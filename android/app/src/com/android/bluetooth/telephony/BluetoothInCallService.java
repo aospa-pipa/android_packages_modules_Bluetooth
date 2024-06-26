@@ -151,11 +151,19 @@ public class BluetoothInCallService extends InCallService {
     private int mDsDaTwoIncomingCallsFlag = 0;
     private int mdsDaSelectPhoneAccountFlag = 0;
     private int mCallSwapPending = 0;
+    private int mDelayOutgoingUpdate = 0;
     private int conferenceCallInitiated = 0;
     public int mFirstIncomingCallId = -1;
     public int mSecondIncomingCallId = -1;
     public int mSelectPhoneAccountId = -1;
     public int mDialingCallId = -1;
+
+    public static int UNKNOWN = 0;
+    public static int DSDS = 1;
+    public static int PSEUDO_DSDA = 2;
+    public static int DSDA = 3;
+    public int currentMode = DSDS;
+    public boolean dsdsTransition = false;
 
     @VisibleForTesting
     boolean mIsTerminatedByClient = false;
@@ -193,8 +201,15 @@ public class BluetoothInCallService extends InCallService {
 
     private boolean mEnableDsdaMode = false;
 
+    private boolean mDsDaEventsHadlingInProgress = false;
+
     private static final String ENABLE_DSDA_SUPPORT =
           "persist.bluetooth.init.dsda.support";
+
+    private final String EXTRAS_MSIM_VOICE_CAPABILITY = "MsimVoiceCapability";
+
+    private static final String ACTION_MSIM_VOICE_CAPABILITY_CHANGED =
+        "org.codeaurora.intent.action.MSIM_VOICE_CAPABILITY_CHANGED";
 
     /**
      * Listens to connections and disconnections of bluetooth headsets. We need to save the current
@@ -253,15 +268,46 @@ public class BluetoothInCallService extends InCallService {
                 } else if (state == BluetoothAdapter.STATE_TURNING_OFF) {
                     clear();
                 }
+               String action = intent.getAction();
+                if (action.equals(ACTION_MSIM_VOICE_CAPABILITY_CHANGED)) {
+                    Log.d(TAG, "ACTION_MSIM_VOICE_CAPABILITY_CHANGED intent received");
+                    currentMode = intent.getIntExtra(EXTRAS_MSIM_VOICE_CAPABILITY, DSDS);
+                    if (mTelephonyManager != null) {
+                        if (currentMode == DSDS) {
+                            Log.w(TAG, "In DSDS mode");
+                            for (int i=0; i < mTelephonyManager.getActiveModemCount(); i++){
+                                int subId = mTelephonyManager.getSubscriptionId();
+                                TelephonyManager tm = mTelephonyManager.createForSubscriptionId(subId);
+                                if (tm.getCallStateForSubscription() == CALL_STATE_IDLE) {
+                                    dsdsTransition = true;
+                                }
+                            }
+                            if(dsdsTransition) {
+                                Log.w(TAG, "In DSDS transition mode");
+                            }
+                            else {
+                                Log.w(TAG, "Not in DSDS transition mode");
+                            }
+                        }
+                        else if (currentMode == PSEUDO_DSDA || currentMode == DSDA) {
+                            Log.w(TAG, "In DSDA mode");
+                        }
+                    }//null check
+                    else {
+                        Log.e(TAG, "mTelephonyManager is null when "
+                                    +"ACTION_MSIM_VOICE_CAPABILITY_CHANGED intent received");
+                    }
+                }
             }
         }
-    }
-    ;
+    };
 
     /** Receives events for global state changes of the bluetooth adapter. */
     // TODO: The code is moved from Telecom stack. Since we're running in the BT process itself,
     // we may be able to simplify this in a future patch.
-    @VisibleForTesting public BluetoothAdapterReceiver mBluetoothAdapterReceiver;
+    @VisibleForTesting
+    public BluetoothAdapterReceiver mBluetoothAdapterReceiver;
+    public BluetoothAdapterReceiver mVoiceCapabilityChangeReceiver = null;
 
     @VisibleForTesting
     public class CallStateCallback extends Call.Callback {
@@ -436,6 +482,7 @@ public class BluetoothInCallService extends InCallService {
             else
                updateheldCalls = 1;
 
+            mDsDaEventsHadlingInProgress = true;
             switch (msg.what) {
              case OUTGOING_INCOMING:
                  Log.d(TAG, "OUTGOING_INCOMING event");
@@ -685,6 +732,25 @@ public class BluetoothInCallService extends InCallService {
                           mDsdaActiveCalls = numActiveCalls;
                      }
                      mLastBtHeadsetState = temp_callState;
+                     if (mDelayOutgoingUpdate == 1) {
+                        mBluetoothHeadset.phoneStateChanged(
+                          0,
+                          1,
+                          CALL_STATE_DIALING,
+                          mDsDaRingingAddress,
+                          mDsDaRingingAddressType,
+                          mDsDaRingingName);
+                        mBluetoothHeadset.phoneStateChanged(
+                          0,
+                          1,
+                          CALL_STATE_ALERTING,
+                          mDsDaRingingAddress,
+                          mDsDaRingingAddressType,
+                          mDsDaRingingName);
+                          mDsDaOutgoingCalls++;
+                        mLastBtHeadsetState =  CALL_STATE_ALERTING;
+                        mDelayOutgoingUpdate = 0;
+                     }
                    }
                  }
              break;
@@ -754,9 +820,14 @@ public class BluetoothInCallService extends InCallService {
                    mLastBtHeadsetState = CALL_STATE_INCOMING;
                  }
              break;
+             case DSDS_EVENT:
+                Log.d(TAG, "DSDS_EVENT event");
+                updateHeadsetWithCallState(false);
+             break;
              default:
               break;
            }
+           mDsDaEventsHadlingInProgress = false;
         }
     };
 
@@ -1167,6 +1238,16 @@ public class BluetoothInCallService extends InCallService {
         IntentFilter intentFilter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
         intentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
         registerReceiver(mBluetoothAdapterReceiver, intentFilter);
+
+        if (mVoiceCapabilityChangeReceiver == null) {
+            Log.d(TAG, "onCreate(): mVoiceCapabilityChangeReceiver ");
+            mVoiceCapabilityChangeReceiver = new BluetoothAdapterReceiver();
+            IntentFilter intentfilter = new IntentFilter(
+                TelecomManager.ACTION_TTY_PREFERRED_MODE_CHANGED);
+            intentFilter.addAction(ACTION_MSIM_VOICE_CAPABILITY_CHANGED);
+            registerReceiver(mVoiceCapabilityChangeReceiver, intentfilter,
+                android.Manifest.permission.MODIFY_PHONE_STATE, null, Context.RECEIVER_EXPORTED);
+        }
         mOnCreateCalled = true;
         mEnableDsdaMode = SystemProperties.getBoolean(ENABLE_DSDA_SUPPORT, true);
         if (mEnableDsdaMode)  {
@@ -1217,6 +1298,11 @@ public class BluetoothInCallService extends InCallService {
         if (mBluetoothAdapterReceiver != null) {
             unregisterReceiver(mBluetoothAdapterReceiver);
             mBluetoothAdapterReceiver = null;
+        }
+        if (mVoiceCapabilityChangeReceiver != null) {
+           Log.d(TAG, "clear");
+           unregisterReceiver(mVoiceCapabilityChangeReceiver);
+           mVoiceCapabilityChangeReceiver = null;
         }
         if (mBluetoothHeadset != null) {
             mBluetoothHeadset.closeBluetoothHeadsetProxy(this);
@@ -1687,6 +1773,16 @@ public class BluetoothInCallService extends InCallService {
 
         int numActiveCalls = mCallInfo.isNullCall(activeCall) ? 0 : 1;
         int numHeldCalls = mCallInfo.getNumHeldCalls();
+        if (mTelephonyManager != null) {
+            if (currentMode == DSDA || currentMode == PSEUDO_DSDA
+                || dsdsTransition) {
+                Log.i(TAG, "Concurrent Calls Possible: DSDA ");
+                if (numHeldCalls > 1) {
+                    mDsDaHeldCalls = numHeldCalls;
+                    numHeldCalls = 1;
+                }
+            }
+        }
         int numChildrenOfActiveCall =
                 mCallInfo.isNullCall(activeCall) ? 0 : activeCall.getChildrenIds().size();
 
@@ -1694,6 +1790,10 @@ public class BluetoothInCallService extends InCallService {
         // TODO: Should we be hardcoding this value to 2 or should we check if all top level calls
         //       are held?
         boolean callsPendingSwitch = (numHeldCalls == 2);
+        if (mEnableDsdaMode && callsPendingSwitch) {
+            callsPendingSwitch = false;
+            numHeldCalls = 1;
+        }
 
         // For conference calls which support swapping the active BluetoothCall within the
         // conference (namely CDMA calls) we need to expose that as a held BluetoothCall
@@ -1878,6 +1978,8 @@ public class BluetoothInCallService extends InCallService {
           (call.getState()  == Call.STATE_DIALING)) {
 
          if (activeCall != null && mDsdaActiveCalls == 1) {
+           mDelayOutgoingUpdate = 1;
+           mDsDaOutgoingCalls++;
            return;
          }
          mDsDaOutgoingCalls++;
@@ -1978,6 +2080,7 @@ public class BluetoothInCallService extends InCallService {
            Log.d(TAG, "Updated incoming call is ended");
            if ((mDsDaTwoIncomingCallsFlag == 0) &&
               (numHeldCalls <= 1) && (numOutgoingCalls == 0)) {
+               mDsdaIncomingCalls--;
                updateHeadsetWithDSDACallState(true, DSDS_EVENT);
                return;
            } else {
@@ -2118,12 +2221,25 @@ public class BluetoothInCallService extends InCallService {
                 Log.d(TAG, "new held call is received from active");
                 if ((mDsDaHeldCalls > 0) && (numHeldCalls>1)) {
                   Log.d(TAG, "Multiple held event came");
+                  if ((mDsDaHeldCalls == 1) && (numHeldCalls == 2)) {
+                    if (mTelephonyManager != null) {
+                      if (!(currentMode == DSDA || currentMode == PSEUDO_DSDA
+                        || dsdsTransition)) {
+                        Log.i(TAG, "Concurrent Calls Not Possible: Not DSDA ");
+                        Log.i(TAG, "Call swapping is in progress ");
+                        mCallSwapPending = 1;
+                        updateHeadsetWithCallState(false);
+                        return;
+                      }
+                    }
+                  }
                   updateHeadsetWithDSDACallState(true, MULTI_HELD);
                 }
                 else if ((mDsDaHeldCalls == 0) && (numHeldCalls ==1)) {
                   Log.d(TAG, "when only 1 active call and moved to held call");
                   mDsdaActiveCalls = 0;
                   mDsDaHeldCalls++;
+                  mDelayOutgoingUpdate = 0;
                   updateHeadsetWithDSDACallState(true, DSDS_EVENT);
                 }
               }
@@ -2142,9 +2258,9 @@ public class BluetoothInCallService extends InCallService {
                else if (call.getState() == Call.STATE_DISCONNECTED) {
                  Log.d(TAG, "this event can come for either held or active call");
                  if ((numActiveCalls == 0) && (mDsdaActiveCalls == 1)) {
-                   Log.d(TAG, "active call ended event is received");
-                   updateHeadsetWithDSDACallState(true, DSDS_EVENT);
-                   mDsdaActiveCalls = 0;
+                   Log.d(TAG, "active call ended event is received. lets remove from oncallremoved");
+                   //updateHeadsetWithDSDACallState(true, DSDS_EVENT);
+                   //mDsdaActiveCalls = 0;
                  }
                  else if (numHeldCalls < mDsDaHeldCalls) {
                    if ((numHeldCalls > 0) && (mDsDaHeldCalls > 1)) {
@@ -2213,12 +2329,10 @@ public class BluetoothInCallService extends InCallService {
      }
 
      private void updateHeadsetWithDSDACallState(boolean force, int event) {
-      if (event == DSDS_EVENT ) {
+      if ((event == DSDS_EVENT) && (!mDsDaEventsHadlingInProgress)) {
           updateHeadsetWithCallState(force);
       } else {
-        if (mBluetoothHeadset != null) {
-           Log.e(TAG, "handleDSDA events in separate thread.");
-        }
+        Log.e(TAG, "handleDSDA events in separate thread.");
         Message msg = mHandler.obtainMessage();
         msg.what = event;
         mHandler.sendMessage(msg);
