@@ -1457,6 +1457,21 @@ public class LeAudioService extends ProfileService {
         }
     }
 
+    /**
+     * Checks if Broadcast instance is pending start
+     *
+     * @param broadcastId broadcast instance identifier
+     * @return true if if broadcast is pending start, false otherwise
+     */
+    public boolean isBroadcastPendingStart(int broadcastId) {
+        boolean ret = (mBroadcastIdPendingStart.isPresent()
+                && mBroadcastIdPendingStart.get().equals(broadcastId))
+                || (mDialingOutTimeoutEvent != null
+                && mDialingOutTimeoutEvent.mBroadcastId.equals(broadcastId));
+        Log.d(TAG, "isBroadcastPendingStart " + ret);
+        return ret;
+    }
+
     /** Return true if device is primary - is active or was active before switch to broadcast */
     public boolean isPrimaryDevice(BluetoothDevice device) {
         LeAudioDeviceDescriptor descriptor = mDeviceDescriptors.get(device);
@@ -3855,6 +3870,12 @@ public class LeAudioService extends ProfileService {
                 descriptor.mIsConnected = false;
                 descriptor.mInactivatedDueToContextType = false;
                 if (descriptor.isActive()) {
+                    Integer gettingActiveGroupId = getFirstGroupIdInGettingActiveState();
+                    if (gettingActiveGroupId != LE_AUDIO_GROUP_ID_INVALID) {
+                        Log.w(TAG, "deviceDisconnected: other device group in getting active");
+                        return;
+                    }
+
                     /* Notify Native layer */
                     removeActiveDevice(hasFallbackDevice);
                     descriptor.setActiveState(ACTIVE_STATE_INACTIVE);
