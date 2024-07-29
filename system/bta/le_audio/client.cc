@@ -44,7 +44,6 @@
 #include "content_control_id_keeper.h"
 #include "devices.h"
 #include "hci/controller_interface.h"
-#include "internal_include/bt_trace.h"
 #include "internal_include/stack_config.h"
 #include "le_audio_health_status.h"
 #include "le_audio_set_configuration_provider.h"
@@ -52,12 +51,12 @@
 #include "le_audio_utils.h"
 #include "main/shim/entry.h"
 #include "metrics_collector.h"
-#include "os/log.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/bt_types.h"
+#include "stack/include/btm_client_interface.h"
 #include "stack/include/main_thread.h"
 #include "state_machine.h"
 #include "storage_helper.h"
@@ -560,12 +559,6 @@ class LeAudioClientImpl : public LeAudioClient {
     }
   }
 
-  void OnDeviceAutonomousStateTransitionTimeout(LeAudioDevice* leAudioDevice) {
-    log::error("Device {}, failed to complete autonomous transition",
-               leAudioDevice->address_);
-    DisconnectDevice(leAudioDevice, true);
-  }
-
   void UpdateLocationsAndContextsAvailability(LeAudioDeviceGroup* group,
                                               bool force = false) {
     bool group_conf_changed = group->ReloadAudioLocations();
@@ -645,6 +638,11 @@ class LeAudioClientImpl : public LeAudioClient {
   }
 
   void CancelStreamingRequest() {
+  log::info(
+        " audio_sender_state {}, audio_receiver_state {}",
+        bluetooth::common::ToString(audio_sender_state_),
+        bluetooth::common::ToString(audio_receiver_state_));
+
     if (audio_sender_state_ >= AudioState::READY_TO_START) {
       CancelLocalAudioSourceStreamingRequest();
     }
@@ -1457,6 +1455,9 @@ class LeAudioClientImpl : public LeAudioClient {
       }
 
       log::info("current state {}", ToString(group->GetState()));
+      group->ClearReconfigStartPendingDirs(
+           bluetooth::le_audio::types::kLeAudioDirectionSink |
+           bluetooth::le_audio::types::kLeAudioDirectionSource);
 
       //Below to ensure CIS termination before updating to app about inactive.
       if (group->GetState() != AseState::BTA_LE_AUDIO_ASE_STATE_IDLE) {
@@ -1574,6 +1575,14 @@ class LeAudioClientImpl : public LeAudioClient {
         log::info("Previous group current state {}", ToString(prev_group->GetState()));
         defer_notify_inactive_until_stop_ = true;
         defer_notify_active_until_stop_ = true;
+        //Clear pending confing to handle race condition between
+        //Reconfigure(due to, MetadataUpdate) and groupsetactive
+        //to other device(Mostly in case of making call active from in-active device)
+        log::info("Clear pending configuration flag of previous active group");
+        prev_group->ClearPendingConfiguration();
+        prev_group->ClearReconfigStartPendingDirs(
+             bluetooth::le_audio::types::kLeAudioDirectionSink |
+             bluetooth::le_audio::types::kLeAudioDirectionSource);
         GroupStop(previous_active_group);
       } else {
         log::info(" Previous group not streaming");
@@ -2334,7 +2343,7 @@ class LeAudioClientImpl : public LeAudioClient {
       BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
     }
 
-    BTM_RequestPeerSCA(leAudioDevice->address_, transport);
+    get_btm_client_interface().peer.BTM_RequestPeerSCA(leAudioDevice->address_, transport);
 
     if (leAudioDevice->GetConnectionState() ==
         DeviceConnectState::CONNECTING_AUTOCONNECT) {
@@ -4314,8 +4323,32 @@ class LeAudioClientImpl : public LeAudioClient {
              ? bluetooth::le_audio::types::kLeAudioDirectionSource
              : bluetooth::le_audio::types::kLeAudioDirectionSink);
 
+    log::debug("configuration_context_type_= {}.",
+                              ToString(configuration_context_type_));
+    log::debug( "remote_direction= {}",
+         (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSource
+             ? "Source" : "Sink"));
     auto remote_contexts =
         DirectionalRealignMetadataAudioContexts(group, remote_direction);
+
+    if (configuration_context_type_ == LeAudioContextType::LIVE &&
+        remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink) {
+      const auto is_sink_config_supported_curr_context =
+                     group->HasCodecConfigurationForDirection(
+                            configuration_context_type_, remote_direction);
+      log::debug("is_sink_config_supported_curr_context= {}.",
+                            ToString(is_sink_config_supported_curr_context));
+      if (is_sink_config_supported_curr_context) {
+        remote_contexts =
+          DirectionalRealignMetadataAudioContexts(group, local_direction);
+      }
+    } else if (configuration_context_type_ == LeAudioContextType::GAME &&
+               (remote_direction ==
+                bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+       log::debug("Ensuring to saty in VBC path.");
+       remote_contexts =
+          DirectionalRealignMetadataAudioContexts(group, local_direction);
+    }
     ApplyRemoteMetadataAudioContextPolicy(group, remote_contexts,
                                           remote_direction);
 
@@ -4471,6 +4504,11 @@ class LeAudioClientImpl : public LeAudioClient {
       return;
     }
 
+    group->ClearReconfigStartPendingDirs(
+         bluetooth::le_audio::types::kLeAudioDirectionSink);
+
+    log::debug("configuration_context_type_= {}.",
+                              ToString(configuration_context_type_));
     /* Check if the device resume is allowed */
     if (!group->HasCodecConfigurationForDirection(
             configuration_context_type_,
@@ -4489,6 +4527,21 @@ class LeAudioClientImpl : public LeAudioClient {
                 ToHexString(configuration_context_type_));
       CancelLocalAudioSourceStreamingRequest();
       return;
+    }
+
+    //Without updatemetadata bt stack getting start from MM
+    /*
+     * In Bcacst -> Unicast switch, When either MT/MO call comes
+     * configuration_context_type_ bydefault set to Unspecified and
+     * remote_contexts set to conversational. This mimatch happens when config
+     * selected on configuration_context_type_(for Media) and
+     * enable op metadata(covsersational)
+     */
+
+    if ((IsInCall() || IsInVoipCall()) &&
+        configuration_context_type_ != LeAudioContextType::CONVERSATIONAL) {
+      ReconfigureOrUpdateRemote(
+               group, bluetooth::le_audio::types::kLeAudioDirectionSink);
     }
 
     log::debug(
@@ -4763,12 +4816,26 @@ class LeAudioClientImpl : public LeAudioClient {
       return;
     }
 
+    group->ClearReconfigStartPendingDirs(
+         bluetooth::le_audio::types::kLeAudioDirectionSource);
+
+    log::debug("configuration_context_type_= {}.",
+                              ToString(configuration_context_type_));
     /* We need new configuration_context_type_ to be selected before we go any
      * further.
      */
     if (audio_receiver_state_ == AudioState::IDLE) {
-      ReconfigureOrUpdateRemote(
-          group, bluetooth::le_audio::types::kLeAudioDirectionSource);
+      //Below condition is not to allow reconfig to LIVE when
+      //configuration_context_type_ is GAME as there is no UpdateMetadata
+      //update on decoding session. This ensures to be stay in VBC path.
+      if ((audio_sender_state_ == AudioState::IDLE) &&
+          (configuration_context_type_ == LeAudioContextType::GAME)) {
+        ReconfigureOrUpdateRemote(
+          group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+      } else {
+         ReconfigureOrUpdateRemote(
+            group, bluetooth::le_audio::types::kLeAudioDirectionSource);
+      }
     }
 
     /* Check if the device resume is allowed */
@@ -4797,6 +4864,9 @@ class LeAudioClientImpl : public LeAudioClient {
         active_group_id_, audio_receiver_state_, audio_sender_state_,
         ToHexString(configuration_context_type_),
         group ? " exist " : " does not exist ");
+
+    log::debug("After reconfig, updated configuration_context_type_= {}.",
+                              ToString(configuration_context_type_));
 
     switch (audio_receiver_state_) {
       case AudioState::STARTED:
@@ -5084,8 +5154,19 @@ class LeAudioClientImpl : public LeAudioClient {
 
     group->dsa_.mode = dsa_mode;
 
-    ReconfigureOrUpdateRemote(
-        group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    /* allow reconfigure only if the new source context is bi-directional
+       (or) not in suspended for reconfiguration (or) receiver state is idle
+       to avoid the additional reconfigurations.
+    */
+    if((local_metadata_context_types_.source.test(LeAudioContextType::MEDIA) &&
+        configuration_context_type_ == LeAudioContextType::LIVE) &&
+       (group->IsPendingConfiguration() || group->IsSuspendedForReconfiguration() ||
+        group->IsReconfigStartPendingDir(bluetooth::le_audio::types::kLeAudioDirectionSink))) {
+      log::warn(" Skip ReconfigureOrUpdateRemote as reconfig start pending for Source.");
+    } else {
+      ReconfigureOrUpdateRemote(
+           group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    }
   }
 
   /* Applies some predefined policy on the audio context metadata, including
@@ -6037,6 +6118,32 @@ class LeAudioClientImpl : public LeAudioClient {
     SetAsymmetricBlePhy(group, false);
   }
 
+  void reconfigurationComplete(void) {
+    // Check which directions were suspended
+    uint8_t previously_active_directions = 0;
+    auto group = aseGroups_.FindById(active_group_id_);
+
+    if (audio_sender_state_ >= AudioState::READY_TO_START) {
+      previously_active_directions |=
+          bluetooth::le_audio::types::kLeAudioDirectionSink;
+    }
+    if (audio_receiver_state_ >= AudioState::READY_TO_START) {
+      previously_active_directions |=
+          bluetooth::le_audio::types::kLeAudioDirectionSource;
+    }
+
+    /* We are done with reconfiguration.
+     * Clean state and if Audio HAL is waiting, cancel the request
+     * so Audio HAL can Resume again.
+     */
+    if(group) {
+      group->ClearSuspendedForReconfiguration();
+      group->SetReconfigStartPendingDirs(previously_active_directions);
+    }
+    CancelStreamingRequest();
+    ReconfigurationComplete(previously_active_directions);
+  }
+
   void OnStateMachineStatusReportCb(int group_id, GroupStreamStatus status) {
     log::info(
         "status: {} ,  group_id: {}, audio_sender_state {}, "
@@ -6141,26 +6248,7 @@ class LeAudioClientImpl : public LeAudioClient {
         SuspendAudio();
         break;
       case GroupStreamStatus::CONFIGURED_BY_USER: {
-        // Check which directions were suspended
-        uint8_t previously_active_directions = 0;
-        if (audio_sender_state_ >= AudioState::READY_TO_START) {
-          previously_active_directions |=
-              bluetooth::le_audio::types::kLeAudioDirectionSink;
-        }
-        if (audio_receiver_state_ >= AudioState::READY_TO_START) {
-          previously_active_directions |=
-              bluetooth::le_audio::types::kLeAudioDirectionSource;
-        }
-
-        /* We are done with reconfiguration.
-         * Clean state and if Audio HAL is waiting, cancel the request
-         * so Audio HAL can Resume again.
-         */
-        if (group->IsSuspendedForReconfiguration()) {
-          group->ClearSuspendedForReconfiguration();
-        }
-        CancelStreamingRequest();
-        ReconfigurationComplete(previously_active_directions);
+        reconfigurationComplete();
       } break;
       case GroupStreamStatus::CONFIGURED_AUTONOMOUS:
         /* This state is notified only when
@@ -6191,6 +6279,9 @@ class LeAudioClientImpl : public LeAudioClient {
                     ? bluetooth::le_audio::types::kLeAudioDirectionSource
                     : bluetooth::le_audio::types::kLeAudioDirectionSink;
 
+            log::debug( "remote_direction= {}", (remote_direction ==
+              bluetooth::le_audio::types::kLeAudioDirectionSource ? "Source" : "Sink"));
+
             /* Reconfiguration to non requiring source scenario */
             if (sink_monitor_mode_ &&
                 (remote_direction ==
@@ -6201,10 +6292,25 @@ class LeAudioClientImpl : public LeAudioClient {
 
             auto remote_contexts =
                 DirectionalRealignMetadataAudioContexts(group, remote_direction);
+            //Below check is needed only when BCast->Unicast switch as part of VBC.
+            //Already here LIVE(of VBC) path started, and when Unicast becomes active
+            //UpdateMetadata comes for Game, and it would reconfigure to Game from
+            //LIVE(of VBC). Due to avove remote_contexts, it is trying to switch
+            //remote_contexts to LIVE, and mismatch happens between remote_contexts
+            //and configuration_context_type_.
+            if (configuration_context_type_ == LeAudioContextType::GAME &&
+                remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSource &&
+                audio_receiver_state_ == AudioState::RELEASING) {
+              remote_contexts = DirectionalRealignMetadataAudioContexts(group,
+                                  bluetooth::le_audio::types::kLeAudioDirectionSink);
+            }
+
             ApplyRemoteMetadataAudioContextPolicy(group, remote_contexts,
                                                   remote_direction);
             if (GroupStream(group->group_id_, configuration_context_type_,
                             remote_contexts)) {
+              log::info("configuration succeed, wait for new status for group {}",
+                         group->group_id_);
               /* If configuration succeed wait for new status. */
               return;
             }
@@ -6262,19 +6368,7 @@ class LeAudioClientImpl : public LeAudioClient {
             stream_setup_end_timestamp_ = 0;
             stream_setup_start_timestamp_ = 0;
             if (group->IsSuspendedForReconfiguration()) {
-               group->ClearSuspendedForReconfiguration();
-               // Check which directions were suspended
-               uint8_t prev_active_directions = 0;
-               if (audio_sender_state_ >= AudioState::READY_TO_START) {
-                 prev_active_directions |=
-                     bluetooth::le_audio::types::kLeAudioDirectionSink;
-               }
-               if (audio_receiver_state_ >= AudioState::READY_TO_START) {
-                 prev_active_directions |=
-                     bluetooth::le_audio::types::kLeAudioDirectionSource;
-               }
-               CancelStreamingRequest();
-               ReconfigurationComplete(prev_active_directions);
+              reconfigurationComplete();
             } else {
                CancelStreamingRequest();
             }
@@ -6411,7 +6505,7 @@ class LeAudioClientImpl : public LeAudioClient {
   std::vector<uint8_t> encoded_data;
   std::unique_ptr<LeAudioSourceAudioHalClient> le_audio_source_hal_client_;
   std::unique_ptr<LeAudioSinkAudioHalClient> le_audio_sink_hal_client_;
-  static constexpr uint64_t kAudioSuspentKeepIsoAliveTimeoutMs = 0;
+  static constexpr uint64_t kAudioSuspentKeepIsoAliveTimeoutMs = 500;
   static constexpr uint64_t kAudioDisableTimeoutMs = 3000;
   static constexpr char kAudioSuspentKeepIsoAliveTimeoutMsProp[] =
       "persist.bluetooth.leaudio.audio.suspend.timeoutms";
@@ -6677,12 +6771,6 @@ class CallbacksImpl : public LeAudioGroupStateMachine::Callbacks {
 
   void OnStateTransitionTimeout(int group_id) override {
     if (instance) instance->OnLeAudioDeviceSetStateTimeout(group_id);
-  }
-
-  void OnDeviceAutonomousStateTransitionTimeout(
-      LeAudioDevice* leAudioDevice) override {
-    if (instance)
-      instance->OnDeviceAutonomousStateTransitionTimeout(leAudioDevice);
   }
 
   void OnUpdatedCisConfiguration(int group_id, uint8_t direction) {

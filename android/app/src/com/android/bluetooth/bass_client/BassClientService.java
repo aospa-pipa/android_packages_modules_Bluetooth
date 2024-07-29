@@ -888,9 +888,45 @@ public class BassClientService extends ProfileService {
                 && (leAudioService.getActiveDevices().contains(device));
     }
 
-    private boolean isAnyDeviceFromActiveUnicastGroupReceivingBroadcast() {
-        return getActiveBroadcastSinks().stream()
-                .anyMatch(d -> isDevicePartOfActiveUnicastGroup(d));
+    private boolean isEmptyBluetoothDevice(BluetoothDevice device) {
+        if (device == null) {
+            Log.e(TAG, "Device is null!");
+            return true;
+        }
+
+        return device.getAddress().equals("00:00:00:00:00:00");
+    }
+
+    private boolean hasAnyConnectedDeviceExternalBroadcastSource() {
+        for (BluetoothDevice device : getConnectedDevices()) {
+            // Check if any connected device has add some source
+            if (getAllSources(device).stream()
+                    .anyMatch(
+                            receiveState ->
+                                    (!isEmptyBluetoothDevice(receiveState.getSourceDevice())
+                                            && !isLocalBroadcast(receiveState)))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void checkAndResetGroupAllowedContextMask() {
+        LeAudioService leAudioService = mServiceFactory.getLeAudioService();
+        if (leAudioService == null) {
+            return;
+        }
+
+        if (leaudioAllowedContextMask()) {
+            /* Restore allowed context mask for Unicast */
+            if (mIsAllowedContextOfActiveGroupModified
+                    && !hasAnyConnectedDeviceExternalBroadcastSource()) {
+                leAudioService.setActiveGroupAllowedContextMask(
+                        BluetoothLeAudio.CONTEXTS_ALL, BluetoothLeAudio.CONTEXTS_ALL);
+                mIsAllowedContextOfActiveGroupModified = false;
+            }
+        }
     }
 
     private void localNotifyReceiveStateChanged(BluetoothDevice sink) {
@@ -928,16 +964,10 @@ public class BassClientService extends ProfileService {
                 leAudioService.activeBroadcastAssistantNotification(false);
             }
 
-            if (leaudioAllowedContextMask()) {
-                /* Restore allowed context mask for active device */
-                if (mIsAllowedContextOfActiveGroupModified) {
-                    if (!isAnyDeviceFromActiveUnicastGroupReceivingBroadcast()) {
-                        leAudioService.setActiveGroupAllowedContextMask(
-                                BluetoothLeAudio.CONTEXTS_ALL, BluetoothLeAudio.CONTEXTS_ALL);
-                    }
-                    mIsAllowedContextOfActiveGroupModified = false;
-                }
-            }
+            /* Restore allowed context mask for unicast in case if last connected broadcast
+             * delegator device which has external source removes this source
+             */
+            checkAndResetGroupAllowedContextMask();
         }
     }
 
@@ -1090,9 +1120,8 @@ public class BassClientService extends ProfileService {
             return false;
         }
         boolean isRoomAvailable = false;
-        String emptyBluetoothDevice = "00:00:00:00:00:00";
         for (BluetoothLeBroadcastReceiveState recvState : stateMachine.getAllSources()) {
-            if (recvState.getSourceDevice().getAddress().equals(emptyBluetoothDevice)) {
+            if (isEmptyBluetoothDevice(recvState.getSourceDevice())) {
                 isRoomAvailable = true;
                 break;
             }
@@ -1368,6 +1397,11 @@ public class BassClientService extends ProfileService {
                 log("Unbonded " + device + ". Removing state machine");
                 removeStateMachine(device);
             }
+
+            /* Restore allowed context mask for unicast in case if last connected broadcast
+             * delegator device which has external source disconnectes.
+             */
+            checkAndResetGroupAllowedContextMask();
         } else if (toState == BluetoothProfile.STATE_CONNECTED) {
             handleReconnectingAudioSharingModeDevice(device);
         }
@@ -1989,13 +2023,13 @@ public class BassClientService extends ProfileService {
                 log("No PA record found");
                 return;
             }
+            BaseData baseData = getBase(syncHandle);
+            if (baseData == null) {
+                log("No BaseData found");
+                return;
+            }
             if (!result.isNotified()) {
                 result.setNotified(true);
-                BaseData baseData = getBase(syncHandle);
-                if (baseData == null) {
-                    log("No BaseData found");
-                    return;
-                }
                 BluetoothLeBroadcastMetadata metaData =
                         getBroadcastMetadataFromBaseData(
                                 baseData, srcDevice, syncHandle, encrypted);
@@ -2306,8 +2340,13 @@ public class BassClientService extends ProfileService {
             }
         }
 
-        if (broadcastId == BassConstants.INVALID_BROADCAST_ID && pbData == null) {
-            Log.w(TAG, "It is not BAP or PBP source");
+        if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            if (pbData == null) {
+                Log.w(TAG, "It is not BAP or PBP source");
+            }
+            else {
+                Log.w(TAG, "Invalid broadcast ID");
+            }
             mPeriodicAdvCallbacksMap.remove(BassConstants.INVALID_SYNC_HANDLE);
             handleSelectSourceRequest();
             return;
@@ -2784,8 +2823,7 @@ public class BassClientService extends ProfileService {
             List<BluetoothLeBroadcastReceiveState> recvStates =
                     new ArrayList<BluetoothLeBroadcastReceiveState>();
             for (BluetoothLeBroadcastReceiveState rs : stateMachine.getAllSources()) {
-                String emptyBluetoothDevice = "00:00:00:00:00:00";
-                if (!rs.getSourceDevice().getAddress().equals(emptyBluetoothDevice)) {
+                if (!isEmptyBluetoothDevice(rs.getSourceDevice())) {
                     recvStates.add(rs);
                 }
             }
@@ -2809,7 +2847,7 @@ public class BassClientService extends ProfileService {
         return stateMachine.getMaximumSourceCapacity();
     }
 
-    private boolean isLocalBroadcast(int sourceAdvertisingSid) {
+    private boolean isLocalBroadcast(int broadcastId) {
         LeAudioService leAudioService = mServiceFactory.getLeAudioService();
         if (leAudioService == null) {
             return false;
@@ -2819,7 +2857,7 @@ public class BassClientService extends ProfileService {
                 leAudioService.getAllBroadcastMetadata().stream()
                         .anyMatch(
                                 meta -> {
-                                    return meta.getSourceAdvertisingSid() == sourceAdvertisingSid;
+                                    return meta.getBroadcastId() == broadcastId;
                                 });
         log("isLocalBroadcast=" + wasFound);
         return wasFound;
@@ -2830,7 +2868,7 @@ public class BassClientService extends ProfileService {
             return false;
         }
 
-        return isLocalBroadcast(metaData.getSourceAdvertisingSid());
+        return isLocalBroadcast(metaData.getBroadcastId());
     }
 
     boolean isLocalBroadcast(BluetoothLeBroadcastReceiveState receiveState) {
@@ -2838,7 +2876,7 @@ public class BassClientService extends ProfileService {
             return false;
         }
 
-        return isLocalBroadcast(receiveState.getSourceAdvertisingSid());
+        return isLocalBroadcast(receiveState.getBroadcastId());
     }
 
     static void log(String msg) {
