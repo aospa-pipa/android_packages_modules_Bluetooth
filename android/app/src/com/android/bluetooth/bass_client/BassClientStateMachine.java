@@ -17,8 +17,10 @@
 package com.android.bluetooth.bass_client;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
+import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -1417,6 +1419,7 @@ public class BassClientStateMachine extends StateMachine {
      * @return {@code true} if it successfully connects to the GATT server.
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     public boolean connectGatt(Boolean autoConnect) {
         if (mGattCallback == null) {
             mGattCallback = new GattCallback();
@@ -2443,8 +2446,10 @@ public class BassClientStateMachine extends StateMachine {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        mService.sendBroadcast(
-                intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        mService.sendBroadcastMultiplePermissions(
+                intent,
+                new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
+                Utils.getTempBroadcastOptions());
     }
 
     int getConnectionState() {
@@ -2564,6 +2569,7 @@ public class BassClientStateMachine extends StateMachine {
 
     /** Mockable wrapper of {@link BluetoothGatt}. */
     @VisibleForTesting
+    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     public static class BluetoothGattTestableWrapper {
         public final BluetoothGatt mWrappedBluetoothGatt;
 

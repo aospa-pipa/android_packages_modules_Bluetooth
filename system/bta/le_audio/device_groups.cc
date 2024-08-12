@@ -842,8 +842,8 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
                                     ? device->snk_audio_locations_
                                     : device->src_audio_locations_;
       if (dev_locations.none()) {
-        log::warn("Device {} has no locations for direction: {}", device->address_, (int)direction);
-        continue;
+        log::warn("Device {} has no specified locations for direction: {}", device->address_,
+                  (int)direction);
       }
 
       has_location.get(direction) = true;
@@ -942,8 +942,8 @@ types::BidirectionalPair<AudioContexts> LeAudioDeviceGroup::GetLatestAvailableCo
 }
 
 bool LeAudioDeviceGroup::ReloadAudioLocations(void) {
-  AudioLocations updated_snk_audio_locations_ = codec_spec_conf::kLeAudioLocationNotAllowed;
-  AudioLocations updated_src_audio_locations_ = codec_spec_conf::kLeAudioLocationNotAllowed;
+  AudioLocations updated_snk_audio_locations_ = codec_spec_conf::kLeAudioLocationMonoAudio;
+  AudioLocations updated_src_audio_locations_ = codec_spec_conf::kLeAudioLocationMonoAudio;
 
   for (const auto& device : leAudioDevices_) {
     if (device.expired() ||
@@ -1058,7 +1058,8 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::GetGroupSinkStrategy() c
 
       log::debug("audio location 0x{:04x}", snk_audio_locations_.to_ulong());
       if (!(snk_audio_locations_.to_ulong() & codec_spec_conf::kLeAudioLocationAnyLeft) ||
-          !(snk_audio_locations_.to_ulong() & codec_spec_conf::kLeAudioLocationAnyRight)) {
+          !(snk_audio_locations_.to_ulong() & codec_spec_conf::kLeAudioLocationAnyRight) ||
+          snk_audio_locations_.none()) {
         return types::LeAudioConfigurationStrategy::MONO_ONE_CIS_PER_DEVICE;
       }
 
@@ -1351,7 +1352,7 @@ bool CheckIfStrategySupported(types::LeAudioConfigurationStrategy strategy,
 
   switch (strategy) {
     case types::LeAudioConfigurationStrategy::MONO_ONE_CIS_PER_DEVICE:
-      return audio_locations.any();
+      return true;
     case types::LeAudioConfigurationStrategy::STEREO_TWO_CISES_PER_DEVICE:
       if ((audio_locations.to_ulong() & codec_spec_conf::kLeAudioLocationAnyLeft) &&
           (audio_locations.to_ulong() & codec_spec_conf::kLeAudioLocationAnyRight)) {
@@ -1699,20 +1700,7 @@ LeAudioDeviceGroup::GetConfiguration(LeAudioContextType context_type) const {
 
 LeAudioCodecConfiguration LeAudioDeviceGroup::GetAudioSessionCodecConfigForDirection(
         LeAudioContextType context_type, uint8_t direction) const {
-  const set_configurations::AudioSetConfiguration* conf = nullptr;
-  bool is_valid = false;
-
-  /* Refresh the cache if there is no valid configuration */
-  if (context_to_configuration_cache_map.count(context_type) != 0) {
-    auto& valid_config_pair = context_to_configuration_cache_map.at(context_type);
-    is_valid = valid_config_pair.first;
-    conf = valid_config_pair.second.get();
-  }
-  if (!is_valid || (conf == nullptr)) {
-    UpdateAudioSetConfigurationCache(context_type);
-  }
-
-  auto audio_set_conf = GetCachedConfiguration(context_type);
+  auto audio_set_conf = GetConfiguration(context_type);
   if (!audio_set_conf) {
     return {{0, 0, 0}, 0, 0, 0, 0, 0};
   }
@@ -1827,13 +1815,19 @@ void LeAudioDeviceGroup::RemoveCisFromStreamIfNeeded(LeAudioDevice* leAudioDevic
 }
 
 bool LeAudioDeviceGroup::IsPendingConfiguration(void) const {
-  log::info(" pending_config: {}", stream_conf.pending_configuration);
+  log::verbose("group {}, is pending: {} ", group_id_, stream_conf.pending_configuration);
   return stream_conf.pending_configuration;
 }
 
-void LeAudioDeviceGroup::SetPendingConfiguration(void) { stream_conf.pending_configuration = true; }
+void LeAudioDeviceGroup::SetPendingConfiguration(void) {
+  log::verbose("group {}, is pending from {} to true", group_id_,
+               stream_conf.pending_configuration);
+  stream_conf.pending_configuration = true;
+}
 
 void LeAudioDeviceGroup::ClearPendingConfiguration(void) {
+  log::verbose("group {}, is pending from {} to false", group_id_,
+               stream_conf.pending_configuration);
   stream_conf.pending_configuration = false;
 }
 
