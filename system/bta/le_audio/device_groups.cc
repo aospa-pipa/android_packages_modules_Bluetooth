@@ -1221,7 +1221,6 @@ void LeAudioDeviceGroup::ResetPreferredAudioSetConfiguration(void) const {
 void LeAudioDeviceGroup::InvalidateCachedConfigurations(void) {
   log::info("Group id: {}", group_id_);
   context_to_configuration_cache_map_.clear();
-  context_to_preferred_configuration_cache_map_.clear();
 }
 
 void LeAudioDeviceGroup::InvalidateCachedConfigurations(LeAudioContextType context_type) {
