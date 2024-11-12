@@ -4233,7 +4233,7 @@ public:
     if (device->GetFirstActiveAse()->is_vsmetadata_available) {
       for (struct bluetooth::le_audio::types::cis& cis : group->cig.cises) {
         UpdateEncoderParams(group_id, cis.id,
-            device->GetFirstActiveAse()->metadata);
+            device->GetFirstActiveAse()->vs_metadata);
         device->GetFirstActiveAse()->is_vsmetadata_available = false;
       }
     }
@@ -6331,7 +6331,7 @@ public:
             stream_setup_start_timestamp_ = 0;
             if (group->IsSuspendedForReconfiguration()) {
               reconfigurationComplete();
-            } else {
+            } else if (status != GroupStreamStatus::IDLE) {
               CancelStreamingRequest();
             }
           }
