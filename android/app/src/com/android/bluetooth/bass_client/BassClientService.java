@@ -2800,6 +2800,33 @@ public class BassClientService extends ProfileService {
 
         ScanResult scanRes = getCachedBroadcast(broadcastId);
         if (scanRes == null) {
+            synchronized (mPendingSourcesToAdd) {
+                for (AddSourceData pendingSourcesToAdd : mPendingSourcesToAdd)
+                {
+                    if (pendingSourcesToAdd.sourceMetadata.getBroadcastId() == broadcastId) {
+                        BluetoothLeBroadcastMetadata sourceMetadata =
+                                pendingSourcesToAdd.sourceMetadata;
+                        log("Cannot find scan result, fake a scan result for QR scan case");
+                        int sid = sourceMetadata.getSourceAdvertisingSid();
+                        if (sid == -1) {
+                            sid = 0; // advertising set id 0 by default
+                        }
+                        BluetoothDevice source = sourceMetadata.getSourceDevice();
+                        int addressType = sourceMetadata.getSourceAddressType();
+                        int bId = sourceMetadata.getBroadcastId();
+                        byte[] advData = {6, 0x16, 0x52, 0x18, (byte)(bId & 0xFF),
+                                (byte)((bId >> 8) & 0xFF), (byte)((bId >> 16) & 0xFF)};
+                        ScanRecord record = ScanRecord.parseFromBytes(advData);
+                        scanRes = new ScanResult(source, addressType, 0x1 /* eventType */,
+                                0x1 /* primaryPhy */, 0x2 /* secondaryPhy */, sid, 0 /* txPower */,
+                                0 /* rssi */, 0 /* periodicAdvertisingInterval */, record,
+                                0 /* timestampNanos */);
+                        break;
+                    }
+                }
+            }
+        }
+        if (scanRes == null) {
             log("addSelectSourceRequest: ScanResult empty");
             return;
         }
@@ -3200,15 +3227,10 @@ public class BassClientService extends ProfileService {
                                 new AddSourceData(device, sourceMetadata, isGroupOp));
                         // If the source has been synced before, try to re-sync
                         // with the source by previously cached scan result.
-                    } else if (getCachedBroadcast(broadcastId) != null) {
+                    } else {
                         mPendingSourcesToAdd.add(
                                 new AddSourceData(device, sourceMetadata, isGroupOp));
                         addSelectSourceRequest(broadcastId, /* hasPriority */ true);
-                    } else {
-                        Log.w(TAG, "AddSource: broadcast not cached, broadcastId: " + broadcastId);
-                        mCallbacks.notifySourceAddFailed(
-                                sink, sourceMetadata, BluetoothStatusCodes.ERROR_BAD_PARAMETERS);
-                        return;
                     }
                 } else {
                     Log.w(TAG, "AddSource: invalid broadcastId");
