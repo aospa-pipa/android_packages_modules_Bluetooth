@@ -765,6 +765,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         l2cu_send_peer_echo_rsp(p_lcb, id, p, cmd_len);
         if (l2cb.p_echo_data_cb && cmd_len != 0) {
           tL2CA_ECHO_DATA_CB* p_data_cb = l2cb.p_echo_data_cb;
+          l2cb.p_echo_data_cb = NULL;
 
           (*p_data_cb)(p_lcb->remote_bd_addr, 0, p);
         }
@@ -784,6 +785,7 @@ static void process_l2cap_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
         */
         if (l2cb.p_echo_data_cb && cmd_len != 0) {
           tL2CA_ECHO_DATA_CB* p_data_cb = l2cb.p_echo_data_cb;
+          l2cb.p_echo_data_cb = NULL;
 
           (*p_data_cb)(p_lcb->remote_bd_addr, 0, p);
         }
