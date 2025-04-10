@@ -507,7 +507,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 // New connected device: select it as active
                 boolean leAudioMadeActive = setLeAudioActiveDevice(device);
                 if (leAudioMadeActive && !Utils.isDualModeAudioEnabled()) {
-                    setA2dpActiveDevice(null, true);
                     setHfpActiveDevice(null);
                 }
             } else if (mPendingLeHearingAidActiveDevice.contains(device)) {
@@ -1205,8 +1204,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             if (!success) {
                 return false;
             }
-
-            mLeAudioActiveDevice = leAudioService.getLeadDevice(device);
 
             if (device == null) {
                 mLeHearingAidActiveDevice = null;
