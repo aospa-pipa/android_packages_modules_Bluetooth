@@ -542,7 +542,9 @@ public class AdapterService extends Service {
                         mNativeInterface.enable();
                     } else if (mRegisteredProfiles.size() == Config.getSupportedProfiles().length
                             && mRegisteredProfiles.size() == mRunningProfiles.size()) {
-                        mAdapterProperties.onBluetoothReady();
+                        if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
+                            mAdapterProperties.onBluetoothReady();
+                        }
                         setScanMode(SCAN_MODE_CONNECTABLE, "processProfileServiceStateChanged");
                         updateUuids();
                         initProfileServices();
@@ -1048,7 +1050,10 @@ public class AdapterService extends Service {
     }
 
     void startProfileServices() {
-        Log.d(TAG, "startCoreServices()");
+        Log.d(TAG, "startProfileServices()");
+        if (Flags.callBluetoothReadyBeforeProfilesStart()) {
+            mAdapterProperties.onBluetoothReady();
+        }
         String socName = SystemProperties.get("persist.vendor.qcom.bluetooth.soc");
         Log.i(TAG, "socName: " + socName);
         if(socName.equals("cherokee")) {
@@ -1056,13 +1061,14 @@ public class AdapterService extends Service {
         } else {
             Config.setProfileEnabled(BluetoothProfile.HEARING_AID, true);
         }
-
         int[] supportedProfileServices = Config.getSupportedProfiles();
         if (Flags.onlyStartScanDuringBleOn()) {
             // Scanning is always supported, started separately, and is not a profile service.
             // This will check other profile services.
             if (supportedProfileServices.length == 0) {
-                mAdapterProperties.onBluetoothReady();
+                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
+                    mAdapterProperties.onBluetoothReady();
+                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
@@ -1075,7 +1081,9 @@ public class AdapterService extends Service {
             // adapter initialization failures
             if (supportedProfileServices.length == 1
                     && supportedProfileServices[0] == BluetoothProfile.GATT) {
-                mAdapterProperties.onBluetoothReady();
+                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
+                    mAdapterProperties.onBluetoothReady();
+                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);

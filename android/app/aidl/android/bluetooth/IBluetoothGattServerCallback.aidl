@@ -48,6 +48,7 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
  *
  */
+
 package android.bluetooth;
 
 import android.bluetooth.BluetoothGattService;

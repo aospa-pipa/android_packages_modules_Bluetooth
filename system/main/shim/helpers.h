@@ -58,7 +58,7 @@ inline hci::Address ToGdAddress(const RawAddress& address) {
 
 inline hci::AddressWithType ToAddressWithType(const RawAddress& legacy_address,
                                               const tBLE_ADDR_TYPE& legacy_type) {
-  hci::Address address = ToGdAddress(legacy_address);
+  hci::Address address = legacy_address;
 
   hci::AddressType type;
   if (legacy_type == BLE_ADDR_PUBLIC) {
