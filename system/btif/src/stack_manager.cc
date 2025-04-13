@@ -145,6 +145,13 @@ static future_t* hack_future;
 // Interface functions
 
 static void init_stack(bluetooth::core::CoreInterface* interface) {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    std::promise<void> promise;
+    event_init_stack(std::move(promise), interface);
+    return;
+  }
+
   // This is a synchronous process. Post it to the thread though, so
   // state modification only happens there. Using the thread to perform
   // all stack operations ensures that the operations are done serially
@@ -159,15 +166,32 @@ static void init_stack(bluetooth::core::CoreInterface* interface) {
 static void start_up_stack_async(bluetooth::core::CoreInterface* interface,
                                  ProfileStartCallback startProfiles,
                                  ProfileStopCallback stopProfiles) {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    event_start_up_stack(interface, startProfiles, stopProfiles);
+    return;
+  }
   management_thread.DoInThread(
           base::BindOnce(event_start_up_stack, interface, startProfiles, stopProfiles));
 }
 
 static void shut_down_stack_async(ProfileStopCallback stopProfiles) {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    event_shut_down_stack(stopProfiles);
+    return;
+  }
   management_thread.DoInThread(base::BindOnce(event_shut_down_stack, stopProfiles));
 }
 
 static void clean_up_stack(ProfileStopCallback stopProfiles) {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    std::promise<void> promise;
+    event_clean_up_stack(std::move(promise), stopProfiles);
+    return;
+  }
+
   // This is a synchronous process. Post it to the thread though, so
   // state modification only happens there.
   std::promise<void> promise;
@@ -186,10 +210,21 @@ static void clean_up_stack(ProfileStopCallback stopProfiles) {
 }
 
 static void start_up_rust_module_async(std::promise<void> promise) {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    std::promise<void> promise;
+    event_start_up_rust_module(std::move(promise));
+    return;
+  }
   management_thread.DoInThread(base::BindOnce(event_start_up_rust_module, std::move(promise)));
 }
 
 static void shut_down_rust_module_async() {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    // This code is executed on the Java main thread
+    event_shut_down_rust_module();
+    return;
+  }
   management_thread.DoInThread(base::BindOnce(event_shut_down_rust_module));
 }
 
@@ -216,7 +251,9 @@ const struct module_lookup module_table[] = {
     {GD_SHIM_MODULE, &gd_shim_module},
     {INTEROP_MODULE, &interop_module},
     {OSI_MODULE, &osi_module},
+#ifndef TARGET_FLOSS
     {RUST_MODULE, &rust_module},
+#endif
     {STACK_CONFIG_MODULE, &stack_config_module},
     {DEVICE_IOT_CONFIG_MODULE, &device_iot_config_module},
     {CS_CONFIG_MODULE, &cs_config_module},
@@ -272,14 +309,6 @@ static void event_init_stack(std::promise<void> promise,
   promise.set_value();
 }
 
-static void ensure_stack_is_initialized(bluetooth::core::CoreInterface* interface) {
-  if (!stack_is_initialized) {
-    warn("found the stack was uninitialized. Initializing now.");
-    // No future needed since we are calling it directly
-    init_stack_internal(interface);
-  }
-}
-
 // Synchronous function to start up the stack
 static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
                                  ProfileStartCallback startProfiles,
@@ -289,7 +318,11 @@ static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
     return;
   }
 
-  ensure_stack_is_initialized(interface);
+  if (!stack_is_initialized) {
+    warn("found the stack was uninitialized. Initializing now.");
+    // No future needed since we are calling it directly
+    init_stack_internal(interface);
+  }
 
   info("is bringing up the stack");
   future_t* local_hack_future = future_new();
@@ -330,8 +363,10 @@ static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
   }
 
   if (!com::android::bluetooth::flags::only_start_scan_during_ble_on()) {
+#ifndef TARGET_FLOSS
     info("Starting rust module");
     module_start_up(get_local_module(RUST_MODULE));
+#endif
   }
   if (com::android::bluetooth::flags::channel_sounding_in_stack()) {
     bluetooth::ras::GetRasServer()->Initialize();
@@ -357,8 +392,10 @@ static void event_shut_down_stack(ProfileStopCallback stopProfiles) {
   stack_is_running = false;
 
   if (!com::android::bluetooth::flags::only_start_scan_during_ble_on()) {
+#ifndef TARGET_FLOSS
     info("Stopping rust module");
     module_shut_down(get_local_module(RUST_MODULE));
+#endif
   }
 
   do_in_main_thread(base::BindOnce(&btm_ble_scanner_cleanup));
@@ -469,6 +506,9 @@ static void event_signal_stack_down(void* /* context */) {
 }
 
 static void ensure_manager_initialized() {
+  if (com::android::bluetooth::flags::remove_legacy_management_thread()) {
+    return;
+  }
   if (management_thread.IsRunning()) {
     return;
   }

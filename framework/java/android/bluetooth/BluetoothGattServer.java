@@ -86,8 +86,7 @@ import java.util.UUID;
 public final class BluetoothGattServer implements BluetoothProfile {
     private static final String TAG = BluetoothGattServer.class.getSimpleName();
 
-    private static final boolean DBG = true;
-    private static final boolean VDBG = false;
+    private static final boolean VDBG = Log.isLoggable("bluetooth", Log.VERBOSE);
 
     private final IBluetoothGatt mService;
     private final BluetoothAdapter mAdapter;
@@ -116,14 +115,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onServerRegistered(int status, int serverIf) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onServerRegistered() - status="
-                                        + status
-                                        + " serverIf="
-                                        + serverIf);
-                    }
+                    Log.d(TAG, "onServerRegistered() - status=" + status + " serverIf=" + serverIf);
                     synchronized (mServerIfLock) {
                         if (mCallback != null) {
                             mServerIf = serverIf;
@@ -143,18 +135,16 @@ public final class BluetoothGattServer implements BluetoothProfile {
                 @Override
                 public void onServerConnectionState(
                         int status, int serverIf, boolean connected, String address) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onServerConnectionState() - status="
-                                        + status
-                                        + " serverIf="
-                                        + serverIf
-                                        + " connected="
-                                        + connected
-                                        + " device="
-                                        + BluetoothUtils.toAnonymizedAddress(address));
-                    }
+                    Log.d(
+                            TAG,
+                            "onServerConnectionState() - status="
+                                    + status
+                                    + " serverIf="
+                                    + serverIf
+                                    + " connected="
+                                    + connected
+                                    + " device="
+                                    + BluetoothUtils.toAnonymizedAddress(address));
                     try {
                         mCallback.onConnectionStateChange(
                                 mAdapter.getRemoteDevice(address),
@@ -172,16 +162,14 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onServiceAdded(int status, BluetoothGattService service) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onServiceAdded() - handle="
-                                        + service.getInstanceId()
-                                        + " uuid="
-                                        + service.getUuid()
-                                        + " status="
-                                        + status);
-                    }
+                    Log.d(
+                            TAG,
+                            "onServiceAdded() - handle="
+                                    + service.getInstanceId()
+                                    + " uuid="
+                                    + service.getUuid()
+                                    + " status="
+                                    + status);
 
                     if (mPendingService == null) {
                         return;
@@ -336,17 +324,15 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onExecuteWrite(String address, int transId, boolean execWrite) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onExecuteWrite() - "
-                                        + "device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + ", transId="
-                                        + transId
-                                        + "execWrite="
-                                        + execWrite);
-                    }
+                    Log.d(
+                            TAG,
+                            "onExecuteWrite() - "
+                                    + "device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + ", transId="
+                                    + transId
+                                    + "execWrite="
+                                    + execWrite);
 
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) return;
@@ -392,15 +378,13 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onMtuChanged(String address, int mtu) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onMtuChanged() - "
-                                        + "device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + ", mtu="
-                                        + mtu);
-                    }
+                    Log.d(
+                            TAG,
+                            "onMtuChanged() - "
+                                    + "device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + ", mtu="
+                                    + mtu);
 
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) return;
@@ -419,17 +403,15 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onPhyUpdate(String address, int txPhy, int rxPhy, int status) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onPhyUpdate() - "
-                                        + "device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + ", txPHy="
-                                        + txPhy
-                                        + ", rxPHy="
-                                        + rxPhy);
-                    }
+                    Log.d(
+                            TAG,
+                            "onPhyUpdate() - "
+                                    + "device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + ", txPHy="
+                                    + txPhy
+                                    + ", rxPHy="
+                                    + rxPhy);
 
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) return;
@@ -448,17 +430,15 @@ public final class BluetoothGattServer implements BluetoothProfile {
                  */
                 @Override
                 public void onPhyRead(String address, int txPhy, int rxPhy, int status) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onPhyUpdate() - "
-                                        + "device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + ", txPHy="
-                                        + txPhy
-                                        + ", rxPHy="
-                                        + rxPhy);
-                    }
+                    Log.d(
+                            TAG,
+                            "onPhyUpdate() - "
+                                    + "device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + ", txPHy="
+                                    + txPhy
+                                    + ", rxPHy="
+                                    + rxPhy);
 
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) return;
@@ -478,20 +458,19 @@ public final class BluetoothGattServer implements BluetoothProfile {
                 @Override
                 public void onConnectionUpdated(
                         String address, int interval, int latency, int timeout, int status) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onConnectionUpdated() - Device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + " interval="
-                                        + interval
-                                        + " latency="
-                                        + latency
-                                        + " timeout="
-                                        + timeout
-                                        + " status="
-                                        + status);
-                    }
+                    Log.d(
+                            TAG,
+                            "onConnectionUpdated() - Device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + " interval="
+                                    + interval
+                                    + " latency="
+                                    + latency
+                                    + " timeout="
+                                    + timeout
+                                    + " status="
+                                    + status);
+
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) return;
 
@@ -515,23 +494,22 @@ public final class BluetoothGattServer implements BluetoothProfile {
                         int contNum,
                         int timeout,
                         int status) {
-                    if (DBG) {
-                        Log.d(
-                                TAG,
-                                "onSubrateChange() - "
-                                        + "Device="
-                                        + BluetoothUtils.toAnonymizedAddress(address)
-                                        + ", subrateFactor="
-                                        + subrateFactor
-                                        + ", latency="
-                                        + latency
-                                        + ", contNum="
-                                        + contNum
-                                        + ", timeout="
-                                        + timeout
-                                        + ", status="
-                                        + status);
-                    }
+                    Log.d(
+                            TAG,
+                            "onSubrateChange() - "
+                                    + "Device="
+                                    + BluetoothUtils.toAnonymizedAddress(address)
+                                    + ", subrateFactor="
+                                    + subrateFactor
+                                    + ", latency="
+                                    + latency
+                                    + ", contNum="
+                                    + contNum
+                                    + ", timeout="
+                                    + timeout
+                                    + ", status="
+                                    + status);
+
                     BluetoothDevice device = mAdapter.getRemoteDevice(address);
                     if (device == null) {
                         return;
@@ -628,7 +606,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public void close() {
-        if (DBG) Log.d(TAG, "close()");
+        Log.d(TAG, "close()");
         unregisterCallback();
     }
 
@@ -667,13 +645,13 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @SuppressWarnings("WaitNotInLoop") // TODO(b/314811467)
     /*package*/ boolean registerCallback(
             BluetoothGattServerCallback callback, boolean eattSupport) {
-        if (DBG) Log.d(TAG, "registerCallback()");
+        Log.d(TAG, "registerCallback()");
         if (mService == null) {
             Log.e(TAG, "GATT service not available");
             return false;
         }
         UUID uuid = UUID.randomUUID();
-        if (DBG) Log.d(TAG, "registerCallback() - UUID=" + uuid);
+        Log.d(TAG, "registerCallback() - UUID=" + uuid);
 
         synchronized (mServerIfLock) {
             if (mCallback != null) {
@@ -714,7 +692,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     private void unregisterCallback() {
-        if (DBG) Log.d(TAG, "unregisterCallback() - mServerIf=" + mServerIf);
+        Log.d(TAG, "unregisterCallback() - mServerIf=" + mServerIf);
         if (mService == null || mServerIf == 0) return;
 
         try {
@@ -763,9 +741,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean connect(BluetoothDevice device, boolean autoConnect) {
-        if (DBG) {
-            Log.d(TAG, "connect() - device: " + device + ", auto: " + autoConnect);
-        }
+        Log.d(TAG, "connect() - device: " + device + ", auto: " + autoConnect);
         if (mService == null || mServerIf == 0) return false;
 
         try {
@@ -794,7 +770,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public void cancelConnection(BluetoothDevice device) {
-        if (DBG) Log.d(TAG, "cancelConnection() - device: " + device);
+        Log.d(TAG, "cancelConnection() - device: " + device);
         if (mService == null || mServerIf == 0) return;
 
         try {
@@ -1014,7 +990,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean addService(BluetoothGattService service) {
-        if (DBG) Log.d(TAG, "addService() - service: " + service.getUuid());
+        Log.d(TAG, "addService() - service: " + service.getUuid());
         if (mService == null || mServerIf == 0) return false;
 
         mPendingService = service;
@@ -1039,7 +1015,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean removeService(BluetoothGattService service) {
-        if (DBG) Log.d(TAG, "removeService() - service: " + service.getUuid());
+        Log.d(TAG, "removeService() - service: " + service.getUuid());
         if (mService == null || mServerIf == 0) return false;
 
         BluetoothGattService intService =
@@ -1062,7 +1038,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public void clearServices() {
-        if (DBG) Log.d(TAG, "clearServices()");
+        Log.d(TAG, "clearServices()");
         if (mService == null || mServerIf == 0) return;
 
         try {

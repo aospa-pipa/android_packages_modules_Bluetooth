@@ -1284,6 +1284,17 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
+    public void onewayFactoryReset() {
+        AdapterService service = getService();
+        if (service == null) {
+            return;
+        }
+
+        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        service.factoryReset();
+    }
+
+    @Override
     public boolean factoryReset(AttributionSource source) {
         AdapterService service = getService();
         if (service == null
