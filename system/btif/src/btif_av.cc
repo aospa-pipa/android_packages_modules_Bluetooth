@@ -63,7 +63,7 @@
 #include "hardware/bt_av.h"
 #include "include/hardware/bt_rc.h"
 #include "os/system_properties.h"
-#include "main/shim/metrics_api.h"
+#include "os/metrics.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
@@ -2055,7 +2055,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
       // incoming/outgoing connect/disconnect requests.
       log::warn("Peer {} : event={}: transitioning to Idle due to ACL Disconnect",
                 peer_.PeerAddress(), BtifAvEvent::EventName(event));
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_ACL_DISCONNECTED, 1);
       btif_report_connection_state(peer_.PeerAddress(), BTAV_CONNECTION_STATE_DISCONNECTED,
                                    bt_status_t::BT_STATUS_FAIL, BTA_AV_FAIL,
@@ -2068,7 +2068,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
     case BTA_AV_REJECT_EVT:
       log::warn("Peer {} : event={} flags={}", peer_.PeerAddress(), BtifAvEvent::EventName(event),
                 peer_.FlagsToString());
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_REJECT_EVT, 1);
       btif_report_connection_state(peer_.PeerAddress(), BTAV_CONNECTION_STATE_DISCONNECTED,
                                    bt_status_t::BT_STATUS_AUTH_REJECTED, BTA_AV_FAIL,
@@ -2150,7 +2150,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
         btif_report_connection_state(peer_.PeerAddress(), BTAV_CONNECTION_STATE_CONNECTED,
                                      bt_status_t::BT_STATUS_SUCCESS, BTA_AV_SUCCESS,
                                      peer_.IsSource() ? A2dpType::kSink : A2dpType::kSource);
-        bluetooth::shim::CountCounterMetrics(
+        bluetooth::os::CountCounterMetrics(
                 android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_SUCCESS, 1);
       } else {
         if (btif_rc_is_connected_peer(peer_.PeerAddress())) {
@@ -2169,7 +2169,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
         btif_report_connection_state(peer_.PeerAddress(), BTAV_CONNECTION_STATE_DISCONNECTED,
                                      bt_status_t::BT_STATUS_FAIL, status,
                                      peer_.IsSource() ? A2dpType::kSink : A2dpType::kSource);
-        bluetooth::shim::CountCounterMetrics(
+        bluetooth::os::CountCounterMetrics(
                 android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_FAILURE, 1);
       }
 
@@ -2209,7 +2209,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
               "Peer {} : event={} : device is already connecting, ignore Connect "
               "request",
               peer_.PeerAddress(), BtifAvEvent::EventName(event));
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_ALREADY_CONNECTING, 1);
       btif_queue_advance();
     } break;
@@ -2221,7 +2221,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
               "Peer {} : event={} : device is already connecting, ignore incoming "
               "request",
               peer_.PeerAddress(), BtifAvEvent::EventName(event));
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_ALREADY_CONNECTING, 1);
     } break;
 
@@ -2229,7 +2229,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
       log::error("Peer {} : event={}: stream is not Opened", peer_.PeerAddress(),
                  BtifAvEvent::EventName(event));
       btif_a2dp_on_offload_started(peer_.PeerAddress(), BTA_AV_FAIL);
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_OFFLOAD_START_REQ_FAILURE, 1);
       break;
 
@@ -2239,7 +2239,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
                                    bt_status_t::BT_STATUS_FAIL, BTA_AV_FAIL,
                                    peer_.IsSource() ? A2dpType::kSink : A2dpType::kSource);
       peer_.StateMachine().TransitionTo(BtifAvStateMachine::kStateIdle);
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_CLOSE, 1);
       DEVICE_IOT_CONFIG_ADDR_INT_ADD_ONE(peer_.PeerAddress(), IOT_CONF_KEY_A2DP_CONN_FAIL_COUNT);
       if (peer_.SelfInitiatedConnection()) {
@@ -2254,7 +2254,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
                                    peer_.IsSource() ? A2dpType::kSink : A2dpType::kSource);
       peer_.StateMachine().TransitionTo(BtifAvStateMachine::kStateIdle);
       DEVICE_IOT_CONFIG_ADDR_INT_ADD_ONE(peer_.PeerAddress(), IOT_CONF_KEY_A2DP_CONN_FAIL_COUNT);
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_DISCONNECTED, 1);
       if (peer_.SelfInitiatedConnection()) {
         btif_queue_advance();
@@ -2273,7 +2273,7 @@ bool BtifAvStateMachine::StateOpening::ProcessEvent(uint32_t event, void* p_data
       CHECK_RC_EVENT(event, reinterpret_cast<tBTA_AV*>(p_data));
 
     default:
-      bluetooth::shim::CountCounterMetrics(
+      bluetooth::os::CountCounterMetrics(
               android::bluetooth::CodePathCounterKeyEnum::A2DP_CONNECTION_UNKNOWN_EVENT, 1);
       log::warn("Peer {} : Unhandled event={}", peer_.PeerAddress(), BtifAvEvent::EventName(event));
       return false;
@@ -2394,8 +2394,7 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event, void* p_data)
         btif_av_source_dispatch_sm_event(peer_.PeerAddress(), BTIF_AV_SUSPEND_STREAM_REQ_EVT);
       }
 
-      if (com::android::bluetooth::flags::av_stream_reconfigure_fix() &&
-          peer_.CheckFlags(BtifAvPeer::kFlagPendingReconfigure)) {
+      if (peer_.CheckFlags(BtifAvPeer::kFlagPendingReconfigure)) {
         log::info(
                 "Peer {} : Stream started but reconfiguration pending. "
                 "Reconfiguring stream",
@@ -3028,7 +3027,7 @@ static void btif_report_audio_state(const RawAddress& peer_address, btav_audio_s
                                                   ? AudioCodingModeEnum::AUDIO_CODING_MODE_HARDWARE
                                                   : AudioCodingModeEnum::AUDIO_CODING_MODE_SOFTWARE;
 
-  bluetooth::shim::LogMetricA2dpPlaybackEvent(peer_address, playback_state, audio_coding_mode);
+  bluetooth::os::LogMetricA2dpPlaybackEvent(peer_address, playback_state, audio_coding_mode);
 }
 
 void btif_av_report_source_codec_state(
@@ -3726,7 +3725,6 @@ bt_status_t btif_av_source_set_codec_config_preference(
   std::future<void> peer_ready_future = peer_ready_promise.get_future();
   bt_status_t status = BT_STATUS_FAIL;
 
-  if (com::android::bluetooth::flags::av_stream_reconfigure_fix()) {
     status = btif_av_source.SetPeerReconfigureStreamData(peer_address, codec_preferences,
                                                          std::move(peer_ready_promise));
     if (status != BT_STATUS_SUCCESS) {
@@ -3738,15 +3736,10 @@ bt_status_t btif_av_source_set_codec_config_preference(
     status = do_in_main_thread(base::BindOnce(&btif_av_handle_event,
                                               AVDT_TSEP_SNK,  // peer_sep
                                               peer_address, kBtaHandleUnknown, btif_av_event));
-  } else {
-    status = do_in_main_thread(base::BindOnce(&BtifAvSource::UpdateCodecConfig,
-                                              base::Unretained(&btif_av_source), peer_address,
-                                              codec_preferences, std::move(peer_ready_promise)));
-  }
 
-  if (status != BT_STATUS_SUCCESS) {
-    log::error("do_in_main_thread failed, status: {}", status);
-    return status;
+    if (status != BT_STATUS_SUCCESS) {
+      log::error("do_in_main_thread failed, status: {}", status);
+      return status;
   }
 
   if (peer_ready_future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {

@@ -73,14 +73,20 @@ java_defaults {
 }
 
 // Qualcomm has their own BluetoothInstrumentationTests
-// android_test {
-//     name: "BluetoothInstrumentationTests",
-//     defaults: ["BluetoothInstrumentationTestsDefaults"],
-// }
+//android_test {
+//    name: "BluetoothInstrumentationTests",
+//    defaults: ["BluetoothInstrumentationTestsDefaults"],
+//    visibility: [
+//        "//platform_testing:__subpackages__",
+//    ],
+//}
 
 android_test {
     name: "GoogleBluetoothInstrumentationTests",
     defaults: ["BluetoothInstrumentationTestsDefaults"],
     test_config: "GoogleAndroidTest.xml",
     instrumentation_target_package: "com.google.android.bluetooth",
+    visibility: [
+        "//platform_testing:__subpackages__",
+    ],
 }
