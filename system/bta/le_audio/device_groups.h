@@ -189,6 +189,8 @@ public:
   bool IsGroupStreamReady(void) const;
   bool IsGroupReadyToCreateStream(void) const;
   bool IsGroupReadyToSuspendStream(void) const;
+  bool IsDirectionAvailableForConfiguration(types::LeAudioContextType configuration_contex_type,
+                                            uint8_t remote_direction) const;
   bool IsSeamlessSupported(void);
   void DisableLeXCodec(bool status);
   void PopulateVendorMetadatabyDirection(types::LeAudioContextType context_type, uint8_t direction,
@@ -220,6 +222,7 @@ public:
                                         bool use_preferred = false) const;
   CodecManager::UnicastConfigurationRequirements GetAudioSetConfigurationRequirements(
           types::LeAudioContextType ctx_type) const;
+  types::BidirectionalPair<bool> GetDirectionSupport(types::LeAudioContextType ctx_type) const;
   bool SetPreferredAudioSetConfiguration(
           const bluetooth::le_audio::btle_audio_codec_config_t& input_codec_config,
           const bluetooth::le_audio::btle_audio_codec_config_t& output_codec_config) const;
@@ -241,6 +244,7 @@ public:
           types::LeAudioContextType ctx_type) const;
   void InvalidateCachedConfigurations(void);
   bool IsLeXDevice(void) const;
+  void InvalidateCachedConfigurations(types::LeAudioContextType context_type);
   void SetPendingConfiguration(void);
   void ClearPendingConfiguration(void);
   void AddToAllowListNotConnectedGroupMembers(int gatt_if);

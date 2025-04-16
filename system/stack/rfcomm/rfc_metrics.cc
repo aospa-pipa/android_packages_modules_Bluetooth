@@ -17,11 +17,11 @@
 
 
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/os_metrics.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/rfcomm/enums.pb.h>
 
 #include "bta/include/bta_jv_api.h"
 #include "common/time_util.h"
-#include "os/metrics.h"
 #include "stack/btm/security_device_record.h"
 #include "stack/include/btm_sec_api_types.h"
 #include "stack/include/port_api.h"
