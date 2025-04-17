@@ -37,6 +37,8 @@
 #include "gd/hci/controller_interface.h"
 #include "main/shim/entry.h"
 #include "osi/include/alarm.h"
+#include "stack/btm/btm_dev.h"
+#include "stack/btm/security_device_record.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/gap_api.h"
@@ -61,9 +63,9 @@ namespace {
 class RasClientImpl;
 RasClientImpl* instance;
 
-enum CallbackDataType { VENDOR_SPECIFIC_REPLY };
-enum TimeoutType { TIMEOUT_NONE, FIRST_SEGMENT, FOLLOWING_SEGMENT, RANGING_DATA_READY };
-enum RangingType { RANGING_TYPE_NONE, REAL_TIME, ON_DEMAND };
+enum class CallbackDataType { VENDOR_SPECIFIC_REPLY };
+enum class TimeoutType { TIMEOUT_NONE, FIRST_SEGMENT, FOLLOWING_SEGMENT, RANGING_DATA_READY };
+enum class RangingType { RANGING_TYPE_NONE, REAL_TIME, ON_DEMAND };
 static constexpr uint16_t kCachedDataSize = 10;
 static constexpr uint16_t kInvalidGattHandle = 0x0000;
 static constexpr uint16_t kFirstSegmentRangingDataTimeoutMs = 5000;
@@ -75,6 +77,7 @@ class RasClientImpl : public bluetooth::ras::RasClient {
   static constexpr uint16_t kCachedDataSize = 10;
   static constexpr uint16_t kInvalidGattHandle = 0x0000;
   static constexpr uint16_t kFirstSegmentRangingDataTimeoutMs = 10000;
+  static constexpr uint16_t kLowPowerFirstSegmentRangingDataTimeoutMs = 10000;
   static constexpr uint16_t kFollowingSegmentTimeoutMs = 1000;
   static constexpr uint16_t kRangingDataReadyTimeoutMs = 5000;
   static constexpr uint16_t kInvalidConnInterval = 0;  // valid value is from 0x0006 to 0x0C0
@@ -116,8 +119,8 @@ public:
     uint8_t write_reply_counter_ = 0;
     uint8_t write_reply_success_counter_ = 0;
     alarm_t* ranging_data_timeout_timer_ = nullptr;
-    RangingType ranging_type_ = RANGING_TYPE_NONE;
-    TimeoutType timeout_type_ = TIMEOUT_NONE;
+    RangingType ranging_type_ = RangingType::RANGING_TYPE_NONE;
+    TimeoutType timeout_type_ = TimeoutType::TIMEOUT_NONE;
     uint16_t conn_interval_ = kInvalidConnInterval;
     uint16_t mtu = kDefaultGattMtu;
 
@@ -198,8 +201,8 @@ public:
       uint16_t real_time_att_handle =
               characteristic == nullptr ? kInvalidGattHandle : characteristic->value_handle;
       // Check if the Real-Time ranging unsubscribed due to timeout
-      if (characteristic != nullptr && tracker->ranging_type_ == RANGING_TYPE_NONE) {
-        tracker->ranging_type_ = REAL_TIME;
+      if (characteristic != nullptr && tracker->ranging_type_ == RangingType::RANGING_TYPE_NONE) {
+        tracker->ranging_type_ = RangingType::REAL_TIME;
         SubscribeCharacteristic(tracker, kRasRealTimeRangingDataCharacteristic);
         SetTimeOutAlarm(tracker, kFirstSegmentRangingDataTimeoutMs, TimeoutType::FIRST_SEGMENT);
       }
@@ -480,7 +483,7 @@ public:
     bool is_last = (data[0] >> 1 & 0x01);
     alarm_cancel(tracker->ranging_data_timeout_timer_);
     if (!is_last) {
-      SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs, FOLLOWING_SEGMENT);
+      SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs, TimeoutType::FOLLOWING_SEGMENT);
     }
     callbacks_->OnRemoteData(tracker->address_for_cs_, data);
   }
@@ -513,7 +516,7 @@ public:
 
     // Send get ranging data command
     tracker->latest_ranging_counter_ = ranging_counter;
-    if (tracker->timeout_type_ == RANGING_DATA_READY) {
+    if (tracker->timeout_type_ == TimeoutType::RANGING_DATA_READY) {
       alarm_cancel(tracker->ranging_data_timeout_timer_);
     }
     GetRangingData(ranging_counter, tracker);
@@ -811,21 +814,21 @@ public:
   void AllCharacteristicsReadComplete(std::shared_ptr<RasTracker> tracker) {
     if (tracker->remote_supported_features_ & feature::kRealTimeRangingData) {
       log::info("Subscribe Real-time Ranging Data");
-      tracker->ranging_type_ = REAL_TIME;
+      tracker->ranging_type_ = RangingType::REAL_TIME;
       if (!SubscribeCharacteristic(tracker, kRasRealTimeRangingDataCharacteristic)) {
         callbacks_->OnDisconnected(tracker->address_for_cs_,
                                    RasDisconnectReason::SERVER_NOT_AVAILABLE);
         return;
       }
-      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(tracker->address_);
-      if(p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
-        SetTimeOutAlarm(tracker, kFirstSegmentRangingDataTimeoutMs_lowpower, TimeoutType::FIRST_SEGMENT);
-      } else {
-        SetTimeOutAlarm(tracker, kFirstSegmentRangingDataTimeoutMs, TimeoutType::FIRST_SEGMENT);
+      uint16_t first_segment_timeout_ms = kFirstSegmentRangingDataTimeoutMs;
+      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(tracker->address_);
+      if (p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
+        first_segment_timeout_ms = kLowPowerFirstSegmentRangingDataTimeoutMs;
       }
+      SetTimeOutAlarm(tracker, first_segment_timeout_ms, TimeoutType::FIRST_SEGMENT);
     } else {
       log::info("Subscribe On-demand Ranging Data");
-      tracker->ranging_type_ = ON_DEMAND;
+      tracker->ranging_type_ = RangingType::ON_DEMAND;
       if (!SubscribeCharacteristic(tracker, kRasOnDemandDataCharacteristic) ||
           !SubscribeCharacteristic(tracker, kRasRangingDataReadyCharacteristic) ||
           !SubscribeCharacteristic(tracker, kRasRangingDataOverWrittenCharacteristic)) {
@@ -946,20 +949,21 @@ public:
     }
 
     switch (tracker->timeout_type_) {
-      case FIRST_SEGMENT:
-      case FOLLOWING_SEGMENT: {
-        auto timeout_type_text =
-                tracker->timeout_type_ == FIRST_SEGMENT ? "first segment" : "following segment";
-        if (tracker->ranging_type_ == REAL_TIME) {
+      case TimeoutType::FIRST_SEGMENT:
+      case TimeoutType::FOLLOWING_SEGMENT: {
+        auto timeout_type_text = tracker->timeout_type_ == TimeoutType::FIRST_SEGMENT
+                                         ? "first segment"
+                                         : "following segment";
+        if (tracker->ranging_type_ == RangingType::REAL_TIME) {
           log::error("Timeout to receive {} of Real-time ranging data", timeout_type_text);
           UnsubscribeCharacteristic(tracker, kRasRealTimeRangingDataCharacteristic);
-          tracker->ranging_type_ = RANGING_TYPE_NONE;
+          tracker->ranging_type_ = RangingType::RANGING_TYPE_NONE;
         } else {
           log::error("Timeout to receive {} of On-Demand ranging data", timeout_type_text);
           AbortOperation(tracker);
         }
       } break;
-      case RANGING_DATA_READY: {
+      case TimeoutType::RANGING_DATA_READY: {
         log::error("Timeout to receive ranging data ready");
       } break;
       default:

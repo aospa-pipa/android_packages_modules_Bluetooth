@@ -13,13 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "bluetooth_event.h"
-
+#include <bluetooth/metrics/bluetooth_event.h>
+#include <bluetooth/metrics/os_metrics.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
 
 #include "bta/include/bta_hfp_api.h"
 #include "main/shim/helpers.h"
-#include "os/metrics.h"
 #include "stack/include/btm_api_types.h"
 
 namespace bluetooth {
@@ -374,9 +373,8 @@ void LogAclCompletionEvent(const hci::Address& address, ErrorCode reason,
 }
 
 void LogRemoteNameRequestCompletion(const RawAddress& address, tHCI_STATUS hci_status) {
-  bluetooth::os::LogMetricBluetoothEvent(
-          address, EventType::REMOTE_NAME_REQUEST,
-          MapHCIStatusToState(hci_status));
+  bluetooth::os::LogMetricBluetoothEvent(address, EventType::REMOTE_NAME_REQUEST,
+                                         MapHCIStatusToState(hci_status));
 }
 
 void LogAclDisconnectionEvent(const hci::Address& address, ErrorCode reason,
@@ -507,6 +505,21 @@ void LogMetricScoLinkRemoved(hci::Address address) {
 void LogMetricScoCodec(hci::Address address, uint16_t codec) {
   bluetooth::os::LogMetricBluetoothEvent(address, EventType::SCO_CODEC,
                                          bluetooth::metrics::MapScoCodecToState(codec));
+}
+
+void LogMetricHfpStartStream(hci::Address address) {
+  bluetooth::os::LogMetricBluetoothEvent(address, EventType::SCO_SESSION,
+                                         State::AUDIO_PORT_START_STREAM);
+}
+
+void LogMetricHfpSuspendStream(hci::Address address) {
+  bluetooth::os::LogMetricBluetoothEvent(address, EventType::SCO_SESSION,
+                                         State::AUDIO_PORT_SUSPEND_STREAM);
+}
+
+void LogMetricHfpStreamStarted(hci::Address address) {
+  bluetooth::os::LogMetricBluetoothEvent(address, EventType::SCO_SESSION,
+                                         State::AUDIO_PROVIDER_STREAM_STARTED);
 }
 
 }  // namespace metrics

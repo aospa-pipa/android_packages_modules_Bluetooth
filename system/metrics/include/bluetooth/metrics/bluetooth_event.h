@@ -16,10 +16,11 @@
 
 #pragma once
 
+#include <bluetooth/metrics/os_metrics.h>
+
 #include "bta/include/bta_sec_api.h"
 #include "hci/address.h"
 #include "hci/hci_packets.h"
-#include "os/metrics.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/hci_error_code.h"
 #include "types/raw_address.h"
@@ -138,6 +139,24 @@ void LogMetricScoLinkRemoved(hci::Address address);
  * @param codec
  */
 void LogMetricScoCodec(hci::Address address, uint16_t codec);
+
+/**
+ * Logs when IBluetoothAudioPort#startStream() is called when opening a SCO
+ * @param address
+ */
+void LogMetricHfpStartStream(hci::Address address);
+
+/**
+ * Logs when IBluetoothAudioPort#stopStream() is called when closing a SCO
+ * @param address
+ */
+void LogMetricHfpSuspendStream(hci::Address address);
+
+/**
+ * Logs when IBluetoothAudioProvider#streamStarted() is called to indicate SCO has opened
+ * @param address
+ */
+void LogMetricHfpStreamStarted(hci::Address address);
 
 }  // namespace metrics
 }  // namespace bluetooth

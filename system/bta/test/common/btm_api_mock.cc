@@ -25,6 +25,7 @@
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
+#include "stack/include/btm_ble_addr.h"
 #include "stack/include/btm_ble_sec_api.h"
 #include "test/mock/mock_stack_btm_interface.h"
 #include "types/raw_address.h"
@@ -89,6 +90,16 @@ tBTM_SEC_DEV_REC* btm_find_dev(const RawAddress& bd_addr) {
 uint16_t BTM_GetHCIConnHandle(RawAddress const& bd_addr, tBT_TRANSPORT transport) {
   log::assert_that(btm_interface != nullptr, "Mock btm interface not set!");
   return btm_interface->GetHCIConnHandle(bd_addr, transport);
+}
+
+bool maybe_resolve_address(RawAddress* bda, tBLE_ADDR_TYPE* bda_type) {
+  log::assert_that(btm_interface != nullptr, "Mock btm interface not set!");
+  return btm_interface->MaybeResolveAddress(bda, bda_type);
+}
+
+bool btm_random_pseudo_to_identity_addr(RawAddress* random_pseudo, uint8_t* p_static_addr_type) {
+  log::assert_that(btm_interface != nullptr, "Mock btm interface not set!");
+  return btm_interface->BTM_RandomPseudoToIdentityAddr(random_pseudo, p_static_addr_type);
 }
 
 void acl_disconnect_from_handle(uint16_t handle, tHCI_STATUS reason, std::string /*comment*/) {

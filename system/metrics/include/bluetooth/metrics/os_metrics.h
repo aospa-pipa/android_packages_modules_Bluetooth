@@ -25,6 +25,7 @@
 
 #include <vector>
 
+#include "btif/include/btif_bqr.h"
 #include "hci/address.h"
 #include "types/raw_address.h"
 
@@ -154,17 +155,6 @@ void LogMetricA2dpSessionMetricsEvent(const hci::Address& address, int64_t audio
  */
 void LogMetricHfpPacketLossStats(const hci::Address& address, int num_decoded_frames,
                                  double packet_loss_ratio, uint16_t codec_id);
-
-/**
- * Log Mmc transcode round-trip time statistics
- *
- * @param maximum_rtt maximum round-trip time in this session
- * @param mean_rtt the average of round-trip time in this session
- * @param num_requests the number of transcoding requests in the session
- * @param codec_type codec type used in this session
- */
-void LogMetricMmcTranscodeRttStats(int maximum_rtt, double mean_rtt, int num_requests,
-                                   int codec_type);
 
 /**
  * Log read RSSI result
@@ -393,14 +383,7 @@ void LogMetricLeAudioConnectionSessionReported(
 
 void LogMetricLeAudioBroadcastSessionReported(int64_t duration_nanos);
 
-void LogMetricBluetoothQualityReport(
-        uint8_t quality_report_id, uint8_t packet_types, uint16_t connection_handle,
-        uint8_t connection_role, int8_t tx_power_level, int8_t rssi, uint8_t snr,
-        uint8_t unused_afh_channel_count, uint8_t afh_select_unideal_channel_count, uint16_t lsto,
-        uint32_t connection_piconet_clock, uint32_t retransmission_count, uint32_t no_rx_count,
-        uint32_t nak_count, uint32_t last_tx_ack_timestamp, uint32_t flow_off_count,
-        uint32_t last_flow_on_timestamp, uint32_t buffer_overflow_bytes,
-        uint32_t buffer_underflow_bytes);
+void LogMetricBluetoothQualityReport(const bqr::BqrLinkQualityEvent& event);
 
 }  // namespace os
 }  // namespace bluetooth

@@ -33,6 +33,7 @@
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/metric_id_api.h>
 
 #include <cstdint>
 #include <cstdlib>
@@ -99,7 +100,6 @@
 #include "hardware/bt_vc.h"
 #include "internal_include/bt_target.h"
 #include "main/shim/dumpsys.h"
-#include "main/shim/metric_id_api.h"
 #include "os/parameter_provider.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocator.h"
@@ -1361,18 +1361,20 @@ void invoke_adapter_properties_cb(bt_status_t status, int num_properties,
           status, num_properties, property_deep_copy_array(num_properties, properties)));
 }
 
-void invoke_remote_device_properties_cb(bt_status_t status, RawAddress bd_addr, int num_properties,
+void invoke_remote_device_properties_cb(bt_status_t status, RawAddress bd_addr,
+                                        uint8_t address_type, int num_properties,
                                         bt_property_t* properties) {
   do_in_jni_thread(base::BindOnce(
-          [](bt_status_t status, RawAddress bd_addr, int num_properties,
+          [](bt_status_t status, RawAddress bd_addr, uint8_t address_type, int num_properties,
              bt_property_t* properties) {
-            HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status, &bd_addr, num_properties,
-                      properties);
+            HAL_CBACK(bt_hal_cbacks, remote_device_properties_cb, status, &bd_addr, address_type,
+                      num_properties, properties);
             if (properties) {
               osi_free(properties);
             }
           },
-          status, bd_addr, num_properties, property_deep_copy_array(num_properties, properties)));
+          status, bd_addr, address_type, num_properties,
+          property_deep_copy_array(num_properties, properties)));
 }
 
 void invoke_device_found_cb(int num_properties, bt_property_t* properties) {

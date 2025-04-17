@@ -18,6 +18,7 @@
 
 #include <bluetooth/log.h>
 #include <signal.h>
+#include <bluetooth/metrics/os_metrics.h>
 
 #include <map>
 #include <utility>
@@ -31,7 +32,6 @@
 #include "hci/inquiry_interface.h"
 #include "main/shim/entry.h"
 #include "os/alarm.h"
-#include "os/metrics.h"
 #include "os/queue.h"
 #include "os/system_properties.h"
 #include "osi/include/properties.h"
