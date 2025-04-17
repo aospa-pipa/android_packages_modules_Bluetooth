@@ -497,6 +497,7 @@ public class A2dpService extends ProfileService {
         synchronized (mActiveSwitchingGuard) {
             BluetoothDevice previousActiveDevice = null;
             synchronized (mStateMachines) {
+                Log.d(TAG," removeActiveDevice(): mActiveDevice: " + mActiveDevice);
                 if (mActiveDevice == null) return true;
                 previousActiveDevice = mActiveDevice;
                 mActiveDevice = null;
