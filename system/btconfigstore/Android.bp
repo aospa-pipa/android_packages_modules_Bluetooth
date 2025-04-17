@@ -23,7 +23,7 @@ cc_library_static {
          "vendor.qti.hardware.btconfigstore@2.0",
     ],
     apex_available: [
-        "com.android.btservices",
+        "com.android.bt",
     ],
     min_sdk_version: "Tiramisu",
 }

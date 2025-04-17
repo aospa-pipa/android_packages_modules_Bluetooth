@@ -22,6 +22,7 @@
 
 #include <android_bluetooth_sysprop.h>
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/os_metrics.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <future>
@@ -32,7 +33,6 @@
 #include "hci/controller_interface.h"
 #include "hci/event_checkers.h"
 #include "hci/hci_layer.h"
-#include "os/metrics.h"
 #include "os/system_properties.h"
 #include "stack/include/hcidefs.h"
 #if TARGET_FLOSS

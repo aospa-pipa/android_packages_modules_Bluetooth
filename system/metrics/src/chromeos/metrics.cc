@@ -16,10 +16,27 @@
  *
  ******************************************************************************/
 
-#include "os/metrics.h"
+#include <bluetooth/log.h>
+#include <bluetooth/metrics/os_metrics.h>
+#include <metrics/structured_events.h>
 
 namespace bluetooth {
 namespace os {
+
+namespace {
+
+// The path to the kernel's boot_id.
+const char kBootIdPath[] = "/proc/sys/kernel/random/boot_id";
+
+static bool GetBootId(std::string* boot_id) {
+  if (!base::ReadFileToString(base::FilePath(kBootIdPath), boot_id)) {
+    return false;
+  }
+  base::TrimWhitespaceASCII(*boot_id, base::TRIM_TRAILING, boot_id);
+  return true;
+}
+
+}  // namespace
 
 using bluetooth::hci::Address;
 
@@ -42,7 +59,51 @@ void LogMetricA2dpAudioUnderrunEvent(const Address& address, uint64_t encoding_i
 
 void LogMetricA2dpAudioOverrunEvent(const Address& address, uint64_t encoding_interval_millis,
                                     int num_dropped_buffers, int num_dropped_encoded_frames,
-                                    int num_dropped_encoded_bytes) {}
+                                    int num_dropped_encoded_bytes) {
+  std::string boot_id;
+  std::string addr_string;
+
+  if (!metrics::GetBootId(&boot_id)) {
+    return;
+  }
+
+  addr_string = address.ToString();
+
+  log::debug("A2dpAudioOverrun: {}, {}, {}, {}, {}, {}", boot_id, address, encoding_interval_millis,
+             num_dropped_buffers, num_dropped_encoded_bytes, num_dropped_encoded_bytes);
+
+  ::metrics::structured::events::bluetooth::BluetoothA2dpAudioOverrun()
+          .SetBootId(boot_id)
+          .SetDeviceId(addr_string)
+          .SetEncodingInterval(encoding_interval_millis)
+          .SetDroppedBuffers(num_dropped_buffers)
+          .SetDroppedFrames(num_dropped_encoded_frames)
+          .SetDroppedBytes(num_dropped_encoded_bytes)
+          .Record();
+}
+
+void LogMetricHfpPacketLossStats(const Address& address, int num_decoded_frames,
+                                 double packet_loss_ratio, uint16_t codec_type) {
+  std::string boot_id;
+  std::string addr_string;
+
+  if (!metrics::GetBootId(&boot_id)) {
+    return;
+  }
+
+  addr_string = address.ToString();
+
+  log::debug("HfpPacketLoss: {}, {}, {}, {:f}, {}", boot_id, address, num_decoded_frames,
+             packet_loss_ratio, codec_type);
+
+  ::metrics::structured::events::bluetooth::BluetoothHfpPacketLoss()
+          .SetBootId(boot_id)
+          .SetDeviceId(addr_string)
+          .SetDecodedFrames(num_decoded_frames)
+          .SetPacketLossRatio(packet_loss_ratio)
+          .SetCodecType(codec_type)
+          .Record();
+}
 
 void LogMetricReadRssiResult(const Address& address, uint16_t handle, uint32_t cmd_status,
                              int8_t rssi) {}
@@ -79,18 +140,42 @@ void LogMetricSmpPairingEvent(const Address& address, uint16_t smp_cmd,
 void LogMetricA2dpPlaybackEvent(const Address& address, int playback_state, int audio_coding_mode) {
 }
 
-void LogMetricA2dpSessionMetricsEvent(const Address& address, int64_t audio_duration_ms,
+void LogMetricA2dpSessionMetricsEvent(const hci::Address& address, int64_t audio_duration_ms,
                                       int media_timer_min_ms, int media_timer_max_ms,
                                       int media_timer_avg_ms, int total_scheduling_count,
                                       int buffer_overruns_max_count, int buffer_overruns_total,
                                       float buffer_underruns_average, int buffer_underruns_count,
-                                      int64_t codec_index, bool is_a2dp_offload) {}
+                                      int64_t codec_index, bool is_a2dp_offload) {
+  std::string boot_id;
+  std::string addr_string;
 
-void LogMetricHfpPacketLossStats(const Address& address, int num_decoded_frames,
-                                 double packet_loss_ratio, uint16_t codec_type) {}
+  if (!metrics::GetBootId(&boot_id)) {
+    return;
+  }
 
-void LogMetricMmcTranscodeRttStats(int maximum_rtt, double mean_rtt, int num_requests,
-                                   int codec_type) {}
+  addr_string = address.ToString();
+
+  log::debug("A2dpSessionMetrics: {}, {}, {}, {}, {}, {}, {}, {}, {}, {:f}, {}, {}, {}", boot_id,
+             address, audio_duration_ms, media_timer_min_ms, media_timer_max_ms, media_timer_avg_ms,
+             total_scheduling_count, buffer_overruns_max_count, buffer_overruns_total,
+             buffer_underruns_average, buffer_underruns_count, codec_index, is_a2dp_offload);
+
+  ::metrics::structured::events::bluetooth::BluetoothA2dpSession()
+          .SetBootId(boot_id)
+          .SetDeviceId(addr_string)
+          .SetAudioDuration(audio_duration_ms)
+          .SetMediaTimerMin(media_timer_min_ms)
+          .SetMediaTimerMax(media_timer_max_ms)
+          .SetMediaTimerAvg(media_timer_avg_ms)
+          .SetTotalSchedulingCount(total_scheduling_count)
+          .SetBufferOverrunsMaxCount(buffer_overruns_max_count)
+          .SetBufferOverrunsTotal(buffer_overruns_total)
+          .SetBufferUnderrunsAvg(buffer_underruns_average)
+          .SetBufferUnderrunsCount(buffer_underruns_count)
+          .SetCodecIndex(codec_index)
+          .SetIsA2dpOffload(is_a2dp_offload)
+          .Record();
+}
 
 void LogMetricBluetoothHalCrashReason(const Address& address, uint32_t error_code,
                                       uint32_t vendor_error_code) {}
@@ -111,17 +196,17 @@ void CountCounterMetrics(android::bluetooth::CodePathCounterKeyEnum key, int64_t
 
 void LogMetricBluetoothLEConnection(os::LEConnectionSessionOptions /* session_options */) {}
 
-void LogMetricRfcommConnectionAtClose(const Address& raw_address,
-                                      android::bluetooth::rfcomm::PortResult close_reason,
-                                      android::bluetooth::rfcomm::SocketConnectionSecurity security,
-                                      android::bluetooth::rfcomm::RfcommPortEvent last_event,
-                                      android::bluetooth::rfcomm::RfcommPortState previous_state,
-                                      int32_t open_duration_ms, int32_t uid,
-                                      android::bluetooth::BtaStatus sdp_status, bool is_server,
-                                      bool sdp_initiated, int32_t sdp_duration_ms) {}
-
 void LogMetricBluetoothEvent(const Address& address, android::bluetooth::EventType event_type,
                              android::bluetooth::State state) {}
+
+void LogMetricRfcommConnectionAtClose(
+        const Address& /* raw_address */, android::bluetooth::rfcomm::PortResult /* close_reason */,
+        android::bluetooth::rfcomm::SocketConnectionSecurity /* security */,
+        android::bluetooth::rfcomm::RfcommPortEvent /* last_event */,
+        android::bluetooth::rfcomm::RfcommPortState /* previous_state */,
+        int32_t /* open_duration_ms */, int32_t /* uid */,
+        android::bluetooth::BtaStatus /* sdp_status */, bool /* is_server */,
+        bool /* sdp_initiated */, int32_t /* sdp_duration_ms */) {}
 
 void LogMetricLeAudioConnectionSessionReported(
         int32_t /*group_size*/, int32_t /*group_metric_id*/, int64_t /*connection_duration_nanos*/,
@@ -137,14 +222,7 @@ void LogMetricLeAudioConnectionSessionReported(
 
 void LogMetricLeAudioBroadcastSessionReported(int64_t /*duration_nanos*/) {}
 
-void LogMetricBluetoothQualityReport(
-        uint8_t quality_report_id, uint8_t packet_types, uint16_t connection_handle,
-        uint8_t connection_role, int8_t tx_power_level, int8_t rssi, uint8_t snr,
-        uint8_t unused_afh_channel_count, uint8_t afh_select_unideal_channel_count, uint16_t lsto,
-        uint32_t connection_piconet_clock, uint32_t retransmission_count, uint32_t no_rx_count,
-        uint32_t nak_count, uint32_t last_tx_ack_timestamp, uint32_t flow_off_count,
-        uint32_t last_flow_on_timestamp, uint32_t buffer_overflow_bytes,
-        uint32_t buffer_underflow_bytes) {}
+void LogMetricBluetoothQualityReport(const bqr::BqrLinkQualityEvent& /*event*/) {}
 
 }  // namespace os
 }  // namespace bluetooth

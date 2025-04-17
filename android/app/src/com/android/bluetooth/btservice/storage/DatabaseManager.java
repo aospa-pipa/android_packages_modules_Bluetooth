@@ -1184,6 +1184,9 @@ public class DatabaseManager {
 
     /** Clear all persistence data in database */
     public void factoryReset() {
+        if (Flags.factoryResetAtBluetoothStart()) {
+            throw new IllegalStateException("flag factoryResetAtBluetoothStart is enabled");
+        }
         Log.w(TAG, "factoryReset");
         mHandler.sendEmptyMessage(MSG_CLEAR_DATABASE);
     }
