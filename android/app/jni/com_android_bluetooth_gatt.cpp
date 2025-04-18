@@ -71,6 +71,7 @@
 #include <utility>
 #include <vector>
 
+#include "bta/include/bta_ras_api.h"
 #include "com_android_bluetooth.h"
 #include "com_android_bluetooth_flags.h"
 #include "hardware/ble_advertiser.h"
@@ -84,7 +85,6 @@
 #include "hardware/distance_measurement_interface.h"
 #include "main/shim/le_scanning_manager.h"
 #include "rust/cxx.h"
-#include "src/core/ffi/module.h"
 #include "src/gatt/ffi.rs.h"
 #include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
@@ -266,6 +266,11 @@ static jmethodID method_onDistanceMeasurementResult;
  * Static variables
  */
 static const btgatt_interface_t* sGattIf = NULL;
+
+// Whilst sGattIf is initialized (with the callbacks we use below), sPrivateGattServerManager *must*
+// be initialised because the callbacks make use of sPrivateGattServerManager.
+static bluetooth::gatt::PrivateGattServerManager* sPrivateGattServerManager = NULL;
+
 /** Pointer to the LE scanner interface methods.*/
 static BleScannerInterface* sScanner = NULL;
 static jobject mCallbacksObj = NULL;
@@ -614,12 +619,7 @@ static const btgatt_client_callbacks_t sGattClientCallbacks = {
  */
 
 static void btgatts_register_app_cb(int status, int server_if, const Uuid& uuid) {
-  // TODO(b/356462170): Remove this when we have fixed the bug
-  if (!is_module_started(&rust_module)) {
-    log::error("Rust module isn't started! only_start_scan_during_ble_on={}",
-               com::android::bluetooth::flags::only_start_scan_during_ble_on());
-  }
-  bluetooth::gatt::open_server(server_if);
+  sPrivateGattServerManager->OpenServer(server_if);
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
@@ -654,7 +654,7 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
               curr_service.attribute_handle, curr_service.properties,
               curr_service.extended_properties, curr_service.permissions});
     }
-    bluetooth::gatt::add_service(server_if, std::move(service_records));
+    sPrivateGattServerManager->AddService(server_if, std::move(service_records));
   }
 
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
@@ -676,7 +676,7 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
 }
 
 static void btgatts_service_stopped_cb(int status, int server_if, int srvc_handle) {
-  bluetooth::gatt::remove_service(server_if, srvc_handle);
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
 
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
@@ -688,7 +688,7 @@ static void btgatts_service_stopped_cb(int status, int server_if, int srvc_handl
 }
 
 static void btgatts_service_deleted_cb(int status, int server_if, int srvc_handle) {
-  bluetooth::gatt::remove_service(server_if, srvc_handle);
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
 
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
@@ -1243,6 +1243,10 @@ static void initializeNative(JNIEnv* env, jobject object) {
     log::warn("Cleaning up Bluetooth GATT Interface before initializing...");
     sGattIf->cleanup();
     sGattIf = NULL;
+
+    // Drop sPrivateGattServerManager
+    rust::Box<bluetooth::gatt::PrivateGattServerManager>::from_raw(sPrivateGattServerManager);
+    sPrivateGattServerManager = NULL;
   }
 
   if (mCallbacksObj != NULL) {
@@ -1264,10 +1268,13 @@ static void initializeNative(JNIEnv* env, jobject object) {
     return;
   }
 
-  if (com::android::bluetooth::flags::only_start_scan_during_ble_on()) {
-    log::info("Starting rust module");
-    btIf->start_rust_module();
-  }
+  // NewPrivateGattServerManager returns an object that we own, but it has a non-trivial destructor
+  // so we cannot store it in a static variable.  It will be cleaned up in cleanupNative.
+  sPrivateGattServerManager =
+          bluetooth::gatt::NewPrivateGattServerManager(
+                  std::make_unique<bluetooth::gatt::GattServerCallbacks>(sGattServerCallbacks),
+                  bluetooth::shim::arbiter::GetArbiter())
+                  .into_raw();
 
   sGattIf->advertiser->RegisterCallbacks(JniAdvertisingCallbacks::GetInstance());
   sGattIf->distance_measurement_manager->RegisterDistanceMeasurementCallbacks(
@@ -1283,14 +1290,13 @@ static void cleanupNative(JNIEnv* env, jobject /* object */) {
     return;
   }
 
-  if (com::android::bluetooth::flags::only_start_scan_during_ble_on()) {
-    log::info("Stopping rust module");
-    btIf->stop_rust_module();
-  }
-
   if (sGattIf != NULL) {
     sGattIf->cleanup();
     sGattIf = NULL;
+
+    // Drop sPrivateGattServerManager
+    rust::Box<bluetooth::gatt::PrivateGattServerManager>::from_raw(sPrivateGattServerManager);
+    sPrivateGattServerManager = NULL;
   }
 
   if (mCallbacksObj != NULL) {
@@ -2083,7 +2089,7 @@ static void gattServerUnregisterAppNative(JNIEnv* /* env */, jobject /* object *
   if (!sGattIf) {
     return;
   }
-  bluetooth::gatt::close_server(serverIf);
+  sPrivateGattServerManager->CloseServer(serverIf);
   sGattIf->server->unregister_server(serverIf);
 }
 
@@ -2238,9 +2244,9 @@ static void gattServerSendIndicationNative(JNIEnv* env, jobject /* object */, ji
   jbyte* array = env->GetByteArrayElements(val, 0);
   int val_len = env->GetArrayLength(val);
 
-  if (bluetooth::gatt::is_connection_isolated(conn_id)) {
+  if (sPrivateGattServerManager->IsConnectionIsolated(conn_id)) {
     auto data = ::rust::Slice<const uint8_t>((uint8_t*)array, val_len);
-    bluetooth::gatt::send_indication(server_if, attr_handle, conn_id, data);
+    sPrivateGattServerManager->SendIndication(server_if, attr_handle, conn_id, data);
   } else {
     sGattIf->server->send_indication(server_if, attr_handle, conn_id,
                                      /*confirm*/ 1, (uint8_t*)array, val_len);
@@ -2293,9 +2299,9 @@ static void gattServerSendResponseNative(JNIEnv* env, jobject /* object */, jint
     env->ReleaseByteArrayElements(val, array, JNI_ABORT);
   }
 
-  if (bluetooth::gatt::is_connection_isolated(conn_id)) {
+  if (sPrivateGattServerManager->IsConnectionIsolated(conn_id)) {
     auto data = ::rust::Slice<const uint8_t>(response.attr_value.value, response.attr_value.len);
-    bluetooth::gatt::send_response(server_if, conn_id, trans_id, status, data);
+    sPrivateGattServerManager->SendResponse(server_if, conn_id, trans_id, status, data);
   } else {
     sGattIf->server->send_response(conn_id, trans_id, status, response);
   }
@@ -2445,7 +2451,7 @@ static void ble_advertising_set_started_cb(int reg_id, int server_if, uint8_t ad
 
   // tie advertiser ID to server_if, once the advertisement has started
   if (status == 0 /* AdvertisingCallback::AdvertisingStatus::SUCCESS */ && server_if != 0) {
-    bluetooth::gatt::associate_server_with_advertiser(server_if, advertiser_id);
+    sPrivateGattServerManager->AssociateServerWithAdvertiser(server_if, advertiser_id);
   }
 
   sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj, method_onAdvertisingSetStarted, reg_id,
@@ -2523,13 +2529,11 @@ static void startAdvertisingSetNative(JNIEnv* env, jobject /* object */, jobject
 }
 
 static void stopAdvertisingSetNative(JNIEnv* /* env */, jobject /* object */, jint advertiser_id) {
-
-  bluetooth::gatt::clear_advertiser(advertiser_id);
-
   if (!sGattIf) {
     return;
   }
 
+  sPrivateGattServerManager->ClearAdvertiser(advertiser_id);
   sGattIf->advertiser->Unregister(advertiser_id);
 }
 
