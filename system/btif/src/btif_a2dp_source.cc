@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <cstring>
 #include <future>
+#include <iomanip>
 #include <string>
 #include <utility>
 #include <vector>
@@ -684,9 +685,17 @@ static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
   }
 
   if (bluetooth::audio::a2dp::is_hal_enabled()) {
-    bluetooth::audio::a2dp::setup_codec(a2dp_codec_config,
-                                        btif_a2dp_get_peer_mtu(a2dp_codec_config),
-                                        bta_av_co_get_encoder_preferred_interval_us());
+    bluetooth::audio::a2dp::ahal_codec_configuration config = {
+            .peer_mtu = btif_a2dp_get_peer_mtu(a2dp_codec_config),
+            .preferred_encoding_interval_us = bta_av_co_get_encoder_preferred_interval_us(),
+            .codec_bitrate = a2dp_codec_config->getTrackBitRate(),
+            .codec_config = a2dp_codec_config->getCodecConfig(),
+    };
+    a2dp_codec_config->copyOutOtaCodecConfig(config.codec_specific_information_elements);
+
+    log::verbose("{}", config.ToString());
+
+    bluetooth::audio::a2dp::setup_codec(config);
   }
 }
 
@@ -785,10 +794,23 @@ void btif_a2dp_update_codec_mode() {
 
 static void btif_a2dp_update_codec_mode_event() {
   log::info("state={}", btif_a2dp_source_cb.StateStr());
+  A2dpCodecConfig* a2dp_codec_config = bta_av_get_a2dp_current_codec();
+  if (a2dp_codec_config == nullptr) {
+    log::error("Cannot stream audio: current codec is not set");
+    return;
+  }
   if (bluetooth::audio::a2dp::is_hal_enabled()) {
-    bluetooth::audio::a2dp::setup_codec(bta_av_get_a2dp_current_codec(),
-                                        btif_a2dp_get_peer_mtu(bta_av_get_a2dp_current_codec()),
-                                        bta_av_co_get_encoder_preferred_interval_us());
+    bluetooth::audio::a2dp::ahal_codec_configuration config = {
+            .peer_mtu = btif_a2dp_get_peer_mtu(a2dp_codec_config),
+            .preferred_encoding_interval_us = bta_av_co_get_encoder_preferred_interval_us(),
+            .codec_bitrate = a2dp_codec_config->getTrackBitRate(),
+            .codec_config = a2dp_codec_config->getCodecConfig(),
+    };
+    a2dp_codec_config->copyOutOtaCodecConfig(config.codec_specific_information_elements);
+
+    log::verbose("{}", config.ToString());
+
+    bluetooth::audio::a2dp::setup_codec(config);
   }
 }
 

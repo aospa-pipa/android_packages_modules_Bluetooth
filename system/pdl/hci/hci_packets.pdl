@@ -6930,9 +6930,10 @@ enum CsPacketNadm : 8 {
   UNKNOWN_NADM = 0xFF,
 }
 
-struct LeCsToneData {
+struct LeCsPacketPct {
   i_sample : 12,
   q_sample : 12,
+  _reserved_ : 8,
 }
 
 struct LeCsMode1InitatorData {
@@ -6949,8 +6950,8 @@ struct LeCsMode1InitatorDataWithPacketPct {
   packet_rssi : 8,
   toa_tod_initiator : 16,
   packet_antenna : 8,
-  packet_pct1 : LeCsToneData,
-  packet_pct2 : LeCsToneData,
+  packet_pct1 : LeCsPacketPct,
+  packet_pct2 : LeCsPacketPct,
 }
 
 struct LeCsMode1ReflectorData {
@@ -6967,8 +6968,8 @@ struct LeCsMode1ReflectorDataWithPacketPct {
   packet_rssi : 8,
   tod_toa_reflector : 16,
   packet_antenna : 8,
-  packet_pct1 : LeCsToneData,
-  packet_pct2 : LeCsToneData,
+  packet_pct1 : LeCsPacketPct,
+  packet_pct2 : LeCsPacketPct,
 }
 
 struct LeCsToneDataWithQuality {
@@ -7001,8 +7002,8 @@ struct LeCsMode3InitatorDataWithPacketPct {
   packet_rssi : 8,
   toa_tod_initiator : 16,
   packet_antenna : 8,
-  packet_pct1 : LeCsToneData,
-  packet_pct2 : LeCsToneData,
+  packet_pct1 : LeCsPacketPct,
+  packet_pct2 : LeCsPacketPct,
   antenna_permutation_index : 8,
   tone_data : LeCsToneDataWithQuality[],
 }
@@ -7025,8 +7026,8 @@ struct LeCsMode3ReflectorDataWithPacketPct {
   packet_rssi : 8,
   tod_toa_reflector : 16,
   packet_antenna : 8,
-  packet_pct1 : LeCsToneData,
-  packet_pct2 : LeCsToneData,
+  packet_pct1 : LeCsPacketPct,
+  packet_pct2 : LeCsPacketPct,
   antenna_permutation_index : 8,
   tone_data : LeCsToneDataWithQuality[],
 }

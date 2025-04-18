@@ -26,8 +26,6 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.media.audio.Flags.deprecateStreamBtSco;
 
-import static com.android.modules.utils.build.SdkLevel.isAtLeastU;
-
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.NonNull;
@@ -1978,16 +1976,12 @@ public class HeadsetService extends ProfileService {
                       && preferredAudioProfiles.getInt("audio_mode_duplex") !=
                                                        BluetoothProfile.LE_AUDIO) {
                       Log.i(TAG, "Setting LE suspension only for HFP preference case");
-                      if (isAtLeastU()) {
-                          mSystemInterface.getAudioManager().setLeAudioSuspended(true);
-                      }
+                      mSystemInterface.getAudioManager().setLeAudioSuspended(true);
                    } else {
                      Log.i(TAG, "Not setting LE suspension. LE is the pref duplex profile");
                    }
                 } else {
-                  if (isAtLeastU()) {
-                      mSystemInterface.getAudioManager().setLeAudioSuspended(true);
-                  }
+                  mSystemInterface.getAudioManager().setLeAudioSuspended(true);
                 }
                 //Adding the wait mechanism Logic.
                 lock.lock();
@@ -2021,9 +2015,7 @@ public class HeadsetService extends ProfileService {
                             && !Utils.isScoManagedByAudioEnabled()) {
                         // Resume A2DP when call ended and SCO is not connected
                         mSystemInterface.getAudioManager().setA2dpSuspended(false);
-                        if (isAtLeastU()) {
-                            mSystemInterface.getAudioManager().setLeAudioSuspended(false);
-                        }
+                        mSystemInterface.getAudioManager().setLeAudioSuspended(false);
                     }
                 });
         if (callState == HeadsetHalConstants.CALL_STATE_IDLE) {
@@ -2397,9 +2389,7 @@ public class HeadsetService extends ProfileService {
                 if (wrapper.isCallIdleAndScoNotManagedbyHal) {
                     Log.i(TAG, "Resume A2DP when SCO is gone and call state is idle");
                     mSystemInterface.getAudioManager().setA2dpSuspended(false);
-                    if (isAtLeastU()) {
-                        mSystemInterface.getAudioManager().setLeAudioSuspended(false);
-                    }
+                    mSystemInterface.getAudioManager().setLeAudioSuspended(false);
                 }
             });
         }
