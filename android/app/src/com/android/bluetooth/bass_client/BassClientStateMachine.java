@@ -33,6 +33,7 @@ import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothLeAudioCodecConfigMetadata;
 import android.bluetooth.BluetoothLeAudioContentMetadata;
 import android.bluetooth.BluetoothLeBroadcastAssistant;
 import android.bluetooth.BluetoothLeBroadcastChannel;
@@ -435,7 +436,11 @@ class BassClientStateMachine extends StateMachine {
             BluetoothLeBroadcastChannel.Builder channel =
                     new BluetoothLeBroadcastChannel.Builder();
             channel.setChannelIndex(0);
+            channel.setCodecMetadata(
+                    BluetoothLeAudioCodecConfigMetadata.fromRawBytes(new byte[0]));
             subGroup.addChannel(channel.build());
+            subGroup.setCodecSpecificConfig(
+                    BluetoothLeAudioCodecConfigMetadata.fromRawBytes(new byte[0]));
             subGroup.setContentMetadata(subgroupMetadata.get(i));
             metaData.addSubgroup(subGroup.build());
         }
