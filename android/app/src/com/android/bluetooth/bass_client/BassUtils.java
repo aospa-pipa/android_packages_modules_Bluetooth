@@ -153,4 +153,9 @@ class BassUtils {
     static void printByteArray(byte[] array) {
         log("Entire byte Array as string: " + Arrays.toString(array));
     }
+
+    static boolean stopBroadcastIfNoReceivers() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_BLUETOOTH,
+               "persist.vendor.service.bt.stopBroadcastIfNoReceivers", false);
+    }
 }

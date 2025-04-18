@@ -62,7 +62,6 @@ import android.os.Message;
 import android.os.ParcelUuid;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
-import android.provider.DeviceConfig;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 import android.util.Pair;
@@ -3413,8 +3412,7 @@ public class BassClientService extends ProfileService {
             message.arg1 = deviceSourceId;
             if (leaudioBisSyncControl()) {
                 message.arg2 =
-                        BassConstants.FLAG_SYNC_PA
-                                | BassConstants.FLAG_SYNC_DO_NOT_USE_NO_PREFERENCE;
+                        BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE;
             } else {
                 message.arg2 = BassConstants.INVALID_PA_SYNC_VALUE;
             }
@@ -3705,6 +3703,10 @@ public class BassClientService extends ProfileService {
 
     private static BluetoothLeBroadcastMetadata getMetadataWithChannelUnselected(
             BluetoothLeBroadcastMetadata original) {
+        if (original == null) {
+            return null;
+        }
+
         BluetoothLeBroadcastMetadata.Builder metaDataBuilder =
                 new BluetoothLeBroadcastMetadata.Builder(original);
         metaDataBuilder.clearSubgroup();
@@ -3791,8 +3793,7 @@ public class BassClientService extends ProfileService {
             if (leaudioBisSyncControl()) {
                 metadata = getMetadataWithChannelUnselected(metadata);
                 message.arg2 =
-                        BassConstants.FLAG_SYNC_PA
-                                | BassConstants.FLAG_SYNC_DO_NOT_USE_NO_PREFERENCE;
+                        BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE;
             } else {
                 message.arg2 = BassConstants.PA_SYNC_DO_NOT_SYNC;
             }
@@ -3831,8 +3832,7 @@ public class BassClientService extends ProfileService {
             return;
         }
 
-        if (!DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_BLUETOOTH,
-                "persist.vendor.service.bt.stopBroadcastIfNoReceivers", false)) {
+        if (!BassUtils.stopBroadcastIfNoReceivers()) {
             Log.w(TAG, "handleDeviceDisconnection: skip stopping broadcast if not receivers");
             return;
         }
@@ -4304,12 +4304,9 @@ public class BassClientService extends ProfileService {
             message.arg2 = BassConstants.FLAG_SYNC_PA; // Use no preference BIS sync
         } else {
             message.arg2 =
-                    DeviceConfig.getBoolean(
-                                    DeviceConfig.NAMESPACE_BLUETOOTH,
-                                    "persist.vendor.service.bt.defNoPAS",
-                                    false)
-                            ? BassConstants.PA_SYNC_PAST_NOT_AVAILABLE
-                            : BassConstants.PA_SYNC_PAST_AVAILABLE;
+                    BassUtils.isPastConfigEnabled()
+                            ? BassConstants.PA_SYNC_PAST_AVAILABLE
+                            : BassConstants.PA_SYNC_PAST_NOT_AVAILABLE;
         }
         message.obj = metadata;
         stateMachine.sendMessage(message);

@@ -88,5 +88,5 @@ public class BassConstants {
     public static final int REMOVE_SOURCE_TIMEOUT_MS = 1000;
 
     public static final int FLAG_SYNC_PA = 1 << 0;
-    public static final int FLAG_SYNC_DO_NOT_USE_NO_PREFERENCE = 1 << 1;
+    public static final int FLAG_SYNC_BIS_CHANNEL_PREFERENCE = 1 << 1;
 }
