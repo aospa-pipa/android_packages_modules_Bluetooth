@@ -32,6 +32,9 @@ filegroup {
 android_test {
     name: "ServiceBluetoothTests",
     defaults: ["service-bluetooth-buildflags"],
+    lint: {
+        test: true,
+    },
     srcs: [
         "src/**/*.java",
         "src/**/*.kt",
@@ -74,7 +77,7 @@ android_test {
         "mts-bt",
     ],
 
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
 }
 
 cc_library_shared {

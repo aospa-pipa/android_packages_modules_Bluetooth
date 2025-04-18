@@ -37,7 +37,7 @@ cc_library_static {
         "libchrome",
     ],
     apex_available: ["com.android.bt"],
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
 }
 
 cc_library_static {
@@ -154,7 +154,7 @@ cc_library_static {
     header_libs: ["libbluetooth_headers"],
     apex_available: ["com.android.bt"],
     host_supported: true,
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
 }
 
 cc_test {
@@ -456,6 +456,7 @@ cc_test {
         ":TestMockBtaVc",
         ":TestMockBtcore",
         ":TestMockBtu",
+        ":TestMockHci",
         ":TestMockMainShim",
         ":TestMockMainShimDumpsys",
         ":TestMockMainShimEntry",
@@ -576,6 +577,7 @@ cc_test {
         ":TestMockBtcore",
         ":TestMockBtu",
         ":TestMockFrameworks",
+        ":TestMockHci",
         ":TestMockMainShim",
         ":TestMockMainShimDumpsys",
         ":TestMockMainShimEntry",
