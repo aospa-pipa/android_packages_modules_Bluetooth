@@ -357,7 +357,7 @@ constexpr uint16_t kLeAudioCodingFormatAptxLe = bluetooth::hci::qcom::kIsoCoding
 constexpr uint16_t kLeAudioCodingFormatAptxLeX = bluetooth::hci::qcom::kIsoCodingFormatAptxLeX;
 
 constexpr uint16_t kLeAudioVendorCompanyIdGoogle = 0x00E0;
-constexpr uint16_t kLeAudioVendorCodecIdHeadtracking = 0x0001;
+constexpr uint16_t kLeAudioVendorCodecIdHeadtracking = 0x0002;
 
 /* Metadata types from Assigned Numbers */
 constexpr uint8_t kLeAudioMetadataTypePreferredAudioContext = 0x01;

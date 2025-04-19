@@ -128,9 +128,6 @@ public final class BluetoothDatabaseU2VMigration {
                 final String primaryKey = cursor.getString(cursor.getColumnIndexOrThrow("address"));
                 final Metadata metadata = new Metadata(primaryKey);
 
-                fetchInt(cursor, "migrated")
-                        .ifPresent(val -> metadata.migrated = val > 0);
-
                 migrate_a2dpSupportsOptionalCodecs(cursor, metadata);
                 migrate_a2dpOptionalCodecsEnabled(cursor, metadata);
 

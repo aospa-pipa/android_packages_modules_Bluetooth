@@ -12,7 +12,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use log::{error, warn};
 
-use crate::core::shared_box::{SharedBox, WeakBox, WeakBoxRef};
+use crate::core::shared_box::{SharedBox, WeakBox};
 use crate::core::uuid::Uuid;
 use crate::gatt::callbacks::{GattWriteRequestType, RawGattDatastore};
 use crate::gatt::ffi::AttributeBackingType;
@@ -113,7 +113,7 @@ pub trait GattDatabaseCallbacks {
     fn on_le_connect(
         &self,
         tcb_idx: TransportIndex,
-        bearer: WeakBoxRef<AttServerBearer<AttDatabaseImpl>>,
+        bearer: &SharedBox<AttServerBearer<AttDatabaseImpl>>,
     );
     /// A peer device has disconnected from this database
     fn on_le_disconnect(&self, tcb_idx: TransportIndex);
@@ -137,10 +137,10 @@ impl GattDatabase {
     pub fn on_bearer_ready(
         &self,
         tcb_idx: TransportIndex,
-        bearer: WeakBoxRef<AttServerBearer<AttDatabaseImpl>>,
+        bearer: &SharedBox<AttServerBearer<AttDatabaseImpl>>,
     ) {
         for listener in self.listeners.borrow().iter() {
-            listener.on_le_connect(tcb_idx, bearer.clone());
+            listener.on_le_connect(tcb_idx, bearer);
         }
     }
 
@@ -482,24 +482,6 @@ impl AttDatabase for AttDatabaseImpl {
 impl Clone for AttDatabaseImpl {
     fn clone(&self) -> Self {
         Self { gatt_db: self.gatt_db.clone(), tcb_idx: self.tcb_idx }
-    }
-}
-
-impl AttDatabaseImpl {
-    /// When the bearer owning this AttDatabase is invalidated,
-    /// we must notify the listeners tied to our GattDatabase.
-    ///
-    /// Note: AttDatabases referring to the backing GattDatabase
-    /// may still exist after bearer invalidation, but the bearer will
-    /// no longer exist (so packets can no longer be sent/received).
-    pub fn on_bearer_dropped(&self) {
-        self.gatt_db.with(|db| {
-            db.map(|db| {
-                for listener in db.listeners.borrow().iter() {
-                    listener.on_le_disconnect(self.tcb_idx)
-                }
-            })
-        });
     }
 }
 
@@ -1271,7 +1253,7 @@ mod test {
         let bearer = make_bearer(&gatt_db);
 
         // act: open a connection
-        gatt_db.on_bearer_ready(TCB_IDX, bearer.as_ref());
+        gatt_db.on_bearer_ready(TCB_IDX, &bearer);
 
         // assert: we got the callback
         let event = rx.blocking_recv().unwrap();

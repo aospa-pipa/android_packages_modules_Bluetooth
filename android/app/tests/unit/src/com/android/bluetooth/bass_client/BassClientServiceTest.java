@@ -33,21 +33,19 @@ import static com.android.bluetooth.TestUtils.getTestDevice;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyInt;
+import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.notNull;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1554,6 +1552,7 @@ public class BassClientServiceTest {
      * either PA or BIS is synced
      */
     @Test
+    @DisableFlags(Flags.FLAG_LEAUDIO_BIS_SYNC_CONTROL)
     public void testRemoveSourceForGroupAndTriggerModifySource() {
         prepareConnectedDeviceGroup();
         prepareSyncToSourceAndVerify();
@@ -1706,14 +1705,22 @@ public class BassClientServiceTest {
             // Verify device get update source
             verify(sm, atLeast(1)).sendMessage(messageCaptor.capture());
 
-            Optional<Message> msg =
-                    messageCaptor.getAllValues().stream()
-                            .filter(m -> m.what == BassClientStateMachine.UPDATE_BCAST_SOURCE)
-                            .findFirst();
+            Optional<Message> msg = Optional.empty();
+            if (Flags.leaudioBisSyncControl()) {
+                msg =
+                        messageCaptor.getAllValues().stream()
+                                .filter(m -> m.what == BassClientStateMachine.REMOVE_BCAST_SOURCE)
+                                .findFirst();
+            } else {
+                msg =
+                        messageCaptor.getAllValues().stream()
+                                .filter(m -> m.what == BassClientStateMachine.UPDATE_BCAST_SOURCE)
+                                .findFirst();
+                assertThat(msg.get().arg2).isEqualTo(BassConstants.PA_SYNC_DO_NOT_SYNC);
+            }
             assertThat(msg.isPresent()).isEqualTo(true);
 
             assertThat(msg.get().arg1).isEqualTo(TEST_SOURCE_ID);
-            assertThat(msg.get().arg2).isEqualTo(BassConstants.PA_SYNC_DO_NOT_SYNC);
             // Verify metadata is null
             assertThat(msg.get().obj).isNull();
         }
@@ -3722,7 +3729,7 @@ public class BassClientServiceTest {
                                                                 && (m.arg1 == TEST_SOURCE_ID)
                                                                 && (m.arg2
                                                                         == BassConstants
-                                                                                .PA_SYNC_PAST_AVAILABLE))
+                                                                                .FLAG_SYNC_PA))
                                                         || ((m.what
                                                                         == BassClientStateMachine
                                                                                 .ADD_BCAST_SOURCE)
@@ -3746,7 +3753,7 @@ public class BassClientServiceTest {
                                                                 && (m.arg1 == TEST_SOURCE_ID + 1)
                                                                 && (m.arg2
                                                                         == BassConstants
-                                                                                .PA_SYNC_PAST_AVAILABLE))
+                                                                                .FLAG_SYNC_PA))
                                                         || ((m.what
                                                                         == BassClientStateMachine
                                                                                 .ADD_BCAST_SOURCE)
@@ -6808,7 +6815,7 @@ public class BassClientServiceTest {
         injectRemoteSourceStateChanged(
                 mBroadcastMetadata1, /* isPaSynced */ false, /* isBisSynced */ false);
 
-        // Resume source will force syncing to broadcaster and put pending source to add
+        // Resume source and trigger sync info request from sink side
         mBassClientService.resumeReceiversSourceSynchronization();
         mInOrderMethodProxy
                 .verify(mMethodProxy)
@@ -6826,7 +6833,7 @@ public class BassClientServiceTest {
     }
 
     @Test
-    public void resumeSourceSynchronization_omitWhenPaSyncedOrRequested() {
+    public void resumeSourceSynchronization_omitWhenPaRequestedOrBisSynced() {
         prepareSynchronizedPair();
 
         // Cache sinks for resume and set SUSPENDED_BY_HOST pause
@@ -6836,15 +6843,12 @@ public class BassClientServiceTest {
         injectRemoteSourceStateChanged(
                 mBroadcastMetadata1,
                 BluetoothLeBroadcastReceiveState.PA_SYNC_STATE_SYNCINFO_REQUEST,
-                false);
+                /* isBisSynced */ false);
         checkNoResumeSynchronizationByHost();
 
-        // Cache sinks for resume and set SUSPENDED_BY_HOST pause
-        // Try resume while pa synced
-        mBassClientService.handleUnicastSourceStreamStatusChange(
-                0 /* STATUS_LOCAL_STREAM_REQUESTED */);
+        // Try resume while BIS synced
         injectRemoteSourceStateChanged(
-                mBroadcastMetadata1, /* isPaSynced */ true, /* isBisSynced */ false);
+                mBroadcastMetadata1, /* isPaSynced */ false, /* isBisSynced */ true);
         checkNoResumeSynchronizationByHost();
 
         // Cache sinks for resume and set SUSPENDED_BY_HOST pause

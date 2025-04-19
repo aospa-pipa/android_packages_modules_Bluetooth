@@ -24,6 +24,7 @@ import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.os.ParcelUuid;
+import android.provider.DeviceConfig;
 import android.util.Log;
 
 import java.nio.charset.StandardCharsets;
@@ -140,11 +141,21 @@ class BassUtils {
         return broadcastName;
     }
 
+    static boolean isPastConfigEnabled() {
+        return !DeviceConfig.getBoolean(
+                DeviceConfig.NAMESPACE_BLUETOOTH, "persist.vendor.service.bt.defNoPAS", false);
+    }
+
     static void log(String msg) {
         Log.d(TAG, msg);
     }
 
     static void printByteArray(byte[] array) {
         log("Entire byte Array as string: " + Arrays.toString(array));
+    }
+
+    static boolean stopBroadcastIfNoReceivers() {
+        return DeviceConfig.getBoolean(DeviceConfig.NAMESPACE_BLUETOOTH,
+               "persist.vendor.service.bt.stopBroadcastIfNoReceivers", false);
     }
 }
