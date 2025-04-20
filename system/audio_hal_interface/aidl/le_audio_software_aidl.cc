@@ -50,11 +50,9 @@ using ::aidl::android::hardware::bluetooth::audio::LeAudioConfiguration;
 using ::aidl::android::hardware::bluetooth::audio::PcmConfiguration;
 using ::bluetooth::audio::aidl::AudioConfiguration;
 using ::bluetooth::audio::aidl::BluetoothAudioCtrlAck;
-using ::bluetooth::audio::le_audio::LeAudioClientInterface;
 using ::bluetooth::audio::le_audio::StartRequestState;
 using ::bluetooth::audio::le_audio::StreamCallbacks;
 using ::bluetooth::le_audio::types::AseConfiguration;
-using ::bluetooth::le_audio::types::LeAudioCoreCodecConfig;
 using bluetooth::le_audio::CodecManager;
 
 using VendorConfiguration =
@@ -307,7 +305,7 @@ void LeAudioTransport::SetStartRequestState(StartRequestState state) {
   start_request_state_ = state;
 }
 
-inline void flush_unicast_sink() {
+static void flush_unicast_sink() {
   if (LeAudioSinkTransport::interface_unicast_ == nullptr) {
     return;
   }
@@ -315,7 +313,7 @@ inline void flush_unicast_sink() {
   LeAudioSinkTransport::interface_unicast_->FlushAudioData();
 }
 
-inline void flush_broadcast_sink() {
+static void flush_broadcast_sink() {
   if (LeAudioSinkTransport::interface_broadcast_ == nullptr) {
     return;
   }
@@ -323,13 +321,9 @@ inline void flush_broadcast_sink() {
   LeAudioSinkTransport::interface_broadcast_->FlushAudioData();
 }
 
-inline bool is_broadcaster_session(SessionType session_type) {
-  if (session_type == SessionType::LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_ENCODING_DATAPATH ||
-      session_type == SessionType::LE_AUDIO_BROADCAST_SOFTWARE_ENCODING_DATAPATH) {
-    return true;
-  }
-
-  return false;
+static bool is_broadcaster_session(SessionType session_type) {
+  return session_type == SessionType::LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_ENCODING_DATAPATH ||
+         session_type == SessionType::LE_AUDIO_BROADCAST_SOFTWARE_ENCODING_DATAPATH;
 }
 
 bool is_aidl_v4plus() {
@@ -501,7 +495,7 @@ void LeAudioSourceTransport::SetStartRequestState(StartRequestState state) {
   transport_->SetStartRequestState(state);
 }
 
-std::unordered_map<int32_t, uint8_t> sampling_freq_map{
+static std::unordered_map<int32_t, uint8_t> sampling_freq_map{
         {8000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioSamplingFreq8000Hz},
         {16000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioSamplingFreq16000Hz},
         {24000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioSamplingFreq24000Hz},
@@ -513,12 +507,12 @@ std::unordered_map<int32_t, uint8_t> sampling_freq_map{
         {176400, ::bluetooth::le_audio::codec_spec_conf::kLeAudioSamplingFreq176400Hz},
         {192000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioSamplingFreq192000Hz}};
 
-std::unordered_map<int32_t, uint8_t> frame_duration_map{
+static std::unordered_map<int32_t, uint8_t> frame_duration_map{
         {7500, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameDur7500us},
         {10000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameDur10000us},
         {15000, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameDur15000us}};
 
-std::unordered_map<int32_t, uint16_t> octets_per_frame_map{
+static std::unordered_map<int32_t, uint16_t> octets_per_frame_map{
         {30, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameLen30},
         {40, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameLen40},
         {45, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameLen45},
@@ -531,7 +525,7 @@ std::unordered_map<int32_t, uint16_t> octets_per_frame_map{
         {120, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameLen120},
         {155, ::bluetooth::le_audio::codec_spec_conf::kLeAudioCodecFrameLen155}};
 
-std::unordered_map<AudioLocation, uint32_t> audio_location_map{
+static std::unordered_map<AudioLocation, uint32_t> audio_location_map{
         {AudioLocation::UNKNOWN,
          ::bluetooth::le_audio::codec_spec_conf::kLeAudioLocationFrontCenter},
         {AudioLocation::FRONT_LEFT,

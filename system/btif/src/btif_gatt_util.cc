@@ -41,7 +41,6 @@
 #include "types/bt_transport.h"
 #include "types/raw_address.h"
 
-using bluetooth::Uuid;
 using namespace bluetooth;
 
 /*******************************************************************************

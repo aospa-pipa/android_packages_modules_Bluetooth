@@ -97,7 +97,6 @@
 #include "types/raw_address.h"
 
 using base::Bind;
-using base::Owned;
 using bluetooth::Uuid;
 
 using namespace bluetooth;

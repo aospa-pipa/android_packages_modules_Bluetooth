@@ -959,7 +959,7 @@ public class RemoteDevices {
         DeviceProperties properties = getDeviceProperties(device);
 
         if (properties == null) {
-            properties = addDeviceProperties(Utils.getByteAddress(device));
+            properties = addDeviceProperties(Utils.getByteAddress(device), device.getAddressType());
         }
 
         properties.setBondingInitiatedLocally(true);
@@ -976,7 +976,8 @@ public class RemoteDevices {
         }
         DeviceProperties deviceProperties = getDeviceProperties(device);
         if (deviceProperties == null) {
-            deviceProperties = addDeviceProperties(Utils.getByteAddress(device));
+            deviceProperties =
+                    addDeviceProperties(Utils.getByteAddress(device), device.getAddressType());
         }
         int prevBatteryLevel = deviceProperties.getBatteryLevel();
         if (isBas) {
@@ -1325,7 +1326,9 @@ public class RemoteDevices {
         DeviceProperties deviceProperties;
         BluetoothDevice device = getDevice(mainAddress);
         if (device == null) {
-            deviceProperties = addDeviceProperties(mainAddress);
+            // Address consolidation happens only for the random device addresses
+            deviceProperties =
+                    addDeviceProperties(mainAddress, BluetoothDevice.ADDRESS_TYPE_RANDOM);
             device = deviceProperties.getDevice();
         } else {
             deviceProperties = getDeviceProperties(device);
@@ -1357,7 +1360,9 @@ public class RemoteDevices {
         DeviceProperties deviceProperties;
         BluetoothDevice device = getDevice(mainAddress);
         if (device == null) {
-            deviceProperties = addDeviceProperties(mainAddress);
+            // Address association happens only for the random device addresses
+            deviceProperties =
+                    addDeviceProperties(mainAddress, BluetoothDevice.ADDRESS_TYPE_RANDOM);
             device = deviceProperties.getDevice();
         } else {
             deviceProperties = getDeviceProperties(device);
@@ -1398,6 +1403,7 @@ public class RemoteDevices {
                                                     + Utils.getRedactedAddressStringFromByte(
                                                             address))
                                             + (" newState=" + newState));
+                            // TODO: Set the correct address type
                             return addDeviceProperties(address).getDevice();
                         });
 
