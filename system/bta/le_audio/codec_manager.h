@@ -59,6 +59,7 @@ public:
     NONE = 0x00,
     LOW_LATENCY,
     ALLOW_ASYMMETRIC,
+    SPATIAL_AUDIO,
   };
 
   struct UnicastConfigurationRequirements {
