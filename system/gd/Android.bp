@@ -189,7 +189,7 @@ cc_library_static {
         "packages/modules/Bluetooth/system",
     ],
     apex_available: ["com.android.bt"],
-    min_sdk_version: "33",
+    min_sdk_version: "36",
     static_libs: [
         "bluetooth_flags_c_lib",
         "libchrome",
@@ -293,7 +293,7 @@ cc_test {
     sanitize: {
         address: true,
     },
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
 }
 
 cc_test {
@@ -443,7 +443,7 @@ cc_test {
     sanitize: {
         address: true,
     },
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
 }
 
 cc_test {
@@ -490,7 +490,7 @@ cc_test {
             ],
         },
     },
-    min_sdk_version: "30",
+    min_sdk_version: "36",
 }
 
 cc_defaults {

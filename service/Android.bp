@@ -37,18 +37,12 @@ filegroup {
 
 java_defaults {
     name: "service-bluetooth-buildflags",
-    defaults: ["bluetooth_framework_errorprone_rules"],
+    defaults: [
+        "bluetooth_errorprone_rules",
+        "bluetooth_lint_rules",
+    ],
 
     lint: {
-        error_checks: [
-            "ExtraText",
-            "NewApi",
-            "ObsoleteSdkInt",
-            "Recycle",
-            "RtlHardcoded",
-            "UseSparseArrays",
-            "UseValueOf",
-        ],
         strict_updatability_linting: true,
     },
     kotlincflags: [
@@ -103,7 +97,7 @@ java_library {
     },
 
     sdk_version: "system_server_current",
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
     apex_available: ["com.android.bt"],
     visibility: [":__subpackages__"],
 }
@@ -133,7 +127,7 @@ java_library {
     ],
 
     sdk_version: "system_server_current",
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
     apex_available: ["com.android.bt"],
     visibility: ["//packages/modules/Bluetooth/apex"],
 }
@@ -153,7 +147,7 @@ java_library {
     },
 
     sdk_version: "system_current",
-    min_sdk_version: "Tiramisu",
+    min_sdk_version: "36",
     apex_available: ["com.android.bt"],
 }
 

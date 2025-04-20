@@ -604,7 +604,6 @@ public final class BluetoothLeScanner {
         }
     }
 
-    @SuppressLint("AndroidFrameworkBluetoothPermission")
     private void postCallbackError(final ScanCallback callback, final int errorCode) {
         mHandler.post(() -> callback.onScanFailed(errorCode));
     }
