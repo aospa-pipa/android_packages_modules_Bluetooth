@@ -359,7 +359,7 @@ struct HciLayer::impl {
       }
     }
 
-    bluetooth::os::LogMetricHciTimeoutEvent(static_cast<uint32_t>(op_code));
+    bluetooth::metrics::LogMetricHciTimeoutEvent(static_cast<uint32_t>(op_code));
 
     log::error("Flushing {} waiting commands", command_queue_.size());
     // Clear any waiting commands (there is an abort coming anyway)
@@ -477,7 +477,7 @@ struct HciLayer::impl {
   void handle_root_inflammation(uint8_t vse_error_reason) {
     log::error("Received a Root Inflammation Event vendor reason 0x{:02x}, scheduling an abort",
                vse_error_reason);
-    bluetooth::os::LogMetricBluetoothHalCrashReason(Address::kEmpty, 0, vse_error_reason);
+    bluetooth::metrics::LogMetricBluetoothHalCrashReason(Address::kEmpty, 0, vse_error_reason);
     // Add Logging for crash reason
     if (hci_timeout_alarm_ != nullptr) {
       hci_timeout_alarm_->Cancel();

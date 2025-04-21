@@ -43,9 +43,7 @@
 using namespace bluetooth::legacy::stack::sdp;
 using namespace bluetooth;
 
-using bluetooth::Uuid;
 using namespace bluetooth;
-
 /*****************************************************************************
  *  Constants
  ****************************************************************************/

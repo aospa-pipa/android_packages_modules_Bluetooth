@@ -64,6 +64,7 @@
 #include "btif_sdp.h"
 #include "btif_storage.h"
 #include "btif_util.h"
+#include "btif_iot_config.h"
 #include "btif_vendor.h"
 #include "common/lru_cache.h"
 #include "common/strings.h"
@@ -179,6 +180,7 @@ struct btif_dm_pairing_cb_t {
   bool is_le_nc; /* LE Numeric comparison */
   btif_dm_ble_cb_t ble;
   uint8_t fail_reason;
+  bool is_ctkd;
 
   enum ServiceDiscoveryState { NOT_STARTED, SCHEDULED, FINISHED };
 
@@ -301,11 +303,6 @@ static void btif_stats_add_bond_event(const RawAddress& bd_addr, bt_bond_functio
 
 static void btif_on_name_read(RawAddress bd_addr, tHCI_ERROR_CODE hci_status, const BD_NAME bd_name,
                               bool during_device_search);
-
-/******************************************************************************
- *  Externs
- *****************************************************************************/
-void btif_iot_update_remote_info(tBTA_DM_AUTH_CMPL* p_auth_cmpl, bool is_ble, bool is_ssp);
 
 /******************************************************************************
  *  Functions
@@ -639,11 +636,11 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
           state, pairing_cb.state, pairing_cb.sdp_attempts);
 
   if (state == BT_BOND_STATE_NONE) {
-    bluetooth::shim::ForgetDeviceFromMetricIdAllocator(bd_addr);
+    bluetooth::metrics::ForgetDeviceFromMetricIdAllocator(bd_addr);
     btif_config_remove_device(bd_addr.ToString());
   } else if (state == BT_BOND_STATE_BONDED) {
-    bluetooth::shim::AllocateIdFromMetricIdAllocator(bd_addr);
-    if (!bluetooth::shim::SaveDeviceOnMetricIdAllocator(bd_addr)) {
+    bluetooth::metrics::AllocateIdFromMetricIdAllocator(bd_addr);
+    if (!bluetooth::metrics::SaveDeviceOnMetricIdAllocator(bd_addr)) {
       log::error("Fail to save metric id for device:{}", bd_addr);
     }
   }
@@ -1209,6 +1206,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
   tBLE_ADDR_TYPE addr_type = p_auth_cmpl->addr_type;
 
   pairing_cb.fail_reason = p_auth_cmpl->fail_reason;
+  pairing_cb.is_ctkd = (pairing_cb.is_ctkd || p_auth_cmpl->is_ctkd);
   log::info("device={}, bond state={}, success={}, key_present={}", bd_addr, pairing_cb.state,
             p_auth_cmpl->success, p_auth_cmpl->key_present);
 
@@ -3548,6 +3546,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
   bt_bond_state_t state = BT_BOND_STATE_NONE;
 
   RawAddress bd_addr = p_auth_cmpl->bd_addr;
+  pairing_cb.is_ctkd = (pairing_cb.is_ctkd || p_auth_cmpl->is_ctkd);
 
   /* Clear OOB data */
   memset(&oob_cb, 0, sizeof(oob_cb));
@@ -3596,6 +3595,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
     /* Map the HCI fail reason  to  bt status  */
     // TODO This is not a proper use of the type
     uint8_t fail_reason = static_cast<uint8_t>(p_auth_cmpl->fail_reason);
+    bool is_ble_keys_removed = false;
     log::error("LE authentication for {} failed with reason {}", bd_addr, p_auth_cmpl->fail_reason);
     switch (fail_reason) {
       case BTA_DM_AUTH_SMP_PAIR_AUTH_FAIL:
@@ -3603,6 +3603,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case BTA_DM_AUTH_SMP_UNKNOWN_ERR:
         btif_dm_remove_ble_bonding_keys();
         status = BT_STATUS_AUTH_FAILURE;
+        is_ble_keys_removed = true;
         break;
 
       case BTA_DM_AUTH_SMP_CONN_TOUT: {
@@ -3614,6 +3615,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
                     during_bonding, p_auth_cmpl->is_ctkd);
           btif_dm_remove_ble_bonding_keys();
           status = BT_STATUS_AUTH_FAILURE;
+          is_ble_keys_removed = true;
         } else {
           uint8_t dev_type;
           uint8_t addr_type;
@@ -3645,7 +3647,12 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       default:
         btif_dm_remove_ble_bonding_keys();
         status = BT_STATUS_UNHANDLED;
+        is_ble_keys_removed = true;
         break;
+    }
+    if (is_ble_keys_removed && pairing_cb.is_ctkd) {
+      log::info("Removing device info for both transports");
+      BTA_DmRemoveDevice(bd_addr);
     }
   }
   if (state == BT_BOND_STATE_BONDED && !pairing_cb.static_bdaddr.IsEmpty() &&
@@ -3995,7 +4002,7 @@ void btif_dm_on_disable() {
  ******************************************************************************/
 void btif_dm_read_energy_info() { BTA_DmBleGetEnergyInfo(bta_energy_info_cb); }
 
-static const char* btif_get_default_local_name_new() {
+static const char* btif_get_default_local_name() {
   using bluetooth::common::StringTrim;
   static std::string default_name = "";
 
@@ -4020,30 +4027,6 @@ static const char* btif_get_default_local_name_new() {
   }
 
   return default_name.c_str();
-}
-
-static const char* btif_get_default_local_name() {
-  if (com::android::bluetooth::flags::empty_names_are_invalid()) {
-    return btif_get_default_local_name_new();
-  }
-  static char btif_default_local_name[DEFAULT_LOCAL_NAME_MAX + 1] = {'\0'};
-
-  if (btif_default_local_name[0] == '\0') {
-    int max_len = sizeof(btif_default_local_name) - 1;
-
-    char prop_name[PROPERTY_VALUE_MAX];
-    osi_property_get(PROPERTY_DEFAULT_DEVICE_NAME, prop_name, "");
-    strncpy(btif_default_local_name, prop_name, max_len);
-
-    // If no value was placed in the btif_default_local_name then use model name
-    if (btif_default_local_name[0] == '\0') {
-      char prop_model[PROPERTY_VALUE_MAX];
-      osi_property_get(PROPERTY_PRODUCT_MODEL, prop_model, "");
-      strncpy(btif_default_local_name, prop_model, max_len);
-    }
-    btif_default_local_name[max_len] = '\0';
-  }
-  return btif_default_local_name;
 }
 
 static void btif_stats_add_bond_event(const RawAddress& bd_addr, bt_bond_function_t function,

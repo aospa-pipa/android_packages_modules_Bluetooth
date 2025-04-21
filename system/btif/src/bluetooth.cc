@@ -134,11 +134,6 @@
 #include "types/bt_transport.h"
 #include "types/raw_address.h"
 
-using bluetooth::csis::CsisClientInterface;
-using bluetooth::has::HasClientInterface;
-using bluetooth::le_audio::LeAudioBroadcasterInterface;
-using bluetooth::le_audio::LeAudioClientInterface;
-using bluetooth::vc::VolumeControlInterface;
 using namespace bluetooth;
 
 namespace {
@@ -185,15 +180,15 @@ extern const btrc_ctrl_interface_t* btif_rc_ctrl_get_interface();
 /*SDP search client*/
 extern const btsdp_interface_t* btif_sdp_get_interface();
 /* Hearing Access client */
-extern HasClientInterface* btif_has_client_get_interface();
+extern bluetooth::has::HasClientInterface* btif_has_client_get_interface();
 /* LeAudio testi client */
-extern LeAudioClientInterface* btif_le_audio_get_interface();
+extern bluetooth::le_audio::LeAudioClientInterface* btif_le_audio_get_interface();
 /* LeAudio Broadcaster */
-extern LeAudioBroadcasterInterface* btif_le_audio_broadcaster_get_interface();
+extern bluetooth::le_audio::LeAudioBroadcasterInterface* btif_le_audio_broadcaster_get_interface();
 /* Coordinated Set Service Client */
-extern CsisClientInterface* btif_csis_client_get_interface();
+extern bluetooth::csis::CsisClientInterface* btif_csis_client_get_interface();
 /* Volume Control client */
-extern VolumeControlInterface* btif_volume_control_get_interface();
+extern bluetooth::vc::VolumeControlInterface* btif_volume_control_get_interface();
 /* vendor  */
 extern btvendor_interface_t* btif_vendor_get_interface();
 
@@ -1126,7 +1121,7 @@ static std::string obfuscate_address(const RawAddress& address) {
 }
 
 static int get_metric_id(const RawAddress& address) {
-  return bluetooth::shim::AllocateIdFromMetricIdAllocator(address);
+  return bluetooth::metrics::AllocateIdFromMetricIdAllocator(address);
 }
 
 static int set_dynamic_audio_buffer_size(int codec, int size) {

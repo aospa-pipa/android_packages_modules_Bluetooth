@@ -125,8 +125,8 @@ void rfc_port_sm_state_closed(tPORT* p_port, tRFC_PORT_EVENT event, void* p_data
   switch (event) {
     case RFC_PORT_EVENT_OPEN:
       rfc_set_state(RFC_STATE_ORIG_WAIT_SEC_CHECK, p_port);
-      btm_sec_mx_access_request(p_port->rfc.p_mcb->bd_addr, true, p_port->sec_mask,
-                                &rfc_sec_check_complete, p_port);
+      btm_sec_service_access_request(p_port->rfc.p_mcb->bd_addr, true, p_port->sec_mask,
+                                     &rfc_sec_check_complete, p_port);
       return;
 
     case RFC_PORT_EVENT_CLOSE:
@@ -146,8 +146,8 @@ void rfc_port_sm_state_closed(tPORT* p_port, tRFC_PORT_EVENT event, void* p_data
 
       /* Open will be continued after security checks are passed */
       rfc_set_state(RFC_STATE_TERM_WAIT_SEC_CHECK, p_port);
-      btm_sec_mx_access_request(p_port->rfc.p_mcb->bd_addr, false, p_port->sec_mask,
-                                &rfc_sec_check_complete, p_port);
+      btm_sec_service_access_request(p_port->rfc.p_mcb->bd_addr, false, p_port->sec_mask,
+                                     &rfc_sec_check_complete, p_port);
       return;
 
     case RFC_PORT_EVENT_UA:
@@ -576,17 +576,15 @@ void rfc_port_sm_disc_wait_ua(tPORT* p_port, tRFC_PORT_EVENT event, void* p_data
 
     case RFC_PORT_EVENT_DM:
       log::warn("RFC_EVENT_DM|RFC_EVENT_UA[{}], port_handle:{}", event, p_port->handle);
-      if (com::android::bluetooth::flags::rfcomm_always_disc_initiator_in_disc_wait_ua()) {
-        // If we got a DM in RFC_STATE_DISC_WAIT_UA, it's likely that both ends
-        // attempt to DISC at the same time and both get a DM.
-        // Without setting this flag the both ends would start the same timers,
-        // wait, and still DISC the multiplexer at the same time eventually.
-        // The wait is meaningless and would block all other services that rely
-        // on RFCOMM such as HFP.
-        // Thus, setting this flag here to save us a timeout and doesn't
-        // introduce further RFCOMM event changes.
-        p_port->rfc.p_mcb->is_disc_initiator = true;
-      }
+      // If we got a DM in RFC_STATE_DISC_WAIT_UA, it's likely that both ends
+      // attempt to DISC at the same time and both get a DM.
+      // Without setting this flag the both ends would start the same timers,
+      // wait, and still DISC the multiplexer at the same time eventually.
+      // The wait is meaningless and would block all other services that rely
+      // on RFCOMM such as HFP.
+      // Thus, setting this flag here to save us a timeout and doesn't
+      // introduce further RFCOMM event changes.
+      p_port->rfc.p_mcb->is_disc_initiator = true;
       rfc_port_closed(p_port);
       return;
 
