@@ -1091,6 +1091,7 @@ cc_test {
         ":TestMockStackGatt",
         ":TestMockStackL2cap",
         ":TestStubOsi",
+        ":TestCommonStackConfig",
         "gatt/database.cc",
         "gatt/database_builder.cc",
         "ras/ras_client.cc",
