@@ -400,19 +400,19 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     }
   }
 
-  void set_cs_params(const Address& cs_remote_address, int mSightType, int mLocationType,
-		     int mCsSecurityLevel, int mFrequency, int mDuration) {
-    uint16_t connection_handle = acl_manager_->HACK_GetHandle(cs_remote_address);
+  void set_cs_params(const Address& cs_remote_address, uint16_t connection_handle,int mSightType,
+		     int mLocationType, int mCsSecurityLevel, int mFrequency, int mDuration) {
 
-    if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
+   if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
       log::error("Channel Sounding is not enabled");
       distance_measurement_callbacks_->OnDistanceMeasurementStopped(
 		      cs_remote_address, REASON_INTERNAL_ERROR, METHOD_CS);
       return;
     }
 
-    log::info("Address:{}, CsSecurityLevel:{} frequency:{}",
-		    cs_remote_address, mCsSecurityLevel, mFrequency);
+    log::info("Address:{}, connection_handle:{}, CsSecurityLevel:{} frequency:{}",
+               cs_remote_address, connection_handle, mCsSecurityLevel, mFrequency);
+
     if (set_cs_params_.find(connection_handle) != set_cs_params_.end() &&
         set_cs_params_[connection_handle].address != cs_remote_address) {
       log::warn("Remove old tracker for {}", cs_remote_address);
@@ -3332,12 +3332,12 @@ void DistanceMeasurementManagerImpl::StartDistanceMeasurement(
                            location_type);
 }
 
-void DistanceMeasurementManagerImpl::SetCsParams(const Address& address,
+void DistanceMeasurementManagerImpl::SetCsParams(const Address& address, uint16_t connection_handle,
 		int mSightType, int mLocationType, int mCsSecurityLevel, int mFrequency, int mDuration) {
 	log::info("address {} mSightType {}, mLocationType {} mCsSecurityLevel {} mFrequency {} mDuration {}",
 		  address, mSightType, mLocationType,
 		  mCsSecurityLevel, mFrequency, mDuration);
-	pimpl_->handler_->CallOn(pimpl_.get(), &impl::set_cs_params, address, mSightType,
+	pimpl_->handler_->CallOn(pimpl_.get(), &impl::set_cs_params, address, connection_handle, mSightType,
                mLocationType, mCsSecurityLevel, mFrequency, mDuration);
 }
 

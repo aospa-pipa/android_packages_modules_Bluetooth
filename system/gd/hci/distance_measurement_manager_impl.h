@@ -67,7 +67,7 @@ public:
   void HandleRemoteDataTimeout(const Address& address, uint16_t connection_handle) override;
   void HandleConnIntervalUpdated(const Address& address, uint16_t connection_handle,
                                  uint16_t conn_interval) override;
-  void SetCsParams(const Address&, int mSightType, int mLocationType,
+  void SetCsParams(const Address&, uint16_t connection_handle, int mSightType, int mLocationType,
                    int mCsSecurityLevel, int mFrequency, int mDuration) override;
 
 private:

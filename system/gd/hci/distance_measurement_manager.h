@@ -130,7 +130,7 @@ public:
   virtual void HandleRemoteDataTimeout(const Address& address, uint16_t connection_handle) = 0;
   virtual void HandleConnIntervalUpdated(const Address& address, uint16_t connection_handle,
                                          uint16_t conn_interval) = 0;
-  virtual void SetCsParams(const Address&, int mSightType, int mLocationType,
+  virtual void SetCsParams(const Address&, uint16_t connection_handle, int mSightType, int mLocationType,
                    int mCsSecurityLevel, int mFrequency, int mDuration) = 0;
 };
 
