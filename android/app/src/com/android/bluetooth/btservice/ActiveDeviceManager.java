@@ -27,6 +27,7 @@ import android.bluetooth.BluetoothHearingAid;
 import android.bluetooth.BluetoothLeAudio;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSinkAudioPolicy;
+import android.bluetooth.BluetoothUuid;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.media.AudioDeviceCallback;
@@ -717,7 +718,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
                 updateLeAudioActiveDeviceIfDualMode(mA2dpActiveDevice, device);
             } else {
-                if (Utils.isDualModeAudioEnabled()
+                if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
                     Log.d(TAG, " set LE Audio in-active as new classic device become active ");
                     setLeAudioActiveDevice(null, true);
@@ -787,7 +788,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
                 updateLeAudioActiveDeviceIfDualMode(mHfpActiveDevice, device);
             } else {
-                if (Utils.isDualModeAudioEnabled()
+                if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
                     Log.d(TAG, " set LE Audio in-active as new classic device become active ");
                     setLeAudioActiveDevice(null, true);
@@ -884,6 +885,14 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 if (!Utils.isDualModeAudioEnabled()) {
                     setA2dpActiveDevice(null, true);
                     setHfpActiveDevice(null);
+                } else {
+                    boolean isCsipSupported = Utils.arrayContains(mAdapterService.getRemoteUuids(device),
+                                                       BluetoothUuid.COORDINATED_SET);
+                    if (isCsipSupported) {
+                       Log.d(TAG, "set A2dp and HFP active device as null for csip");
+                       setA2dpActiveDevice(null, true);
+                       setHfpActiveDevice(null);
+                    }
                 }
                 setHearingAidActiveDevice(null, true);
             }
