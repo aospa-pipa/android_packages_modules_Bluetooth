@@ -3553,6 +3553,27 @@ public class LeAudioService extends ConnectableProfile {
         }
     }
 
+    private void handleMetadataContextUpdate(int context_type) {
+        if (context_type == BluetoothLeAudio.CONTEXT_TYPE_GAME) {
+            if (isBroadcastActive()) {
+                Log.d(TAG, "Update Broadcast InActive to MM-Framework in Gaming context");
+                if (mActiveBroadcastAudioDevice != null) {
+                    updateBroadcastActiveDevice(null, mActiveBroadcastAudioDevice, true);
+                }
+            }
+        } else if (context_type == BluetoothLeAudio.CONTEXT_TYPE_MEDIA) {
+            if (isBroadcastActive()) {
+                BluetoothDevice device =
+                    getAdapterService().getDeviceFromByte(
+                        Utils.getBytesFromAddress("FF:FF:FF:FF:FF:FF"));
+                if (!device.equals(mActiveBroadcastAudioDevice)) {
+                    Log.d(TAG, "Update Broadcast Active to MM-Framework in Media Context");
+                    updateBroadcastActiveDevice(device, mActiveBroadcastAudioDevice, true);
+                }
+            }
+        }
+    }
+
     @VisibleForTesting
     void handleGroupIdleDuringCall() {
         if (mHfpHandoverDevice == null) {
@@ -6636,6 +6657,7 @@ public class LeAudioService extends ConnectableProfile {
         BluetoothDevice btDevice = mActiveAudioInDevice;
         Log.w(TAG, "setMetadataContext Type: " + context_type + " for device" + btDevice);
         mActiveDeviceManager.contextBundle(btDevice, context_type);
+        handleMetadataContextUpdate(context_type);
     }
 
     /**

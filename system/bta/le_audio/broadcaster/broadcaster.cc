@@ -1427,6 +1427,7 @@ private:
 
       if (instance->audio_state_ == AudioState::STOPPED) {
         log::warn("audio stopped, skip suspend request");
+        instance->le_audio_source_hal_client_->ConfirmSuspendRequest();
         return;
       }
 
