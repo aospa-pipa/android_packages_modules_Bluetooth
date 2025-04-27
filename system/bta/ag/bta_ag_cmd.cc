@@ -1425,7 +1425,8 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
-      if (!p_scb->inband_enabled && p_scb->callsetup_ind == BTA_AG_CALLSETUP_INCOMING &&
+      if (com::android::bluetooth::flags::qc_send_error_at_bcc_ibr_disabled() &&
+          !p_scb->inband_enabled && p_scb->callsetup_ind == BTA_AG_CALLSETUP_INCOMING &&
           !(p_scb->call_ind || p_scb->callheld_ind)) {
         log::warn(
                 "Sending error for AT+BCC received when call is in ringing state"
