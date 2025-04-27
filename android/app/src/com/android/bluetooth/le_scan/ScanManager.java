@@ -288,6 +288,8 @@ public class ScanManager {
         locationIntentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
         mAdapterService.registerReceiver(mLocationReceiver, locationIntentFilter);
         mBatchScanThrottler = new BatchScanThrottler(timeProvider, mScreenOn);
+
+        Log.d(TAG, "IsMsftSupported? " + mIsMsftSupported);
     }
 
     void cleanup() {
@@ -1324,7 +1326,9 @@ public class ScanManager {
     }
 
     private void startBatchScan(ScanClient client) {
-        if (mFilterIndexStack.isEmpty() && isFilteringSupported()) {
+        if (mFilterIndexStack.isEmpty()
+                && isFilteringSupported()
+                && mClientFilterIndexMap.isEmpty()) {
             initFilterIndexStack();
         }
         configureScanFilters(client);
@@ -1538,10 +1542,10 @@ public class ScanManager {
             }
         }
 
-        if (!mIsMsftSupported) {
-            removeScanFilters(client.mScannerId);
-        } else {
+        if (!isFilteringSupported() && mIsMsftSupported) {
             removeFiltersMsft(client);
+        } else {
+            removeScanFilters(client.mScannerId);
         }
     }
 

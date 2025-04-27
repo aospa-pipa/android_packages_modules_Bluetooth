@@ -46,7 +46,7 @@
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_cb.h"
 #include "stack/btm/btm_sec_int_types.h"
-#include "stack/l2cap/l2c_api.h"
+#include "stack/btm/internal/btm_api.h"
 #include "stack/btm/security_device_record.h"
 #include "stack/eatt/eatt.h"
 #include "stack/gatt/gatt_int.h"
@@ -67,12 +67,11 @@
 #include "stack/include/l2cap_security_interface.h"
 #include "stack/include/smp_api.h"
 #include "stack/include/smp_api_types.h"
+#include "stack/l2cap/l2c_api.h"
 #include "stack/l2cap/l2c_int.h"
 #include "types/raw_address.h"
 
 using namespace bluetooth;
-
-extern tBTM_CB btm_cb;
 
 namespace {
 constexpr char kBtmLogTag[] = "SEC";

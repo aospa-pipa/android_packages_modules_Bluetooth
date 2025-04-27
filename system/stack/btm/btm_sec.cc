@@ -57,6 +57,7 @@
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec_cb.h"
 #include "stack/btm/btm_sec_int_types.h"
+#include "stack/btm/internal/btm_api.h"
 #include "stack/btm/security_device_record.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/bt_dev_class.h"
@@ -85,8 +86,6 @@ constexpr char kBtmLogTag[] = "SEC";
 }
 
 using namespace bluetooth;
-
-extern tBTM_CB btm_cb;
 
 #define BTM_SEC_MAX_COLLISION_DELAY (5000)
 #define BTM_SEC_START_AUTH_DELAY (200)
@@ -787,15 +786,15 @@ tBTM_STATUS BTM_SecBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
   if ((transport == BT_TRANSPORT_LE && (dev_type & BT_DEVICE_TYPE_BLE) == 0) ||
       (transport == BT_TRANSPORT_BR_EDR && (dev_type & BT_DEVICE_TYPE_BREDR) == 0)) {
     log::warn("Requested transport and supported transport don't match");
-    bluetooth::metrics::LogMetricBluetoothEvent(bd_addr,
-                                                android::bluetooth::EventType::TRANSPORT_MATCH,
-                                                android::bluetooth::State::FAIL);
+    bluetooth::metrics::LogBluetoothEvent(bd_addr,
+                                          bluetooth::metrics::EventType::TRANSPORT_MATCH,
+                                          bluetooth::metrics::State::FAIL);
   }
 
-  bluetooth::metrics::LogMetricBluetoothEvent(bd_addr, android::bluetooth::EventType::TRANSPORT,
-                                              transport == BT_TRANSPORT_LE
-                                                      ? android::bluetooth::State::LE
-                                                      : android::bluetooth::State::CLASSIC);
+  bluetooth::metrics::LogBluetoothEvent(bd_addr, bluetooth::metrics::EventType::TRANSPORT,
+                                        transport == BT_TRANSPORT_LE
+                                                ? bluetooth::metrics::State::LE
+                                                : bluetooth::metrics::State::CLASSIC);
 
   return btm_sec_bond_by_transport(bd_addr, addr_type, transport);
 }
@@ -5229,7 +5228,7 @@ static void btm_sec_check_pending_enc_req(tBTM_SEC_DEV_REC* p_dev_rec, tBT_TRANS
                 p_dev_rec->bd_addr, transport, req.sec_act);
       tBTM_STATUS res =
               BTM_SetEncryption(p_dev_rec->bd_addr, transport, req.callback, req.ref, req.sec_act);
-      if (res != tBTM_STATUS::BTM_SUCCESS || res != tBTM_STATUS::BTM_CMD_STARTED) {
+      if (res != tBTM_STATUS::BTM_SUCCESS && res != tBTM_STATUS::BTM_CMD_STARTED) {
         log::warn(
                 "Failed to retry encryption request: addr={}, transport={}, sec_act=0x{:x}, res={}",
                 p_dev_rec->bd_addr, transport, req.sec_act, btm_status_text(res));

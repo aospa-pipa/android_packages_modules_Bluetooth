@@ -42,6 +42,7 @@
 #include "main_thread.h"
 #include "stack/acl/acl.h"
 #include "stack/btm/btm_int_types.h"
+#include "stack/btm/internal/btm_api.h"
 #include "stack/include/advertise_data_parser.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/bt_dev_class.h"
@@ -58,8 +59,6 @@
 #include "types/raw_address.h"
 
 using namespace bluetooth;
-
-extern tBTM_CB btm_cb;
 
 namespace {
 constexpr char kBtmLogTag[] = "SCAN";

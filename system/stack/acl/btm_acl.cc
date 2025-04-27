@@ -96,8 +96,6 @@
 using namespace bluetooth;
 using bluetooth::legacy::hci::GetInterface;
 
-extern tBTM_CB btm_cb;
-
 extern void btm_flow_spec_complete(uint8_t status, uint16_t handle, tBT_FLOW_SPEC* p_flow);
 
 struct StackAclBtmAcl {
