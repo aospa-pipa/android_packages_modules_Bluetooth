@@ -51,7 +51,6 @@
 
 package android.bluetooth;
 
-import android.os.ParcelUuid;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGattService;
 
@@ -60,8 +59,8 @@ import android.bluetooth.BluetoothGattService;
  * @hide
  */
 oneway interface IBluetoothGattCallback {
-    void onClientRegistered(in int status, in int clientIf);
-    void onClientConnectionState(in int status, in int clientIf,
+    void onClientRegistered(in int status);
+    void onClientConnectionState(in int status,
                                  in boolean connected, in BluetoothDevice device);
     void onPhyUpdate(in BluetoothDevice device, in int txPhy, in int rxPhy, in int status);
     void onPhyRead(in BluetoothDevice device, in int txPhy, in int rxPhy, in int status);

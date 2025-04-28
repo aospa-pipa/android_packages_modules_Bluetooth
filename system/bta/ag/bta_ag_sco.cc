@@ -61,8 +61,6 @@
 #include "stack/include/main_thread.h"
 #include "types/raw_address.h"
 
-extern tBTM_CB btm_cb;
-
 using namespace bluetooth;
 using HfpInterface = bluetooth::audio::hfp::HfpClientInterface;
 using namespace bluetooth;
