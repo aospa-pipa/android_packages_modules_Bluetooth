@@ -5494,9 +5494,25 @@ public:
       if (( is_local_sink_metadata_available_ == false) &&
           (audio_sender_state_ == AudioState::IDLE) &&
           (configuration_context_type_ == LeAudioContextType::GAME)) {
-        ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+        if (!ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+          log::error("Unable to reconfigure group at this time, configuration_context_type_ = {}",
+                    ToString(configuration_context_type_));
+          if (group->GetState() == AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING) {
+            log::debug("Group is releasing, cancel streaming request and wait for release to end.");
+            CancelLocalAudioSinkStreamingRequest();
+            return;
+          }
+        }
       } else {
-        ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSource);
+        if (!ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+          log::error("Unable to reconfigure group at this time, configuration_context_type_ = {}",
+                    ToString(configuration_context_type_));
+          if (group->GetState() == AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING) {
+            log::debug("Group is releasing, cancel streaming request and wait for release to end.");
+            CancelLocalAudioSinkStreamingRequest();
+            return;
+          }
+        }
       }
       /* We need new configuration_context_type_ to be selected before we go any
        * further.
@@ -7778,21 +7794,33 @@ LeAudioStateMachineVscHciCallbackImpl stateMachineVscHciCallbackImpl;
 class CallbacksImpl : public LeAudioGroupStateMachine::Callbacks {
 public:
   void StatusReportCb(int group_id, GroupStreamStatus status) override {
-    if (instance) {
-      instance->OnStateMachineStatusReportCb(group_id, status);
-    }
+    do_in_main_thread(base::BindOnce(
+            [](int group_id, GroupStreamStatus status) {
+              if (instance) {
+                instance->OnStateMachineStatusReportCb(group_id, status);
+              }
+            },
+            group_id, status));
   }
 
   void OnStateTransitionTimeout(int group_id) override {
-    if (instance) {
-      instance->OnLeAudioDeviceSetStateTimeout(group_id);
-    }
+    do_in_main_thread(base::BindOnce(
+            [](int group_id) {
+              if (instance) {
+                instance->OnLeAudioDeviceSetStateTimeout(group_id);
+              }
+            },
+            group_id));
   }
 
   void OnUpdatedCisConfiguration(int group_id, uint8_t direction) {
-    if (instance) {
-      instance->OnUpdatedCisConfiguration(group_id, direction);
-    }
+    do_in_main_thread(base::BindOnce(
+            [](int group_id, uint8_t direction) {
+              if (instance) {
+                instance->OnUpdatedCisConfiguration(group_id, direction);
+              }
+            },
+            group_id, direction));
   }
 
   void UpdateMetadataCb(AseState state, int cig_id, int cis_id,

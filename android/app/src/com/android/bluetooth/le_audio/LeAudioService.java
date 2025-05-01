@@ -286,7 +286,8 @@ public class LeAudioService extends ProfileService {
             if (isProfileSupported(BluetoothProfile.LE_AUDIO_BROADCAST)) {
                 Log.i(TAG, "Init Le Audio broadcaster");
                 LeAudioBroadcasterNativeInterface broadcastNativeInterface =
-                        requireNonNull(LeAudioBroadcasterNativeInterface.getInstance());
+                        requireNonNull(
+                                LeAudioBroadcasterNativeInterface.getInstance(mAdapterService));
                 broadcastNativeInterface.init();
                 mLeAudioBroadcasterNativeInterface = Optional.of(broadcastNativeInterface);
 
@@ -302,7 +303,8 @@ public class LeAudioService extends ProfileService {
                     != 0) {
                 Log.i(TAG, "Init Le Audio broadcaster");
                 LeAudioBroadcasterNativeInterface broadcastNativeInterface =
-                        requireNonNull(LeAudioBroadcasterNativeInterface.getInstance());
+                        requireNonNull(
+                                LeAudioBroadcasterNativeInterface.getInstance(mAdapterService));
                 broadcastNativeInterface.init();
                 mLeAudioBroadcasterNativeInterface = Optional.of(broadcastNativeInterface);
                 mTmapRoleMask =
@@ -2156,7 +2158,7 @@ public class LeAudioService extends ProfileService {
 
             mAdapterService
                     .getBluetoothScanController()
-                    .registerScannerInternal(this, getAttributionSource(), null);
+                    .registerScannerInternal(this, null, getAttributionSource());
         }
 
         synchronized void stopBackgroundScan() {
