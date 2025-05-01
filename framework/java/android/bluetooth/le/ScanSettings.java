@@ -16,7 +16,7 @@
 
 package android.bluetooth.le;
 
-import android.annotation.SuppressLint;
+import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 import android.app.compat.CompatChanges;
@@ -25,9 +25,6 @@ import android.compat.annotation.ChangeId;
 import android.compat.annotation.EnabledSince;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.bluetooth.annotations.RequiresBluetoothLocationPermission;
-import android.bluetooth.annotations.RequiresBluetoothScanPermission;
-import android.annotation.RequiresPermission;
 
 import com.android.bluetooth.flags.Flags;
 
@@ -208,8 +205,7 @@ public final class ScanSettings implements Parcelable {
 
     private final int mPhy;
 
-    private int mRssiHighThreshold = Byte.MIN_VALUE;
-    private int mRssiLowThreshold = Byte.MIN_VALUE;
+    private final int mRssiThreshold;
 
     public int getScanMode() {
         return mScanMode;
@@ -251,34 +247,9 @@ public final class ScanSettings implements Parcelable {
         return mPhy;
     }
 
-    /**
-     * @hide
-     * Returns high rssi threshold for the scan results.
-     */
-    @RequiresBluetoothScanPermission
-    @RequiresBluetoothLocationPermission
-    @RequiresPermission(allOf = {
-            android.Manifest.permission.BLUETOOTH_SCAN,
-            android.Manifest.permission.BLUETOOTH_PRIVILEGED,
-    })
-    @SuppressLint("AndroidFrameworkRequiresPermission")
-    public int getRssiHighThreshold() {
-        return mRssiHighThreshold;
-    }
-
-    /**
-     * @hide
-     * Returns low rssi threshold for the scan results.
-     */
-    @RequiresBluetoothScanPermission
-    @RequiresBluetoothLocationPermission
-    @RequiresPermission(allOf = {
-            android.Manifest.permission.BLUETOOTH_SCAN,
-            android.Manifest.permission.BLUETOOTH_PRIVILEGED,
-    })
-    @SuppressLint("AndroidFrameworkRequiresPermission")
-    public int getRssiLowThreshold() {
-        return mRssiLowThreshold;
+    @FlaggedApi(Flags.FLAG_RSSI_SCAN_FILTER)
+    public int getRssiThreshold() {
+        return mRssiThreshold;
     }
 
     private ScanSettings(
@@ -290,9 +261,7 @@ public final class ScanSettings implements Parcelable {
             int numOfMatchesPerFilter,
             boolean legacy,
             int phy,
-            int rssiLowThreshold,
-            int rssiHighThreshold) {
-
+            int rssiThreshold) {
         mScanMode = scanMode;
         mCallbackType = callbackType;
         mScanResultType = scanResultType;
@@ -301,8 +270,7 @@ public final class ScanSettings implements Parcelable {
         mMatchMode = matchMode;
         mLegacy = legacy;
         mPhy = phy;
-        mRssiLowThreshold = rssiLowThreshold;
-        mRssiHighThreshold = rssiHighThreshold;
+        mRssiThreshold = rssiThreshold;
     }
 
     private ScanSettings(Parcel in) {
@@ -314,8 +282,7 @@ public final class ScanSettings implements Parcelable {
         mNumOfMatchesPerFilter = in.readInt();
         mLegacy = in.readInt() != 0;
         mPhy = in.readInt();
-        mRssiLowThreshold = in.readInt();
-        mRssiHighThreshold = in.readInt();
+        mRssiThreshold = in.readInt();
     }
 
     @Override
@@ -328,8 +295,7 @@ public final class ScanSettings implements Parcelable {
         dest.writeInt(mNumOfMatchesPerFilter);
         dest.writeInt(mLegacy ? 1 : 0);
         dest.writeInt(mPhy);
-        dest.writeInt(mRssiLowThreshold);
-        dest.writeInt(mRssiHighThreshold);
+        dest.writeInt(mRssiThreshold);
     }
 
     @Override
@@ -360,8 +326,7 @@ public final class ScanSettings implements Parcelable {
         private int mNumOfMatchesPerFilter = MATCH_NUM_MAX_ADVERTISEMENT;
         private boolean mLegacy = true;
         private int mPhy = BluetoothDevice.PHY_LE_1M;
-        private int mRssiHighThreshold = Byte.MIN_VALUE;
-        private int mRssiLowThreshold = Byte.MIN_VALUE;
+        private int mRssiThreshold = Byte.MIN_VALUE;
 
         // Instance initializer for mNumOfMatchesPerFilter
         {
@@ -521,32 +486,15 @@ public final class ScanSettings implements Parcelable {
         }
 
         /**
-         * @hide
+         * Sets the RSSI threshold. When filtering by RSSI threshold, an advertisement will pass the
+         * filter only if its RSSI value is greater than or equal to the specified threshold.
+         *
+         * @param rssiThreshold the high threshold of RSSI value. The valid range is [-127, 126].
+         * @return this builder
          */
-        @RequiresBluetoothScanPermission
-        @RequiresBluetoothLocationPermission
-        @RequiresPermission(allOf = {
-                android.Manifest.permission.BLUETOOTH_SCAN,
-                android.Manifest.permission.BLUETOOTH_PRIVILEGED,
-        })
-        @SuppressLint({"AndroidFrameworkRequiresPermission","MissingNullability"})
-        public Builder setRssiHighThreshold(int rssiHighThreshold) {
-            mRssiHighThreshold = rssiHighThreshold;
-            return this;
-        }
-
-        /**
-         * @hide
-         */
-        @RequiresBluetoothScanPermission
-        @RequiresBluetoothLocationPermission
-        @RequiresPermission(allOf = {
-                android.Manifest.permission.BLUETOOTH_SCAN,
-                android.Manifest.permission.BLUETOOTH_PRIVILEGED,
-        })
-        @SuppressLint({"AndroidFrameworkRequiresPermission","MissingNullability"})
-        public Builder setRssiLowThreshold(int rssiLowThreshold) {
-            mRssiLowThreshold = rssiLowThreshold;
+        @FlaggedApi(Flags.FLAG_RSSI_SCAN_FILTER)
+        public @NonNull Builder setRssiThreshold(int rssiThreshold) {
+            mRssiThreshold = rssiThreshold;
             return this;
         }
 
@@ -571,8 +519,7 @@ public final class ScanSettings implements Parcelable {
                     mNumOfMatchesPerFilter,
                     mLegacy,
                     mPhy,
-                    mRssiLowThreshold,
-                    mRssiHighThreshold);
+                    mRssiThreshold);
         }
     }
 
