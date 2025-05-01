@@ -321,7 +321,7 @@ final class BondStateMachine extends StateMachine {
                                     ? msg.getData().getByte(DISPLAY_PASSKEY) == 1 /* 1 == true */
                                     : false;
                     sendDisplayPinIntent(
-                            devProp.getAddress(),
+                            devProp.getDevice(),
                             displayPasskey ? Optional.of(passkey) : Optional.empty(),
                             variant);
                     break;
@@ -346,7 +346,7 @@ final class BondStateMachine extends StateMachine {
                         // This is not truly random but good enough.
                         int pin = 100000 + (int) Math.floor((Math.random() * (999999 - 100000)));
                         sendDisplayPinIntent(
-                                devProp.getAddress(),
+                                devProp.getDevice(),
                                 Optional.of(pin),
                                 BluetoothDevice.PAIRING_VARIANT_DISPLAY_PIN);
                         break;
@@ -354,14 +354,14 @@ final class BondStateMachine extends StateMachine {
 
                     if (msg.arg2 == 1) { // Minimum 16 digit pin required here
                         sendDisplayPinIntent(
-                                devProp.getAddress(),
+                                devProp.getDevice(),
                                 Optional.empty(),
                                 BluetoothDevice.PAIRING_VARIANT_PIN_16_DIGITS);
                     } else {
                         // In PIN_REQUEST, there is no passkey to display.So do not send the
                         // EXTRA_PAIRING_KEY type in the intent
                         sendDisplayPinIntent(
-                                devProp.getAddress(),
+                                devProp.getDevice(),
                                 Optional.empty(),
                                 BluetoothDevice.PAIRING_VARIANT_PIN);
                     }
@@ -379,9 +379,9 @@ final class BondStateMachine extends StateMachine {
 
     private boolean cancelBond(BluetoothDevice dev) {
         if (mRemoteDevices.getBondState(dev) == BluetoothDevice.BOND_BONDING) {
-            byte[] addr = Utils.getBytesFromAddress(dev.getAddress());
+            byte[] addr = Utils.getByteAddress(dev);
             if (!mAdapterService.getNative().cancelBond(addr)) {
-                Log.e(TAG, "Unexpected error while cancelling bond:");
+                Log.e(TAG, "Unexpected error while cancelling bond:" + dev);
             } else {
                 return true;
             }
@@ -392,9 +392,9 @@ final class BondStateMachine extends StateMachine {
     private boolean removeBond(BluetoothDevice dev, boolean transition) {
         DeviceProperties devProp = mRemoteDevices.getDeviceProperties(dev);
         if (devProp != null && devProp.getBondState() == BluetoothDevice.BOND_BONDED) {
-            byte[] addr = Utils.getBytesFromAddress(dev.getAddress());
+            byte[] addr = Utils.getByteAddress(dev);
             if (!mAdapterService.getNative().removeBond(addr)) {
-                Log.e(TAG, "Unexpected error while removing bond:");
+                Log.e(TAG, "Unexpected error while removing bond:" + dev);
             } else {
                 if (transition) {
                     transitionTo(mPendingCommandState);
@@ -421,7 +421,7 @@ final class BondStateMachine extends StateMachine {
             boolean transition) {
         if (mRemoteDevices.getBondState(dev) == BluetoothDevice.BOND_NONE) {
             infoLog("Bond address is:" + dev + ", transport is: " + transport);
-            byte[] addr = Utils.getBytesFromAddress(dev.getAddress());
+            byte[] addr = Utils.getByteAddress(dev);
             int addrType = dev.getAddressType();
             boolean result;
             // If we have some data
@@ -491,8 +491,8 @@ final class BondStateMachine extends StateMachine {
         return false;
     }
 
-    private void sendDisplayPinIntent(byte[] address, Optional<Integer> maybePin, int variant) {
-        BluetoothDevice device = mRemoteDevices.getDevice(address);
+    private void sendDisplayPinIntent(
+            BluetoothDevice device, Optional<Integer> maybePin, int variant) {
         Intent intent = new Intent(BluetoothDevice.ACTION_PAIRING_REQUEST);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         maybePin.ifPresent(pin -> intent.putExtra(BluetoothDevice.EXTRA_PAIRING_KEY, pin));

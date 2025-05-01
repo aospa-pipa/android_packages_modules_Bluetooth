@@ -18,7 +18,6 @@ package com.android.bluetooth.btservice;
 
 import static java.util.Objects.requireNonNull;
 
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothQualityReport;
@@ -85,14 +84,9 @@ public class BluetoothQualityReportNativeInterface {
             Log.e(TAG, "bqrDeliver failed: remoteAddress is null");
             return;
         }
-        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        if (adapter == null) {
-            Log.e(TAG, "bqrDeliver failed: adapter is null");
-            return;
-        }
 
         int versionSupported = mAdapterService.getVendorCapVersion();
-        BluetoothDevice device = adapter.getRemoteDevice(remoteAddress);
+        BluetoothDevice device = mAdapterService.getRemoteDevice(remoteAddress);
         BluetoothClass remoteClass = new BluetoothClass(mAdapterService.getRemoteClass(device));
         BluetoothQualityReport bqr;
         try {

@@ -2744,6 +2744,19 @@ public class AdapterService extends Service {
         return null;
     }
 
+    public BluetoothDevice getRemoteDevice(String address) {
+        if (!BluetoothAdapter.checkBluetoothAddress(address)) {
+            throw new IllegalArgumentException(address + " is not a valid Bluetooth address");
+        }
+
+        BluetoothDevice device =
+                Flags.retainAddressType() ? device = mRemoteDevices.getDevice(address) : null;
+        if (device == null) {
+            device = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(address);
+        }
+        return device;
+    }
+
     public BluetoothDevice getDeviceFromByte(byte[] address) {
         BluetoothDevice device = mRemoteDevices.getDevice(address);
         if (device == null) {
@@ -2753,9 +2766,7 @@ public class AdapterService extends Service {
     }
 
     public String getIdentityAddress(String address) {
-        BluetoothDevice device =
-                BluetoothAdapter.getDefaultAdapter()
-                        .getRemoteDevice(address.toUpperCase(Locale.ROOT));
+        BluetoothDevice device = getRemoteDevice(address.toUpperCase(Locale.ROOT));
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp != null && deviceProp.getIdentityAddress() != null) {
             return deviceProp.getIdentityAddress();
@@ -2773,9 +2784,7 @@ public class AdapterService extends Service {
      */
     @NonNull
     public BluetoothAddress getIdentityAddressWithType(@NonNull String address) {
-        BluetoothDevice device =
-                BluetoothAdapter.getDefaultAdapter()
-                        .getRemoteDevice(address.toUpperCase(Locale.ROOT));
+        BluetoothDevice device = getRemoteDevice(address.toUpperCase(Locale.ROOT));
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
 
         String identityAddress = null;
