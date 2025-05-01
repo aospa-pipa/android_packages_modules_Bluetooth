@@ -619,12 +619,12 @@ static const btgatt_client_callbacks_t sGattClientCallbacks = {
  */
 
 static void btgatts_register_app_cb(int status, int server_if, const Uuid& uuid) {
-  sPrivateGattServerManager->OpenServer(server_if);
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->OpenServer(server_if);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServerRegistered, status, server_if,
                                UUID_PARAMS(uuid));
 }
@@ -644,6 +644,12 @@ static void btgatts_connection_cb(int conn_id, int server_if, int connected,
 
 static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_element_t* service,
                                      size_t service_count) {
+  std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid() || !mCallbacksObj) {
+    return;
+  }
+
   // mirror the database in rust, now that it's created.
   if (status == 0x00 /* SUCCESS */) {
     auto service_records = rust::Vec<bluetooth::gatt::GattRecord>();
@@ -655,12 +661,6 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
               curr_service.extended_properties, curr_service.permissions});
     }
     sPrivateGattServerManager->AddService(server_if, std::move(service_records));
-  }
-
-  std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
-  CallbackEnv sCallbackEnv(__func__);
-  if (!sCallbackEnv.valid() || !mCallbacksObj) {
-    return;
   }
 
   jclass arrayListclazz = sCallbackEnv->FindClass("java/util/ArrayList");
@@ -676,25 +676,23 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
 }
 
 static void btgatts_service_stopped_cb(int status, int server_if, int srvc_handle) {
-  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
-
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServiceStopped, status, server_if,
                                srvc_handle);
 }
 
 static void btgatts_service_deleted_cb(int status, int server_if, int srvc_handle) {
-  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
-
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServiceDeleted, status, server_if,
                                srvc_handle);
 }

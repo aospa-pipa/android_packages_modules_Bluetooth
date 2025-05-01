@@ -20,6 +20,8 @@
 
 package com.android.bluetooth.gatt;
 
+import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringRunnable;
+
 import static com.android.bluetooth.gatt.AdvertiseHelper.advertiseDataToBytes;
 
 import android.app.ActivityManager;
@@ -121,14 +123,6 @@ public class AdvertiseManager {
             AdvertisingSetDeathRecipient deathRecipient,
             IAdvertisingSetCallback callback) {}
 
-    private interface CallbackWrapper {
-        void call() throws RemoteException;
-    }
-
-    IBinder toBinder(IAdvertisingSetCallback e) {
-        return e.asBinder();
-    }
-
     class AdvertisingSetDeathRecipient implements IBinder.DeathRecipient {
         public IAdvertisingSetCallback callback;
         private final String mPackageName;
@@ -190,7 +184,6 @@ public class AdvertiseManager {
         }
 
         sendToCallback(
-                advertiserId,
                 () ->
                         callback.onAdvertisingSetStarted(
                                 mAdvertiseBinder, advertiserId, txPower, status));
@@ -217,8 +210,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(
-                advertiserId, () -> callback.onAdvertisingEnabled(advertiserId, enable, status));
+        sendToCallback(() -> callback.onAdvertisingEnabled(advertiserId, enable, status));
 
         if (!enable && status != 0) {
             AppAdvertiseStats stats = mAdvertiserMap.getAppAdvertiseStatsById(advertiserId);
@@ -299,7 +291,7 @@ public class AdvertiseManager {
         }
         AdvertisingSetDeathRecipient deathRecipient =
                 new AdvertisingSetDeathRecipient(callback, packageName);
-        IBinder binder = toBinder(callback);
+        IBinder binder = callback.asBinder();
         byte[] encryptedKeyMaterialValue = new byte[0];
         try {
             binder.linkToDeath(deathRecipient, 0);
@@ -379,8 +371,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(
-                advertiserId, () -> callback.onOwnAddressRead(advertiserId, addressType, address));
+        sendToCallback(() -> callback.onOwnAddressRead(advertiserId, addressType, address));
     }
 
     void getOwnAddress(int advertiserId) {
@@ -395,7 +386,7 @@ public class AdvertiseManager {
 
     void stopAdvertisingSet(IAdvertisingSetCallback callback) {
         checkThread();
-        IBinder binder = toBinder(callback);
+        IBinder binder = callback.asBinder();
         Log.d(TAG, "stopAdvertisingSet() " + binder);
 
         AdvertiserInfo adv = mAdvertisers.remove(binder);
@@ -558,7 +549,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(advertiserId, () -> callback.onAdvertisingDataSet(advertiserId, status));
+        sendToCallback(() -> callback.onAdvertisingDataSet(advertiserId, status));
     }
 
     void onScanResponseDataSet(int advertiserId, int status) {
@@ -572,7 +563,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(advertiserId, () -> callback.onScanResponseDataSet(advertiserId, status));
+        sendToCallback(() -> callback.onScanResponseDataSet(advertiserId, status));
     }
 
     void onAdvertisingParametersUpdated(int advertiserId, int txPower, int status) {
@@ -594,7 +585,6 @@ public class AdvertiseManager {
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
         sendToCallback(
-                advertiserId,
                 () -> callback.onAdvertisingParametersUpdated(advertiserId, txPower, status));
     }
 
@@ -616,9 +606,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(
-                advertiserId,
-                () -> callback.onPeriodicAdvertisingParametersUpdated(advertiserId, status));
+        sendToCallback(() -> callback.onPeriodicAdvertisingParametersUpdated(advertiserId, status));
     }
 
     void onPeriodicAdvertisingDataSet(int advertiserId, int status) {
@@ -637,8 +625,7 @@ public class AdvertiseManager {
         }
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(
-                advertiserId, () -> callback.onPeriodicAdvertisingDataSet(advertiserId, status));
+        sendToCallback(() -> callback.onPeriodicAdvertisingDataSet(advertiserId, status));
     }
 
     void onPeriodicAdvertisingEnabled(int advertiserId, boolean enable, int status) {
@@ -657,9 +644,7 @@ public class AdvertiseManager {
         checkThread();
 
         IAdvertisingSetCallback callback = entry.getValue().callback;
-        sendToCallback(
-                advertiserId,
-                () -> callback.onPeriodicAdvertisingEnabled(advertiserId, enable, status));
+        sendToCallback(() -> callback.onPeriodicAdvertisingEnabled(advertiserId, enable, status));
 
         AppAdvertiseStats stats = mAdvertiserMap.getAppAdvertiseStatsById(advertiserId);
         if (stats != null) {
@@ -717,11 +702,7 @@ public class AdvertiseManager {
         }
     }
 
-    private static void sendToCallback(int advertiserId, CallbackWrapper wrapper) {
-        try {
-            wrapper.call();
-        } catch (RemoteException e) {
-            Log.i(TAG, "RemoteException in callback for advertiserId: " + advertiserId);
-        }
+    private static void sendToCallback(RemoteExceptionIgnoringRunnable wrapper) {
+        wrapper.run();
     }
 }
