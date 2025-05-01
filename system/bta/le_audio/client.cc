@@ -560,6 +560,12 @@ public:
     DeviceGroups::Initialize(device_group_callbacks);
   }
 
+  void setConfigurationContextType(LeAudioContextType context_type) {
+    log::debug("{} -> {}", common::ToString(configuration_context_type_),
+               common::ToString(context_type));
+    configuration_context_type_ = context_type;
+  }
+
   void ReconfigureAfterVbcClose() {
     log::debug("VBC close timeout");
 
@@ -4925,7 +4931,7 @@ public:
       // use case even when it eventually ends up being the exact same
       // codec and qos configuration.
       if (configuration_context_type_ != context_type) {
-        configuration_context_type_ = context_type;
+        setConfigurationContextType(context_type);
         group->SetConfigurationContextType(context_type);
       }
       return AudioReconfigurationResult::RECONFIGURATION_NOT_NEEDED;
@@ -4939,7 +4945,7 @@ public:
       group->InvalidateCachedConfigurations(context_type);
     }
 
-    configuration_context_type_ = context_type;
+    setConfigurationContextType(context_type);
 
     uint16_t context_update_ = LeAudioContextToIntContent(configuration_context_type_);
     log::info("OnMetadataUpdate for context type: {}", ToHexString(context_type));
@@ -5148,18 +5154,12 @@ public:
 
     group->ClearReconfigStartPendingDirs(bluetooth::le_audio::types::kLeAudioDirectionSink);
 
-    log::debug("configuration_context_type_= {}.", ToString(configuration_context_type_));
-    /* Check if the device resume is allowed */
-    if (!group->HasCodecConfigurationForDirection(
-                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
-      log::error("invalid resume request for context type: {}",
-                 ToHexString(configuration_context_type_));
-      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
-        handleInvalidContextTypeResumeRequest(group);
-      }
-      CancelLocalAudioSourceStreamingRequest();
-      return;
+    if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(group);
+      setConfigurationContextType(new_context_type);
     }
+
+    log::info("configuration_context_type_: {}", ToString(configuration_context_type_));
 
     /* Group should not be resumed if:
      * - configured context type is not allowed
@@ -5197,6 +5197,18 @@ public:
         is_src_metadata_updated_before_resume_) {
       is_src_metadata_updated_before_resume_ = false;
       ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    }
+
+    /* Check if the device resume is allowed */
+    if (!group->HasCodecConfigurationForDirection(
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+      log::error("invalid resume request for context type: {}",
+                 ToHexString(configuration_context_type_));
+      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+        handleInvalidContextTypeResumeRequest(group);
+      }
+      CancelLocalAudioSourceStreamingRequest();
+      return;
     }
 
     log::debug(
@@ -5415,8 +5427,13 @@ public:
   }
 
   void notifyAudioLocalSink(UnicastMonitorModeStatus status) {
+    if (sink_monitor_notified_status_.has_value()) {
+      log::verbose("source_monitor_notified_status_: {}, status: {}",
+                   ToString(sink_monitor_notified_status_.value()), ToString(status));
+    }
+
     if (sink_monitor_notified_status_ != status) {
-      log::info("Stream monitoring status changed to: {}", static_cast<int>(status));
+      log::info("Stream monitoring status changed to: {}", ToString(status));
       sink_monitor_notified_status_ = status;
       callbacks_->OnUnicastMonitorModeStatus(bluetooth::le_audio::types::kLeAudioDirectionSink,
                                              status);
@@ -5424,8 +5441,12 @@ public:
   }
 
   void notifyAudioLocalSource(UnicastMonitorModeStatus status) {
+    if (source_monitor_notified_status_.has_value()) {
+      log::verbose("source_monitor_notified_status_: {}, status: {}",
+                   ToString(source_monitor_notified_status_.value()), ToString(status));
+    }
     if (source_monitor_notified_status_ != status) {
-      log::info("Source stream monitoring status changed to: {}", static_cast<int>(status));
+      log::info("Source stream monitoring status changed to: {}", ToString(status));
       source_monitor_notified_status_ = status;
       callbacks_->OnUnicastMonitorModeStatus(bluetooth::le_audio::types::kLeAudioDirectionSource,
                                              status);
@@ -5480,20 +5501,9 @@ public:
       /* We need new configuration_context_type_ to be selected before we go any
        * further.
        */
-      log::info("new_configuration_context = {}", ToString(configuration_context_type_));
     }
 
-    /* Check if the device resume is allowed */
-    if (!group->HasCodecConfigurationForDirection(
-                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
-      log::error("invalid resume request for context type: {}",
-                 ToHexString(configuration_context_type_));
-      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
-        handleInvalidContextTypeResumeRequest(group);
-      }
-      CancelLocalAudioSinkStreamingRequest();
-      return;
-    }
+    log::info("configuration_context_type_: {}", ToString(configuration_context_type_));
 
     /* Group should not be resumed if:
      * - configured context type is not allowed
@@ -5511,6 +5521,18 @@ public:
                       bluetooth::le_audio::types::kLeAudioDirectionSource)),
               ToString(configuration_context_type_));
       CancelLocalAudioSourceStreamingRequest();
+      return;
+    }
+
+    /* Check if the device resume is allowed */
+    if (!group->HasCodecConfigurationForDirection(
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+      log::error("invalid resume request for context type: {}",
+                 ToHexString(configuration_context_type_));
+      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+        handleInvalidContextTypeResumeRequest(group);
+      }
+      CancelLocalAudioSinkStreamingRequest();
       return;
     }
 
@@ -5723,7 +5745,9 @@ public:
      * to be set here as it might be the initial configuration.
      */
 
-    configuration_context_type_ = new_context_type;
+    if (!com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      setConfigurationContextType(new_context_type);
+    }
 
     log::info("group_id {}, previous_context {} context type {} ({}), {}", group->group_id_,
               ToString(previous_context_type), ToString(new_context_type),
@@ -6327,7 +6351,7 @@ public:
                   group->group_id_, ToString(configuration_context_type_),
                   ToString(new_config_context));
         initReconfiguration(group, configuration_context_type_);
-        configuration_context_type_ = new_config_context;
+        setConfigurationContextType(new_config_context);
       }
       return false;
     }
@@ -6455,14 +6479,13 @@ public:
                                    BidirectionalPair<AudioContexts> remote_contexts) {
     bool is_dsa_reconfig_needed = DsaReconfigureNeeded(group, new_configuration_context);
     bool is_configuration_changed = (new_configuration_context != configuration_context_type_);
-    if (!is_configuration_changed &&
-        com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+    if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
       /* Check if directional configuration has changed. E.g. for GAME we might switch from uni
        * direction to bidirection */
       bool const has_sink_ase_config = group->IsDirectionAvailableForConfiguration(
-              configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink);
+              new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSink);
       bool const has_source_ase_config = group->IsDirectionAvailableForConfiguration(
-              configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource);
+              new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSource);
 
       /* Check if for any direction, the configuration list mismatches the latest metadata on that
        * direction */
@@ -6474,14 +6497,15 @@ public:
       auto const is_missing_source_ase_context =
               remote_contexts.source.none() && has_source_ase_config;
 
-      is_configuration_changed = is_missing_sink_ase_config || is_missing_source_ase_config ||
-                                 is_missing_sink_ase_context || is_missing_source_ase_context;
+      is_configuration_changed = is_configuration_changed || is_missing_sink_ase_config ||
+                                 is_missing_source_ase_config || is_missing_sink_ase_context ||
+                                 is_missing_source_ase_context;
 
       // Clear DSA configuration cache when DSA mode has changed
       auto clear_dsa_config_cache = com::android::bluetooth::flags::dsa_use_codec_extensibility() &&
                                     is_dsa_reconfig_needed;
       if (is_configuration_changed || clear_dsa_config_cache) {
-        group->InvalidateCachedConfigurations(configuration_context_type_);
+        group->InvalidateCachedConfigurations(new_configuration_context);
       }
     }
 
@@ -7520,7 +7544,7 @@ private:
     }
 
     local_metadata_context_types_.source.clear();
-    configuration_context_type_ = LeAudioContextType::UNINITIALIZED;
+    setConfigurationContextType(LeAudioContextType::UNINITIALIZED);
 
     bluetooth::le_audio::MetricsCollector::Get()->OnStreamEnded(active_group_id_);
   }

@@ -2510,7 +2510,8 @@ public class HeadsetService extends ProfileService {
 
                     mExposedActiveDevice = null;
 
-                    if (address.equals(mPendingScoConnection.getAddress())) {
+                    if (mPendingScoConnection != null
+                            && address.equals(mPendingScoConnection.getAddress())) {
                         mPendingScoConnection = null;
                     }
 
