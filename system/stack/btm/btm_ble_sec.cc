@@ -1428,7 +1428,7 @@ void btm_ble_link_encrypted(const RawAddress& bd_addr, uint8_t encr_enable) {
   }
 
   if (btm_cb.encrypted_advertising_data_supported && encr_enable &&
-      btm_sec_is_a_bonded_dev(p_dev_rec->ble.pseudo_addr)) {
+      BTM_IsBonded(p_dev_rec->ble.pseudo_addr)) {
     size_t length = btif_storage_get_enc_key_material_length(&p_dev_rec->ble.pseudo_addr);
 
     tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);

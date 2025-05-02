@@ -42,6 +42,9 @@ import android.os.RemoteException;
 import android.os.WorkSource;
 import android.util.Log;
 
+
+import com.android.bluetooth.flags.Flags;
+
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -274,6 +277,14 @@ public final class BluetoothLeScanner {
             if (!isRoutingAllowedForScan(settings)) {
                 return postCallbackErrorOrReturn(callback,
                         ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
+            }
+            if (Flags.batchScanSupportCheck()) {
+                if (!mBluetoothAdapter.isOffloadedScanBatchingSupported()
+                        && settings.getReportDelayMillis() > 0) {
+                    Log.w(TAG, "Batch scan requested but not supported");
+                    return postCallbackErrorOrReturn(
+                            callback, ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
+                }
             }
             if (callback != null) {
                 BleScanCallbackWrapper wrapper =

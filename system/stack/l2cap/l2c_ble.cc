@@ -794,7 +794,8 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
       p_ccb = l2cu_allocate_ccb(p_lcb, 0, con_info.psm == BT_PSM_EATT /* is_eatt */);
       if (p_ccb == NULL) {
         log::error("L2CAP - unable to allocate CCB");
-        l2cu_reject_ble_connection(p_ccb, id, tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_NO_RESOURCES);
+        l2cu_reject_ble_coc_connection(p_lcb, id,
+                                       tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_NO_RESOURCES);
         break;
       }
 
@@ -967,7 +968,8 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
 /** This function is to initiate a direct connection. Returns true if connection
  * initiated, false otherwise. */
 bool l2cble_create_conn(tL2C_LCB* p_lcb) {
-  if (!connection_manager::direct_connect_add(CONN_MGR_ID_L2CAP, p_lcb->remote_bd_addr)) {
+  if (!connection_manager::direct_connect_add(CONN_MGR_ID_L2CAP, p_lcb->remote_bd_addr,
+                                              BLE_ADDR_PUBLIC, false)) {
     return false;
   }
 

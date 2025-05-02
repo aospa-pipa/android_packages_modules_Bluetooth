@@ -56,10 +56,10 @@ public class HeadsetClientNativeInterface {
      *
      * @return default instance
      */
-    public static HeadsetClientNativeInterface getInstance() {
+    public static HeadsetClientNativeInterface getInstance(AdapterService adapterService) {
         synchronized (INSTANCE_LOCK) {
             if (sInstance == null) {
-                sInstance = new HeadsetClientNativeInterface(AdapterService.getAdapterService());
+                sInstance = new HeadsetClientNativeInterface(adapterService);
             }
             return sInstance;
         }
@@ -347,8 +347,6 @@ public class HeadsetClientNativeInterface {
         event.valueInt2 = peerFeat;
         event.valueInt3 = chldFeat;
         event.device = getDevice(address);
-        // BluetoothAdapter.getDefaultAdapter().getRemoteDevice(Utils.getAddressStringFromByte
-        // (address));
         Log.d(TAG, "Device addr " + event.device + " State " + state);
         HeadsetClientService service = HeadsetClientService.getHeadsetClientService();
         if (service != null) {

@@ -287,7 +287,7 @@ public class ScanManager {
         IntentFilter locationIntentFilter = new IntentFilter(LocationManager.MODE_CHANGED_ACTION);
         locationIntentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
         mAdapterService.registerReceiver(mLocationReceiver, locationIntentFilter);
-        mBatchScanThrottler = new BatchScanThrottler(timeProvider, mScreenOn);
+        mBatchScanThrottler = new BatchScanThrottler(mAdapterService, timeProvider, mScreenOn);
 
         Log.d(TAG, "IsMsftSupported? " + mIsMsftSupported);
     }
@@ -1831,47 +1831,47 @@ public class ScanManager {
         }
     }
 
-        // Configure filter parameters.
-        private void configureFilterParameter(
-                int scannerId,
-                ScanClient client,
-                int featureSelection,
-                int filterIndex,
-                int numOfTrackingEntries) {
-            int deliveryMode = getDeliveryMode(client);
-            int rssiThresholdLow = getLowRssiThreshold(client);
-            int rssiThresholdHigh = getHighRssiThreshold(client);
-            ScanSettings settings = client.mSettings;
-            int onFoundTimeout = getOnFoundOnLostTimeoutMillis(settings, true);
-            int onFoundCount = getOnFoundOnLostSightings(settings);
-            int onLostTimeout = 10000;
-            Log.d(TAG, "rssiThresholdLow: " + rssiThresholdLow  +
-                       "rssiThresholdHigh: " + rssiThresholdHigh);
-            Log.d(
-                    TAG,
-                    "configureFilterParameter "
-                            + onFoundTimeout
-                            + " "
-                            + onLostTimeout
-                            + " "
-                            + onFoundCount
-                            + " "
-                            + numOfTrackingEntries);
-            FilterParams filtValue =
-                    new FilterParams(
-                            scannerId,
-                            filterIndex,
-                            featureSelection,
-                            LIST_LOGIC_TYPE,
-                            FILTER_LOGIC_TYPE,
-                            rssiThresholdHigh,
-                            rssiThresholdLow,
-                            deliveryMode,
-                            onFoundTimeout,
-                            onLostTimeout,
-                            onFoundCount,
-                            numOfTrackingEntries);
-            mNativeInterface.gattClientScanFilterParamAdd(filtValue);
+    // Configure filter parameters.
+    private void configureFilterParameter(
+            int scannerId,
+            ScanClient client,
+            int featureSelection,
+            int filterIndex,
+            int numOfTrackingEntries) {
+        int deliveryMode = getDeliveryMode(client);
+        int rssiThreshold = Byte.MIN_VALUE;
+        ScanSettings settings = client.mSettings;
+        if (Flags.rssiScanFilter()) {
+            rssiThreshold = settings.getRssiThreshold();
+        }
+        int onFoundTimeout = getOnFoundOnLostTimeoutMillis(settings, true);
+        int onFoundCount = getOnFoundOnLostSightings(settings);
+        int onLostTimeout = 10000;
+        Log.d(
+                TAG,
+                "configureFilterParameter "
+                        + onFoundTimeout
+                        + " "
+                        + onLostTimeout
+                        + " "
+                        + onFoundCount
+                        + " "
+                        + numOfTrackingEntries);
+        FilterParams filtValue =
+                new FilterParams(
+                        scannerId,
+                        filterIndex,
+                        featureSelection,
+                        LIST_LOGIC_TYPE,
+                        FILTER_LOGIC_TYPE,
+                        rssiThreshold,
+                        rssiThreshold,
+                        deliveryMode,
+                        onFoundTimeout,
+                        onLostTimeout,
+                        onFoundCount,
+                        numOfTrackingEntries);
+        mNativeInterface.gattClientScanFilterParamAdd(filtValue);
     }
 
     // Get delivery mode based on scan settings.
@@ -1894,30 +1894,6 @@ public class ScanManager {
         }
         return settings.getReportDelayMillis() == 0 ? DELIVERY_MODE_IMMEDIATE : DELIVERY_MODE_BATCH;
     }
-
-        // Get Low RSSI Threashhold for the scan client
-        @SuppressLint("AndroidFrameworkRequiresPermission")
-        private int getLowRssiThreshold(ScanClient client) {
-            if (client == null || client.mSettings == null) {
-                Log.d(TAG, "getLowRssiThreshold: client is null");
-                return Byte.MIN_VALUE;
-            }
-            if (getDeliveryMode(client) != DELIVERY_MODE_ON_FOUND_LOST) {
-                Log.d(TAG, "getLowRssiThreshold: client settings is null");
-                return Byte.MIN_VALUE;
-            }
-            return client.mSettings.getRssiLowThreshold();
-        }
-
-        // Get High RSSI Threashhold for the scan client
-        @SuppressLint("AndroidFrameworkRequiresPermission")
-        private static int getHighRssiThreshold(ScanClient client) {
-            if (client == null || client.mSettings == null) {
-                Log.d(TAG, "getHighRssiThreshold: client is null");
-                return Byte.MIN_VALUE;
-            }
-            return client.mSettings.getRssiHighThreshold();
-        }
 
     private int getScanWindowMillis(ScanSettings settings) {
         ContentResolver resolver = mAdapterService.getContentResolver();
