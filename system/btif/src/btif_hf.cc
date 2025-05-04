@@ -480,7 +480,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
 
         bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::HFP_SELF_INITIATED_AG_FAILED);
         btif_queue_advance();
-        if (btm_sec_is_a_bonded_dev(connected_bda)) {
+        if (BTM_IsBonded(connected_bda)) {
           DEVICE_IOT_CONFIG_ADDR_INT_ADD_ONE(connected_bda, IOT_CONF_KEY_HFP_SLC_CONN_FAIL_COUNT);
         }
       }
@@ -743,6 +743,10 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
               BTHF_SWB_CODEC_VENDOR_APTX,
               p_data->val.num <= BTA_AG_SCO_APTX_SWB_SETTINGS_Q3 ? BTHF_SWB_YES : BTHF_SWB_NO,
               &btif_hf_cb[idx].connected_bda);
+      break;
+    case BTA_AG_AT_BCC_EVT:
+      log::info("Calling AtBccCallback for {}", btif_hf_cb[idx].connected_bda);
+      bt_hf_callbacks->AtBccCallback(&btif_hf_cb[idx].connected_bda);
       break;
 
     default:

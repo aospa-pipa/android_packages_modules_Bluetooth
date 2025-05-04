@@ -619,12 +619,12 @@ static const btgatt_client_callbacks_t sGattClientCallbacks = {
  */
 
 static void btgatts_register_app_cb(int status, int server_if, const Uuid& uuid) {
-  sPrivateGattServerManager->OpenServer(server_if);
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->OpenServer(server_if);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServerRegistered, status, server_if,
                                UUID_PARAMS(uuid));
 }
@@ -644,6 +644,12 @@ static void btgatts_connection_cb(int conn_id, int server_if, int connected,
 
 static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_element_t* service,
                                      size_t service_count) {
+  std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid() || !mCallbacksObj) {
+    return;
+  }
+
   // mirror the database in rust, now that it's created.
   if (status == 0x00 /* SUCCESS */) {
     auto service_records = rust::Vec<bluetooth::gatt::GattRecord>();
@@ -655,12 +661,6 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
               curr_service.extended_properties, curr_service.permissions});
     }
     sPrivateGattServerManager->AddService(server_if, std::move(service_records));
-  }
-
-  std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
-  CallbackEnv sCallbackEnv(__func__);
-  if (!sCallbackEnv.valid() || !mCallbacksObj) {
-    return;
   }
 
   jclass arrayListclazz = sCallbackEnv->FindClass("java/util/ArrayList");
@@ -676,25 +676,23 @@ static void btgatts_service_added_cb(int status, int server_if, const btgatt_db_
 }
 
 static void btgatts_service_stopped_cb(int status, int server_if, int srvc_handle) {
-  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
-
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServiceStopped, status, server_if,
                                srvc_handle);
 }
 
 static void btgatts_service_deleted_cb(int status, int server_if, int srvc_handle) {
-  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
-
   std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
   CallbackEnv sCallbackEnv(__func__);
   if (!sCallbackEnv.valid() || !mCallbacksObj) {
     return;
   }
+  sPrivateGattServerManager->RemoveService(server_if, srvc_handle);
   sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onServiceDeleted, status, server_if,
                                srvc_handle);
 }
@@ -1371,13 +1369,13 @@ static void gattClientScanNative(JNIEnv* /* env */, jobject /* object */, jboole
 static void gattClientConnectNative(JNIEnv* env, jobject /* object */, jint clientif,
                                     jstring address, jint addressType, jboolean isDirect,
                                     jint transport, jboolean opportunistic, jint initiating_phys,
-                                    jint preferred_mtu) {
+                                    jint preferred_mtu, jboolean prefer_relax_mode) {
   if (!sGattIf) {
     return;
   }
 
   sGattIf->client->connect(clientif, str2addr(env, address), addressType, isDirect, transport,
-                           opportunistic, initiating_phys, preferred_mtu);
+                           opportunistic, initiating_phys, preferred_mtu, prefer_relax_mode);
 }
 
 static void gattClientDisconnectNative(JNIEnv* env, jobject /* object */, jint clientIf,
@@ -2441,21 +2439,12 @@ static PeriodicAdvertisingParameters parsePeriodicParams(JNIEnv* env, jobject i)
   return p;
 }
 
-static void ble_advertising_set_started_cb(int reg_id, int server_if, uint8_t advertiser_id,
-                                           int8_t tx_power, uint8_t status) {
-  std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
-  CallbackEnv sCallbackEnv(__func__);
-  if (!sCallbackEnv.valid() || !mAdvertiseCallbacksObj) {
-    return;
-  }
-
+static void ble_advertising_set_started_cb(int /*reg_id*/, int server_if, uint8_t advertiser_id,
+                                           int8_t /*tx_power*/, uint8_t status) {
   // tie advertiser ID to server_if, once the advertisement has started
   if (status == 0 /* AdvertisingCallback::AdvertisingStatus::SUCCESS */ && server_if != 0) {
     sPrivateGattServerManager->AssociateServerWithAdvertiser(server_if, advertiser_id);
   }
-
-  sCallbackEnv->CallVoidMethod(mAdvertiseCallbacksObj, method_onAdvertisingSetStarted, reg_id,
-                               advertiser_id, tx_power, status);
 }
 
 static void ble_advertising_set_timeout_cb(uint8_t advertiser_id, uint8_t status) {
@@ -3016,7 +3005,7 @@ static int register_com_android_bluetooth_gatt_(JNIEnv* env) {
           {"gattClientRegisterAppNative", "(JJLjava/lang/String;Z)V",
            (void*)gattClientRegisterAppNative},
           {"gattClientUnregisterAppNative", "(I)V", (void*)gattClientUnregisterAppNative},
-          {"gattClientConnectNative", "(ILjava/lang/String;IZIZII)V",
+          {"gattClientConnectNative", "(ILjava/lang/String;IZIZIIZ)V",
            (void*)gattClientConnectNative},
           {"gattClientDisconnectNative", "(ILjava/lang/String;I)V",
            (void*)gattClientDisconnectNative},

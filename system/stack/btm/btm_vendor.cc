@@ -268,7 +268,7 @@ bool BTM_GetRemoteQLLFeatures(uint16_t handle, uint8_t* features) {
     BD_FEATURES value;
     size_t length = sizeof(value);
 
-    if (btif_config_get_bin(p_acl->remote_addr.ToString().c_str(), "QLL_FEATURES", value,
+    if (btif_config_get_bin(p_acl->link_spec.addrt.bda.ToString().c_str(), "QLL_FEATURES", value,
                             &length)) {
       log::info("reading feature from config file");
       p_acl->qll_features_state = BTM_QLL_FEATURES_STATE_FEATURE_COMPLETE;
@@ -527,7 +527,7 @@ void btm_ble_read_remote_supported_qll_features_complete(uint8_t* p) {
 
   p_acl->qll_features_state = BTM_QLL_FEATURES_STATE_FEATURE_COMPLETE;
   STREAM_TO_ARRAY(p_acl->remote_qll_features, p, BD_FEATURES_LEN);
-  btif_config_set_bin(p_acl->remote_addr.ToString(), "QLL_FEATURES", p_acl->remote_qll_features,
+  btif_config_set_bin(p_acl->link_spec.addrt.bda.ToString(), "QLL_FEATURES", p_acl->remote_qll_features,
                       BD_FEATURES_LEN);
 }
 
@@ -622,13 +622,13 @@ void btm_acl_update_qcm_phy_state(uint8_t* p) {
   if (status != HCI_SUCCESS) {
     log::error(":: failed for handle: 0x{:04x}, status 0x{:02x}", handle, status);
     // Setting qcm phy state to default value: 0x00 BR/EDR
-    btif_config_set_int(p_acl->remote_addr.ToString(), "QCM_PHY_STATE", QCM_PHY_STATE_BR_EDR);
+    btif_config_set_int(p_acl->link_spec.addrt.bda.ToString(), "QCM_PHY_STATE", QCM_PHY_STATE_BR_EDR);
     return;
   }
 
   STREAM_TO_UINT8(qcm_phy_state, p);
   // Setting qcm phy state as 0x00 BR/EDR, 0x01 QHS
-  btif_config_set_int(p_acl->remote_addr.ToString(), "QCM_PHY_STATE", qcm_phy_state);
+  btif_config_set_int(p_acl->link_spec.addrt.bda.ToString(), "QCM_PHY_STATE", qcm_phy_state);
 }
 
 /*******************************************************************************

@@ -27,8 +27,7 @@
 
 #include "avrcp/avrcp.h"
 #include "bluetooth/uuid.h"
-#include "bt_transport.h"
-#include "raw_address.h"
+#include "types/ble_address_with_type.h"
 
 /**
  * The Bluetooth Hardware Module ID
@@ -571,9 +570,8 @@ typedef void (*le_address_associate_callback)(RawAddress* main_bd_addr,
                                               uint8_t identity_address_type);
 
 /** Bluetooth ACL connection state changed callback */
-typedef void (*acl_state_changed_callback)(bt_status_t status, RawAddress* remote_bd_addr,
-                                           bt_acl_state_t state, int transport_link_type,
-                                           bt_hci_error_code_t hci_reason,
+typedef void (*acl_state_changed_callback)(bt_status_t status, tAclLinkSpec& link_spec,
+                                           bt_acl_state_t state, bt_hci_error_code_t hci_reason,
                                            bt_conn_direction_t direction, uint16_t acl_handle);
 
 /** Bluetooth link quality report callback */

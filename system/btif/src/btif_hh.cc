@@ -768,6 +768,16 @@ static void hh_open_handler(tBTA_HH_CONN& conn) {
     log::warn("Connection failed, link spec = {}, status = {}, handle = {}", conn.link_spec,
               conn.status, conn.handle);
     hh_connect_complete(conn, BTHH_CONN_STATE_DISCONNECTED);
+
+    // Resume background connection attempt for added HOGP device.
+    if (com::android::bluetooth::flags::reconnect_on_hogp_connection_failure() &&
+        conn.link_spec.transport == BT_TRANSPORT_LE) {
+      btif_hh_added_device_t* added_dev = btif_hh_find_added_dev(conn.link_spec);
+      if (added_dev != nullptr && added_dev->reconnect_allowed) {
+        log::info("Resuming background connection attempt for {}", conn.link_spec);
+        BTA_HhOpen(conn.link_spec, false);
+      }
+    }
     return;
   }
 
@@ -1033,7 +1043,6 @@ void btif_hh_load_bonded_dev(const tAclLinkSpec& link_spec_ref, tBTA_HH_ATTR_MAS
     log::warn("Resolving link spec {} transport to BREDR/LE", link_spec);
     btif_hh_transport_select(link_spec);
     reconnect_allowed = true;
-    btif_storage_set_hid_connection_policy(link_spec, reconnect_allowed);
 
     // remove and re-write the hid info
     btif_storage_remove_hid_info(link_spec);
@@ -1041,6 +1050,7 @@ void btif_hh_load_bonded_dev(const tAclLinkSpec& link_spec_ref, tBTA_HH_ATTR_MAS
                                      dscp_info.product_id, dscp_info.version, dscp_info.ctry_code,
                                      dscp_info.ssr_max_latency, dscp_info.ssr_min_tout,
                                      dscp_info.descriptor.dl_len, dscp_info.descriptor.dsc_list);
+    btif_storage_set_hid_connection_policy(link_spec, reconnect_allowed);
   }
 
   if (hh_add_device(link_spec, attr_mask, reconnect_allowed)) {

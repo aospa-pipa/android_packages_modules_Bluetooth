@@ -686,7 +686,7 @@ public class AdapterService extends Service {
         mBluetoothKeystoreService.initJni();
 
         mBluetoothQualityReportNativeInterface =
-                requireNonNull(BluetoothQualityReportNativeInterface.getInstance());
+                requireNonNull(BluetoothQualityReportNativeInterface.getInstance(this));
         mBluetoothQualityReportNativeInterface.init();
 
         if (Flags.hciVendorSpecificExtension()) {
@@ -1015,7 +1015,8 @@ public class AdapterService extends Service {
         mAdapterProperties.init();
 
         Log.d(TAG, "bleOnProcessStart() - Make Bond State Machine");
-        mBondStateMachine = BondStateMachine.make(this, mAdapterProperties, mRemoteDevices);
+        mBondStateMachine =
+                BondStateMachine.make(this, mLooper, mAdapterProperties, mRemoteDevices);
 
         mNativeInterface.getCallbacks().init(mBondStateMachine, mRemoteDevices);
 
@@ -2744,6 +2745,26 @@ public class AdapterService extends Service {
         return null;
     }
 
+    public BluetoothDevice getRemoteDevice(String address, int addressType) {
+        if (!BluetoothAdapter.checkBluetoothAddress(address)) {
+            throw new IllegalArgumentException(address + " is not a valid Bluetooth address");
+        }
+
+        // Reuse the existing BluetoothDevice object if it exists
+        BluetoothDevice device =
+                Flags.retainAddressType() ? device = mRemoteDevices.getDevice(address) : null;
+        if (device == null) {
+            // BluetoothAdapter.getRemoteLeDevice() is same as BluetoothAdapter.getRemoteDevice()
+            // with the specific address type.
+            device = BluetoothAdapter.getDefaultAdapter().getRemoteLeDevice(address, addressType);
+        }
+        return device;
+    }
+
+    public BluetoothDevice getRemoteDevice(String address) {
+        return getRemoteDevice(address, BluetoothDevice.ADDRESS_TYPE_PUBLIC);
+    }
+
     public BluetoothDevice getDeviceFromByte(byte[] address) {
         BluetoothDevice device = mRemoteDevices.getDevice(address);
         if (device == null) {
@@ -2753,9 +2774,7 @@ public class AdapterService extends Service {
     }
 
     public String getIdentityAddress(String address) {
-        BluetoothDevice device =
-                BluetoothAdapter.getDefaultAdapter()
-                        .getRemoteDevice(address.toUpperCase(Locale.ROOT));
+        BluetoothDevice device = getRemoteDevice(address.toUpperCase(Locale.ROOT));
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp != null && deviceProp.getIdentityAddress() != null) {
             return deviceProp.getIdentityAddress();
@@ -2773,9 +2792,7 @@ public class AdapterService extends Service {
      */
     @NonNull
     public BluetoothAddress getIdentityAddressWithType(@NonNull String address) {
-        BluetoothDevice device =
-                BluetoothAdapter.getDefaultAdapter()
-                        .getRemoteDevice(address.toUpperCase(Locale.ROOT));
+        BluetoothDevice device = getRemoteDevice(address.toUpperCase(Locale.ROOT));
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
 
         String identityAddress = null;
