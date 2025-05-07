@@ -912,6 +912,18 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         continue;
       }
 
+      if ((ctx_type == types::LeAudioContextType::LIVE) &&
+         (remote_direction == types::kLeAudioDirectionSink)){
+         auto direction_sink_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSink);
+         auto direction_src_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSource);
+         if (!(direction_sink_contexs.test(ctx_type) && direction_src_contexs.test(ctx_type))){
+           log::warn("Device {} does not have both direction  for {}, treat it as source only",
+                      device->address_,
+                      common::ToString(ctx_type));
+           continue;
+         }
+      }
+
       if (!has_direction.get(remote_direction)) {
         log::info("Skipping {} direction",
                   remote_direction == types::kLeAudioDirectionSource ? "Decoding" : "Encoding");
