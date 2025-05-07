@@ -414,6 +414,17 @@ public class BassClientServiceTest {
         assertThat(mBassClientService.connect(mCurrentDevice)).isFalse();
     }
 
+    /** Test connecting to a device without UUID. - service.connect() should return false. */
+    @Test
+    public void testConnectToDevice_whenUuidIsMissing_returnFalse() {
+        // Return No UUID
+        doReturn(new ParcelUuid[] {})
+                .when(mAdapterService)
+                .getRemoteUuids(any(BluetoothDevice.class));
+
+        assertThat(mBassClientService.connect(mCurrentDevice)).isFalse();
+    }
+
     /**
      * Test whether service.startSearchingForSources() calls BluetoothLeScannerWrapper.startScan().
      */
@@ -4817,6 +4828,21 @@ public class BassClientServiceTest {
                 .verify(mMethodProxy)
                 .periodicAdvertisingManagerRegisterSync(
                         any(), any(), anyInt(), anyInt(), any(), any());
+    }
+
+    @Test
+    public void onSyncLost_stopTimeoutsOnStopSearching() throws RemoteException {
+        prepareConnectedDeviceGroup();
+        prepareSyncToSourceAndVerify();
+
+        onSyncLost();
+        checkTimeout(TEST_BROADCAST_ID, BassClientService.MESSAGE_SYNC_LOST_TIMEOUT);
+
+        mBassClientService.stopSearchingForSources();
+        checkNoTimeout(TEST_BROADCAST_ID, BassClientService.MESSAGE_SYNC_LOST_TIMEOUT);
+
+        TestUtils.waitForLooperToFinishScheduledTask(mBassClientService.getCallbacks().getLooper());
+        verify(mCallback, never()).onSourceLost(eq(TEST_BROADCAST_ID));
     }
 
     @Test

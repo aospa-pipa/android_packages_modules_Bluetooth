@@ -175,7 +175,7 @@ public class LeAudioBroadcastServiceTest {
             List.of(LC3_48KHZ_CONFIG);
 
     private final Context mTargetContext =
-            InstrumentationRegistry.getInstrumentation().getTargetContext();
+            InstrumentationRegistry.getInstrumentation().getContext();
     private final BluetoothAdapter mAdapter =
             mTargetContext.getSystemService(BluetoothManager.class).getAdapter();
     private final BluetoothDevice mDevice = getTestDevice(0);
@@ -1448,7 +1448,7 @@ public class LeAudioBroadcastServiceTest {
         TestUtils.waitForLooperToFinishScheduledTask(Looper.getMainLooper());
         assertThat(mService.mUnicastGroupIdDeactivatedForBroadcastTransition).isEqualTo(groupId2);
 
-            verify(mLeAudioCallbacks).onBroadcastToUnicastFallbackGroupChanged(groupId2);
+        verify(mLeAudioCallbacks).onBroadcastToUnicastFallbackGroupChanged(groupId2);
 
         synchronized (mService.mLeAudioCallbacks) {
             mService.mLeAudioCallbacks.unregister(mLeAudioCallbacks);

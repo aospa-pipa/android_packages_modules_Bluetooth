@@ -100,6 +100,7 @@ import android.platform.test.flag.junit.SetFlagsRule;
 
 import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.TestUtils;
@@ -117,7 +118,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -132,7 +132,7 @@ import java.util.UUID;
 
 /** Test cases for {@link BassClientStateMachine}. */
 @MediumTest
-@RunWith(JUnit4.class)
+@RunWith(AndroidJUnit4.class)
 public class BassClientStateMachineTest {
     @Rule public final MockitoRule mMockitoRule = new MockitoRule();
 
@@ -155,7 +155,7 @@ public class BassClientStateMachineTest {
     private static final int UPDATE_SOURCE_FIXED_LENGTH = 6;
 
     private final Context mTargetContext =
-            InstrumentationRegistry.getInstrumentation().getTargetContext();
+            InstrumentationRegistry.getInstrumentation().getContext();
     private final BluetoothAdapter mAdapter =
             mTargetContext.getSystemService(BluetoothManager.class).getAdapter();
     private final BluetoothDevice mTestDevice = getTestDevice(0);
@@ -169,8 +169,6 @@ public class BassClientStateMachineTest {
     public void setUp() throws Exception {
         mEmptyTestDevice = mAdapter.getRemoteDevice(EMPTY_BLUETOOTH_DEVICE_ADDRESS);
         assertThat(mEmptyTestDevice).isNotNull();
-
-        TestUtils.setAdapterService(mAdapterService);
 
         BluetoothMethodProxy.setInstanceForTesting(mMethodProxy);
         doNothing()
@@ -220,7 +218,6 @@ public class BassClientStateMachineTest {
         mBassClientStateMachine.doQuit();
         mHandlerThread.quit();
         joinUninterruptibly(mHandlerThread);
-        TestUtils.clearAdapterService(mAdapterService);
     }
 
     /** Test that default state is disconnected */

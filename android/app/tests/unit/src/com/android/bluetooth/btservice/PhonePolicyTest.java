@@ -27,10 +27,10 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 import static com.android.bluetooth.TestUtils.MockitoRule;
 import static com.android.bluetooth.TestUtils.getTestDevice;
 
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
@@ -59,7 +59,6 @@ import com.android.bluetooth.TestLooper;
 import com.android.bluetooth.TestUtils;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.a2dp.A2dpService;
-import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
 import com.android.bluetooth.btservice.storage.MetadataDatabase;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
@@ -905,7 +904,7 @@ public class PhonePolicyTest {
 
         MetadataDatabase mDatabase =
                 Room.inMemoryDatabaseBuilder(
-                                InstrumentationRegistry.getInstrumentation().getTargetContext(),
+                                InstrumentationRegistry.getInstrumentation().getContext(),
                                 MetadataDatabase.class)
                         .build();
         DatabaseManager db = new DatabaseManager(mAdapterService);
@@ -938,7 +937,7 @@ public class PhonePolicyTest {
 
         MetadataDatabase mDatabase =
                 Room.inMemoryDatabaseBuilder(
-                                InstrumentationRegistry.getInstrumentation().getTargetContext(),
+                                InstrumentationRegistry.getInstrumentation().getContext(),
                                 MetadataDatabase.class)
                         .build();
         DatabaseManager db = new DatabaseManager(mAdapterService);
@@ -977,7 +976,7 @@ public class PhonePolicyTest {
 
         MetadataDatabase mDatabase =
                 Room.inMemoryDatabaseBuilder(
-                                InstrumentationRegistry.getInstrumentation().getTargetContext(),
+                                InstrumentationRegistry.getInstrumentation().getContext(),
                                 MetadataDatabase.class)
                         .build();
         DatabaseManager db = new DatabaseManager(mAdapterService);
