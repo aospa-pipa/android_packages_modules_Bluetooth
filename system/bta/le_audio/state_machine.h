@@ -40,6 +40,7 @@ public:
     virtual void OnUpdatedCisConfiguration(int group_id, uint8_t direction) = 0;
     virtual void UpdateMetadataCb(types::AseState state, int cig_id, int cis_id,
             const std::vector<uint8_t>& data) = 0;
+    virtual uint8_t OnGetEnabledDirections(int group_id) = 0;
   };
 
   virtual ~LeAudioGroupStateMachine() = default;
@@ -66,6 +67,8 @@ public:
           const types::BidirectionalPair<types::AudioContexts>& metadata_context_types,
           types::BidirectionalPair<std::vector<uint8_t>> ccid_lists = {.sink = {}, .source = {}},
           bool configure_qos = false) = 0;
+  virtual bool EnableStreamingDirection(LeAudioDeviceGroup* group, uint8_t remote_direction) = 0;
+  virtual bool DisableStreamingDirection(LeAudioDeviceGroup* group, uint8_t remote_direction) = 0;
   virtual void StopStream(LeAudioDeviceGroup* group) = 0;
   virtual void ProcessGattCtpNotification(LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice,
                                           uint8_t* value, uint16_t len) = 0;

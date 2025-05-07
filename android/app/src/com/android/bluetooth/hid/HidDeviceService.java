@@ -111,8 +111,7 @@ public class HidDeviceService extends ProfileService {
     }
 
     public static boolean isEnabled() {
-        return BluetoothProperties.isProfileHidDeviceEnabled().orElse(false)
-                && !BluetoothProperties.isProfileHidDeviceRuntimeDisabled().orElse(false);
+        return BluetoothProperties.isProfileHidDeviceEnabled().orElse(false);
     }
 
     private class HidDeviceServiceHandler extends Handler {
@@ -531,7 +530,7 @@ public class HidDeviceService extends ProfileService {
 
     @Override
     public void cleanup() {
-        Log.i(TAG, "Cleanup HidDevice Service");
+        Log.i(TAG, "cleanup()");
 
         if (sHidDeviceService == null) {
             Log.w(TAG, "cleanup() called before initialization");

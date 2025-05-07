@@ -40,6 +40,7 @@
 #include "broadcaster/broadcaster_types.h"
 #include "bta_le_audio_api.h"
 #include "btm_iso_api_types.h"
+#include "common/strings.h"
 #include "gmap_client.h"
 #include "gmap_server.h"
 #include "hardware/bt_le_audio.h"
@@ -126,11 +127,9 @@ public:
       return;
     }
 
-    if (!bluetooth::shim::GetController()->IsSupported(
-                bluetooth::hci::OpCode::CONFIGURE_DATA_PATH)) {
-      log::warn("Controller does not support config data path command");
-      return;
-    }
+    log::info("LeAudioCodecManagerImpl: configure_data_path for encode");
+    ConfigureDataPath(hci_data_direction_t::HOST_TO_CONTROLLER, kIsoDataPathPlatformDefault, {});
+
     uint8_t qll_supported_feat_len = 0;
     uint8_t soc_add_on_features_len = 0;
     bool is_apx_lossless_le_supported = false;
@@ -177,13 +176,39 @@ public:
                is_aptx_adaptive_le_supported_, is_aptx_adaptive_lex_supported_,
                is_enhanced_le_gaming_supported_);
 
-    log::info("LeAudioCodecManagerImpl: configure_data_path for encode");
-    GetInterface().ConfigureDataPath(hci_data_direction_t::HOST_TO_CONTROLLER,
-                                     kIsoDataPathPlatformDefault, {});
-    GetInterface().ConfigureDataPath(hci_data_direction_t::CONTROLLER_TO_HOST,
-                                     kIsoDataPathPlatformDefault, {});
+    log::info("LeAudioCodecManagerImpl: configure_data_path for decode");
+    ConfigureDataPath(hci_data_direction_t::CONTROLLER_TO_HOST, kIsoDataPathPlatformDefault, {});
+
     SetCodecLocation(CodecLocation::ADSP);
   }
+
+  void ConfigureDataPath(hci_data_direction_t direction, uint8_t dataPathId,
+                         std::vector<uint8_t> dataPathConfig) const {
+    if (!bluetooth::shim::GetController()->IsSupported(
+                bluetooth::hci::OpCode::CONFIGURE_DATA_PATH)) {
+      log::warn("Controller does not support config data path command");
+      return;
+    }
+
+    log::debug("direction: {}, dataPathId: {}, dataPathConfig: {}", static_cast<int>(direction),
+               +dataPathId, bluetooth::common::ToHexString(dataPathConfig));
+
+    // Avoid reconfiguring to the same data path
+    static std::map<hci_data_direction_t, std::pair<uint8_t, std::vector<uint8_t>>>
+            configured_data_path = {};
+    if (configured_data_path.count(direction)) {
+      auto& dataPath = configured_data_path.at(direction);
+      if ((dataPath.first == dataPathId) && (dataPath.second == dataPathConfig)) {
+        log::debug("Data path for direction {} already configured to {}",
+                   static_cast<int>(direction), +dataPathId);
+        return;
+      }
+    }
+
+    GetInterface().ConfigureDataPath(direction, dataPathId, dataPathConfig);
+    configured_data_path[direction] = std::make_pair<>(dataPathId, dataPathConfig);
+  }
+
   void start(const std::vector<btle_audio_codec_config_t>& offloading_preference) {
     dual_bidirection_swb_supported_ =
             osi_property_get_bool("bluetooth.leaudio.dual_bidirection_swb.supported", false);
@@ -205,10 +230,8 @@ public:
   }
   ~codec_manager_impl() {
     if (GetCodecLocation() != CodecLocation::HOST) {
-      GetInterface().ConfigureDataPath(hci_data_direction_t::HOST_TO_CONTROLLER, kIsoDataPathHci,
-                                       {});
-      GetInterface().ConfigureDataPath(hci_data_direction_t::CONTROLLER_TO_HOST, kIsoDataPathHci,
-                                       {});
+      ConfigureDataPath(hci_data_direction_t::HOST_TO_CONTROLLER, kIsoDataPathHci, {});
+      ConfigureDataPath(hci_data_direction_t::CONTROLLER_TO_HOST, kIsoDataPathHci, {});
     }
     bluetooth::le_audio::AudioSetConfigurationProvider::Cleanup();
   }
@@ -1157,6 +1180,8 @@ private:
           log::error("{}: ADSP config size mismatches the software: {} != {}",
                      direction == types::kLeAudioDirectionSink ? "Sink" : "Source",
                      adsp_set_ase_confs.size(), software_set_ase_confs.size());
+          log::error("software: {}, adsp: {}", software_audio_set_conf->name,
+                     adsp_audio_set_conf.name);
           continue;
         }
 
@@ -1637,6 +1662,13 @@ bool CodecManager::IsUsingCodecExtensibility() const {
     return pimpl_->codec_manager_impl_->IsUsingCodecExtensibility();
   }
   return false;
+}
+
+void CodecManager::ConfigureDataPath(hci_data_direction_t direction, uint8_t dataPathId,
+                                     std::vector<uint8_t> dataPathConfig) const {
+  if (pimpl_->IsRunning()) {
+    pimpl_->codec_manager_impl_->ConfigureDataPath(direction, dataPathId, dataPathConfig);
+  }
 }
 
 }  // namespace bluetooth::le_audio

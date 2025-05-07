@@ -267,6 +267,9 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
     uint8_t procedure_sequence_after_enable = -1;
     std::unique_ptr<os::Alarm> enable_security_timeout_alarm = nullptr;
     bool sent_procedure_disable_after_stopping = false;
+    DistanceMeasurementSightType sight_type = DistanceMeasurementSightType::SIGHT_TYPE_UNKNOWN;
+    DistanceMeasurementLocationType location_type =
+            DistanceMeasurementLocationType::LOCATION_TYPE_UNKNOWN;
   };
 
   bool get_free_config_id(uint16_t connection_handle, uint8_t& config_id) {
@@ -443,7 +446,9 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
 
   void start_distance_measurement(const Address address, uint16_t connection_handle,
                                   hci::Role local_hci_role, uint16_t interval,
-                                  DistanceMeasurementMethod method) {
+                                  DistanceMeasurementMethod method,
+                                  DistanceMeasurementSightType sight_type,
+                                  DistanceMeasurementLocationType location_type) {
     log::info("Address:{}, method:{}", address, method);
 
     // Remove this check if we support any connection less method
@@ -474,7 +479,7 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
       case METHOD_CS: {
         bool has_updated_procedure_params = false;
         if (init_cs_requester_tracker(address, connection_handle, local_hci_role, interval,
-                                      &has_updated_procedure_params)) {
+                                      &has_updated_procedure_params, sight_type, location_type)) {
           start_distance_measurement_with_cs(address, connection_handle,
                                              has_updated_procedure_params);
         }
@@ -484,7 +489,9 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
 
   bool init_cs_requester_tracker(const Address& cs_remote_address, uint16_t connection_handle,
                                  hci::Role local_hci_role, uint16_t interval_ms,
-                                 bool* has_updated_procedure_params) {
+                                 bool* has_updated_procedure_params,
+                                 DistanceMeasurementSightType sight_type,
+                                 DistanceMeasurementLocationType location_type) {
     *has_updated_procedure_params = false;
     auto it = cs_requester_trackers_.find(connection_handle);
     if (it != cs_requester_trackers_.end()) {
@@ -495,6 +502,13 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
     } else {
       cs_requester_trackers_[connection_handle] = CsTracker();
       it = cs_requester_trackers_.find(connection_handle);
+    }
+    if (it->second.state != CsTrackerState::STOPPED) {
+      log::info("reuse the current ongoing session");
+      if (!it->second.waiting_for_start_callback) {
+        distance_measurement_callbacks_->OnDistanceMeasurementStarted(cs_remote_address, METHOD_CS);
+      }
+      return false;
     }
     it->second.address = cs_remote_address;
     if (it->second.used_config_id == kInvalidConfigId) {
@@ -551,6 +565,8 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
     it->second.retry_counter_for_create_config = 0;
     it->second.retry_counter_for_cs_enable = 0;
     it->second.sent_procedure_disable_after_stopping = false;
+    it->second.sight_type = sight_type;
+    it->second.location_type = location_type;
     return true;
   }
 
@@ -651,7 +667,9 @@ struct DistanceMeasurementManager::impl : bluetooth::hal::RangingHalCallback {
     it->second.state = CsTrackerState::RAS_CONNECTED;
 
     if (ranging_hal_->IsBound()) {
-      ranging_hal_->OpenSession(connection_handle, att_handle, vendor_specific_data);
+      ranging_hal_->OpenSession(connection_handle, att_handle, vendor_specific_data,
+                                static_cast<uint8_t>(it->second.sight_type),
+                                static_cast<uint8_t>(it->second.location_type));
       return;
     }
     start_distance_measurement_with_cs(it->second.address, connection_handle, false);
@@ -3198,13 +3216,12 @@ void DistanceMeasurementManager::RegisterDistanceMeasurementCallbacks(
   CallOn(pimpl_.get(), &impl::register_distance_measurement_callbacks, callbacks);
 }
 
-void DistanceMeasurementManager::StartDistanceMeasurement(const Address& address,
-                                                          uint16_t connection_handle,
-                                                          hci::Role local_hci_role,
-                                                          uint16_t interval,
-                                                          DistanceMeasurementMethod method) {
+void DistanceMeasurementManager::StartDistanceMeasurement(
+        const Address& address, uint16_t connection_handle, hci::Role local_hci_role,
+        uint16_t interval, DistanceMeasurementMethod method,
+        DistanceMeasurementSightType sight_type, DistanceMeasurementLocationType location_type) {
   CallOn(pimpl_.get(), &impl::start_distance_measurement, address, connection_handle,
-         local_hci_role, interval, method);
+         local_hci_role, interval, method, sight_type, location_type);
 }
 
 void DistanceMeasurementManager::SetCsParams(const Address& address,

@@ -41,8 +41,10 @@ import android.os.Looper;
 import android.os.RemoteException;
 import android.util.Log;
 
+import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -120,6 +122,18 @@ public class DistanceMeasurementManager {
             mHasChannelSoundingFeature = true;
         }
         if(mHasChannelSoundingFeature) {}
+        postOnDistanceMeasurementThread(
+                () -> {
+                    int[] csTypes = {
+                        BluetoothStatsLog.CHANNEL_SOUNDING_TYPES_SUPPORTED__CS_TYPES__CS_UNSPECIFIED
+                    };
+                    if (mHasChannelSoundingFeature) {
+                        csTypes[0] =
+                                BluetoothStatsLog
+                                        .CHANNEL_SOUNDING_TYPES_SUPPORTED__CS_TYPES__CS_BT_CORE60;
+                    }
+                    MetricsLogger.getInstance().logChannelSoundingTypesSupported(csTypes);
+                });
     }
 
     void cleanup() {
@@ -251,7 +265,11 @@ public class DistanceMeasurementManager {
             return;
         }
         mDistanceMeasurementNativeInterface.startDistanceMeasurement(
-                tracker.mIdentityAddress, tracker.mInterval, DISTANCE_MEASUREMENT_METHOD_RSSI);
+                tracker.mIdentityAddress,
+                tracker.mInterval,
+                DISTANCE_MEASUREMENT_METHOD_RSSI,
+                tracker.mSightType,
+                tracker.mLocationType);
     }
 
     private synchronized void startCsTracker(DistanceMeasurementTracker tracker) {
@@ -281,7 +299,9 @@ public class DistanceMeasurementManager {
         mDistanceMeasurementNativeInterface.startDistanceMeasurement(
                 tracker.mIdentityAddress,
                 tracker.mInterval,
-                DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING);
+                DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING,
+                tracker.mSightType,
+                tracker.mLocationType);
     }
 
     int stopDistanceMeasurement(UUID uuid, BluetoothDevice device, int method, boolean timeout) {
@@ -689,7 +709,7 @@ public class DistanceMeasurementManager {
     }
 
     private void forceRunSyncOnDistanceMeasurementThread(Runnable r) {
-        if (!Flags.distanceMeasurementThread()) {
+        if (!Flags.distanceMeasurementThread() || Utils.isInstrumentationTestMode()) {
             r.run();
             return;
         }

@@ -52,7 +52,6 @@ apex {
     ],
     key: "com.android.bt.key",
     certificate: ":com.android.bt.certificate",
-    compressible: false,
     visibility: ["//packages/modules/common/build"],
 }
 

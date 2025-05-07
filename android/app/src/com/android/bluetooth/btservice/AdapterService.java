@@ -1433,7 +1433,7 @@ public class AdapterService extends Service {
 
     @RequiresPermission(BLUETOOTH_CONNECT)
     void cleanup() {
-        Log.d(TAG, "cleanup()");
+        Log.i(TAG, "cleanup()");
         if (mCleaningUp) {
             Log.e(TAG, "cleanup() - Service already starting to cleanup, ignoring request...");
             return;
@@ -2755,7 +2755,7 @@ public class AdapterService extends Service {
 
         // Reuse the existing BluetoothDevice object if it exists
         BluetoothDevice device =
-                Flags.retainAddressType() ? device = mRemoteDevices.getDevice(address) : null;
+                Flags.retainAddressType() ? mRemoteDevices.getDevice(address) : null;
         if (device == null) {
             // BluetoothAdapter.getRemoteLeDevice() is same as BluetoothAdapter.getRemoteDevice()
             // with the specific address type.
@@ -3452,6 +3452,12 @@ public class AdapterService extends Service {
         if (!profileServicesRunning()) {
             Log.e(TAG, "connectAllEnabledProfiles: Not all profile services running");
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
+        }
+
+        if (Flags.identityToPseudoAddr()) {
+            device =
+                    Objects.requireNonNullElse(
+                            mRemoteDevices.getDevice(device.getAddress()), device);
         }
 
         // Checks if any profiles are enabled or disabled and if so, only connect enabled profiles
