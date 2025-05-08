@@ -24,7 +24,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import android.annotation.IntRange;
-import android.annotation.NonNull;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -39,6 +38,7 @@ import android.os.MessageQueue;
 import android.service.media.MediaBrowserService;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.UiDevice;
 
@@ -123,7 +123,7 @@ public class TestUtils {
         assertThat(id).isAtMost(0xFF);
         BluetoothDevice testDevice =
                 InstrumentationRegistry.getInstrumentation()
-                        .getTargetContext()
+                        .getContext()
                         .getSystemService(BluetoothManager.class)
                         .getAdapter()
                         .getRemoteDevice(String.format("00:01:02:03:04:%02X", id));
@@ -141,7 +141,7 @@ public class TestUtils {
         assertThat(BluetoothAdapter.checkBluetoothAddress(address)).isTrue();
         BluetoothDevice testDevice =
                 InstrumentationRegistry.getInstrumentation()
-                        .getTargetContext()
+                        .getContext()
                         .getSystemService(BluetoothManager.class)
                         .getAdapter()
                         .getRemoteDevice(address);
@@ -158,7 +158,6 @@ public class TestUtils {
             return null;
         }
     }
-
 
     /**
      * Wait for looper to finish its current task and all tasks schedule before this
@@ -268,7 +267,7 @@ public class TestUtils {
     public static Intent prepareIntentToStartBluetoothBrowserMediaService() {
         final Intent intent =
                 new Intent(
-                        InstrumentationRegistry.getInstrumentation().getTargetContext(),
+                        InstrumentationRegistry.getInstrumentation().getContext(),
                         BluetoothMediaBrowserService.class);
         intent.setAction(MediaBrowserService.SERVICE_INTERFACE);
         return intent;
