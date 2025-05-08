@@ -85,15 +85,15 @@ public class DistanceMeasurementManagerTest {
 
     private static final int RSSI_FREQUENCY_LOW = 3000;
     private static final int CS_FREQUENCY_LOW = 5000;
+    private static final int APP_UID = 100;
 
     @Before
     public void setUp() throws Exception {
         doReturn(mPackageManager).when(mAdapterService).getPackageManager();
         doReturn(true).when(mPackageManager).hasSystemFeature(any());
         doReturn(true).when(mAdapterService).isLeChannelSoundingSupported();
-        doReturn(mDevice.getAddress())
-                .when(mAdapterService)
-                .getIdentityAddress(mDevice.getAddress());
+        final String address = mDevice.getAddress();
+        doReturn(address).when(mAdapterService).getIdentityAddress(address);
         doReturn(true).when(mAdapterService).isConnected(any());
         DistanceMeasurementNativeInterface.setInstance(mDistanceMeasurementNativeInterface);
 
@@ -130,9 +130,10 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         verify(mDistanceMeasurementNativeInterface)
                 .startDistanceMeasurement(
+                        APP_UID,
                         mDevice.getAddress(),
                         RSSI_FREQUENCY_LOW,
                         DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI,
@@ -148,7 +149,7 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         mDistanceMeasurementManager.stopDistanceMeasurement(
                 mUuid, mDevice, DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI, false);
         verify(mDistanceMeasurementNativeInterface)
@@ -165,9 +166,10 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         verify(mDistanceMeasurementNativeInterface)
                 .startDistanceMeasurement(
+                        APP_UID,
                         mDevice.getAddress(),
                         RSSI_FREQUENCY_LOW,
                         DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI,
@@ -186,9 +188,10 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         verify(mDistanceMeasurementNativeInterface)
                 .startDistanceMeasurement(
+                        APP_UID,
                         mDevice.getAddress(),
                         RSSI_FREQUENCY_LOW,
                         DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI,
@@ -213,10 +216,11 @@ public class DistanceMeasurementManagerTest {
                                 DistanceMeasurementMethod
                                         .DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
 
         verify(mDistanceMeasurementNativeInterface, never())
                 .startDistanceMeasurement(
+                        APP_UID,
                         mDevice.getAddress(),
                         CS_FREQUENCY_LOW,
                         DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING,
@@ -236,10 +240,11 @@ public class DistanceMeasurementManagerTest {
                                 DistanceMeasurementMethod
                                         .DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
 
         verify(mDistanceMeasurementNativeInterface)
                 .startDistanceMeasurement(
+                        APP_UID,
                         mDevice.getAddress(),
                         CS_FREQUENCY_LOW,
                         DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING,
@@ -290,7 +295,7 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         mDistanceMeasurementManager.onDistanceMeasurementStarted(
                 mDevice.getAddress(), DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI);
         verify(mCallback).onStarted(mDevice);
@@ -310,7 +315,7 @@ public class DistanceMeasurementManagerTest {
                         .setFrequency(DistanceMeasurementParams.REPORT_FREQUENCY_LOW)
                         .setMethodId(DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         mDistanceMeasurementManager.onDistanceMeasurementStarted(
                 mDevice.getAddress(), DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI);
         verify(mCallback).onStarted(mDevice);
@@ -354,7 +359,7 @@ public class DistanceMeasurementManagerTest {
                         .setDurationSeconds(
                                 DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI)
                         .build();
-        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, params, mCallback);
+        mDistanceMeasurementManager.startDistanceMeasurement(mUuid, APP_UID, params, mCallback);
         mDistanceMeasurementManager.stopDistanceMeasurement(
                 mUuid, mDevice, DistanceMeasurementMethod.DISTANCE_MEASUREMENT_METHOD_RSSI, false);
         verify(mDistanceMeasurementNativeInterface)

@@ -187,7 +187,7 @@ public:
   bool IsDeviceInTheGroup(LeAudioDevice* leAudioDevice) const;
   uint8_t GetActiveEnabledDirections(void);
   uint8_t GetActiveQoSConfiguredDirections(void);
-  bool HaveAllActiveDevicesAsesInExpectedState(void) const;
+  bool HasAllRequiredStreamingAses(void) const;
   bool HaveAllActiveDevicesAsesTheSameState(types::AseState state) const;
   bool HaveAnyActiveDeviceInStreamingState() const;
   bool HaveAnyActiveDeviceInUnconfiguredState() const;

@@ -75,6 +75,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -624,9 +625,7 @@ public class ScanController {
             return;
         }
         client.mAppDied = true;
-        if (client.mStats != null) {
-            client.mStats.isAppDead = true;
-        }
+        client.mStats.ifPresent(stats -> stats.isAppDead = true);
         stopScan(client.mScannerId);
     }
 
@@ -1200,7 +1199,7 @@ public class ScanController {
             int scannerId, ScanSettings settings, List<ScanFilter> filters, ScanClient scanClient) {
         AppScanStats app = mScannerMap.getAppScanStatsById(scannerId);
         if (app != null) {
-            scanClient.mStats = app;
+            scanClient.mStats = Optional.of(app);
             mScanManager.fetchAppForegroundState(scanClient);
             boolean isFilteredScan = (filters != null) && !filters.isEmpty();
             boolean isCallbackScan = false;
@@ -1308,7 +1307,7 @@ public class ScanController {
 
         AppScanStats scanStats = mScannerMap.getAppScanStatsById(scannerId);
         if (scanStats != null) {
-            scanClient.mStats = scanStats;
+            scanClient.mStats = Optional.of(scanStats);
             mScanManager.fetchAppForegroundState(scanClient);
             boolean isFilteredScan = (piInfo.filters != null) && !piInfo.filters.isEmpty();
             scanStats.recordScanStart(
