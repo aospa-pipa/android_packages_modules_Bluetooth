@@ -41,7 +41,6 @@ import androidx.test.filters.MediumTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.TestLooper;
-import com.android.bluetooth.TestUtils.MockitoRule;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
 
@@ -120,7 +119,7 @@ public class BatteryServiceTest {
                             badPolicyValue)) {
                 doReturn(bondState).when(mAdapterService).getBondState(any());
                 doReturn(policy).when(mDatabaseManager).getProfileConnectionPolicy(any(), anyInt());
-                assertThat(mService.canConnect(mDevice)).isEqualTo(false);
+                assertThat(mService.canConnect(mDevice)).isFalse();
             }
         }
     }
@@ -132,7 +131,7 @@ public class BatteryServiceTest {
 
         for (int policy : List.of(CONNECTION_POLICY_FORBIDDEN, badPolicyValue)) {
             doReturn(policy).when(mDatabaseManager).getProfileConnectionPolicy(any(), anyInt());
-            assertThat(mService.canConnect(mDevice)).isEqualTo(false);
+            assertThat(mService.canConnect(mDevice)).isFalse();
         }
         for (int policy : List.of(CONNECTION_POLICY_UNKNOWN, CONNECTION_POLICY_ALLOWED)) {
             doReturn(policy).when(mDatabaseManager).getProfileConnectionPolicy(any(), anyInt());

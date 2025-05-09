@@ -486,7 +486,6 @@ cc_fuzz {
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestFakeOsi",
-        ":TestMockBtaDm",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -637,6 +636,7 @@ cc_fuzz {
         "libbluetooth_metrics_mock",
         "libbluetooth_smp_pdl",
         "libbt-common",
+        "libcom.android.sysprop.bluetooth.wrapped",
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
@@ -876,7 +876,6 @@ cc_test {
     srcs: [
         ":TestCommonMainHandler",
         ":TestCommonMockFunctions",
-        ":TestMockBtaDm",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",

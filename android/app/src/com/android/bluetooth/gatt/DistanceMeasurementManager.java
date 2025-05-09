@@ -177,7 +177,10 @@ public class DistanceMeasurementManager {
     }
 
     void startDistanceMeasurement(
-            UUID uuid, DistanceMeasurementParams params, IDistanceMeasurementCallback callback) {
+            UUID uuid,
+            int appUid,
+            DistanceMeasurementParams params,
+            IDistanceMeasurementCallback callback) {
         checkThread();
 
         if (mIsTurnedOff) {
@@ -215,7 +218,8 @@ public class DistanceMeasurementManager {
         }
 
         DistanceMeasurementTracker tracker =
-                new DistanceMeasurementTracker(this, params, address, uuid, interval, params.getFrequency(), callback);
+                new DistanceMeasurementTracker(
+                        this, appUid, params, address, uuid, interval, params.getFrequency(), callback);
 
         switch (params.getMethodId()) {
             case DISTANCE_MEASUREMENT_METHOD_AUTO:
@@ -265,6 +269,7 @@ public class DistanceMeasurementManager {
             return;
         }
         mDistanceMeasurementNativeInterface.startDistanceMeasurement(
+                tracker.mAppUid,
                 tracker.mIdentityAddress,
                 tracker.mInterval,
                 DISTANCE_MEASUREMENT_METHOD_RSSI,
@@ -297,6 +302,7 @@ public class DistanceMeasurementManager {
 			params.getCsSecurityLevel(),
 			tracker.mFrequency,tracker.mInterval);
         mDistanceMeasurementNativeInterface.startDistanceMeasurement(
+                tracker.mAppUid,
                 tracker.mIdentityAddress,
                 tracker.mInterval,
                 DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING,
@@ -323,16 +329,16 @@ public class DistanceMeasurementManager {
                         + " => "
                         + BluetoothUtils.toAnonymizedAddress(address));
 
-        switch (method) {
-            case DISTANCE_MEASUREMENT_METHOD_AUTO:
-            case DISTANCE_MEASUREMENT_METHOD_RSSI:
-                return stopRssiTracker(uuid, address, timeout);
-            case DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING:
-                return stopCsTracker(uuid, address, timeout);
-            default:
+        return switch (method) {
+            case DISTANCE_MEASUREMENT_METHOD_AUTO, DISTANCE_MEASUREMENT_METHOD_RSSI ->
+                    stopRssiTracker(uuid, address, timeout);
+            case DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING ->
+                    stopCsTracker(uuid, address, timeout);
+            default -> {
                 Log.w(TAG, "stopDistanceMeasurement with invalid method:" + method);
-                return BluetoothStatusCodes.ERROR_DISTANCE_MEASUREMENT_INTERNAL;
-        }
+                yield BluetoothStatusCodes.ERROR_DISTANCE_MEASUREMENT_INTERNAL;
+            }
+        };
     }
 
     int getChannelSoundingMaxSupportedSecurityLevel(BluetoothDevice remoteDevice) {
