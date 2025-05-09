@@ -11,6 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Pandora experimental gRPC Bluetooth test interfaces."""
+"""Pandora gRPC Bluetooth test interfaces."""
 
-__version__ = "0.0.1"
+__version__ = "0.0.6"

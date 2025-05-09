@@ -926,6 +926,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                         + ", from "
                         + getUidPidString());
 
+        service.addAssociatedPackage(device, source.getPackageName());
         service.getRemoteDevices().fetchUuids(device, transport);
         MetricsLogger.getInstance().cacheCount(BluetoothProtoEnums.SDP_FETCH_UUID_REQUEST, 1);
         return true;
@@ -1248,6 +1249,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 || !checkConnectPermissionForDataDelivery(service, source, TAG, "sdpSearch")) {
             return false;
         }
+        service.addAssociatedPackage(device, source.getPackageName());
         return service.sdpSearch(device, uuid);
     }
 

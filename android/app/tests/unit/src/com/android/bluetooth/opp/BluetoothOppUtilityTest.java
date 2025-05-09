@@ -79,8 +79,7 @@ public class BluetoothOppUtilityTest {
             Uri.parse("content://com.android.bluetooth.opp/btopp/0123455343467");
     private static final Uri INCORRECT_FORMAT_URI = Uri.parse("www.google.com");
 
-    private final Context mContext =
-            InstrumentationRegistry.getInstrumentation().getContext();
+    private final Context mContext = InstrumentationRegistry.getInstrumentation().getContext();
 
     @Before
     public void setUp() throws Exception {
@@ -328,7 +327,7 @@ public class BluetoothOppUtilityTest {
         assertThat(info.mFileUri).isNull();
         assertThat(info.mFileType).isEqualTo(fileTypeValue);
         assertThat(info.mDeviceName).isEqualTo(deviceNameValue);
-        assertThat(info.mHandoverInitiated).isEqualTo(false);
+        assertThat(info.mHandoverInitiated).isFalse();
         assertThat(info.mFileName).isEqualTo(fileNameValue);
     }
 
