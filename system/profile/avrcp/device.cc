@@ -342,7 +342,8 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
       for (auto attribute : attributes) {
         log::info("{}: PDU: {} attribute: {}", address_, pkt->GetCommandPdu(), (int)attribute);
         if (attribute < PlayerAttribute::EQUALIZER || attribute > PlayerAttribute::SCAN) {
-          log::warn("{}: Player Setting Attribute is not valid", address_);
+          log::warn("{}: Player Setting Attribute is not valid PDU: {} attribute: {}", address_,
+                    pkt->GetCommandPdu(), (int)attribute);
           auto response =
                   RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::INVALID_PARAMETER);
           send_message(label, false, std::move(response));
@@ -350,7 +351,7 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
         }
       }
 
-      log::info("{}: Get current player setting value ", address_);
+      log::info("{}: Get current player setting value", address_);
       player_settings_interface_->GetCurrentPlayerSettingValue(
               attributes, base::Bind(&Device::GetPlayerApplicationSettingValueResponse,
                                      weak_ptr_factory_.GetWeakPtr(), label));
@@ -383,7 +384,8 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
         log::info("{}: PDU: {} attributes[i] = {}", address_, pkt->GetCommandPdu(),
                   (int)attributes[i]);
         if (attributes[i] < PlayerAttribute::EQUALIZER || attributes[i] > PlayerAttribute::SCAN) {
-          log::warn("{}: Player Setting Attribute is not valid", address_);
+          log::warn("{}: Player Setting Attribute is not valid PDU: {} attributes[i] = {}",
+                    address_, pkt->GetCommandPdu(), (int)attributes[i]);
           invalid_request = true;
           break;
         }
@@ -392,7 +394,8 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
           PlayerRepeatValue value = static_cast<PlayerRepeatValue>(values[i]);
           log::info("{}: PDU: {} REPEAT value = {}", address_, pkt->GetCommandPdu(), (int)value);
           if (value < PlayerRepeatValue::OFF || value > PlayerRepeatValue::GROUP) {
-            log::warn("{}: Player Repeat Value is not valid", address_);
+            log::warn("{}: Player Repeat Value is not valid PDU: {} REPEAT value = {}", address_,
+                      pkt->GetCommandPdu(), (int)value);
             invalid_request = true;
             break;
           }
@@ -400,7 +403,8 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
           PlayerShuffleValue value = static_cast<PlayerShuffleValue>(values[i]);
           log::info("{}: PDU: {} SHUFFLE value = {}", address_, pkt->GetCommandPdu(), (int)value);
           if (value < PlayerShuffleValue::OFF || value > PlayerShuffleValue::GROUP) {
-            log::warn("{}: Player Shuffle Value is not valid", address_);
+            log::warn("{}: Player Shuffle Value is not valid PDU: {} SHUFFLE value = {}", address_,
+                      pkt->GetCommandPdu(), (int)value);
             invalid_request = true;
             break;
           }
@@ -413,7 +417,7 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
         return;
       }
 
-      log::info("{}: Set player settings ", address_);
+      log::info("{}: Set player settings", address_);
       player_settings_interface_->SetPlayerSettings(
               attributes, values,
               base::Bind(&Device::SetPlayerApplicationSettingValueResponse,
