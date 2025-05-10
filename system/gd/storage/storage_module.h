@@ -48,8 +48,10 @@ class SecurityManagerImpl;
 namespace hci {
 class AclManager;
 class LeAdvertisingManager;
+class LeAdvertisingManagerImpl;
 class LeScanningManager;
 class LeScanningReassembler;
+class LeScanningManagerImpl;
 }  // namespace hci
 
 namespace storage {
@@ -139,8 +141,9 @@ protected:
   friend shim::BtifConfigInterface;
   friend hci::AclManager;
   friend security::internal::SecurityManagerImpl;
-  friend hci::LeAdvertisingManager;
+  friend hci::LeAdvertisingManagerImpl;
   friend hci::LeScanningManager;
+  friend hci::LeScanningManagerImpl;
   friend hci::LeScanningReassembler;
   // For unit test only
   ConfigCache* GetMemoryOnlyConfigCache();
