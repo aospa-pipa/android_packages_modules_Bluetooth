@@ -20,7 +20,7 @@
 
 #define LOG_TAG "bt_shim_scanner"
 
-#include "le_scanning_manager.h"
+#include "main/shim/le_scanning_manager.h"
 
 #include <base/functional/bind.h>
 #include <base/threading/thread.h>
@@ -37,7 +37,6 @@
 #include "main/shim/ble_scanner_interface_impl.h"
 #include "main/shim/entry.h"
 #include "main/shim/helpers.h"
-#include "main/shim/le_scanning_manager.h"
 #include "main/shim/shim.h"
 #include "main_thread.h"
 #include "stack/acl/acl.h"

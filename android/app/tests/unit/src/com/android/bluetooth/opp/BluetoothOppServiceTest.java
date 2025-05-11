@@ -17,6 +17,7 @@
 package com.android.bluetooth.opp;
 
 import static com.android.bluetooth.TestUtils.MockitoRule;
+import static com.android.bluetooth.TestUtils.getRealDevice;
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
 import static com.android.bluetooth.opp.BluetoothOppService.WHERE_INVISIBLE_UNCONFIRMED;
 
@@ -26,15 +27,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.app.NotificationManager;
-import android.bluetooth.BluetoothAdapter;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.database.MatrixCursor;
@@ -45,7 +45,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMethodProxy;
-import com.android.bluetooth.TestUtils;
 import com.android.bluetooth.btservice.AdapterService;
 
 import org.junit.After;
@@ -72,7 +71,6 @@ public class BluetoothOppServiceTest {
 
     @Before
     public void setUp() throws Exception {
-        TestUtils.setAdapterService(mAdapterService);
         mockGetSystemService(
                 mAdapterService, Context.NOTIFICATION_SERVICE, NotificationManager.class);
         doReturn(mTargetContext.getPackageName()).when(mAdapterService).getPackageName();
@@ -80,12 +78,13 @@ public class BluetoothOppServiceTest {
         doReturn(mTargetContext.getResources()).when(mAdapterService).getResources();
         doReturn(mTargetContext.getContentResolver()).when(mAdapterService).getContentResolver();
 
-        when(mAdapterService.getRemoteDevice(anyString()))
-                .thenAnswer(
+        doAnswer(
                         invocation -> {
                             String address = invocation.getArgument(0);
-                            return BluetoothAdapter.getDefaultAdapter().getRemoteDevice(address);
-                        });
+                            return getRealDevice(address);
+                        })
+                .when(mAdapterService)
+                .getRemoteDevice(anyString());
 
         BluetoothMethodProxy.setInstanceForTesting(mBluetoothMethodProxy);
 
@@ -100,7 +99,8 @@ public class BluetoothOppServiceTest {
             Looper.prepare();
         }
 
-        mService = new BluetoothOppService(mAdapterService);
+        BluetoothOppPreference oppPreference = BluetoothOppPreference.getInstance(mTargetContext);
+        mService = new BluetoothOppService(mAdapterService, oppPreference);
         mService.setAvailable(true);
 
         // Wait until the initial trimDatabase operation is done.
@@ -129,7 +129,6 @@ public class BluetoothOppServiceTest {
 
         BluetoothMethodProxy.setInstanceForTesting(null);
         mService.cleanup();
-        TestUtils.clearAdapterService(mAdapterService);
     }
 
     @Test
