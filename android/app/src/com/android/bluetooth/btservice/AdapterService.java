@@ -4290,6 +4290,10 @@ public class AdapterService extends Service {
         if (mPbapClientService != null && mPbapClientService.isAvailable()) {
             mPbapClientService.aclDisconnected(device, transport);
         }
+        Message msg = mBondStateMachine.obtainMessage(BondStateMachine.ACL_DISCONNECTED);
+        msg.obj = device;
+        msg.arg1 = transport;
+        mBondStateMachine.sendMessage(msg);
     }
 
     /**
