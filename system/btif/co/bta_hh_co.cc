@@ -43,7 +43,7 @@
 #include "btif_hh.h"
 #include "device/include/interop.h"
 #include "hardware/bt_hh.h"
-#include "hci/controller_interface.h"
+#include "hci/controller.h"
 #include "main/shim/entry.h"
 #include "osi/include/alarm.h"
 #include "osi/include/allocator.h"
