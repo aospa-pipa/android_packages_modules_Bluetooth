@@ -198,6 +198,7 @@ android_library {
         "androidx.annotation_annotation",
         "bluetooth.change-ids",
         "com.android.obex",
+        "com.android.sysprop.bluetooth",
         "com.android.vcard",
         "guava",
         "libprotobuf-java-lite",
