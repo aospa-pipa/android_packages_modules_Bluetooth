@@ -32,7 +32,7 @@
 
 #include "common/strings.h"
 #include "hardware/ble_advertiser.h"
-#include "hci/controller_interface.h"
+#include "hci/controller.h"
 #include "hci/event_checkers.h"
 #include "hci/hci_interface.h"
 #include "hci/hci_packets.h"
@@ -161,7 +161,7 @@ static AdvertiserAddressType GetAdvertiserAddressTypeNonConnectable(
 }
 
 struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerCallback {
-  impl(os::Handler* handler, hci::HciInterface* hci, hci::ControllerInterface* controller,
+  impl(os::Handler* handler, hci::HciInterface* hci, hci::Controller* controller,
        hci::LeAddressManager* le_address_manager,
        hci::OnAdvertisingSetTerminatedInterface* on_set_terminated)
       : handler_(handler),
@@ -1024,8 +1024,13 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     auto own_address_type = static_cast<OwnAddressType>(
             advertising_sets_[advertiser_id].current_address.GetAddressType());
 
+    // if controller supports RPA generation, advertising set is using non public address
+    // and host is not requesting non resolvable PRA,
+    // then change address type to RESOLVABLE_OR_RANDOM_ADDRESS
     if (controller_->IsRpaGenerationSupported() &&
-        own_address_type != OwnAddressType::PUBLIC_DEVICE_ADDRESS) {
+        own_address_type != OwnAddressType::PUBLIC_DEVICE_ADDRESS &&
+        advertising_sets_[advertiser_id].address_type !=
+            AdvertiserAddressType::NONRESOLVABLE_RANDOM) {
       log::info("Support RPA offload, set own address type RESOLVABLE_OR_RANDOM_ADDRESS");
       own_address_type = OwnAddressType::RESOLVABLE_OR_RANDOM_ADDRESS;
     }
@@ -2011,7 +2016,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 
   os::Handler* handler_;
   hci::HciInterface* hci_;
-  hci::ControllerInterface* controller_;
+  hci::Controller* controller_;
   hci::LeAddressManager* le_address_manager_;
   hci::OnAdvertisingSetTerminatedInterface* on_set_terminated_;
   common::Callback<void(Address, AddressType)> scan_callback_;
@@ -2634,7 +2639,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 };
 
 LeAdvertisingManagerImpl::LeAdvertisingManagerImpl(
-        os::Handler* handler, hci::HciInterface* hci, hci::ControllerInterface* controller,
+        os::Handler* handler, hci::HciInterface* hci, hci::Controller* controller,
         hci::LeAddressManager* le_address_manager,
         hci::OnAdvertisingSetTerminatedInterface* on_set_terminated) {
   pimpl_ = std::make_unique<impl>(handler, hci, controller, le_address_manager, on_set_terminated);

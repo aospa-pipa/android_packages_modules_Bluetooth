@@ -20,7 +20,7 @@
 #include "bta/include/bta_ras_api.h"
 #include "hal/ranging_hal.h"
 #include "hci/address.h"
-#include "hci/controller_interface.h"
+#include "hci/controller.h"
 #include "hci/distance_measurement_manager.h"
 #include "hci/hci_interface.h"
 #include "hci/hci_packets.h"
@@ -32,7 +32,7 @@ class AclManager;
 class DistanceMeasurementManagerImpl : public DistanceMeasurementManager {
 public:
   DistanceMeasurementManagerImpl(os::Handler* handler, hci::HciInterface* hci_layer,
-                                 hci::ControllerInterface* controller, hci::AclManager* acl_manager,
+                                 hci::Controller* controller, hci::AclManager* acl_manager,
                                  hal::RangingHal* ranging_hal);
   ~DistanceMeasurementManagerImpl();
   DistanceMeasurementManagerImpl(const DistanceMeasurementManagerImpl&) = delete;

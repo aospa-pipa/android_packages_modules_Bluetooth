@@ -17,7 +17,7 @@
 package com.android.bluetooth.opp;
 
 import static com.android.bluetooth.TestUtils.MockitoRule;
-import static com.android.bluetooth.TestUtils.getRealDevice;
+import static com.android.bluetooth.TestUtils.getTestDevice;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -89,7 +89,6 @@ public class BluetoothOppUtilityTest {
     @After
     public void tearDown() throws Exception {
         TestUtils.tearDownUiTest();
-
         BluetoothMethodProxy.setInstanceForTesting(null);
     }
 
@@ -161,7 +160,6 @@ public class BluetoothOppUtilityTest {
 
     @Test
     public void openReceivedFile_fileNotExist() {
-
         Uri contentResolverUri = Uri.parse("content://com.android.bluetooth.opp/btopp/0123");
         Uri fileUri = Uri.parse("content:///tmp/randomFileName.txt");
 
@@ -293,7 +291,9 @@ public class BluetoothOppUtilityTest {
         String destinationValue = "AA:BB:CC:00:11:22";
         String fileNameValue = mContext.getString(R.string.unknown_file);
         String fileTypeValue = "text/plain";
-        final BluetoothDevice remoteDevice = getRealDevice(destinationValue);
+        final BluetoothDevice remoteDevice = getTestDevice(destinationValue);
+        doReturn("Unknown device").when(remoteDevice).getAlias();
+
         String deviceNameValue =
                 BluetoothOppManager.getInstance(mContext).getDeviceName(remoteDevice);
 
