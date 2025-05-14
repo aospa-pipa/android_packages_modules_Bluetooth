@@ -35,6 +35,7 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.BluetoothProfile.getProfileName;
 import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringConsumer;
+import static android.bluetooth.BluetoothUtils.logRemoteException;
 import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 import static android.text.format.DateUtils.MINUTE_IN_MILLIS;
 import static android.text.format.DateUtils.SECOND_IN_MILLIS;
@@ -273,6 +274,7 @@ public class AdapterService extends Service {
     private final Looper mLooper;
     private final AdapterServiceHandler mHandler;
 
+    private boolean mIsMediaProfileConnected;
     private int mStackReportedState;
     private long mTxTimeTotalMs;
     private long mRxTimeTotalMs;
@@ -346,7 +348,9 @@ public class AdapterService extends Service {
     private volatile boolean mTestModeEnabled = false;
 
     /** Handlers for incoming service calls */
-    private AdapterServiceBinder mBinder;
+    private final AdapterServiceBinder mAdapterServiceBinder = new AdapterServiceBinder(this);
+
+    private final AdapterBinder mAdapterBinder = new AdapterBinder(this);
 
     private volatile int mScanMode;
 
@@ -610,7 +614,6 @@ public class AdapterService extends Service {
         mRemoteDevices = new RemoteDevices(this, mLooper);
         mAdapterProperties = new AdapterProperties(this, mRemoteDevices, mLooper);
         mAdapterStateMachine = new AdapterState(this, mLooper);
-        mBinder = new AdapterServiceBinder(this);
         mUserManager = requireNonNull(getSystemService(UserManager.class));
         mAppOps = requireNonNull(getSystemService(AppOpsManager.class));
         mPowerManager = requireNonNull(getSystemService(PowerManager.class));
@@ -767,7 +770,7 @@ public class AdapterService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         Log.d(TAG, "onBind()");
-        return mBinder;
+        return mAdapterBinder;
     }
 
     @Override
@@ -4028,6 +4031,11 @@ public class AdapterService extends Service {
 
     void registerRemoteCallback(IBluetoothCallback callback) {
         mSystemServerCallbacks.register(callback);
+        try {
+            callback.setAdapterServiceBinder(mAdapterServiceBinder);
+        } catch (RemoteException e) {
+            logRemoteException(TAG, e);
+        }
     }
 
     void unregisterRemoteCallback(IBluetoothCallback callback) {
@@ -4331,6 +4339,15 @@ public class AdapterService extends Service {
         mPhonePolicy.ifPresent(
                 policy ->
                         policy.profileConnectionStateChanged(profile, device, fromState, toState));
+        if (!Flags.onewayMediaProfile()) {
+            return;
+        }
+        boolean mediaConnected = isMediaProfileConnected();
+        if (mIsMediaProfileConnected != mediaConnected) {
+            mIsMediaProfileConnected = mediaConnected;
+            broadcastToSystemServerCallbacks(
+                    "mediaConnected", (c) -> c.onMediaProfileConnectionChange(mediaConnected));
+        }
     }
 
     /** Handle Bluetooth app state when active device changes for a given {@code profile}. */

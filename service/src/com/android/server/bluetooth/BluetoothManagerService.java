@@ -45,7 +45,7 @@ import android.app.ActivityManager;
 import android.app.BroadcastOptions;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothStatusCodes;
-import android.bluetooth.IBluetooth;
+import android.bluetooth.IAdapter;
 import android.bluetooth.IBluetoothCallback;
 import android.bluetooth.IBluetoothManager;
 import android.bluetooth.IBluetoothManagerCallback;
@@ -143,7 +143,7 @@ class BluetoothManagerService {
 
     // TODO: b/402209603 remove along with system_server_remove_extra_thread_jump
     @VisibleForTesting static final int MESSAGE_HANDLE_DISABLE_DELAYED = 4;
-    @VisibleForTesting static final int MESSAGE_INFORM_ADAPTER_SERVICE_UP = 22;
+
     @VisibleForTesting static final int MESSAGE_BLUETOOTH_SERVICE_CONNECTED = 40;
     @VisibleForTesting static final int MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED = 41;
     @VisibleForTesting static final int MESSAGE_RESTART_BLUETOOTH_SERVICE = 42;
@@ -242,6 +242,28 @@ class BluetoothManagerService {
                     }
                     Log.d(TAG, "IBluetoothCallback.onAdapterAddressChange: " + logAddress(address));
                     mHandler.post(() -> storeAddress(address));
+                }
+
+                @Override
+                public void onMediaProfileConnectionChange(boolean connected) {
+                    mHandler.post(
+                            () -> {
+                                AirplaneModeListener.setIsMediaProfileConnected(connected);
+                            });
+                }
+
+                @Override
+                public void setAdapterServiceBinder(IBinder adapterServiceBinder) {
+                    mHandler.post(
+                            () -> {
+                                if (mAdapter == null) {
+                                    return;
+                                }
+                                mAdapter.setAdapterServiceBinder(adapterServiceBinder);
+                                broadcastToAdapters(
+                                        "setAdapterServiceBinder",
+                                        (item) -> item.onBluetoothServiceUp(adapterServiceBinder));
+                            });
                 }
             };
 
@@ -764,11 +786,11 @@ class BluetoothManagerService {
     }
 
     // Called from unsafe binder thread
-    IBluetooth registerAdapter(IBluetoothManagerCallback callback) {
+    IBinder registerAdapter(IBluetoothManagerCallback callback) {
         mCallbacks.register(callback);
         // Copy to local variable to avoid race condition when checking for null
         AdapterBinder adapter = mAdapter;
-        return adapter != null ? adapter.getAdapterBinder() : null;
+        return adapter != null ? adapter.getAdapterServiceBinder() : null;
     }
 
     void unregisterAdapter(IBluetoothManagerCallback callback) {
@@ -979,6 +1001,9 @@ class BluetoothManagerService {
     }
 
     boolean isMediaProfileConnected() {
+        if (Flags.onewayMediaProfile()) {
+            throw new IllegalStateException("Not callable when the flag is enabled");
+        }
         if (!mState.oneOf(STATE_ON)) {
             return false;
         }
@@ -1442,12 +1467,6 @@ class BluetoothManagerService {
         broadcastToAdapters("sendBluetoothOffCallback", IBluetoothManagerCallback::onBluetoothOff);
     }
 
-    private void sendBluetoothServiceUpCallback() {
-        broadcastToAdapters(
-                "sendBluetoothServiceUpCallback",
-                (item) -> item.onBluetoothServiceUp(mAdapter.getAdapterBinder().asBinder()));
-    }
-
     private void sendBluetoothServiceDownCallback() {
         broadcastToAdapters(
                 "sendBluetoothServiceDownCallback",
@@ -1592,10 +1611,6 @@ class BluetoothManagerService {
                     mEnableExternal = true;
                     sendEnableMsg(false, ENABLE_DISABLE_REASON_RESTORE_USER_SETTING);
                     break;
-                case MESSAGE_INFORM_ADAPTER_SERVICE_UP:
-                    Log.i(TAG,"MESSAGE_INFORM_ADAPTER_SERVICE_UP");
-                    sendBluetoothServiceUpCallback();
-                    break;
                 case MESSAGE_BLUETOOTH_SERVICE_CONNECTED:
                     IBinder service = (IBinder) msg.obj;
 
@@ -1624,7 +1639,6 @@ class BluetoothManagerService {
                     }
 
                     offToBleOn(mHciInstanceName);
-                    sendBluetoothServiceUpCallback();
 
                     if (!Flags.systemServerRemoveExtraThreadJump() && !mEnable) {
                         /* Wait for BLE ON or ON state ,if enable is from BLE app
@@ -2046,7 +2060,7 @@ class BluetoothManagerService {
     private void bindToAdapter() {
         UserHandle user = UserHandle.CURRENT;
         int flags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
-        Intent intent = new Intent(IBluetooth.class.getName());
+        Intent intent = new Intent(IAdapter.class.getName());
         intent.setComponent(resolveSystemService(intent));
 
         mHandler.sendEmptyMessageDelayed(MESSAGE_TIMEOUT_BIND, TIMEOUT_BIND_MS);
@@ -2279,6 +2293,7 @@ class BluetoothManagerService {
 
         if (prevState == STATE_ON) {
             autoOnSetupTimer();
+            AirplaneModeListener.setIsMediaProfileConnected(false);
         }
 
         // Notify all proxy objects first of adapter state change

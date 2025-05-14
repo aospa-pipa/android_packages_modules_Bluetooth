@@ -402,7 +402,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   void set_cs_params(const Address& cs_remote_address, int mSightType, int mLocationType,
 		     int mCsSecurityLevel, int mFrequency, int mDuration) {
-    uint16_t connection_handle = acl_manager_->HACK_GetLeHandle(cs_remote_address);
+    uint16_t connection_handle = acl_manager_->HACK_GetHandle(cs_remote_address);
 
     if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
       log::error("Channel Sounding is not enabled");
