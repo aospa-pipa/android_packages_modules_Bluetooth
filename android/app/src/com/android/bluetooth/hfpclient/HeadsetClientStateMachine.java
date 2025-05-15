@@ -2331,7 +2331,8 @@ public class HeadsetClientStateMachine extends StateMachine {
                 new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
                 Utils.getTempBroadcastOptions());
 
-        HfpClientConnectionService.onConnectionStateChanged(device, newState, prevState);
+        HfpClientConnectionService.onConnectionStateChanged(
+                mAdapterService, device, newState, prevState);
     }
 
     boolean isConnected() {

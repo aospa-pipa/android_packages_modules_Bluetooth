@@ -46,7 +46,7 @@ class SecurityManagerImpl;
 }
 
 namespace hci {
-class AclManager;
+class AclManagerImpl;
 class LeAdvertisingManager;
 class LeAdvertisingManagerImpl;
 class LeScanningManager;
@@ -139,7 +139,7 @@ protected:
   std::string ToString() const override;
 
   friend shim::BtifConfigInterface;
-  friend hci::AclManager;
+  friend hci::AclManagerImpl;
   friend security::internal::SecurityManagerImpl;
   friend hci::LeAdvertisingManagerImpl;
   friend hci::LeScanningManager;
