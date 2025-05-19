@@ -528,6 +528,28 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         }
     }
 
+    private boolean isA2dpProfileConnected(BluetoothDevice device) {
+        A2dpService a2dpService = mFactory.getA2dpService();
+        if (a2dpService != null) {
+            int connectionState = a2dpService.getConnectionState(device);
+            if (connectionState == BluetoothProfile.STATE_CONNECTED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isHfpProfileConnected(BluetoothDevice device) {
+        HeadsetService headsetService = mFactory.getHeadsetService();
+        if (headsetService != null) {
+            int connectionState = headsetService.getConnectionState(device);
+            if (connectionState == BluetoothProfile.STATE_CONNECTED) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void handleA2dpDisconnected(BluetoothDevice device) {
         synchronized (mLock) {
             Log.d(
@@ -539,7 +561,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             mA2dpConnectedDevices.remove(device);
             if (Objects.equals(mA2dpActiveDevice, device)) {
                 setA2dpActiveDevice(null, false);
-                setFallbackDeviceActiveLocked(device);
+                if (!isHfpProfileConnected(device)) {
+                    setFallbackDeviceActiveLocked(device);
+                }
             }
         }
     }
@@ -554,7 +578,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 if (mHfpConnectedDevices.isEmpty()) {
                     setHfpActiveDevice(null);
                 }
-                setFallbackDeviceActiveLocked(device);
+                if (!isA2dpProfileConnected(device)) {
+                    setFallbackDeviceActiveLocked(device);
+                }
             }
         }
     }
