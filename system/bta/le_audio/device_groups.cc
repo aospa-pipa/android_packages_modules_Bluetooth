@@ -970,6 +970,18 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         continue;
       }
 
+      if ((ctx_type == types::LeAudioContextType::LIVE) &&
+         (remote_direction == types::kLeAudioDirectionSink)){
+         auto direction_sink_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSink);
+         auto direction_src_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSource);
+         if (!(direction_sink_contexs.test(ctx_type) && direction_src_contexs.test(ctx_type))){
+           log::warn("Device {} does not have both direction  for {}, treat it as source only",
+                      device->address_,
+                      common::ToString(ctx_type));
+           continue;
+         }
+      }
+
       if (!has_direction.get(remote_direction)) {
         log::info("Skipping {} direction",
                   remote_direction == types::kLeAudioDirectionSource ? "Decoding" : "Encoding");
@@ -987,9 +999,9 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
           // direction.
-          auto group_contexts = GetSupportedContexts(types::kLeAudioDirectionBoth);
+          auto group_contexts = GetAvailableContexts(types::kLeAudioDirectionBoth);
           if (group_contexts.test(ctx_type)) {
-            auto direction_contexs = device->GetSupportedContexts(remote_direction);
+            auto direction_contexs = device->GetAvailableContexts(remote_direction);
             if (!direction_contexs.test(ctx_type)) {
               log::warn("Device {} has no {} context support", device->address_,
                         common::ToString(ctx_type));
