@@ -1233,7 +1233,6 @@ void LeAudioDeviceGroup::ResetPreferredAudioSetConfiguration(void) const {
 void LeAudioDeviceGroup::InvalidateCachedConfigurations(void) {
   log::info("Group id: {}", group_id_);
   context_to_configuration_cache_map_.clear();
-  context_to_preferred_configuration_cache_map_.clear();
 }
 
 void LeAudioDeviceGroup::InvalidateCachedConfigurations(LeAudioContextType context_type) {
@@ -2061,7 +2060,8 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
       if (!utils::IsAseConfigMatchedWithPreferredRequirements(
                   ase_confs, direction_req.value(),
                   codec_spec_conf::SingleChannelCountCapability2Config(
-                          preferred_config_.get(direction)->channel_count))) {
+                          preferred_config_.get(direction)->channel_count),
+                  preferred_config_.get(direction)->codec_type)) {
         return false;
       }
     }
