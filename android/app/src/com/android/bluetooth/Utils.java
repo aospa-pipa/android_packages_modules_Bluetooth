@@ -111,6 +111,7 @@ public final class Utils {
 
     private static final int MICROS_PER_UNIT = 625;
     private static final String PTS_TEST_MODE_PROPERTY = "persist.bluetooth.pts";
+    private static final String PTS_TEST_MODE_ADD_EMPTY_FOLDER = "persist.bluetooth.pts.add_empty_folder";
     private static final String TMAP_PTS_MODE_PROPERTY = "persist.bluetooth.tmap.pts";
     private static final String BAP_NO_PACS_PTS_MODE_PROPERTY = "persist.bluetooth.bap.no.pacs.pts";
 
@@ -1045,6 +1046,16 @@ public final class Utils {
      */
     public static boolean isPtsTestMode() {
         return SystemProperties.getBoolean(PTS_TEST_MODE_PROPERTY, false);
+    }
+
+    /**
+     * Check if we want empty folder to be added. To enable/disable PTS test mode, invoke {@code adb
+     * shell setprop persist.bluetooth.pts.add_empty_folder true/false}
+     *
+     * @return true if in PTS Test mode, false otherwise
+     */
+    public static boolean isPtsTestModeAddEmptyFolder() {
+        return SystemProperties.getBoolean(PTS_TEST_MODE_ADD_EMPTY_FOLDER, false);
     }
 
     /**
