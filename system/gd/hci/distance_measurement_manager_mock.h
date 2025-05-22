@@ -89,7 +89,7 @@ public:
               (const Address& address, uint16_t connection_handle, uint16_t conn_interval),
               (override));
   MOCK_METHOD(void, SetCsParams,
-              (const Address&, int mSightType, int mLocationType,
+              (const Address&, uint16_t connection_handle, int mSightType, int mLocationType,
                    int mCsSecurityLevel, int mFrequency, int mDuration), (override));
 };
 
