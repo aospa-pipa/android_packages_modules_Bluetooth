@@ -6098,8 +6098,12 @@ public:
                                             kLogAfResume + "LocalSink",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
-    audio_dev_active_tracker_.LogAHALResumeOperation(
-            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    if (LeAudioBroadcaster::IsLeAudioBroadcasterRunning() &&
+        LeAudioBroadcaster::Get()->IsLeAudioBroadcastStreaming()) {
+      log::info("Broadcast is streaming, cancel local sink stream request");
+      CancelLocalAudioSinkStreamingRequestWithUnsupported();
+      return;
+    }
 
     /* Note: This callback is from audio hal driver.
      * Bluetooth peer is a Source for Audio Framework.
