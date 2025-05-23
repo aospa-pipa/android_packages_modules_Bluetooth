@@ -143,6 +143,7 @@ static struct btm_client_interface_t btm_client_interface = {
                         .BTM_IsQHSPhySupported = BTM_IsQHSPhySupported,
                         .BTM_SetPowerBackOffState = BTM_SetPowerBackOffState,
                         .BTM_VendorSpecificCommand = ::BTM_VendorSpecificCommand,
+                        .BTM_RegisterSsrCallback = btm_register_ssr_cback,
                 }
 
 };
