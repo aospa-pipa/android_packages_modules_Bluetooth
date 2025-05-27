@@ -6010,7 +6010,6 @@ public:
     }
 
     if (group->GetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
-      SendAudioGroupCurrentCodecConfigChanged(group);
       log::debug("Group is not streaming");
       return false;
     }
