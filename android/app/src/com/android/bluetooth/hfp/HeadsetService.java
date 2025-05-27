@@ -1412,7 +1412,8 @@ public class HeadsetService extends ProfileService {
                 connDelay = 0;
 
             Log.i(TAG, "connectAudio: connect audio after " + connDelay + " ms");
-            stateMachine.sendMessage(HeadsetStateMachine.CONNECT_AUDIO, device);
+            stateMachine.sendMessageDelayed(HeadsetStateMachine.CONNECT_AUDIO,
+                    device, connDelay);
             logScoSessionMetric(
                     device,
                     BluetoothStatsLog
