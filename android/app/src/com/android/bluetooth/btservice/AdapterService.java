@@ -93,6 +93,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.devicestate.DeviceStateManager;
+import android.hardware.display.DisplayManager;
 import android.os.AsyncTask;
 import android.os.BatteryStatsManager;
 import android.os.Binder;
@@ -272,6 +273,16 @@ public class AdapterService extends Service {
 
     private final BluetoothHciVendorSpecificDispatcher mBluetoothHciVendorSpecificDispatcher =
             new BluetoothHciVendorSpecificDispatcher();
+
+    private final PowerManager.WakeLockStateListener mWakeLockListener =
+            new PowerManager.WakeLockStateListener() {
+                @Override
+                public void onStateChanged(boolean enabled) {
+                    if (Flags.adapterSuspendMgmt()) {
+                        mAdapterSuspend.updateWakeLockState(enabled);
+                    }
+                }
+            };
 
     private final Looper mLooper;
     private final AdapterServiceHandler mHandler;
@@ -733,7 +744,11 @@ public class AdapterService extends Service {
         if (Flags.adapterSuspendMgmt()) {
             mAdapterSuspend =
                     new AdapterSuspend(
-                            mNativeInterface, mLooper, getSystemService(DeviceStateManager.class));
+                            this,
+                            mLooper,
+                            getSystemService(DeviceStateManager.class),
+                            mPowerManager,
+                            getSystemService(DisplayManager.class));
         }
 
         invalidateBluetoothCaches();
@@ -1527,11 +1542,8 @@ public class AdapterService extends Service {
             mBluetoothSocketManagerBinder = null;
         }
 
-        if (mAdapterSuspend != null) {
-            if (Flags.adapterSuspendMgmt()) {
-                mAdapterSuspend.cleanup();
-            }
-            mAdapterSuspend = null;
+        if (Flags.adapterSuspendMgmt()) {
+            mAdapterSuspend.cleanup();
         }
 
         mPreferredAudioProfilesCallbacks.kill();
@@ -4459,6 +4471,9 @@ public class AdapterService extends Service {
         synchronized (this) {
             if (mWakeLock == null) {
                 mWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, lockName);
+                if (Flags.refCountedNativeWakelock() && Flags.adapterSuspendMgmt()) {
+                    mWakeLock.setStateListener(mHandler::post, mWakeLockListener);
+                }
             }
 
             if (!mWakeLock.isHeld() || Flags.refCountedNativeWakelock()) {
@@ -4648,6 +4663,10 @@ public class AdapterService extends Service {
             }
             mTestModeEnabled = testModeEnabled;
             return;
+        }
+
+        if (Flags.adapterSuspendMgmt()) {
+            mAdapterSuspend.dump(fd, writer, args);
         }
 
         writer.println();
