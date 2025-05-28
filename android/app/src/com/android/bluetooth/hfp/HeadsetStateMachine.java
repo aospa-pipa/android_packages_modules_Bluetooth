@@ -72,12 +72,24 @@ import java.util.Objects;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * A Bluetooth Handset StateMachine (Disconnected) | ^ CONNECT | | DISCONNECTED V | (Connecting)
- * (Disconnecting) | ^ CONNECTED | | DISCONNECT V | (Connected) | ^ CONNECT_AUDIO | |
- * AUDIO_DISCONNECTED V | (AudioConnecting) (AudioDisconnecting) | ^ AUDIO_CONNECTED | |
- * DISCONNECT_AUDIO V | (AudioOn)
- */
+//                        (Disconnected)
+//                           |      ^
+//                   CONNECT |      | DISCONNECTED
+//                           V      |
+//                  (Connecting)   (Disconnecting)
+//                           |      ^
+//                 CONNECTED |      | DISCONNECT
+//                           V      |
+//                          (Connected)
+//                           |      ^
+//             CONNECT_AUDIO |      | AUDIO_DISCONNECTED
+//                           V      |
+//             (AudioConnecting)   (AudioDisconnecting)
+//                           |      ^
+//           AUDIO_CONNECTED |      | DISCONNECT_AUDIO
+//                           V      |
+//                           (AudioOn)
+
 class HeadsetStateMachine extends StateMachine {
     private static final String TAG = HeadsetStateMachine.class.getSimpleName();
 
@@ -2231,7 +2243,7 @@ class HeadsetStateMachine extends StateMachine {
             mSpeakerVolume = volume;
             boolean showVolume =
                     !Flags.hfpVolumeControlProperty()
-                            || com.android.bluetooth.util.SystemProperties.getBoolean(HFP_VOLUME_CONTROL_ENABLED, true);
+                            || android.os.SystemProperties.getBoolean(HFP_VOLUME_CONTROL_ENABLED, true);
             int flag = showVolume && (mCurrentState == mAudioOn) ? AudioManager.FLAG_SHOW_UI : 0;
             int volStream =
                     deprecateStreamBtSco()

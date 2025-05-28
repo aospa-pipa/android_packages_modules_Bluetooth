@@ -114,8 +114,6 @@ class BassClientStateMachine extends StateMachine {
     static final int INITIATE_PA_SYNC_TRANSFER = 16;
     static final int STOP_PENDING_PA_SYNC = 17;
 
-    private final int mConnectTimeoutMs;
-
     // Type of argument for set broadcast code operation
     static final int ARGTYPE_METADATA = 1;
     static final int ARGTYPE_RCVSTATE = 2;
@@ -172,15 +170,13 @@ class BassClientStateMachine extends StateMachine {
             BluetoothDevice device,
             BassClientService svc,
             AdapterService adapterService,
-            Looper looper,
-            int connectTimeoutMs) {
+            Looper looper) {
         super(TAG + "(" + device + ")", looper);
         mDevice = device;
         mService = svc;
         mAdapterService = adapterService;
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
         mPeriodicAdvertisingManager = mAdapter.getPeriodicAdvertisingManager();
-        mConnectTimeoutMs = connectTimeoutMs;
         addState(mDisconnected);
         addState(mConnected);
         addState(mConnecting);
@@ -1591,7 +1587,7 @@ class BassClientStateMachine extends StateMachine {
                             + mDevice
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
-            sendMessageDelayed(CONNECT_TIMEOUT, mDevice, mConnectTimeoutMs);
+            sendMessageDelayed(CONNECT_TIMEOUT, mDevice, BassConstants.CONNECT_TIMEOUT_MS);
             broadcastConnectionState(mDevice, mLastConnectionState, STATE_CONNECTING);
         }
 
