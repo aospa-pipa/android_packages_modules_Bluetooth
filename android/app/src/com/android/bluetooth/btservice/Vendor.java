@@ -278,6 +278,8 @@ final class Vendor {
                         }
                     }
                     break;
+	        default:
+		    break;
             }
         }
     }
