@@ -52,7 +52,6 @@ interface IAdapter
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_PRIVILEGED)")
     oneway void killBluetoothProcess();
 
-    @UnsupportedAppUsage
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     void updateQuietModeStatus(boolean quietMode);
 }
