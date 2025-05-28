@@ -61,7 +61,6 @@ import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
-import com.android.modules.expresslog.Counter;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -223,7 +222,7 @@ class HeadsetStateMachine extends StateMachine {
     @VisibleForTesting
     static final String HFP_VOLUME_CONTROL_ENABLED = "bluetooth.hfp_volume_control.enabled";
 
-    private HeadsetStateMachine(
+    HeadsetStateMachine(
             BluetoothDevice device,
             Looper looper,
             HeadsetService headsetService,
@@ -274,26 +273,9 @@ class HeadsetStateMachine extends StateMachine {
             Log.w(TAG, "alerting delay " + CS_CALL_ALERTING_DELAY_TIME_MSEC +
                       " active delay " + CS_CALL_ACTIVE_DELAY_TIME_MSEC);
         }
-    }
 
-    static HeadsetStateMachine make(
-            BluetoothDevice device,
-            Looper looper,
-            HeadsetService headsetService,
-            AdapterService adapterService,
-            HeadsetNativeInterface nativeInterface,
-            HeadsetSystemInterface systemInterface) {
-        HeadsetStateMachine stateMachine =
-                new HeadsetStateMachine(
-                        device,
-                        looper,
-                        headsetService,
-                        adapterService,
-                        nativeInterface,
-                        systemInterface);
-        stateMachine.start();
-        Log.i(TAG, "Created state machine " + stateMachine + " for " + device);
-        return stateMachine;
+        start();
+        Log.i(TAG, "Created state machine " + this + " for " + device);
     }
 
     static void destroy(HeadsetStateMachine stateMachine) {
@@ -1767,23 +1749,10 @@ class HeadsetStateMachine extends StateMachine {
             removeDeferredMessages(CONNECT_AUDIO);
             // Set active device to current active SCO device when the current active device
             // is different from mCurrentDevice. This is to accommodate active device state
-            // mis-match between native and Java.
+            // mismatch between native and Java.
             if (!mDevice.equals(mHeadsetService.getActiveDevice())
                     && !hasDeferredMessages(DISCONNECT_AUDIO)) {
                 mHeadsetService.setActiveDevice(mDevice);
-            }
-
-            // TODO (b/276463350): Remove check when Express metrics no longer need jni
-            if (!Utils.isInstrumentationTestMode()) {
-                if (mHasSwbLc3Enabled) {
-                    Counter.logIncrement("bluetooth.value_lc3_codec_usage_over_hfp");
-                } else if (mHasSwbAptXEnabled) {
-                    Counter.logIncrement("bluetooth.value_aptx_codec_usage_over_hfp");
-                } else if (mHasWbsEnabled) {
-                    Counter.logIncrement("bluetooth.value_msbc_codec_usage_over_hfp");
-                } else {
-                    Counter.logIncrement("bluetooth.value_cvsd_codec_usage_over_hfp");
-                }
             }
 
             if (mHeadsetService.mPendingScoConnection != null

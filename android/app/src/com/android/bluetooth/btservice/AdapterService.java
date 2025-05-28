@@ -150,6 +150,7 @@ import com.android.bluetooth.le_scan.ScanManager;
 import com.android.bluetooth.map.BluetoothMapService;
 import com.android.bluetooth.mapclient.MapClientService;
 import com.android.bluetooth.mcp.McpService;
+import com.android.bluetooth.notification.NotificationHelperService;
 import com.android.bluetooth.opp.BluetoothOppService;
 import com.android.bluetooth.pan.PanService;
 import com.android.bluetooth.pbap.BluetoothPbapService;
@@ -1020,7 +1021,9 @@ public class AdapterService extends Service {
 
         Log.d(TAG, "bleOnProcessStart() - Make Bond State Machine");
         mBondStateMachine =
-                BondStateMachine.make(this, mLooper, mAdapterProperties, mRemoteDevices);
+                Flags.bondStateMachineLooper()
+                        ? new BondStateMachine(this, mLooper, mAdapterProperties, mRemoteDevices)
+                        : new BondStateMachine(this, mAdapterProperties, mRemoteDevices);
 
         mNativeInterface.getCallbacks().init(mBondStateMachine, mRemoteDevices);
 
@@ -4080,6 +4083,10 @@ public class AdapterService extends Service {
         recursivelyDeleteDirectory(getDataDir(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluedroid/").toFile(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluetooth/").toFile(), false);
+
+        if (Flags.factoryResetClearAdditionalData()) {
+            NotificationHelperService.factoryReset(getContentResolver());
+        }
         Log.i(TAG, "factoryResetIfNeeded(): Completed");
     }
 
@@ -4242,9 +4249,9 @@ public class AdapterService extends Service {
         return mGattService == null ? null : mGattService.getDistanceMeasurement();
     }
 
-    void unregAllGattClient(AttributionSource source) {
+    void unregAllGattClient() {
         if (mGattService != null) {
-            mGattService.unregAll(source);
+            mGattService.unregAll();
         }
     }
 

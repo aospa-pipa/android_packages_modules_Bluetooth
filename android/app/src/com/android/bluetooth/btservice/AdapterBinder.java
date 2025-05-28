@@ -20,18 +20,15 @@ import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.DUMP;
 
 import static com.android.bluetooth.Utils.callerIsSystemOrActiveOrManagedUser;
-import static com.android.bluetooth.Utils.checkConnectPermissionForDataDelivery;
 
 import android.annotation.SuppressLint;
 import android.bluetooth.IAdapter;
 import android.bluetooth.IBluetoothCallback;
-import android.content.AttributionSource;
 import android.os.Process;
 import android.util.Log;
 
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.flags.Flags;
-import com.android.modules.expresslog.Counter;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
@@ -81,13 +78,12 @@ class AdapterBinder extends IAdapter.Stub {
         // Bluetooth cannot be killed on the main thread; it is in a deadLock.
         // Trying to recover by killing the Bluetooth from the binder thread.
         // This is bad :(
-        Counter.logIncrement("bluetooth.value_kill_from_binder_thread");
         Log.wtf(TAG, "Failed to kill Bluetooth using its main thread. Trying from binder");
         killAction.run();
     }
 
     @Override
-    public void offToBleOn(boolean quietMode, String hciInstanceName, AttributionSource source) {
+    public void offToBleOn(boolean quietMode, String hciInstanceName) {
         AdapterService service = getService();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "offToBleOn")) {
             return;
@@ -98,7 +94,7 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void onToBleOn(AttributionSource source) {
+    public void onToBleOn() {
         AdapterService service = getService();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "onToBleOn")) {
             return;
@@ -120,12 +116,10 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void registerCallback(IBluetoothCallback callback, AttributionSource source) {
+    public void registerCallback(IBluetoothCallback callback) {
         AdapterService service = getService();
         if (service == null
-                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "registerCallback")
-                || !checkConnectPermissionForDataDelivery(
-                        service, source, TAG, "registerCallback")) {
+                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "registerCallback")) {
             return;
         }
 
@@ -134,12 +128,10 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void unregisterCallback(IBluetoothCallback callback, AttributionSource source) {
+    public void unregisterCallback(IBluetoothCallback callback) {
         AdapterService service = getService();
         if (service == null
-                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "unregisterCallback")
-                || !checkConnectPermissionForDataDelivery(
-                        service, source, TAG, "unregisterCallback")) {
+                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "unregisterCallback")) {
             return;
         }
 
@@ -148,7 +140,7 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void bleOnToOn(AttributionSource source) {
+    public void bleOnToOn() {
         AdapterService service = getService();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOn")) {
             return;
@@ -159,7 +151,7 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void bleOnToOff(AttributionSource source) {
+    public void bleOnToOff() {
         AdapterService service = getService();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOff")) {
             return;
@@ -183,11 +175,9 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public boolean isMediaProfileConnected(AttributionSource source) {
+    public boolean isMediaProfileConnected() {
         AdapterService service = getService();
-        if (service == null
-                || !checkConnectPermissionForDataDelivery(
-                        service, source, TAG, "isMediaProfileConnected")) {
+        if (service == null) {
             return false;
         }
 
@@ -196,14 +186,12 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void setForegroundUserId(int userId, AttributionSource source) {
+    public void setForegroundUserId(int userId) {
+        if (Flags.limitUserSwitchPropagation()) {
+            throw new IllegalStateException("limitUserSwitchPropagation is activated");
+        }
         AdapterService service = getService();
-        if (service == null
-                || !checkConnectPermissionForDataDelivery(
-                        service,
-                        Utils.getCallingAttributionSource(mService),
-                        TAG,
-                        "setForegroundUserId")) {
+        if (service == null) {
             return;
         }
 
@@ -212,17 +200,16 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public void unregAllGattClient(AttributionSource source) {
+    public void unregAllGattClient() {
         AdapterService service = getService();
         if (service == null) {
             return;
         }
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        service.unregAllGattClient(source);
+        service.unregAllGattClient();
     }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
-    public void updateQuietModeStatus(boolean quietMode,
-	    AttributionSource attributionSource) {}
+    public void updateQuietModeStatus(boolean quietMode) {}
 }

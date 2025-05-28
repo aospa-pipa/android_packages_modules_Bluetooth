@@ -789,7 +789,7 @@ public class BluetoothMapService extends ProfileService {
             Log.v(TAG, "  Adding account: " + account);
             int masId = getNextMasId();
             BluetoothMapMasInstance newInst =
-                    new BluetoothMapMasInstance(this, this, account, masId, false);
+                    new BluetoothMapMasInstance(this, account, masId, false);
             mMasInstances.append(masId, newInst);
             mMasInstanceMap.put(account, newInst);
             // Start the new instance
@@ -851,7 +851,7 @@ public class BluetoothMapService extends ProfileService {
         if (mSmsCapable) {
             // Add the SMS/MMS instance
             BluetoothMapMasInstance smsMmsInst =
-                    new BluetoothMapMasInstance(this, this, null, masId, true);
+                    new BluetoothMapMasInstance(this, null, masId, true);
             mMasInstances.append(masId, smsMmsInst);
             mMasInstanceMap.put(null, smsMmsInst);
             masId++;
@@ -860,7 +860,7 @@ public class BluetoothMapService extends ProfileService {
         // get list of accounts already set to be visible through MAP
         for (BluetoothMapAccountItem account : mEnabledAccounts) {
             BluetoothMapMasInstance newInst =
-                    new BluetoothMapMasInstance(this, this, account, masId, false);
+                    new BluetoothMapMasInstance(this, account, masId, false);
             mMasInstances.append(masId, newInst);
             mMasInstanceMap.put(account, newInst);
             masId++;

@@ -77,6 +77,7 @@ import androidx.core.graphics.Insets;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
+import com.android.bluetooth.flags.Flags;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -135,10 +136,16 @@ public final class Utils {
     }
 
     public static int getForegroundUserId() {
+        if (Flags.limitUserSwitchPropagation()) {
+            throw new IllegalStateException("limitUserSwitchPropagation is enabled");
+        }
         return sForegroundUserId;
     }
 
     public static void setForegroundUserId(int userId) {
+        if (Flags.limitUserSwitchPropagation()) {
+            throw new IllegalStateException("limitUserSwitchPropagation is enabled");
+        }
         sForegroundUserId = userId;
     }
 
@@ -255,9 +262,10 @@ public final class Utils {
         };
     }
 
+    /** Convert a BluetoothDevice transport constant to a string for printing in debug lines */
     public static String transportToString(int transport) {
         return switch (transport) {
-            case BluetoothDevice.TRANSPORT_BREDR -> "BREDR";
+            case BluetoothDevice.TRANSPORT_BREDR -> "BR/EDR";
             case BluetoothDevice.TRANSPORT_LE -> "LE";
             default -> "Unknown transport (" + transport + ")";
         };
@@ -736,6 +744,11 @@ public final class Utils {
         int callingUid = Binder.getCallingUid();
         UserHandle callingUser = UserHandle.getUserHandleForUid(callingUid);
 
+        if (Flags.limitUserSwitchPropagation()) {
+            return Process.myUserHandle().equals(callingUser)
+                    || (UserHandle.getAppId(sSystemUiUid) == UserHandle.getAppId(callingUid))
+                    || (UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(callingUid));
+        }
         return (sForegroundUserId == callingUser.getIdentifier())
                 || (UserHandle.getAppId(sSystemUiUid) == UserHandle.getAppId(callingUid))
                 || (UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(callingUid));
@@ -787,6 +800,14 @@ public final class Utils {
                     um.isHeadlessSystemUserMode() && callingUser.equals(UserHandle.SYSTEM);
 
             // Always allow SystemUI/System access.
+            if (Flags.limitUserSwitchPropagation()) {
+                return Process.myUserHandle().equals(callingUser)
+                        || Process.myUserHandle().equals(uh)
+                        || (UserHandle.getAppId(sSystemUiUid) == UserHandle.getAppId(callingUid))
+                        || (UserHandle.getAppId(Process.SYSTEM_UID)
+                                == UserHandle.getAppId(callingUid))
+                        || (isSystemUserInHsumMode);
+            }
             return (sForegroundUserId == callingUser.getIdentifier())
                     || (sForegroundUserId == parentUser)
                     || (UserHandle.getAppId(sSystemUiUid) == UserHandle.getAppId(callingUid))

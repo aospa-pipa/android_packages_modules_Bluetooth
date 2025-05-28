@@ -520,7 +520,6 @@ cc_test {
             shared_libs: [
                 "libaaudio",
                 "libbinder_ndk",
-                "libexpresslog",
                 "libstatssocket",
             ],
         },
@@ -644,7 +643,6 @@ cc_test {
             shared_libs: [
                 "vendor.qti.hardware.bluetooth.audio-V1-ndk",
                 "libbinder_ndk",
-                "libexpresslog",
                 "libstatssocket",
             ],
         },
