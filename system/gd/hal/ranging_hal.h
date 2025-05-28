@@ -23,7 +23,6 @@
 #include <complex>
 
 #include "hci/hci_packets.h"
-#include "module.h"
 
 namespace bluetooth {
 namespace hal {
@@ -320,10 +319,8 @@ public:
   virtual void OnResult(uint16_t connection_handle, const RangingResult& ranging_result) = 0;
 };
 
-class RangingHal : public ::bluetooth::Module {
+class RangingHal {
 public:
-  static const ModuleFactory Factory;
-
   virtual ~RangingHal() = default;
   virtual bool IsBound() = 0;
   virtual RangingHalVersion GetRangingHalVersion() = 0;
@@ -349,7 +346,6 @@ public:
                                   const ProcedureDataV2& procedure_data,
                                   uint16_t procedure_counter) = 0;
   virtual bool IsAbortedProcedureRequired(uint16_t connection_handle) = 0;
-  virtual void close(uint16_t connection_handle) = 0;
 };
 
 }  // namespace hal

@@ -45,6 +45,7 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.le.PeriodicAdvertisingCallback;
+import android.bluetooth.le.PeriodicAdvertisingManager;
 import android.content.AttributionSource;
 import android.content.Intent;
 import android.os.Binder;
@@ -135,6 +136,7 @@ class BassClientStateMachine extends StateMachine {
 
     private final AdapterService mAdapterService;
     private final BluetoothAdapter mAdapter;
+    private final PeriodicAdvertisingManager mPeriodicAdvertisingManager;
 
     @VisibleForTesting
     final List<BluetoothGattCharacteristic> mBroadcastCharacteristics =
@@ -178,6 +180,7 @@ class BassClientStateMachine extends StateMachine {
         mService = svc;
         mAdapterService = adapterService;
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
+        mPeriodicAdvertisingManager = mAdapter.getPeriodicAdvertisingManager();
         mConnectTimeoutMs = connectTimeoutMs;
         addState(mDisconnected);
         addState(mConnected);
@@ -500,8 +503,7 @@ class BassClientStateMachine extends StateMachine {
                                 + serviceData);
                 BluetoothMethodProxy.getInstance()
                         .periodicAdvertisingManagerTransferSetInfo(
-                                BassClientPeriodicAdvertisingManager
-                                        .getPeriodicAdvertisingManager(),
+                                mPeriodicAdvertisingManager,
                                 mDevice,
                                 serviceData,
                                 advHandle,
@@ -544,10 +546,7 @@ class BassClientStateMachine extends StateMachine {
                             + serviceData);
             BluetoothMethodProxy.getInstance()
                     .periodicAdvertisingManagerTransferSync(
-                            BassClientPeriodicAdvertisingManager.getPeriodicAdvertisingManager(),
-                            mDevice,
-                            serviceData,
-                            syncHandle);
+                            mPeriodicAdvertisingManager, mDevice, serviceData, syncHandle);
         } else {
             Log.e(
                     TAG,
@@ -2338,7 +2337,7 @@ class BassClientStateMachine extends StateMachine {
                         int sourceId = message.arg1;
 
                         /* In case of source being synced PA or BIS, synchronization needs to be
-                         * stoped prior.
+                         * stopped prior.
                          */
                         if (isSyncedToTheSource(sourceId)) {
                             handleSourceSynchronizationChange(

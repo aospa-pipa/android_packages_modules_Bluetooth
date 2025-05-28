@@ -22,6 +22,7 @@
 #include <com_android_bluetooth_flags.h>
 
 #include "abstract_message_loop.h"
+#include "array_utils.h"
 #include "avrcp_common.h"
 #include "bta/include/bta_le_audio_api.h"
 #include "btif/include/btif_av.h"
@@ -968,7 +969,7 @@ void Device::RejectNotification() {
   log::verbose("");
   Notification* rejectNotification[] = {&play_status_changed_, &track_changed_, &play_pos_changed_,
                                         &now_playing_changed_, &player_setting_changed_};
-  for (int i = 0; i < 5; i++) {
+  for (uint8_t i = 0; i < ARRAY_SIZE(rejectNotification); i++) {
     uint8_t label = rejectNotification[i]->second;
     auto response = RejectBuilder::MakeBuilder(CommandPdu::REGISTER_NOTIFICATION,
                                                Status::ADDRESSED_PLAYER_CHANGED);

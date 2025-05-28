@@ -99,6 +99,13 @@ bool CodecManager::UpdateActiveBroadcastAudioHalClient(
   return true;
 }
 
+void CodecManager::UpdateSelectedCodecConfig(
+        const ::bluetooth::le_audio::types::AudioSetConfiguration& config) const {
+  if (pimpl_) {
+    return pimpl_->UpdateSelectedCodecConfig(config);
+  }
+}
+
 void CodecManager::UpdateActiveAudioConfig(
         const types::BidirectionalPair<stream_parameters>& stream_params,
         types::LeAudioCodecId id,

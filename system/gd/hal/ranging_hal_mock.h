@@ -17,7 +17,6 @@
 #pragma once
 
 #include <gmock/gmock.h>
-#include <string>
 
 #include "hal/ranging_hal.h"
 
@@ -55,11 +54,6 @@ public:
 
   void RegisterCallback(RangingHalCallback* callback) override { ranging_hal_callback_ = callback; }
   RangingHalCallback* GetRangingHalCallback() { return ranging_hal_callback_; }
-
-  void Start() override {}
-  void Stop() override {}
-  void ListDependencies(ModuleList* /*list*/) const override {}
-  std::string ToString() const override { return std::string("mock ranging hal"); }
 
 private:
   RangingHalCallback* ranging_hal_callback_ = nullptr;
