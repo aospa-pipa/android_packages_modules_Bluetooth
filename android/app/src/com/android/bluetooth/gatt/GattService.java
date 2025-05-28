@@ -58,6 +58,7 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.Utils.checkCallerTargetSdk;
+import static com.android.bluetooth.Utils.transportToString;
 import static com.android.bluetooth.util.AttributionSourceUtil.getLastAttributionTag;
 
 import static java.util.Objects.requireNonNull;
@@ -193,7 +194,6 @@ public class GattService extends ProfileService {
      */
     private final HashMap<BluetoothDevice, Integer> mPermits = new HashMap<>();
 
-    private final AdapterService mAdapterService;
     private final ActivityManager mActivityManager;
     private final PackageManager mPackageManager;
     private final CompanionDeviceManager mCompanionDeviceManager;
@@ -205,10 +205,9 @@ public class GattService extends ProfileService {
 
     public GattService(AdapterService adapterService) {
         super(requireNonNull(adapterService));
-        mAdapterService = adapterService;
-        mActivityManager = requireNonNull(getSystemService(ActivityManager.class));
+        mActivityManager = requireNonNull(obtainSystemService(ActivityManager.class));
         mPackageManager = requireNonNull(mAdapterService.getPackageManager());
-        mCompanionDeviceManager = requireNonNull(getSystemService(CompanionDeviceManager.class));
+        mCompanionDeviceManager = requireNonNull(obtainSystemService(CompanionDeviceManager.class));
 
         Settings.Global.putInt(
                 getContentResolver(), "bluetooth_sanitized_exposure_notification_supported", 1);
@@ -375,19 +374,21 @@ public class GattService extends ProfileService {
         callbackToApp(() -> app.callback.onClientRegistered(status));
     }
 
-    void onConnectedFromNative(int clientIf, int connId, int status, BluetoothDevice device) {
+    void onConnectedFromNative(
+            int clientIf, int connId, int transport, int status, BluetoothDevice device) {
         Log.d(
                 TAG,
                 "onConnected() -"
                         + (" clientIf=" + clientIf)
-                        + (", connId=" + connId)
-                        + (", status=" + status)
-                        + (", device=" + device));
+                        + (" connId=" + connId)
+                        + (" transport=" + transportToString(transport))
+                        + (" status=" + status)
+                        + (" device=" + device));
         int connectionState = BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTED;
         if (status != 0) {
             mAdapterService.notifyGattClientConnectFailed(clientIf, device);
         } else {
-            mClientMap.addConnection(clientIf, connId, device);
+            mClientMap.addConnection(clientIf, connId, transport, device);
 
             // Allow one writeCharacteristic operation at a time for each connected remote device.
             synchronized (mPermits) {
@@ -414,13 +415,14 @@ public class GattService extends ProfileService {
                         app.uid);
     }
 
-    void onDisconnectedFromNative(int clientIf, int connId, int status, BluetoothDevice device) {
+    void onDisconnectedFromNative(
+            int clientIf, int connId, int transport, int status, BluetoothDevice device) {
         Log.d(
                 TAG,
-                "onDisconnected() -"
-                        + (" clientIf=" + clientIf)
+                "onDisconnected() - "
+                        + ("clientIf=" + clientIf)
                         + (", connId=" + connId)
-                        + (", status=" + status)
+                        + (", transport=" + transportToString(transport))
                         + (", device=" + device));
         mClientMap.removeConnection(clientIf, connId);
         mAdapterService.notifyGattClientDisconnect(clientIf, device);
@@ -859,10 +861,11 @@ public class GattService extends ProfileService {
         }
     }
 
-    public void unregAll(AttributionSource source) {
+    public void unregAll() {
         for (IBluetoothGattCallback appId : mClientMap.getAllAppsCallbackId()) {
             Log.d(TAG, "unreg:" + appId);
-            unregisterClient(appId, source, ContextMap.RemoveReason.REASON_UNREGISTER_ALL);
+            unregisterClient(
+                    appId, getAttributionSource(), ContextMap.RemoveReason.REASON_UNREGISTER_ALL);
         }
         for (IBluetoothGattServerCallback appId : mServerMap.getAllAppsCallbackId()) {
             Log.d(TAG, "unreg:" + appId);
@@ -1634,13 +1637,15 @@ public class GattService extends ProfileService {
     }
 
     void onClientConnectedFromNative(
-            BluetoothDevice device, boolean connected, int connId, int serverIf) {
+            BluetoothDevice device, int transport, boolean connected, int connId, int serverIf) {
         Log.d(
                 TAG,
                 "onClientConnected() connId="
                         + connId
                         + ", device="
                         + device
+                        + ", transport="
+                        + transportToString(transport)
                         + ", connected="
                         + connected);
 
@@ -1650,7 +1655,7 @@ public class GattService extends ProfileService {
         }
         int connectionState;
         if (connected) {
-            mServerMap.addConnection(serverIf, connId, device);
+            mServerMap.addConnection(serverIf, connId, transport, device);
             connectionState = BluetoothProtoEnums.CONNECTION_STATE_CONNECTED;
         } else {
             mServerMap.removeConnection(serverIf, connId);
@@ -2360,7 +2365,7 @@ public class GattService extends ProfileService {
         }
         List<HandleMap.Entry> entries = mHandleMap.getEntries();
         for (HandleMap.Entry entry : entries) {
-            if (entry.mType != HandleMap.TYPE_SERVICE
+            if (entry.mType != HandleMap.Type.SERVICE
                     || entry.mServerIf != serverIf
                     || !entry.mStarted) {
                 continue;
@@ -2381,7 +2386,7 @@ public class GattService extends ProfileService {
         List<Integer> handleList = new ArrayList<>();
         List<HandleMap.Entry> entries = mHandleMap.getEntries();
         for (HandleMap.Entry entry : entries) {
-            if (entry.mType != HandleMap.TYPE_SERVICE || entry.mServerIf != serverIf) {
+            if (entry.mType != HandleMap.Type.SERVICE || entry.mServerIf != serverIf) {
                 continue;
             }
             handleList.add(entry.mHandle);

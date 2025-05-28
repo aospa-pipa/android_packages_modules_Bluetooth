@@ -3274,16 +3274,8 @@ private:
       case AseState::BTA_LE_AUDIO_ASE_STATE_DISABLING: {
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED);
 
-        /* More ASEs notification from this device has to come for this group */
-        if (!group->HaveAllActiveDevicesAsesTheSameState(
-                    AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED)) {
-          return;
-        }
-
-        group->SetState(AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED);
-
         if (ase->expected_state == AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED) {
-          /* We are here after Receiver state ready. Check if we should not enable direction */
+          /* We are here after Receiver stop ready. Check if we should not enable direction */
           auto enabled_directions =
                   state_machine_callbacks_->OnGetEnabledDirections(group->group_id_);
           if (ase->direction & enabled_directions) {
@@ -3293,6 +3285,14 @@ private:
             return;
           }
         }
+
+        /* More ASEs notification from this device has to come for this group */
+        if (!group->HaveAllActiveDevicesAsesTheSameState(
+                    AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED)) {
+          return;
+        }
+
+        group->SetState(AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED);
 
         if (!group->HaveAllCisesDisconnected()) {
           return;
@@ -4167,6 +4167,7 @@ private:
         if (group->HaveAllActiveDevicesAsesTheSameState(
                     AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING)) {
           group->SetState(AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING);
+          group->ClearStreamingMetadataContexts();
         }
 
         bool remove_cig = (DisconnectCisIfNeeded(group, leAudioDevice, ase) == CIS_DISCONNECTED);
@@ -4189,6 +4190,7 @@ private:
           return;
         }
         group->SetState(AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING);
+        group->ClearStreamingMetadataContexts();
 
         if (remove_cig) {
           /* In the ENABLING state most probably there was no CISes created.

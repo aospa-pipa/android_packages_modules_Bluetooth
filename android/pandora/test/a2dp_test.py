@@ -30,13 +30,6 @@ from avatar import BumblePandoraDevice, PandoraDevice, PandoraDevices, pandora_s
 from bumble.a2dp import (
     A2DP_MPEG_2_4_AAC_CODEC_TYPE,
     A2DP_SBC_CODEC_TYPE,
-    MPEG_2_AAC_LC_OBJECT_TYPE,
-    SBC_DUAL_CHANNEL_MODE,
-    SBC_JOINT_STEREO_CHANNEL_MODE,
-    SBC_LOUDNESS_ALLOCATION_METHOD,
-    SBC_MONO_CHANNEL_MODE,
-    SBC_SNR_ALLOCATION_METHOD,
-    SBC_STEREO_CHANNEL_MODE,
     AacMediaCodecInformation,
     SbcMediaCodecInformation,
     make_audio_sink_service_sdp_records,
@@ -75,9 +68,10 @@ from mobly.asserts import assert_raises  # type: ignore
 from mobly.asserts import fail  # type: ignore
 from pandora.a2dp_grpc_aio import A2DP
 from pandora.a2dp_pb2 import STEREO, CodecId, CodecParameters, Configuration, PlaybackAudioRequest, Source
-from pandora.host_pb2 import Connection
+from pandora.host_pb2 import Connection, ConnectResponse
 from pandora.security_pb2 import LEVEL2
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator, Awaitable, Optional
+from typing_extensions import override
 
 logger = logging.getLogger(__name__)
 
@@ -136,24 +130,49 @@ def sbc_codec_capabilities() -> MediaCodecCapabilities:
     return MediaCodecCapabilities(
         media_type=AVDTP_AUDIO_MEDIA_TYPE,
         media_codec_type=A2DP_SBC_CODEC_TYPE,
-        media_codec_information=SbcMediaCodecInformation.from_lists(
-            sampling_frequencies=[48000, 44100, 32000, 16000],
-            channel_modes=[
-                SBC_MONO_CHANNEL_MODE,
-                SBC_DUAL_CHANNEL_MODE,
-                SBC_STEREO_CHANNEL_MODE,
-                SBC_JOINT_STEREO_CHANNEL_MODE,
-            ],
-            block_lengths=[4, 8, 12, 16],
-            subbands=[4, 8],
-            allocation_methods=[
-                SBC_LOUDNESS_ALLOCATION_METHOD,
-                SBC_SNR_ALLOCATION_METHOD,
-            ],
+        media_codec_information=SbcMediaCodecInformation(
+            sampling_frequency=(SbcMediaCodecInformation.SamplingFrequency.SF_16000 |
+                                SbcMediaCodecInformation.SamplingFrequency.SF_32000 |
+                                SbcMediaCodecInformation.SamplingFrequency.SF_44100 |
+                                SbcMediaCodecInformation.SamplingFrequency.SF_48000),
+            channel_mode=(SbcMediaCodecInformation.ChannelMode.STEREO |
+                          SbcMediaCodecInformation.ChannelMode.DUAL_CHANNEL |
+                          SbcMediaCodecInformation.ChannelMode.JOINT_STEREO |
+                          SbcMediaCodecInformation.ChannelMode.MONO),
+            block_length=(SbcMediaCodecInformation.BlockLength.BL_4 |
+                          SbcMediaCodecInformation.BlockLength.BL_8 |
+                          SbcMediaCodecInformation.BlockLength.BL_12 |
+                          SbcMediaCodecInformation.BlockLength.BL_16),
+            subbands=(SbcMediaCodecInformation.Subbands.S_4 |
+                      SbcMediaCodecInformation.Subbands.S_8),
+            allocation_method=(SbcMediaCodecInformation.AllocationMethod.LOUDNESS |
+                               SbcMediaCodecInformation.AllocationMethod.SNR),
             minimum_bitpool_value=2,
             maximum_bitpool_value=53,
         ),
     )
+
+
+def sbc_service_capabilites() -> List[ServiceCapability]:
+    return [
+        MediaTransportCapability(),
+        MediaCodecCapability(
+            service_category=ServiceCategory.MEDIA_CODEC,
+            media_type=0x00,  # Audio
+            media_codec_type=0x00,  # SBC
+            # 0x3f
+            # Sampling Frequency: 44100, 48000 Hz
+            # Channel Mode: Mono, Dual Channel, Stereo, Joint Stereo
+            # 0xff
+            # Block Length: 4, 8, 12, 16
+            # Subbands: 4, 8
+            # Allocation method: SNR, Loudness
+            # 0x02
+            # Min bitpool: 2
+            # 0x37
+            # Max bitpool: 55
+            media_codec_specific_information_elements=bytearray([0x3f, 0xff, 0x02, 0x37]))
+    ]
 
 
 def aac_codec_capabilities() -> MediaCodecCapabilities:
@@ -162,14 +181,39 @@ def aac_codec_capabilities() -> MediaCodecCapabilities:
     return MediaCodecCapabilities(
         media_type=AVDTP_AUDIO_MEDIA_TYPE,
         media_codec_type=A2DP_MPEG_2_4_AAC_CODEC_TYPE,
-        media_codec_information=AacMediaCodecInformation.from_lists(
-            object_types=[MPEG_2_AAC_LC_OBJECT_TYPE],
-            sampling_frequencies=[48000, 44100],
-            channels=[1, 2],
+        media_codec_information=AacMediaCodecInformation(
+            object_type=AacMediaCodecInformation.ObjectType.MPEG_2_AAC_LC,
+            sampling_frequency=(AacMediaCodecInformation.SamplingFrequency.SF_44100 |
+                                AacMediaCodecInformation.SamplingFrequency.SF_48000),
+            channels=(AacMediaCodecInformation.Channels.MONO |
+                      AacMediaCodecInformation.Channels.STEREO),
             vbr=1,
             bitrate=256000,
         ),
     )
+
+
+def aac_service_capabilites() -> List[ServiceCapability]:
+    return [
+        MediaTransportCapability(),
+        MediaCodecCapability(
+            service_category=ServiceCategory.MEDIA_CODEC,
+            media_type=0x00,  # Audio
+            media_codec_type=0x02,  # AAC
+            # 0xc0
+            # MPEG2 AAC LC, MPEG4 AAC LC
+            # 0xff
+            # Sampling Frequency: 8000 - 44100 Hz
+            # 0xbc
+            # Sampling Frequency: 48000 - 96000 Hz
+            # Channels: 1, 2
+            # 0x89, 0x00, 0x00
+            # VBR
+            # Bit Rate: 0x090000
+            media_codec_specific_information_elements=bytearray(
+                [0xc0, 0xff, 0xbc, 0x89, 0x00, 0x00])),
+        ContentProtectionCapability(cp_type=2)
+    ]
 
 
 async def generate_sine(source: Source,
@@ -316,17 +360,11 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         seid_information = [
             SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
         ]
-        acceptor_service_capabilities = [
-            MediaTransportCapability(),
-            MediaCodecCapability(service_category=ServiceCategory.MEDIA_CODEC,
-                                 media_codec_specific_information_elements=bytearray(
-                                     [255, 255, 2, 53]))
-        ]
 
         # Connect AVDTP to RD1.
         _, dut_ref1_source = await asyncio.gather(
             channel.accept_open_stream(seid_information=seid_information,
-                                       service_capabilities=acceptor_service_capabilities),
+                                       service_capabilities=sbc_service_capabilites()),
             open_source(self.dut_a2dp, dut_ref1))
 
         # Start streaming to RD1.
@@ -360,8 +398,7 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         # Create a listener to wait for AVDTP connections
         avdtp_future = asyncio.get_running_loop().create_future()
 
-        def on_avdtp_connection(server):
-            nonlocal avdtp_future
+        def on_avdtp_connection(server: bumble.avdtp.Protocol):
             self.ref1_a2dp_sink = server.add_sink(sbc_codec_capabilities())
             self.ref1.log.info(f'Sink: {self.ref1_a2dp_sink}')
             avdtp_future.set_result(None)
@@ -519,13 +556,8 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
             channel.accept_open_stream(seid_information=[
                 SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
             ],
-                                       service_capabilities=[
-                                           MediaTransportCapability(),
-                                           MediaCodecCapability(
-                                               service_category=ServiceCategory.MEDIA_CODEC,
-                                               media_codec_specific_information_elements=bytearray(
-                                                   [255, 255, 2, 53]))
-                                       ]), open_source(self.dut_a2dp, dut_ref1))
+                                       service_capabilities=sbc_service_capabilites()),
+            open_source(self.dut_a2dp, dut_ref1))
 
         # Start streaming to RD1.
         await asyncio.gather(self.dut_a2dp.Start(source=dut_ref1_source), channel.accept_start())
@@ -559,10 +591,13 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         3. Check that the DUT will abort and reopen the AVDTP as initiator
         """
 
+        # Create a listener to wait for AVDTP open
+        avdtp_future = asyncio.get_running_loop().create_future()
+
         class TestAvdtProtocol(Protocol):
 
-            def on_open_command(self, command):
-                nonlocal avdtp_future
+            @override
+            def on_open_command(self, command: bumble.avdtp.Open_Command):
                 logger.info("<< AVDTP Open received >>")
                 avdtp_future.set_result(None)
                 return super().on_open_command(command)
@@ -572,9 +607,6 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
             initiate_pairing(self.ref1, self.dut.address),
             accept_pairing(self.dut, self.ref1.address),
         )
-
-        # Create a listener to wait for AVDTP open
-        avdtp_future = asyncio.get_running_loop().create_future()
 
         # Retrieve Bumble connection object from Pandora connection token
         connection = pandora_snippet.get_raw_connection(device=self.ref1, connection=ref1_dut)
@@ -596,12 +628,12 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         configuration = MediaCodecCapabilities(
             media_type=AVDTP_AUDIO_MEDIA_TYPE,
             media_codec_type=A2DP_SBC_CODEC_TYPE,
-            media_codec_information=SbcMediaCodecInformation.from_lists(
-                sampling_frequencies=[44100],
-                channel_modes=[SBC_JOINT_STEREO_CHANNEL_MODE],
-                block_lengths=[16],
-                subbands=[8],
-                allocation_methods=[SBC_LOUDNESS_ALLOCATION_METHOD],
+            media_codec_information=SbcMediaCodecInformation(
+                sampling_frequency=SbcMediaCodecInformation.SamplingFrequency.SF_44100,
+                channel_mode=SbcMediaCodecInformation.ChannelMode.JOINT_STEREO,
+                block_length=SbcMediaCodecInformation.BlockLength.BL_16,
+                subbands=SbcMediaCodecInformation.Subbands.S_8,
+                allocation_method=SbcMediaCodecInformation.AllocationMethod.LOUDNESS,
                 minimum_bitpool_value=2,
                 maximum_bitpool_value=53,
             ),
@@ -878,12 +910,12 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
             MediaCodecCapabilities(
                 media_type=AVDTP_AUDIO_MEDIA_TYPE,
                 media_codec_type=A2DP_SBC_CODEC_TYPE,
-                media_codec_information=SbcMediaCodecInformation.from_lists(
-                    sampling_frequencies=[44100],
-                    channel_modes=[SBC_JOINT_STEREO_CHANNEL_MODE],
-                    block_lengths=[16],
-                    subbands=[8],
-                    allocation_methods=[SBC_LOUDNESS_ALLOCATION_METHOD],
+                media_codec_information=SbcMediaCodecInformation(
+                    sampling_frequency=SbcMediaCodecInformation.SamplingFrequency.SF_44100,
+                    channel_mode=SbcMediaCodecInformation.ChannelMode.JOINT_STEREO,
+                    block_length=SbcMediaCodecInformation.BlockLength.BL_16,
+                    subbands=SbcMediaCodecInformation.Subbands.S_8,
+                    allocation_method=SbcMediaCodecInformation.AllocationMethod.LOUDNESS,
                     minimum_bitpool_value=2,
                     maximum_bitpool_value=53,
                 ),
@@ -935,16 +967,12 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
             seid_information = [
                 SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
             ]
-            acceptor_service_capabilities = [
-                MediaTransportCapability(),
-                MediaCodecCapability(service_category=ServiceCategory.MEDIA_CODEC,
-                                     media_codec_specific_information_elements=bytearray(
-                                         [255, 255, 2, 53])),
-                DelayReportingCapability()
-            ]
+            sbc_capabilites = sbc_service_capabilites()
+            sbc_capabilites.append(DelayReportingCapability())
 
+            await channel.wait_signaling_channel_connected()
             await channel.accept_discover(seid_information)
-            await channel.accept_get_all_capabilities(acceptor_service_capabilities)
+            await channel.accept_get_all_capabilities(sbc_capabilites)
             await channel.accept_set_configuration(expected_configuration=[
                 MediaTransportCapability(), ANY,
                 DelayReportingCapability()
@@ -1007,16 +1035,12 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
             seid_information = [
                 SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
             ]
-            acceptor_service_capabilities = [
-                MediaTransportCapability(),
-                MediaCodecCapability(service_category=ServiceCategory.MEDIA_CODEC,
-                                     media_codec_specific_information_elements=bytearray(
-                                         [255, 255, 2, 53])),
-                DelayReportingCapability()
-            ]
+            sbc_capabilites = sbc_service_capabilites()
+            sbc_capabilites.append(DelayReportingCapability())
 
+            await channel.wait_signaling_channel_connected()
             await channel.accept_discover(seid_information)
-            await channel.accept_get_all_capabilities(acceptor_service_capabilities)
+            await channel.accept_get_all_capabilities(sbc_capabilites)
             await channel.accept_set_configuration(expected_configuration=[
                 MediaTransportCapability(), ANY,
                 DelayReportingCapability()
@@ -1090,17 +1114,11 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         seid_information = [
             SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
         ]
-        acceptor_service_capabilities = [
-            MediaTransportCapability(),
-            MediaCodecCapability(service_category=ServiceCategory.MEDIA_CODEC,
-                                 media_codec_specific_information_elements=bytearray(
-                                     [255, 255, 2, 53]))
-        ]
 
         # Connect AVDTP to RD1.
         _, dut_ref1_source = await asyncio.gather(
             channel.accept_open_stream(seid_information=seid_information,
-                                       service_capabilities=acceptor_service_capabilities),
+                                       service_capabilities=sbc_service_capabilites()),
             open_source(self.dut_a2dp, dut_ref1))
 
         assert channel.signaling_channel is not None
@@ -1174,46 +1192,6 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
                 SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE),
                 SeidInformation(acp_seid=0x02, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
             ]
-            acceptor_service_capabilities_sbc = [
-                MediaTransportCapability(),
-                MediaCodecCapability(
-                    service_category=ServiceCategory.MEDIA_CODEC,
-                    media_type=0x00,  # Audio
-                    media_codec_type=0x00,  # SBC
-                    # 0x3f
-                    # Sampling Frequency: 44100, 48000 Hz
-                    # Channel Mode: Mono, Dual Channel, Stereo, Joint Stereo
-                    # 0xff
-                    # Block Length: 4, 8, 12, 16
-                    # Subbands: 4, 8
-                    # Allocation method: SNR, Loudness
-                    # 0x02
-                    # Min bitpool: 2
-                    # 0x37
-                    # Max bitpool: 55
-                    media_codec_specific_information_elements=bytearray([0x3f, 0xff, 0x02, 0x37]))
-            ]
-
-            acceptor_service_capabilities_aac = [
-                MediaTransportCapability(),
-                MediaCodecCapability(
-                    service_category=ServiceCategory.MEDIA_CODEC,
-                    media_type=0x00,  # Audio
-                    media_codec_type=0x02,  # AAC
-                    # 0xc0
-                    # MPEG2 AAC LC, MPEG4 AAC LC
-                    # 0xff
-                    # Sampling Frequency: 8000 - 44100 Hz
-                    # 0xbc
-                    # Sampling Frequency: 48000 - 96000 Hz
-                    # Channels: 1, 2
-                    # 0x89, 0x00, 0x00
-                    # VBR
-                    # Bit Rate: 0x090000
-                    media_codec_specific_information_elements=bytearray(
-                        [0xc0, 0xff, 0xbc, 0x89, 0x00, 0x00])),
-                ContentProtectionCapability(cp_type=2)
-            ]
 
             acceptor_configuration_aac = [
                 MediaTransportCapability(),
@@ -1224,9 +1202,10 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
                     media_codec_specific_information_elements=ANY)
             ]
 
+            await channel.wait_signaling_channel_connected()
             await channel.accept_discover(seid_information)
-            await channel.accept_get_all_capabilities(acceptor_service_capabilities_sbc)
-            await channel.accept_get_all_capabilities(acceptor_service_capabilities_aac)
+            await channel.accept_get_all_capabilities(sbc_service_capabilites())
+            await channel.accept_get_all_capabilities(aac_service_capabilites())
             await channel.accept_set_configuration(acceptor_configuration_aac)
             await channel.accept_open()
 
@@ -1301,6 +1280,158 @@ class A2dpTest(base_test.BaseTestClass):  # type: ignore[misc]
         # # Stop streaming to RD1.
         await asyncio.gather(self.dut_a2dp.Suspend(source=dut_ref1_source),
                              channel.accept_suspend(timeout=8.0))
+
+    @avatar.asynchronous
+    async def test_delay_report_after_full_codec_reconfiguration(self) -> None:
+        """Test if AOSP properly sets configuration when the peer device supports/doesn't support
+           delay report service capability.
+
+        1. Connect, pair, open AVDTP and disconnect with remote REF1 - delay report supported by REF1
+        2. Connect, open AVDTP and disconnect with remote REF1 - delay report not supported by REF1
+        3. Connect, open AVDTP and disconnect with remote REF1 - delay report supported by REF1
+        4. Connect and open AVDTP with remote REF1 - delay report not supported by REF1
+        5. Reconfigure codec AAC to SBC - delay report not supported by both codecs
+        6. Connect, open AVDTP and disconnect with remote REF1 - delay report supported by REF1
+        """
+
+        seid_information = [
+            SeidInformation(acp_seid=0x01, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE),
+            SeidInformation(acp_seid=0x02, tsep=Tsep.SINK, media_type=AVDTP_AUDIO_MEDIA_TYPE)
+        ]
+
+        async def connect_and_pair() -> tuple[SignalingChannel, Connection, Connection]:
+            logger.info("connect ACL and pair")
+            # Connect and pair RD1.
+            dut_ref1, ref1_dut = await asyncio.gather(
+                initiate_pairing(self.dut, self.ref1.address),
+                accept_pairing(self.ref1, self.dut.address),
+            )
+            logger.info("connect signaling channel")
+            connection = pandora_snippet.get_raw_connection(device=self.ref1, connection=ref1_dut)
+            assert connection is not None, "Unable to find connection!"
+            channel = SignalingChannel.accept(connection)
+            return channel, dut_ref1, ref1_dut
+
+        async def reconnect() -> tuple[SignalingChannel, Awaitable[ConnectResponse], Connection]:
+            logger.info("connect ACL")
+            connect_awaitable = self.dut.aio.host.Connect(address=self.ref1.address)
+            result = await self.ref1.aio.host.WaitConnection(address=self.dut.address)
+            ref1_dut = result.connection
+            assert ref1_dut
+            logger.info("connect signaling channel")
+            connection = pandora_snippet.get_raw_connection(device=self.ref1, connection=ref1_dut)
+            assert connection is not None, "Unable to find connection!"
+            channel = SignalingChannel.accept(connection)
+            return channel, connect_awaitable, ref1_dut
+
+        async def disconnect(dut_ref1: Connection, ref1_dut: Connection):
+            logger.info("disconnect ACL")
+            await self.dut.aio.host.Disconnect(connection=dut_ref1)
+            await self.ref1.aio.host.WaitDisconnection(connection=ref1_dut, timeout=5)
+            logger.info("disconnected ACL")
+
+        async def accept_open_with_delay_report(channel: SignalingChannel):
+            sbc_capabilities = sbc_service_capabilites()
+            sbc_capabilities.append(DelayReportingCapability())
+            aac_capabilities = aac_service_capabilites()
+            aac_capabilities.append(DelayReportingCapability())
+            logger.info("connect_with_delay_report: waiting for channel to be established")
+            await channel.wait_signaling_channel_connected()
+            logger.info("connect_with_delay_report: waiting for discover")
+            await channel.accept_discover(seid_information)
+            logger.info("connect_with_delay_report: waiting for accept_get_all_capabilities")
+            await channel.accept_get_all_capabilities(sbc_capabilities)
+            logger.info("connect_with_delay_report: waiting for accept_get_all_capabilities")
+            await channel.accept_get_all_capabilities(aac_capabilities)
+            logger.info("connect_with_delay_report: waiting for accept_set_configuration")
+            await channel.accept_set_configuration(expected_configuration=[
+                MediaTransportCapability(), ANY,
+                DelayReportingCapability()
+            ])
+            logger.info("connect_with_delay_report: initiate delay report")
+            await channel.initiate_delay_report()
+            logger.info("connect_with_delay_report: waiting for accept_open")
+            await channel.accept_open()
+
+        async def accept_open_without_delay_report(channel: SignalingChannel):
+            logger.info("connect_without_delay_report: waiting for channel to be established")
+            await channel.wait_signaling_channel_connected()
+            logger.info("connect_without_delay_report: waiting for discover")
+            await channel.accept_discover(seid_information)
+            logger.info("connect_without_delay_report: waiting for accept_get_all_capabilities")
+            await channel.accept_get_all_capabilities(sbc_service_capabilites())
+            logger.info("connect_without_delay_report: waiting for accept_get_all_capabilities")
+            await channel.accept_get_all_capabilities(aac_service_capabilites())
+            logger.info("connect_without_delay_report: waiting for accept_set_configuration")
+            await channel.accept_set_configuration(
+                expected_configuration=[MediaTransportCapability(), ANY])
+            logger.info("connect_without_delay_report: waiting for accept_open")
+            await channel.accept_open()
+
+        async def handle_reconfiguration(channel: SignalingChannel):
+            logger.info("handle_reconfiguration: waiting for close")
+            await channel.accept_close()
+            acceptor_configuration_sbc = [MediaTransportCapability(), ANY]
+            logger.info("handle_reconfiguration: waiting for set configuration")
+            await channel.accept_set_configuration(
+                expected_configuration=[MediaTransportCapability(), ANY])
+            logger.info("handle_reconfiguration: waiting for open")
+            await channel.accept_open()
+
+        # 1. Validate connection with remote supporting delay report
+        channel, dut_ref1, ref1_dut = await connect_and_pair()
+        logger.info("channel: %s, dut_ref1: %s, ref1_dut: %s", channel, dut_ref1, ref1_dut)
+        await asyncio.gather(accept_open_with_delay_report(channel),
+                             open_source(self.dut_a2dp, dut_ref1))
+        await disconnect(dut_ref1, ref1_dut)
+
+        # 2. Validate connection with remote not supporting delay report
+        channel, connect_awaitable, ref1_dut = await reconnect()
+        await accept_open_without_delay_report(channel)
+        result = await connect_awaitable
+        assert result.connection is not None, "connection is None!"
+        await disconnect(result.connection, ref1_dut)
+
+        # 3. Validate connection with remote supporting delay report
+        channel, connect_awaitable, ref1_dut = await reconnect()
+        await accept_open_with_delay_report(channel)
+        result = await connect_awaitable
+        assert result.connection is not None, "connection is None!"
+        await disconnect(result.connection, ref1_dut)
+
+        # 4. Connect with remote device not supporting delay report
+        channel, connect_awaitable, ref1_dut = await reconnect()
+        await accept_open_without_delay_report(channel)
+        result = await connect_awaitable
+        assert result.connection is not None, "connection is None!"
+        dut_ref1 = result.connection
+
+        # 5. Reconfigure codec AAC to SBC (delay report not supported)
+        configurationResponse = await self.dut_a2dp.GetConfiguration(connection=dut_ref1)
+        logger.info("Current codec configuration: %s", configurationResponse.configuration)
+        assert configurationResponse.configuration.id.HasField('mpeg_aac')
+
+        new_configuration = Configuration(id=CodecId(sbc=empty_pb2.Empty()),
+                                          parameters=CodecParameters(channel_mode=STEREO,
+                                                                     sampling_frequency_hz=44100,
+                                                                     bit_depth=16))
+
+        logger.info("Switching to codec: %s", new_configuration)
+        await asyncio.gather(
+            self.dut_a2dp.SetConfiguration(connection=dut_ref1, configuration=new_configuration),
+            handle_reconfiguration(channel))
+
+        configurationResponse = await self.dut_a2dp.GetConfiguration(connection=dut_ref1)
+        logger.info("Current codec configuration: %s", configurationResponse.configuration)
+        assert configurationResponse.configuration.id.HasField('sbc')
+        await disconnect(dut_ref1, ref1_dut)
+
+        # 6. Connect to remote supporting delay report
+        channel, connect_awaitable, ref1_dut = await reconnect()
+        await accept_open_with_delay_report(channel)
+        result = await connect_awaitable
+        assert result.connection is not None, "connection is None!"
+        await disconnect(result.connection, ref1_dut)
 
 
 if __name__ == '__main__':

@@ -141,11 +141,6 @@ class BassUtils {
         return broadcastName;
     }
 
-    static boolean isPastConfigEnabled() {
-        return !DeviceConfig.getBoolean(
-                DeviceConfig.NAMESPACE_BLUETOOTH, "persist.vendor.service.bt.defNoPAS", false);
-    }
-
     static void log(String msg) {
         Log.d(TAG, msg);
     }

@@ -600,6 +600,6 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return;
         }
-        service.unregAll(attributionSource);
+        service.unregAll();
     }
 }

@@ -24,11 +24,9 @@
 
 #include "hal/hci_hal_fake.h"
 #include "hci/hci_packets.h"
-#include "module.h"
 #include "os/thread.h"
 #include "packet/bit_inserter.h"
 #include "packet/raw_builder.h"
-#include "test/mock/mock_main_shim_entry.h"
 
 using bluetooth::os::Thread;
 using bluetooth::packet::BitInserter;
@@ -53,54 +51,69 @@ namespace {
 
 constexpr std::chrono::milliseconds kTimeout = HciLayer::kHciTimeoutMs / 2;
 
-class DependsOnHci : public Module {
+class DependsOnHci {
 public:
-  DependsOnHci() : Module() {}
+  DependsOnHci(os::Handler* handler, HciInterface* hci) : handler_(handler), hci_(hci) {
+    hci_->RegisterEventHandler(EventCode::CONNECTION_COMPLETE,
+                               handler_->BindOn(this, &DependsOnHci::handle_event<EventView>));
+    hci_->RegisterLeEventHandler(
+            SubeventCode::CONNECTION_COMPLETE,
+            handler_->BindOn(this, &DependsOnHci::handle_event<LeMetaEventView>));
+    hci_->GetAclQueueEnd()->RegisterDequeue(
+            handler_, common::Bind(&DependsOnHci::handle_acl, common::Unretained(this)));
+    hci_->GetIsoQueueEnd()->RegisterDequeue(
+            handler_, common::Bind(&DependsOnHci::handle_iso, common::Unretained(this)));
+  }
+
+  ~DependsOnHci() {
+    hci_->GetAclQueueEnd()->UnregisterDequeue();
+    hci_->GetIsoQueueEnd()->UnregisterDequeue();
+  }
 
   void SendHciCommandExpectingStatus(std::unique_ptr<CommandBuilder> command) {
     hci_->EnqueueCommand(
             std::move(command),
-            GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandStatusView>));
+            handler_->BindOnceOn(this, &DependsOnHci::handle_event<CommandStatusView>));
   }
 
   void SendHciCommandExpectingComplete(std::unique_ptr<CommandBuilder> command) {
     hci_->EnqueueCommand(
             std::move(command),
-            GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+            handler_->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
   }
 
   void SendSecurityCommandExpectingComplete(std::unique_ptr<SecurityCommandBuilder> command) {
     if (security_interface_ == nullptr) {
       security_interface_ = hci_->GetSecurityInterface(
-              GetHandler()->BindOn(this, &DependsOnHci::handle_event<EventView>));
+              handler_->BindOn(this, &DependsOnHci::handle_event<EventView>));
     }
     hci_->EnqueueCommand(
             std::move(command),
-            GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+            handler_->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
   }
 
   void SendLeSecurityCommandExpectingComplete(std::unique_ptr<LeSecurityCommandBuilder> command) {
     if (le_security_interface_ == nullptr) {
       le_security_interface_ = hci_->GetLeSecurityInterface(
-              GetHandler()->BindOn(this, &DependsOnHci::handle_event<LeMetaEventView>));
+              handler_->BindOn(this, &DependsOnHci::handle_event<LeMetaEventView>));
     }
     hci_->EnqueueCommand(
             std::move(command),
-            GetHandler()->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
+            handler_->BindOnceOn(this, &DependsOnHci::handle_event<CommandCompleteView>));
   }
 
   void SendAclData(std::unique_ptr<AclBuilder> acl) {
     outgoing_acl_.push(std::move(acl));
     auto queue_end = hci_->GetAclQueueEnd();
     queue_end->RegisterEnqueue(
-            GetHandler(), common::Bind(&DependsOnHci::handle_enqueue, common::Unretained(this)));
+            handler_, common::Bind(&DependsOnHci::handle_enqueue, common::Unretained(this)));
   }
 
   void SendIsoData(std::unique_ptr<IsoBuilder> iso) {
     outgoing_iso_.push(std::move(iso));
     auto queue_end = hci_->GetIsoQueueEnd();
-    queue_end->RegisterEnqueue(GetHandler(), common::Bind(&DependsOnHci::handle_enqueue_iso,
-                                                          common::Unretained(this)));
+    queue_end->RegisterEnqueue(
+            handler_, common::Bind(&DependsOnHci::handle_enqueue_iso, common::Unretained(this)));
   }
 
   std::optional<EventView> GetReceivedEvent(std::chrono::milliseconds timeout = kTimeout) {
@@ -132,32 +145,9 @@ public:
     return iso;
   }
 
-  void Start() {
-    hci_ = GetDependency<HciLayer>();
-    hci_->RegisterEventHandler(EventCode::CONNECTION_COMPLETE,
-                               GetHandler()->BindOn(this, &DependsOnHci::handle_event<EventView>));
-    hci_->RegisterLeEventHandler(
-            SubeventCode::CONNECTION_COMPLETE,
-            GetHandler()->BindOn(this, &DependsOnHci::handle_event<LeMetaEventView>));
-    hci_->GetAclQueueEnd()->RegisterDequeue(
-            GetHandler(), common::Bind(&DependsOnHci::handle_acl, common::Unretained(this)));
-    hci_->GetIsoQueueEnd()->RegisterDequeue(
-            GetHandler(), common::Bind(&DependsOnHci::handle_iso, common::Unretained(this)));
-  }
-
-  void Stop() {
-    hci_->GetAclQueueEnd()->UnregisterDequeue();
-    hci_->GetIsoQueueEnd()->UnregisterDequeue();
-  }
-
-  void ListDependencies(ModuleList* list) const { list->add<HciLayer>(); }
-
-  std::string ToString() const override { return std::string("DependsOnHci"); }
-
-  static const ModuleFactory Factory;
-
 private:
-  HciLayer* hci_ = nullptr;
+  os::Handler* handler_ = nullptr;
+  HciInterface* hci_ = nullptr;
   const SecurityInterface* security_interface_;
   const LeSecurityInterface* le_security_interface_;
   common::BlockingQueue<EventView> incoming_events_;
@@ -198,8 +188,6 @@ private:
   }
 };
 
-const ModuleFactory DependsOnHci::Factory = ModuleFactory([]() { return new DependsOnHci(); });
-
 class HciTest : public ::testing::Test {
 public:
   void SetUp() override {
@@ -209,20 +197,15 @@ public:
       counting_bytes.push_back(i);
       counting_down_bytes.push_back(~i);
     }
-    hal = new hal::TestHciHal();
 
-    bluetooth::hci::testing::mock_storage_ = new storage::StorageModule(
-            com::android::bluetooth::flags::same_handler_for_all_modules()
-                    ? fake_registry_.GetTestHandler()
-                    : new os::Handler(&fake_registry_.GetTestThread()));
-    bluetooth::hci::testing::mock_storage_->Start();
+    thread_ = new os::Thread("test_thread", os::Thread::Priority::NORMAL);
+    client_handler_ = new os::Handler(thread_);
 
-    fake_registry_.InjectTestModule(&hal::HciHal::Factory, hal);
-    fake_registry_.Start<DependsOnHci>(&fake_registry_.GetTestThread(),
-                                       fake_registry_.GetTestHandler());
-    hci = static_cast<HciLayer*>(fake_registry_.GetModuleUnderTest(&HciLayer::Factory));
-    upper = static_cast<DependsOnHci*>(fake_registry_.GetModuleUnderTest(&DependsOnHci::Factory));
-    ASSERT_TRUE(fake_registry_.IsStarted<HciLayer>());
+    hal = std::make_unique<hal::TestHciHal>();
+    storage = std::make_unique<storage::StorageModule>(client_handler_);
+
+    hci = std::make_unique<HciLayer>(client_handler_, hal.get(), storage.get());
+    upper = std::make_unique<DependsOnHci>(client_handler_, hci.get());
 
     // Verify that reset was received
     auto sent_command = hal->GetSentCommand();
@@ -238,10 +221,18 @@ public:
   }
 
   void TearDown() override {
-    delete bluetooth::hci::testing::mock_storage_;
-    bluetooth::hci::testing::mock_storage_ = nullptr;
+    client_handler_->Synchronize(std::chrono::milliseconds(20));
 
-    fake_registry_.StopAll();
+    upper.reset();
+    hci.reset();
+    storage.reset();
+    hal.reset();
+
+    client_handler_->Clear();
+    client_handler_->WaitUntilStopped(bluetooth::kHandlerStopTimeout);
+
+    delete client_handler_;
+    delete thread_;
   }
 
   std::vector<uint8_t> GetPacketBytes(std::unique_ptr<packet::BasePacketBuilder> packet) {
@@ -252,10 +243,12 @@ public:
     return bytes;
   }
 
-  DependsOnHci* upper = nullptr;
-  hal::TestHciHal* hal = nullptr;
-  HciLayer* hci = nullptr;
-  TestModuleRegistry fake_registry_;
+  os::Thread* thread_ = nullptr;
+  os::Handler* client_handler_ = nullptr;
+  std::unique_ptr<DependsOnHci> upper = nullptr;
+  std::unique_ptr<hal::TestHciHal> hal = nullptr;
+  std::unique_ptr<storage::StorageModule> storage = nullptr;
+  std::unique_ptr<HciLayer> hci = nullptr;
 };
 
 TEST_F(HciTest, initAndClose) {}

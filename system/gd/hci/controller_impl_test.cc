@@ -60,12 +60,14 @@ namespace {
 
 class HciLayerFakeForController : public HciLayerFake {
 public:
+  HciLayerFakeForController(os::Handler* handler) : HciLayerFake(handler) {}
+
   void EnqueueCommand(
           std::unique_ptr<CommandBuilder> command,
           common::ContextualOnceCallback<void(CommandCompleteView)> on_complete) override {
-    GetHandler()->Post(common::BindOnce(&HciLayerFakeForController::HandleCommand,
-                                        common::Unretained(this), std::move(command),
-                                        std::move(on_complete)));
+    handler_->Post(common::BindOnce(&HciLayerFakeForController::HandleCommand,
+                                    common::Unretained(this), std::move(command),
+                                    std::move(on_complete)));
   }
 
   void EnqueueCommand(
@@ -285,23 +287,28 @@ public:
 class ControllerTest : public ::testing::Test {
 protected:
   void SetUp() override {
+    thread_ = new os::Thread("test_thread", os::Thread::Priority::NORMAL);
+    client_handler_ = new os::Handler(thread_);
+
     feature_spec_version = feature_spec_version_;
-    test_hci_layer_ = new HciLayerFakeForController;
+    test_hci_layer_ = std::make_unique<HciLayerFakeForController>(client_handler_);
     test_hci_layer_->vendor_capabilities_ = std::move(vendor_capabilities_);
     vendor_capabilities_.reset();
-    fake_registry_.InjectTestModule(&HciLayer::Factory, test_hci_layer_);
-    client_handler_ = fake_registry_.GetTestModuleHandler(&HciLayer::Factory);
-    fake_registry_.Start<HciLayer>(&thread_, fake_registry_.GetTestHandler());
-    controller_ = std::make_unique<ControllerImpl>(client_handler_, test_hci_layer_);
+    controller_ = std::make_unique<ControllerImpl>(client_handler_, test_hci_layer_.get());
   }
 
-  void TearDown() override { fake_registry_.StopAll(); }
+  void TearDown() override {
+    client_handler_->Clear();
+    client_handler_->WaitUntilStopped(bluetooth::kHandlerStopTimeout);
 
-  TestModuleRegistry fake_registry_;
-  HciLayerFakeForController* test_hci_layer_ = nullptr;
-  os::Thread& thread_ = fake_registry_.GetTestThread();
-  std::unique_ptr<ControllerImpl> controller_ = nullptr;
+    delete client_handler_;
+    delete thread_;
+  }
+
+  os::Thread* thread_ = nullptr;
   os::Handler* client_handler_ = nullptr;
+  std::unique_ptr<HciLayerFakeForController> test_hci_layer_ = nullptr;
+  std::unique_ptr<ControllerImpl> controller_ = nullptr;
   uint16_t feature_spec_version_ = 98;
   std::unique_ptr<EventBuilder> vendor_capabilities_ = nullptr;
 };
@@ -526,7 +533,7 @@ TEST_F(ControllerTest, feature_spec_version_098_no_dab_test) {
 
 TEST_F(ControllerTest, set_dynamic_audio_buffer_time) {
   controller_->SetDabAudioBufferTime(123);
-  thread_.GetReactor()->WaitForIdle(std::chrono::seconds(1));
+  thread_->GetReactor()->WaitForIdle(std::chrono::seconds(1));
   ASSERT_EQ(0, test_hci_layer_->dynamic_audio_buffer_time);
 }
 
@@ -551,7 +558,7 @@ TEST_F(Controller103Test, feature_spec_version_103_dab_test) {
 
 TEST_F(Controller103Test, set_dynamic_audio_buffer_time) {
   controller_->SetDabAudioBufferTime(123);
-  thread_.GetReactor()->WaitForIdle(std::chrono::seconds(1));
+  thread_->GetReactor()->WaitForIdle(std::chrono::seconds(1));
   ASSERT_EQ(123, test_hci_layer_->dynamic_audio_buffer_time);
 }
 
