@@ -22,6 +22,7 @@
 #include <string>
 
 #include "a2dp_codec_api.h"
+#include "a2dp_constants.h"
 #include "a2dp_ext.h"
 #include "bta/include/bta_av_api.h"
 #include "stack/include/bt_hdr.h"
