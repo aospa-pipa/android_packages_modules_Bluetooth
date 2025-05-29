@@ -308,6 +308,7 @@ cc_test {
         ":audio_set_configurations_json",
         ":audio_set_scenarios_bfbs",
         ":audio_set_scenarios_json",
+        ":audio_set_scenarios_test_json",
     ],
     cflags: [
         "-Wno-macro-redefined",
@@ -728,6 +729,13 @@ prebuilt_etc {
 }
 
 prebuilt_etc {
+    name: "audio_set_scenarios_test_json",
+    src: "le_audio/audio_set_scenarios_test.json",
+    filename_from_src: true,
+    sub_dir: "bluetooth/le_audio",
+}
+
+prebuilt_etc {
     name: "audio_set_configurations_bfbs",
     src: ":LeAudioSetConfigsSchema_bfbs",
     filename: "audio_set_configurations.bfbs",
@@ -793,6 +801,7 @@ cc_test {
         ":audio_set_configurations_json",
         ":audio_set_scenarios_bfbs",
         ":audio_set_scenarios_json",
+        ":audio_set_scenarios_test_json",
     ],
     generated_headers: [
         "LeAudioSetConfigSchemas_h",
@@ -905,6 +914,7 @@ cc_test {
         ":audio_set_configurations_json",
         ":audio_set_scenarios_bfbs",
         ":audio_set_scenarios_json",
+        ":audio_set_scenarios_test_json",
     ],
     generated_headers: [
         "LeAudioSetConfigSchemas_h",
@@ -1037,6 +1047,7 @@ cc_test {
         ":audio_set_configurations_json",
         ":audio_set_scenarios_bfbs",
         ":audio_set_scenarios_json",
+        ":audio_set_scenarios_test_json",
     ],
     generated_headers: [
         "LeAudioSetConfigSchemas_h",

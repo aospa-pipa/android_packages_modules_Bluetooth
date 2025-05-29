@@ -19,6 +19,7 @@ package com.android.bluetooth.btservice;
 import static android.Manifest.permission.MEDIA_CONTENT_CONTROL;
 
 import static com.android.bluetooth.TestUtils.MockitoRule;
+import static com.android.bluetooth.TestUtils.mockGetSystemService;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -37,15 +38,10 @@ import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.bluetooth.TestUtils;
-import com.android.bluetooth.a2dpsink.A2dpSinkNativeInterface;
-import com.android.bluetooth.avrcp.AvrcpNativeInterface;
 import com.android.bluetooth.avrcpcontroller.AvrcpControllerNativeInterface;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
 import com.android.bluetooth.hearingaid.HearingAidNativeInterface;
 import com.android.bluetooth.hfp.HeadsetNativeInterface;
-import com.android.bluetooth.hfpclient.HeadsetClientNativeInterface;
-import com.android.bluetooth.hid.HidHostNativeInterface;
 import com.android.bluetooth.le_audio.LeAudioNativeInterface;
 import com.android.bluetooth.sdp.SdpManagerNativeInterface;
 
@@ -62,35 +58,33 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.FutureTask;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** Test cases for {@link ProfileService}. */
 @MediumTest
 @RunWith(AndroidJUnit4.class)
 public class ProfileServiceTest {
-    private static final int NUM_REPEATS = 5;
-
-    @Spy
-    private AdapterService mAdapterService =
-            new AdapterService(InstrumentationRegistry.getInstrumentation().getContext());
-
     @Rule public final MockitoRule mMockitoRule = new MockitoRule();
 
     @Mock private DatabaseManager mDatabaseManager;
     @Mock private TelephonyManager mMockTelephonyManager;
 
-    private int[] mProfiles;
-
-    @Mock private A2dpSinkNativeInterface mA2dpSinkNativeInterface;
-    @Mock private AvrcpNativeInterface mAvrcpNativeInterface;
     @Mock private AvrcpControllerNativeInterface mAvrcpControllerNativeInterface;
     @Mock private HeadsetNativeInterface mHeadsetNativeInterface;
-    @Mock private HeadsetClientNativeInterface mHeadsetClientNativeInterface;
     @Mock private HearingAidNativeInterface mHearingAidNativeInterface;
     @Mock private SdpManagerNativeInterface mSdpManagerNativeInterface;
-    @Mock private HidHostNativeInterface mHidHostNativeInterface;
     @Mock private LeAudioNativeInterface mLeAudioInterface;
+
+    @Spy
+    private AdapterService mAdapterService =
+            new AdapterService(InstrumentationRegistry.getInstrumentation().getContext());
+
+    private static final int NUM_REPEATS = 5;
+
+    private int[] mProfiles;
 
     private void setProfileState(int profile, int state) {
         FutureTask task =
@@ -142,47 +136,46 @@ public class ProfileServiceTest {
         doReturn(false).when(mAdapterService).isA2dpOffloadEnabled();
         doReturn(false).when(mAdapterService).pbapPseDynamicVersionUpgradeIsEnabled();
 
-        TestUtils.mockGetSystemService(
-                mAdapterService,
-                "Context.TELEPHONY_SERVICE",
-                TelephonyManager.class,
-                mMockTelephonyManager);
+        mockGetSystemService(mAdapterService, TelephonyManager.class, mMockTelephonyManager);
+
+        // These are disabled because `AdapterService` incorrectly starts the real NativeInterface
+        // due to their respective NativeInterface being unmockable from here.
+        final Set<Integer> manuallyDisabled =
+                Set.of(BluetoothProfile.AVRCP, BluetoothProfile.HID_HOST);
+
+        final Set<Integer> excludedProfiles =
+                Set.of(
+                        BluetoothProfile.A2DP,
+                        BluetoothProfile.CSIP_SET_COORDINATOR,
+                        BluetoothProfile.GATT,
+                        BluetoothProfile.HAP_CLIENT,
+                        BluetoothProfile.HID_DEVICE,
+                        BluetoothProfile.PAN,
+                        BluetoothProfile.VOLUME_CONTROL);
+
+        final Set<Integer> allDisabled =
+                Stream.concat(manuallyDisabled.stream(), excludedProfiles.stream())
+                        .collect(Collectors.toUnmodifiableSet());
 
         mProfiles =
                 Arrays.stream(Config.getSupportedProfiles())
-                        .filter(
-                                profile ->
-                                        profile != BluetoothProfile.HAP_CLIENT
-                                                && profile != BluetoothProfile.VOLUME_CONTROL
-                                                && profile != BluetoothProfile.CSIP_SET_COORDINATOR
-                                                && profile != BluetoothProfile.GATT
-                                                && profile != BluetoothProfile.HID_DEVICE
-                                                && profile != BluetoothProfile.PAN
-                                                && profile != BluetoothProfile.A2DP)
+                        .filter(profile -> !allDisabled.contains(profile))
                         .toArray();
 
-        A2dpSinkNativeInterface.setInstance(mA2dpSinkNativeInterface);
-        AvrcpNativeInterface.setInstance(mAvrcpNativeInterface);
         AvrcpControllerNativeInterface.setInstance(mAvrcpControllerNativeInterface);
         HeadsetNativeInterface.setInstance(mHeadsetNativeInterface);
-        HeadsetClientNativeInterface.setInstance(mHeadsetClientNativeInterface);
         HearingAidNativeInterface.setInstance(mHearingAidNativeInterface);
         SdpManagerNativeInterface.setInstance(mSdpManagerNativeInterface);
-        HidHostNativeInterface.setInstance(mHidHostNativeInterface);
         LeAudioNativeInterface.setInstance(mLeAudioInterface);
     }
 
     @After
     public void tearDown()
             throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
-        A2dpSinkNativeInterface.setInstance(null);
-        AvrcpNativeInterface.setInstance(null);
         AvrcpControllerNativeInterface.setInstance(null);
         HeadsetNativeInterface.setInstance(null);
-        HeadsetClientNativeInterface.setInstance(null);
         HearingAidNativeInterface.setInstance(null);
         SdpManagerNativeInterface.setInstance(null);
-        HidHostNativeInterface.setInstance(null);
         LeAudioNativeInterface.setInstance(null);
         InstrumentationRegistry.getInstrumentation()
                 .getUiAutomation()

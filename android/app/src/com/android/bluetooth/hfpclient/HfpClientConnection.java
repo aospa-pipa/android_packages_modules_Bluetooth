@@ -135,28 +135,24 @@ public class HfpClientConnection extends Connection {
 
         debug("Got call state change to " + state);
         switch (state) {
-            case HfpClientCall.CALL_STATE_ACTIVE:
+            case HfpClientCall.CALL_STATE_ACTIVE -> {
                 setActive();
                 if (conference != null) {
                     conference.setActive();
                 }
-                break;
-            case HfpClientCall.CALL_STATE_HELD_BY_RESPONSE_AND_HOLD:
-            case HfpClientCall.CALL_STATE_HELD:
+            }
+            case HfpClientCall.CALL_STATE_HELD_BY_RESPONSE_AND_HOLD,
+                    HfpClientCall.CALL_STATE_HELD -> {
                 setOnHold();
                 if (conference != null) {
                     conference.setOnHold();
                 }
-                break;
-            case HfpClientCall.CALL_STATE_DIALING:
-            case HfpClientCall.CALL_STATE_ALERTING:
-                setDialing();
-                break;
-            case HfpClientCall.CALL_STATE_INCOMING:
-            case HfpClientCall.CALL_STATE_WAITING:
-                setRinging();
-                break;
-            case HfpClientCall.CALL_STATE_TERMINATED:
+            }
+            case HfpClientCall.CALL_STATE_DIALING, HfpClientCall.CALL_STATE_ALERTING ->
+                    setDialing();
+            case HfpClientCall.CALL_STATE_INCOMING, HfpClientCall.CALL_STATE_WAITING ->
+                    setRinging();
+            case HfpClientCall.CALL_STATE_TERMINATED -> {
                 if (mPreviousCallState == STATE_RINGING) {
                     close(DisconnectCause.MISSED);
                 } else if (mLocalDisconnect) {
@@ -164,9 +160,8 @@ public class HfpClientConnection extends Connection {
                 } else {
                     close(DisconnectCause.REMOTE);
                 }
-                break;
-            default:
-                Log.wtf(TAG, "[" + mDevice + "]Unexpected phone state " + state);
+            }
+            default -> Log.wtf(TAG, "[" + mDevice + "]Unexpected phone state " + state);
         }
         // Hold capability is added in finishInitializing() only when call state is already
         // active or held and then HFP client is connected, leading to the capability not being
@@ -280,12 +275,9 @@ public class HfpClientConnection extends Connection {
             return;
         }
         switch (event) {
-            case EVENT_SCO_CONNECT:
-                mServiceInterface.connectAudio(mDevice);
-                break;
-            case EVENT_SCO_DISCONNECT:
-                mServiceInterface.disconnectAudio(mDevice);
-                break;
+            case EVENT_SCO_CONNECT -> mServiceInterface.connectAudio(mDevice);
+            case EVENT_SCO_DISCONNECT -> mServiceInterface.disconnectAudio(mDevice);
+            default -> {} // Nothing to do
         }
     }
 

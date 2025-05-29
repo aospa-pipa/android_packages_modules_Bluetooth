@@ -20,7 +20,6 @@ import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHE
 import static android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
-import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 import static android.bluetooth.le.ScanSettings.getScanModeString;
 
@@ -28,7 +27,9 @@ import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
@@ -45,6 +46,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.RemoteException;
+import android.os.SystemProperties;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.SparseBooleanArray;
@@ -56,9 +58,7 @@ import androidx.annotation.Nullable;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.BluetoothAdapterProxy;
 import com.android.bluetooth.flags.Flags;
-import com.android.bluetooth.util.SystemProperties;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -153,7 +153,9 @@ public class ScanManager {
     private static final int FILTER_LOGIC_TYPE = 1;
 
     // MSFT-based hardware scan offload sysprop
-    private static final String MSFT_HCI_EXT_ENABLED = "bluetooth.core.le.use_msft_hci_ext";
+    @VisibleForTesting
+    static final String MSFT_HCI_EXT_ENABLED = "bluetooth.core.le.use_msft_hci_ext";
+
     // Hardcoded min number of hardware adv monitor slots for MSFT-enabled controllers
     private static final int MIN_NUM_MSFT_MONITOR_SLOTS = 20;
 
@@ -183,8 +185,9 @@ public class ScanManager {
     private final MsftAdvMonitorMergedPatternList mMsftAdvMonitorMergedPatternList =
             new MsftAdvMonitorMergedPatternList();
 
-    private final ScanController mScanController;
     private final AdapterService mAdapterService;
+    private final BluetoothAdapter mAdapter;
+    private final ScanController mScanController;
     private final TimeProvider mTimeProvider;
     private final ScanNativeInterface mNativeInterface;
     private final AlarmManager mAlarmManager;
@@ -192,7 +195,6 @@ public class ScanManager {
     private final DisplayManager mDisplayManager;
     private final ActivityManager mActivityManager;
     private final LocationManager mLocationManager;
-    private final BluetoothAdapterProxy mBluetoothAdapterProxy;
     private final BatchScanThrottler mBatchScanThrottler;
     // Whether or not MSFT-based scanning hardware offload is available on this device
     private final boolean mIsMsftSupported;
@@ -221,11 +223,11 @@ public class ScanManager {
     ScanManager(
             AdapterService adapterService,
             ScanController scanController,
-            BluetoothAdapterProxy bluetoothAdapterProxy,
             Looper looper,
             TimeProvider timeProvider) {
-        mScanController = scanController;
         mAdapterService = adapterService;
+        mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
+        mScanController = scanController;
         mTimeProvider = timeProvider;
         mNativeInterface = ScanObjectsFactory.getInstance().getScanNativeInterface();
         mNativeInterface.init(scanController);
@@ -263,7 +265,6 @@ public class ScanManager {
         mDisplayManager = mAdapterService.getSystemService(DisplayManager.class);
         mActivityManager = mAdapterService.getSystemService(ActivityManager.class);
         mLocationManager = mAdapterService.getSystemService(LocationManager.class);
-        mBluetoothAdapterProxy = bluetoothAdapterProxy;
         mIsConnecting = false;
         mPriorityMap.put(ScanSettings.SCAN_MODE_OPPORTUNISTIC, 0);
         mPriorityMap.put(ScanSettings.SCAN_MODE_SCREEN_OFF, 1);
@@ -287,7 +288,7 @@ public class ScanManager {
         IntentFilter locationIntentFilter = new IntentFilter(LocationManager.MODE_CHANGED_ACTION);
         locationIntentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
         mAdapterService.registerReceiver(mLocationReceiver, locationIntentFilter);
-        mBatchScanThrottler = new BatchScanThrottler(mAdapterService, timeProvider, mScreenOn);
+        mBatchScanThrottler = new BatchScanThrottler(timeProvider, mScreenOn);
 
         Log.d(TAG, "IsMsftSupported? " + mIsMsftSupported);
     }
@@ -399,11 +400,7 @@ public class ScanManager {
     }
 
     private boolean isFilteringSupported() {
-        if (mBluetoothAdapterProxy == null) {
-            Log.e(TAG, "mBluetoothAdapterProxy is null");
-            return false;
-        }
-        return mBluetoothAdapterProxy.isOffloadedScanFilteringSupported();
+        return mAdapter.isOffloadedFilteringSupported();
     }
 
     boolean isAutoBatchScanClientEnabled(ScanClient client) {
@@ -446,48 +443,22 @@ public class ScanManager {
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case MSG_START_BLE_SCAN:
-                    handleStartScan((ScanClient) msg.obj);
-                    break;
-                case MSG_STOP_BLE_SCAN:
-                    handleStopScan((ScanClient) msg.obj);
-                    break;
-                case MSG_FLUSH_BATCH_RESULTS:
-                    handleFlushBatchResults((ScanClient) msg.obj);
-                    break;
-                case MSG_SCAN_TIMEOUT:
-                    regularScanTimeout((ScanClient) msg.obj);
-                    break;
-                case MSG_SUSPEND_SCANS:
-                    handleSuspendScans();
-                    break;
-                case MSG_RESUME_SCANS:
-                    handleResumeScans();
-                    break;
-                case MSG_SCREEN_OFF:
-                    handleScreenOff();
-                    break;
-                case MSG_SCREEN_ON:
-                    handleScreenOn();
-                    break;
-                case MSG_REVERT_SCAN_MODE_UPGRADE:
-                    handleRevertScanModeUpgrade((ScanClient) msg.obj);
-                    break;
-                case MSG_IMPORTANCE_CHANGE:
-                    handleImportanceChange((UidImportance) msg.obj);
-                    break;
-                case MSG_START_CONNECTING:
-                    handleConnectingState();
-                    break;
-                case MSG_STOP_CONNECTING:
-                    handleClearConnectingState();
-                    break;
-                case MSG_SUSPEND_SCAN_ALL:
-                    handleSuspendScanAll();
-                    break;
-                default:
-                    // Shouldn't happen.
-                    Log.e(TAG, "received an unknown message : " + msg.what);
+                case MSG_START_BLE_SCAN -> handleStartScan((ScanClient) msg.obj);
+                case MSG_STOP_BLE_SCAN -> handleStopScan((ScanClient) msg.obj);
+                case MSG_FLUSH_BATCH_RESULTS -> handleFlushBatchResults((ScanClient) msg.obj);
+                case MSG_SCAN_TIMEOUT -> regularScanTimeout((ScanClient) msg.obj);
+                case MSG_SUSPEND_SCANS -> handleSuspendScans();
+                case MSG_RESUME_SCANS -> handleResumeScans();
+                case MSG_SCREEN_OFF -> handleScreenOff();
+                case MSG_SCREEN_ON -> handleScreenOn();
+                case MSG_REVERT_SCAN_MODE_UPGRADE ->
+                        handleRevertScanModeUpgrade((ScanClient) msg.obj);
+                case MSG_IMPORTANCE_CHANGE -> handleImportanceChange((UidImportance) msg.obj);
+                case MSG_START_CONNECTING -> handleConnectingState();
+                case MSG_STOP_CONNECTING -> handleClearConnectingState();
+                case MSG_SUSPEND_SCAN_ALL -> handleSuspendScanAll();
+                // Shouldn't happen.
+                default -> Log.e(TAG, "received an unknown message : " + msg.what);
             }
         }
 
@@ -588,7 +559,7 @@ public class ScanManager {
         }
 
         private static boolean isFilteredScan(ScanClient client) {
-            if ((client.mFilters == null) || client.mFilters.isEmpty()) {
+            if (client.mFilters.isEmpty()) {
                 return false;
             }
 
@@ -808,19 +779,16 @@ public class ScanManager {
                 // The following codes are effectively only for services
                 // Apps are either already or will be soon handled by handleImportanceChange().
                 switch (client.mScanModeApp) {
-                    case ScanSettings.SCAN_MODE_LOW_POWER:
-                        updatedScanMode = ScanSettings.SCAN_MODE_SCREEN_OFF;
-                        break;
-                    case ScanSettings.SCAN_MODE_BALANCED:
-                    case ScanSettings.SCAN_MODE_AMBIENT_DISCOVERY:
-                        updatedScanMode = ScanSettings.SCAN_MODE_SCREEN_OFF_BALANCED;
-                        break;
-                    case ScanSettings.SCAN_MODE_LOW_LATENCY:
-                        updatedScanMode = ScanSettings.SCAN_MODE_LOW_LATENCY;
-                        break;
-                    case ScanSettings.SCAN_MODE_OPPORTUNISTIC:
-                    default:
+                    case ScanSettings.SCAN_MODE_LOW_POWER ->
+                            updatedScanMode = ScanSettings.SCAN_MODE_SCREEN_OFF;
+                    case ScanSettings.SCAN_MODE_BALANCED,
+                            ScanSettings.SCAN_MODE_AMBIENT_DISCOVERY ->
+                            updatedScanMode = ScanSettings.SCAN_MODE_SCREEN_OFF_BALANCED;
+                    case ScanSettings.SCAN_MODE_LOW_LATENCY ->
+                            updatedScanMode = ScanSettings.SCAN_MODE_LOW_LATENCY;
+                    default -> {
                         return false;
+                    }
                 }
             }
             Log.d(
@@ -1529,7 +1497,7 @@ public class ScanManager {
         if (!isExemptFromScanTimeout(client)
                 && (client.mStats.isEmpty() || client.mStats.get().isScanningTooLong())) {
             Log.d(TAG, "regularScanTimeout - client scan time was too long");
-            if (client.mFilters == null || client.mFilters.isEmpty()) {
+            if (client.mFilters.isEmpty()) {
                 Log.w(
                         TAG,
                         "Moving unfiltered scan client to opportunistic scan (scannerId "
@@ -1779,7 +1747,7 @@ public class ScanManager {
         if (client == null) {
             return true;
         }
-        if (client.mFilters == null || client.mFilters.isEmpty()) {
+        if (client.mFilters.isEmpty()) {
             return true;
         }
         if (client.mFilters.size() > mFilterIndexStack.size()) {
@@ -1989,31 +1957,27 @@ public class ScanManager {
         if (settings == null) {
             return 0;
         }
-        int val = 0;
         int maxTotalTrackableAdvertisements =
                 mAdapterService.getTotalNumOfTrackableAdvertisements();
         // controller based onfound onlost resources are scarce commodity; the
         // assignment of filters to num of beacons to track is configurable based
         // on hw capabilities. Apps give an intent and allocation of onfound
         // resources or failure there of is done based on availability - FCFS model
-        switch (settings.getNumOfMatches()) {
-            case ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT:
-                val = 1;
-                break;
-            case ScanSettings.MATCH_NUM_FEW_ADVERTISEMENT:
-                val = 2;
-                break;
-            case ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT:
-                val = maxTotalTrackableAdvertisements / 2;
+        return switch (settings.getNumOfMatches()) {
+            case ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT -> 1;
+            case ScanSettings.MATCH_NUM_FEW_ADVERTISEMENT -> 2;
+            case ScanSettings.MATCH_NUM_MAX_ADVERTISEMENT -> {
                 if (Flags.changeDefaultTrackableAdvNumber()) {
-                    val = maxTotalTrackableAdvertisements / 4;
+                    yield maxTotalTrackableAdvertisements / 4;
+                } else {
+                    yield maxTotalTrackableAdvertisements / 2;
                 }
-                break;
-            default:
-                val = 1;
+            }
+            default -> {
                 Log.d(TAG, "Invalid setting for getNumOfMatches() " + settings.getNumOfMatches());
-        }
-        return val;
+                yield 1;
+            }
+        };
     }
 
     private boolean manageAllocationOfTrackingAdvertisement(
@@ -2048,7 +2012,6 @@ public class ScanManager {
         }
 
         if (client == null
-                || client.mFilters == null
                 || client.mFilters.isEmpty()
                 || client.mFilters.size() > mFilterIndexStack.size()) {
             // Use all-pass filter
@@ -2232,7 +2195,7 @@ public class ScanManager {
 
     private boolean updateCountersAndCheckForConnectingState(int state, int prevState) {
         switch (prevState) {
-            case STATE_CONNECTING:
+            case STATE_CONNECTING -> {
                 if (mProfilesConnecting > 0) {
                     mProfilesConnecting--;
                 } else {
@@ -2240,8 +2203,8 @@ public class ScanManager {
                     throw new IllegalStateException(
                             "Invalid state transition, " + prevState + " -> " + state);
                 }
-                break;
-            case STATE_CONNECTED:
+            }
+            case STATE_CONNECTED -> {
                 if (mProfilesConnected > 0) {
                     mProfilesConnected--;
                 } else {
@@ -2249,8 +2212,8 @@ public class ScanManager {
                     throw new IllegalStateException(
                             "Invalid state transition, " + prevState + " -> " + state);
                 }
-                break;
-            case STATE_DISCONNECTING:
+            }
+            case STATE_DISCONNECTING -> {
                 if (mProfilesDisconnecting > 0) {
                     mProfilesDisconnecting--;
                 } else {
@@ -2258,21 +2221,14 @@ public class ScanManager {
                     throw new IllegalStateException(
                             "Invalid state transition, " + prevState + " -> " + state);
                 }
-                break;
+            }
+            default -> {} // Nothing to do
         }
         switch (state) {
-            case STATE_CONNECTING:
-                mProfilesConnecting++;
-                break;
-            case STATE_CONNECTED:
-                mProfilesConnected++;
-                break;
-            case STATE_DISCONNECTING:
-                mProfilesDisconnecting++;
-                break;
-            case STATE_DISCONNECTED:
-                break;
-            default:
+            case STATE_CONNECTING -> mProfilesConnecting++;
+            case STATE_CONNECTED -> mProfilesConnected++;
+            case STATE_DISCONNECTING -> mProfilesDisconnecting++;
+            default -> {} // Nothing to do
         }
         Log.d(
                 TAG,

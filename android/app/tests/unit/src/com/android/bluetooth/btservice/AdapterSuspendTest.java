@@ -19,16 +19,22 @@ package com.android.bluetooth.btservice;
 import static android.bluetooth.BluetoothAdapter.SCAN_MODE_CONNECTABLE;
 import static android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE;
 
-import static com.android.bluetooth.TestUtils.MockitoRule;
-
-import static com.google.common.truth.Truth.assertThat;
+import static com.android.bluetooth.TestUtils.StaticMockitoRule;
+import static com.android.bluetooth.TestUtils.mockSystemPropertyGet;
+import static com.android.bluetooth.btservice.AdapterSuspend.BLUETOOTH_SUSPEND_DISCONNECT_ACL;
+import static com.android.bluetooth.btservice.AdapterSuspend.BLUETOOTH_SUSPEND_SCAN_MODE_NONE;
 
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 import android.content.Context;
 import android.hardware.devicestate.DeviceStateManager;
+import android.hardware.display.DisplayManager;
+import android.os.PowerManager;
+import android.os.SystemProperties;
 
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -46,64 +52,60 @@ import org.mockito.Mock;
 @SmallTest
 @RunWith(AndroidJUnit4.class)
 public class AdapterSuspendTest {
+    @Rule
+    public final StaticMockitoRule mMockitoRule = new StaticMockitoRule(SystemProperties.class);
+
+    @Mock private AdapterNativeInterface mAdapterNativeInterface;
+    @Mock private AdapterService mAdapterService;
+
+    private final Context mContext = InstrumentationRegistry.getInstrumentation().getContext();
+    private final DeviceStateManager mDeviceStateManager =
+            mContext.getSystemService(DeviceStateManager.class);
+    private final DisplayManager mDisplayManager = mContext.getSystemService(DisplayManager.class);
+    private final PowerManager mPowerManager = mContext.getSystemService(PowerManager.class);
+
     private TestLooper mTestLooper;
-    private DeviceStateManager mDeviceStateManager;
     private AdapterSuspend mAdapterSuspend;
 
-    @Rule public final MockitoRule mMockitoRule = new MockitoRule();
-    @Mock private AdapterNativeInterface mAdapterNativeInterface;
-
     @Before
-    public void setUp() throws Exception {
-        Context context = InstrumentationRegistry.getInstrumentation().getContext();
+    public void setUp() {
+        doReturn(mAdapterNativeInterface).when(mAdapterService).getNative();
+
         mTestLooper = new TestLooper();
-        mDeviceStateManager = context.getSystemService(DeviceStateManager.class);
 
+        mockSystemPropertyGet(BLUETOOTH_SUSPEND_DISCONNECT_ACL, true);
+        mockSystemPropertyGet(BLUETOOTH_SUSPEND_SCAN_MODE_NONE, true);
         mAdapterSuspend =
-                new AdapterSuspend(
-                        mAdapterNativeInterface, mTestLooper.getLooper(), mDeviceStateManager);
-    }
-
-    private void triggerSuspend() throws Exception {
-        mAdapterSuspend.handleSuspend(true);
-    }
-
-    private void triggerResume() throws Exception {
-        mAdapterSuspend.handleResume();
-    }
-
-    private boolean isSuspended() throws Exception {
-        return mAdapterSuspend.isSuspended();
+                spy(
+                        new AdapterSuspend(
+                                mAdapterService,
+                                mTestLooper.getLooper(),
+                                mDeviceStateManager,
+                                mPowerManager,
+                                mDisplayManager));
     }
 
     @Test
     public void testSuspend() throws Exception {
-        assertThat(isSuspended()).isFalse();
+        doReturn(SCAN_MODE_CONNECTABLE).when(mAdapterService).getScanMode();
+        mAdapterSuspend.handleSuspend(true);
 
-        triggerSuspend();
-
+        verify(mAdapterService).setScanMode(eq(SCAN_MODE_NONE), eq("handleSuspend"));
         verify(mAdapterNativeInterface).setDefaultEventMaskExcept(anyLong(), anyLong());
-        verify(mAdapterNativeInterface)
-                .setScanMode(AdapterService.convertScanModeToHal(SCAN_MODE_NONE));
         verify(mAdapterNativeInterface).clearEventFilter();
         verify(mAdapterNativeInterface).clearFilterAcceptList();
         verify(mAdapterNativeInterface).disconnectAllAcls();
-        assertThat(isSuspended()).isTrue();
     }
 
     @Test
     public void testResume() throws Exception {
-        triggerSuspend();
-        assertThat(isSuspended()).isTrue();
-
-        clearInvocations(mAdapterNativeInterface);
-        triggerResume();
+        mAdapterSuspend.setLastScanModeForTest(SCAN_MODE_CONNECTABLE);
+        doReturn(SCAN_MODE_NONE).when(mAdapterService).getScanMode();
+        mAdapterSuspend.handleResume();
 
         verify(mAdapterNativeInterface).setDefaultEventMaskExcept(0, 0);
         verify(mAdapterNativeInterface).clearEventFilter();
         verify(mAdapterNativeInterface).restoreFilterAcceptList();
-        verify(mAdapterNativeInterface)
-                .setScanMode(AdapterService.convertScanModeToHal(SCAN_MODE_CONNECTABLE));
-        assertThat(isSuspended()).isFalse();
+        verify(mAdapterService).setScanMode(eq(SCAN_MODE_CONNECTABLE), eq("handleResume"));
     }
 }

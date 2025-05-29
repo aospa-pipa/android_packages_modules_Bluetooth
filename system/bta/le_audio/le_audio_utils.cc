@@ -155,6 +155,10 @@ bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType
         const types::LeAudioCodecId& codecId, std::optional<uint32_t> sampling_frequency_hz) {
   if (codecId == types::LeAudioCodecIdLc3) {
     return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_LC3;
+  } else if (codecId == types::LeAudioCodecIdAptxLe) {
+    return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LE;
+  } else if (codecId == types::LeAudioCodecIdAptxLeX) {
+    return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX;
   } else if (codecId == types::LeAudioCodecIdOpus) {
     if (!com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()) {
       return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS;
@@ -164,7 +168,6 @@ bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType
       return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES;
     }
     return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS;
-
   }
 
   log::warn("Unable to translate codecID: {} to codec type index.", common::ToString(codecId));
@@ -190,6 +193,10 @@ types::LeAudioCodecId translateCodecTypeToLeAudioCodecId(btle_audio_codec_index_
   switch (codecIndex) {
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_LC3:
       return types::LeAudioCodecIdLc3;
+    case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LE:
+      return types::LeAudioCodecIdAptxLe;
+    case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX:
+      return types::LeAudioCodecIdAptxLeX;
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS:
       return types::LeAudioCodecIdOpus;
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES:
@@ -301,100 +308,6 @@ void fillStreamParamsToBtLeAudioCodecConfig(
   out_config.octets_per_frame = config.GetOctetsPerFrame();
   out_config.channel_count =
           translateToBtLeAudioCodecConfigChannelCount(config.GetChannelCountPerIsoStream());
-}
-
-static bool is_known_codec(const types::LeAudioCodecId& codec_id) {
-  switch (codec_id.coding_format) {
-    case types::kLeAudioCodingFormatLC3:
-      return true;
-    case types::kLeAudioCodingFormatVendorSpecific:
-      if (codec_id.vendor_codec_id == types::kLeAudioCodingFormatAptxLe) {
-        return true;
-      } else if (codec_id.vendor_codec_id == types::kLeAudioCodingFormatAptxLeX) {
-        return true;
-      }
-  }
-  return false;
-}
-
-static void fillRemotePacsCapabilitiesToBtLeAudioCodecConfig(
-        const struct types::acs_ac_record& record,
-        std::vector<bluetooth::le_audio::btle_audio_codec_config_t>& vec) {
-  if (!utils::IsCodecUsingLtvFormat(record.codec_id)) {
-    log::warn(
-            "Unknown codec capability format. Unable to report known codec "
-            "parameters.");
-    return;
-  }
-  log::assert_that(!record.codec_spec_caps.IsEmpty(),
-                   "Codec specific capabilities are not parsed appropriately.");
-
-  const struct types::LeAudioCoreCodecCapabilities capa =
-          record.codec_spec_caps.GetAsCoreCodecCapabilities();
-  for (uint8_t freq_bit = codec_spec_conf::kLeAudioSamplingFreq8000Hz;
-       freq_bit <= codec_spec_conf::kLeAudioSamplingFreq384000Hz; freq_bit++) {
-    if (!capa.IsSamplingFrequencyConfigSupported(freq_bit)) {
-      continue;
-    }
-    for (uint8_t fd_bit = codec_spec_conf::kLeAudioCodecFrameDur7500us;
-         fd_bit <= codec_spec_conf::kLeAudioCodecFrameDur10000us; fd_bit++) {
-      if (!capa.IsFrameDurationConfigSupported(fd_bit)) {
-        if ((record.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe) &&
-            (record.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX)) {
-          continue;
-        }
-      }
-      if (!capa.HasSupportedAudioChannelCounts()) {
-        bluetooth::le_audio::btle_audio_codec_config_t config = {
-                .codec_type = utils::translateLeAudioCodecIdToCodecType(
-                        record.codec_id,
-                        types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
-                .sample_rate = utils::translateToBtLeAudioCodecConfigSampleRate(
-                        types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
-                .bits_per_sample = utils::translateToBtLeAudioCodecConfigBitPerSample(16),
-                .channel_count = utils::translateToBtLeAudioCodecConfigChannelCount(1),
-                .frame_duration = utils::translateToBtLeAudioCodecConfigFrameDuration(
-                        types::LeAudioCoreCodecConfig::GetFrameDurationUs(fd_bit)),
-        };
-        vec.push_back(config);
-      } else {
-        for (int chan_bit = 1; chan_bit <= 2; chan_bit++) {
-          if (!capa.IsAudioChannelCountsSupported(chan_bit)) {
-            continue;
-          }
-
-          bluetooth::le_audio::btle_audio_codec_config_t config = {
-                  .codec_type = utils::translateLeAudioCodecIdToCodecType(
-                          record.codec_id,
-                          types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
-                  .sample_rate = utils::translateToBtLeAudioCodecConfigSampleRate(
-                          types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
-                  .bits_per_sample = utils::translateToBtLeAudioCodecConfigBitPerSample(16),
-                  .channel_count = utils::translateToBtLeAudioCodecConfigChannelCount(chan_bit),
-                  .frame_duration = utils::translateToBtLeAudioCodecConfigFrameDuration(
-                          types::LeAudioCoreCodecConfig::GetFrameDurationUs(fd_bit)),
-          };
-          vec.push_back(config);
-        }
-      }
-    }
-  }
-}
-
-std::vector<bluetooth::le_audio::btle_audio_codec_config_t> GetRemoteBtLeAudioCodecConfigFromPac(
-        const types::PublishedAudioCapabilities& group_pacs) {
-  std::vector<bluetooth::le_audio::btle_audio_codec_config_t> vec;
-
-  for (auto& [handles, pacs_record] : group_pacs) {
-    for (auto& pac : pacs_record) {
-      if (!is_known_codec(pac.codec_id)) {
-        continue;
-      }
-
-      fillRemotePacsCapabilitiesToBtLeAudioCodecConfig(pac, vec);
-    }
-  }
-  return vec;
 }
 
 bool IsCodecUsingLtvFormat(const types::LeAudioCodecId& codec_id) {

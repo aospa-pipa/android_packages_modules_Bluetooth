@@ -22,6 +22,7 @@ import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_UNKNOWN;
 
 import static com.android.bluetooth.TestUtils.MockitoRule;
 import static com.android.bluetooth.TestUtils.getTestDevice;
+import static com.android.bluetooth.TestUtils.mockGetBluetoothManager;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -62,11 +63,10 @@ public class SapServiceTest {
     @Before
     public void setUp() {
         doReturn(mDatabaseManager).when(mAdapterService).getDatabase();
-
         if (Looper.myLooper() == null) {
             Looper.prepare();
         }
-
+        mockGetBluetoothManager(mAdapterService);
         mService = new SapService(mAdapterService);
         mService.setAvailable(true);
     }

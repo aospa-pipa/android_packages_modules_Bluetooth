@@ -535,8 +535,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                         + (charUuid != null ? mcsUuidToString(charUuid) : "UNKNOWN"));
 
         switch (op.operation()) {
-                /* Allow not yet authorized devices to subscribe for notifications */
-            case READ_DESCRIPTOR:
+            /* Allow not yet authorized devices to subscribe for notifications */
+            case READ_DESCRIPTOR -> {
                 if (op.offset() > 1) {
                     mBluetoothGattServer.sendResponse(
                             device,
@@ -557,8 +557,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                 value = Arrays.copyOfRange(value, op.offset(), value.length);
                 mBluetoothGattServer.sendResponse(
                         device, op.requestId(), BluetoothGatt.GATT_SUCCESS, op.offset(), value);
-                return;
-            case WRITE_DESCRIPTOR:
+            }
+            case WRITE_DESCRIPTOR -> {
                 int status = BluetoothGatt.GATT_SUCCESS;
                 if (op.preparedWrite()) {
                     status = BluetoothGatt.GATT_FAILURE;
@@ -578,28 +578,24 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                     mBluetoothGattServer.sendResponse(
                             device, op.requestId(), status, op.offset(), op.value().toByteArray());
                 }
-                return;
-            case READ_CHARACTERISTIC:
-                onUnauthorizedCharRead(device, op);
-                return;
-            case WRITE_CHARACTERISTIC:
-                // store as pending operation
-                break;
-            default:
-                break;
-        }
-
-        synchronized (mPendingGattOperations) {
-            List<GattOpContext> operations = mPendingGattOperations.get(device);
-            if (operations == null) {
-                operations = new ArrayList<>();
-                mPendingGattOperations.put(device, operations);
             }
+            case READ_CHARACTERISTIC -> {
+                onUnauthorizedCharRead(device, op);
+            }
+            case WRITE_CHARACTERISTIC -> {
+                synchronized (mPendingGattOperations) {
+                    List<GattOpContext> operations = mPendingGattOperations.get(device);
+                    if (operations == null) {
+                        operations = new ArrayList<>();
+                        mPendingGattOperations.put(device, operations);
+                    }
 
-            operations.add(op);
-            // Send authorization request for each device only for it's first GATT request
-            if (operations.size() == 1) {
-                mMcpService.onDeviceUnauthorized(device);
+                    operations.add(op);
+                    // Send authorization request for each device only for it's first GATT request
+                    if (operations.size() == 1) {
+                        mMcpService.onDeviceUnauthorized(device);
+                    }
+                }
             }
         }
     }
@@ -623,7 +619,7 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
         int status = BluetoothGatt.GATT_SUCCESS;
 
         switch (op.operation()) {
-            case READ_CHARACTERISTIC:
+            case READ_CHARACTERISTIC -> {
                 // Always ask for the latest position
                 if (op.characteristic()
                         .getUuid()
@@ -677,9 +673,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                             op.offset(),
                             new byte[] {});
                 }
-                break;
-
-            case WRITE_CHARACTERISTIC:
+            }
+            case WRITE_CHARACTERISTIC -> {
                 if (op.preparedWrite()) {
                     status = BluetoothGatt.GATT_FAILURE;
                 } else if (op.offset() > 0) {
@@ -702,9 +697,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                     mBluetoothGattServer.sendResponse(
                             device, op.requestId(), status, op.offset(), op.value().toByteArray());
                 }
-                break;
-
-            case READ_DESCRIPTOR:
+            }
+            case READ_DESCRIPTOR -> {
                 if (op.offset() > 1) {
                     mBluetoothGattServer.sendResponse(
                             device,
@@ -725,9 +719,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                 value = Arrays.copyOfRange(value, op.offset(), value.length);
                 mBluetoothGattServer.sendResponse(
                         device, op.requestId(), BluetoothGatt.GATT_SUCCESS, op.offset(), value);
-                break;
-
-            case WRITE_DESCRIPTOR:
+            }
+            case WRITE_DESCRIPTOR -> {
                 if (op.preparedWrite()) {
                     status = BluetoothGatt.GATT_FAILURE;
                 } else if (op.offset() > 0) {
@@ -746,10 +739,7 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                     mBluetoothGattServer.sendResponse(
                             device, op.requestId(), status, op.offset(), op.value().toByteArray());
                 }
-                break;
-
-            default:
-                break;
+            }
         }
     }
 
@@ -770,16 +760,15 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                         + (charUuid != null ? mcsUuidToString(charUuid) : "UNKNOWN"));
 
         switch (op.operation()) {
-            case READ_CHARACTERISTIC:
-            case READ_DESCRIPTOR:
+            case READ_CHARACTERISTIC, READ_DESCRIPTOR -> {
                 mBluetoothGattServer.sendResponse(
                         device,
                         op.requestId(),
                         BluetoothGatt.GATT_INSUFFICIENT_AUTHORIZATION,
                         op.offset(),
                         null);
-                break;
-            case WRITE_CHARACTERISTIC:
+            }
+            case WRITE_CHARACTERISTIC -> {
                 if (op.responseNeeded()) {
                     mBluetoothGattServer.sendResponse(
                             device,
@@ -797,8 +786,8 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                         setSearchRequestResult(null, SearchRequest.Results.FAILURE, 0);
                     }
                 }
-                break;
-            case WRITE_DESCRIPTOR:
+            }
+            case WRITE_DESCRIPTOR -> {
                 if (op.responseNeeded()) {
                     mBluetoothGattServer.sendResponse(
                             device,
@@ -807,10 +796,7 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                             op.offset(),
                             null);
                 }
-                break;
-
-            default:
-                break;
+            }
         }
     }
 
@@ -1277,9 +1263,9 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
     private static int getMediaControlPointRequestPayloadLength(int opcode) {
         return switch (opcode) {
             case Request.Opcodes.MOVE_RELATIVE,
-                            Request.Opcodes.GOTO_SEGMENT,
-                            Request.Opcodes.GOTO_TRACK,
-                            Request.Opcodes.GOTO_GROUP ->
+                    Request.Opcodes.GOTO_SEGMENT,
+                    Request.Opcodes.GOTO_TRACK,
+                    Request.Opcodes.GOTO_GROUP ->
                     4;
             default -> 0;
         };

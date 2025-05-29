@@ -19,15 +19,14 @@ package com.android.bluetooth.btservice;
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 
 import static com.android.bluetooth.TestUtils.MockitoRule;
-import static com.android.bluetooth.TestUtils.mockGetSystemService;
+import static com.android.bluetooth.TestUtils.getRealDevice;
+import static com.android.bluetooth.TestUtils.mockGetBluetoothManager;
 
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.Mockito.*;
 
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothManager;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.HandlerThread;
@@ -70,11 +69,6 @@ public class BondStateMachineTest {
     private static final int BOND_BONDING = BluetoothDevice.BOND_BONDING;
     private static final int BOND_BONDED = BluetoothDevice.BOND_BONDED;
 
-    private final Context mTargetContext =
-            InstrumentationRegistry.getInstrumentation().getContext();
-    private final BluetoothManager mBluetoothManager =
-            mTargetContext.getSystemService(BluetoothManager.class);
-
     private AdapterProperties mAdapterProperties;
     private BluetoothDevice mDevice;
     private RemoteDevices mRemoteDevices;
@@ -94,20 +88,17 @@ public class BondStateMachineTest {
         mHandlerThread = new HandlerThread("BondStateMachineTestHandlerThread");
         mHandlerThread.start();
 
-        mockGetSystemService(
-                mAdapterService,
-                Context.BLUETOOTH_SERVICE,
-                BluetoothManager.class,
-                mBluetoothManager);
-
+        mockGetBluetoothManager(mAdapterService);
         mRemoteDevices = new RemoteDevices(mAdapterService, mHandlerThread.getLooper());
         mRemoteDevices.reset();
-        when(mAdapterService.getResources()).thenReturn(mTargetContext.getResources());
+
+        final var context = InstrumentationRegistry.getInstrumentation().getContext();
+        when(mAdapterService.getResources()).thenReturn(context.getResources());
         mAdapterProperties =
                 new AdapterProperties(mAdapterService, mRemoteDevices, mHandlerThread.getLooper());
         mAdapterProperties.init();
         mBondStateMachine =
-                BondStateMachine.make(
+                new BondStateMachine(
                         mAdapterService,
                         mHandlerThread.getLooper(),
                         mAdapterProperties,
@@ -182,21 +173,13 @@ public class BondStateMachineTest {
         mBondStateMachine.mPendingBondedDevices.clear();
 
         BluetoothDevice device1 =
-                InstrumentationRegistry.getInstrumentation()
-                        .getContext()
-                        .getSystemService(BluetoothManager.class)
-                        .getAdapter()
-                        .getRemoteLeDevice(
-                                Utils.getAddressStringFromByte(TEST_BT_ADDR_BYTES),
-                                BluetoothDevice.ADDRESS_TYPE_PUBLIC);
+                getRealDevice(
+                        Utils.getAddressStringFromByte(TEST_BT_ADDR_BYTES),
+                        BluetoothDevice.ADDRESS_TYPE_PUBLIC);
         BluetoothDevice device2 =
-                InstrumentationRegistry.getInstrumentation()
-                        .getContext()
-                        .getSystemService(BluetoothManager.class)
-                        .getAdapter()
-                        .getRemoteLeDevice(
-                                Utils.getAddressStringFromByte(TEST_BT_ADDR_BYTES_2),
-                                BluetoothDevice.ADDRESS_TYPE_RANDOM);
+                getRealDevice(
+                        Utils.getAddressStringFromByte(TEST_BT_ADDR_BYTES_2),
+                        BluetoothDevice.ADDRESS_TYPE_RANDOM);
 
         // The createBond() request for two devices with different address types.
         Message createBondMsg1 = mBondStateMachine.obtainMessage(BondStateMachine.CREATE_BOND);

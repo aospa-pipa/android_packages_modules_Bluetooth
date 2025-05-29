@@ -22,6 +22,7 @@
 #include <com_android_bluetooth_flags.h>
 
 #include "abstract_message_loop.h"
+#include "array_utils.h"
 #include "avrcp_common.h"
 #include "bta/include/bta_le_audio_api.h"
 #include "btif/include/btif_av.h"
@@ -968,7 +969,7 @@ void Device::RejectNotification() {
   log::verbose("");
   Notification* rejectNotification[] = {&play_status_changed_, &track_changed_, &play_pos_changed_,
                                         &now_playing_changed_, &player_setting_changed_};
-  for (int i = 0; i < 5; i++) {
+  for (uint8_t i = 0; i < ARRAY_SIZE(rejectNotification); i++) {
     uint8_t label = rejectNotification[i]->second;
     auto response = RejectBuilder::MakeBuilder(CommandPdu::REGISTER_NOTIFICATION,
                                                Status::ADDRESSED_PLAYER_CHANGED);
@@ -1621,17 +1622,41 @@ void Device::GetItemAttributesNowPlayingResponse(uint8_t label,
   }
 
   auto attributes_requested = pkt->GetAttributesRequested();
+  bool all_attributes_flag = com::android::bluetooth::flags::get_all_element_attributes_empty();
+
   if (attributes_requested.size() != 0) {
     for (const auto& attribute : attributes_requested) {
       if (info.attributes.find(attribute) != info.attributes.end()) {
         builder->AddAttributeEntry(*info.attributes.find(attribute));
+      } else if (all_attributes_flag) {
+        builder->AddAttributeEntry(attribute, std::string());
       }
     }
   } else {
     // If zero attributes were requested, that means all attributes were
     // requested
-    for (const auto& attribute : info.attributes) {
-      builder->AddAttributeEntry(attribute);
+    if (!all_attributes_flag) {
+      for (const auto& attribute : info.attributes) {
+        builder->AddAttributeEntry(attribute);
+      }
+    } else {
+      std::vector<Attribute> all_attributes = {Attribute::TITLE,
+                                               Attribute::ARTIST_NAME,
+                                               Attribute::ALBUM_NAME,
+                                               Attribute::TRACK_NUMBER,
+                                               Attribute::TOTAL_NUMBER_OF_TRACKS,
+                                               Attribute::GENRE,
+                                               Attribute::PLAYING_TIME,
+                                               Attribute::DEFAULT_COVER_ART};
+      for (const auto& attribute : all_attributes) {
+        if (info.attributes.find(attribute) != info.attributes.end()) {
+          builder->AddAttributeEntry(*info.attributes.find(attribute));
+        } else {
+          // As all attributes were requested, we send a response even for attributes that we don't
+          // have a value for.
+          builder->AddAttributeEntry(attribute, std::string());
+        }
+      }
     }
   }
 

@@ -859,7 +859,7 @@ public final class BluetoothCodecConfig implements Parcelable {
                 if (other.mCodecSpecific4 > 0) {
                     return false;
                 }
-                // fall through
+            // fall through
             default:
                 return true;
         }

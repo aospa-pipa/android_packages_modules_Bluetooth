@@ -64,26 +64,30 @@ MATCHER_P(IsSetWithValue, matcher, "Future is not set with value") {
 class RemoteNameRequestModuleTest : public ::testing::Test {
 protected:
   void SetUp() override {
-    test_hci_layer_ = new HciLayerFake;
-    fake_registry_.InjectTestModule(&HciLayer::Factory, test_hci_layer_);
-
-    client_handler_ = fake_registry_.GetTestHandler();
+    thread_ = new os::Thread("test_thread", os::Thread::Priority::NORMAL);
+    client_handler_ = new os::Handler(thread_);
     ASSERT_NE(client_handler_, nullptr);
 
+    test_hci_layer_ = std::make_unique<HciLayerFake>(client_handler_);
     test_acl_scheduler_ = std::make_unique<hci::acl_manager::AclScheduler>(client_handler_);
     remote_name_request_module_ = std::make_unique<RemoteNameRequestModuleImpl>(
-            client_handler_, test_hci_layer_, test_acl_scheduler_.get());
+            client_handler_, test_hci_layer_.get(), test_acl_scheduler_.get());
 
     ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   }
 
   void TearDown() override {
-    fake_registry_.SynchronizeHandler(client_handler_, timeout);
-    fake_registry_.SynchronizeHandler(client_handler_, timeout);
+    client_handler_->Synchronize(std::chrono::milliseconds(20));
+    client_handler_->Synchronize(std::chrono::milliseconds(20));
     remote_name_request_module_.reset();
-    fake_registry_.SynchronizeHandler(client_handler_, timeout);
+    client_handler_->Synchronize(std::chrono::milliseconds(20));
     test_acl_scheduler_.reset();
-    fake_registry_.StopAll();
+
+    client_handler_->Clear();
+    client_handler_->WaitUntilStopped(bluetooth::kHandlerStopTimeout);
+
+    delete client_handler_;
+    delete thread_;
   }
 
   template <typename... T>
@@ -117,12 +121,11 @@ protected:
                                      std::move(promise));
   }
 
-  TestModuleRegistry fake_registry_;
-  os::Thread& thread_ = fake_registry_.GetTestThread();
-  HciLayerFake* test_hci_layer_ = nullptr;
+  os::Thread* thread_ = nullptr;
+  os::Handler* client_handler_ = nullptr;
+  std::unique_ptr<HciLayerFake> test_hci_layer_ = nullptr;
   std::unique_ptr<hci::acl_manager::AclScheduler> test_acl_scheduler_ = nullptr;
   std::unique_ptr<RemoteNameRequestModuleImpl> remote_name_request_module_ = nullptr;
-  os::Handler* client_handler_ = nullptr;
 };
 
 TEST_F(RemoteNameRequestModuleTest, CorrectCommandSent) {
@@ -661,7 +664,7 @@ TEST_F(RemoteNameRequestModuleTest, CancelJustWhenRNREventReturns) {
 
             promise2.set_value();
           },
-          remote_name_request_module_.get(), test_hci_layer_, std::move(promise2)));
+          remote_name_request_module_.get(), test_hci_layer_.get(), std::move(promise2)));
 
   future2.wait();
 }

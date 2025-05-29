@@ -1442,7 +1442,7 @@ public:
   void UpdateCodecConfigPreferenceToHal(
           const bluetooth::le_audio::btle_audio_codec_config_t *input_codec_config,
           const bluetooth::le_audio::btle_audio_codec_config_t *output_codec_config) {
-    if (!com::android::bluetooth::flags::le_audio_update_config_preference_to_hal()) {
+    if (false/*!com::android::bluetooth::flags::le_audio_update_config_preference_to_hal()*/) {
       log::warn(
               "SetCodecPriority skipped due to flag not set: "
               "le_audio_update_config_preference_to_hal");
@@ -1450,12 +1450,16 @@ public:
     }
 
     if (le_audio_sink_hal_client_ && input_codec_config) {
+      log::info("input codec type: {}, input codec priority: {}",
+                   input_codec_config->codec_type, input_codec_config->codec_priority);
       le_audio_sink_hal_client_->SetCodecPriority(
               bluetooth::le_audio::utils::translateCodecTypeToLeAudioCodecId(
                       input_codec_config->codec_type),
               input_codec_config->codec_priority);
     }
     if (le_audio_source_hal_client_ && output_codec_config) {
+      log::info("output codec type: {}, output codec priority: {}",
+                   output_codec_config->codec_type, output_codec_config->codec_priority);
       le_audio_source_hal_client_->SetCodecPriority(
               bluetooth::le_audio::utils::translateCodecTypeToLeAudioCodecId(
                       output_codec_config->codec_type),
@@ -1472,23 +1476,28 @@ public:
       log::error("Unknown group id: %d", group_id);
     }
 
-    if (output_codec_config.codec_type ==
-        bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX) {
-      group->DisableLeXCodec(false);
-      log::debug("Enabling LeX Codec");
-      group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
-      group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
-    } else if (output_codec_config.codec_type ==
-        bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_DEFAULT) {
-      group->DisableLeXCodec(true);
-      log::debug("Disabling LeX Codec");
-      group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
-      group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
+    if (!CodecManager::GetInstance()->IsUsingCodecExtensibility()) {
+      if (output_codec_config.codec_type ==
+          bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX) {
+        group->DisableLeXCodec(false);
+        log::debug("Enabling LeX Codec");
+        group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
+        group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
+      } else if (output_codec_config.codec_type ==
+          bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_DEFAULT) {
+        group->DisableLeXCodec(true);
+        log::debug("Disabling LeX Codec");
+        group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
+        group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
+      }
     }
 
+    log::info("output codec type: {}, input codec type: {}",
+                    output_codec_config.codec_type, input_codec_config.codec_type);
     if (!com::android::bluetooth::flags::leaudio_set_codec_config_preference()) {
       log::debug("leaudio_set_codec_config_preference flag is not enabled");
     } else {
+      UpdateCodecConfigPreferenceToHal(&input_codec_config, &output_codec_config);
       if (group->SetPreferredAudioSetConfiguration(input_codec_config, output_codec_config)) {
         log::info("group id: {}, setting preferred codec is successful.", group_id);
       } else {
@@ -2021,6 +2030,7 @@ public:
 
       if (CodecManager::GetInstance()->IsUsingCodecExtensibility()) {
         group->InvalidateCachedConfigurations();
+        group->ResetPreferredAudioSetConfiguration();
       }
 
       log::info("current state {}", ToString(group->GetState()));
@@ -2069,6 +2079,7 @@ public:
         }
         log::info("current_active_group: {}", current_active_group->group_id_);
         current_active_group->InvalidateCachedConfigurations();
+        current_active_group->ResetPreferredAudioSetConfiguration();
       }
 
       log::info("switching active group to: {}", group_id);
@@ -4181,10 +4192,8 @@ public:
     auto leAudioDevice = group->GetFirstDevice();
     callbacks_->OnAudioGroupSelectableCodecConf(
             group->group_id_,
-            bluetooth::le_audio::utils::GetRemoteBtLeAudioCodecConfigFromPac(
-                    leAudioDevice->src_pacs_),
-            bluetooth::le_audio::utils::GetRemoteBtLeAudioCodecConfigFromPac(
-                    leAudioDevice->snk_pacs_));
+            CodecManager::GetInstance()->GetRemoteAudioCodecCapa(leAudioDevice->src_pacs_),
+            CodecManager::GetInstance()->GetRemoteAudioCodecCapa(leAudioDevice->snk_pacs_));
   }
 
   void SendAudioGroupCurrentCodecConfigChanged(LeAudioDeviceGroup* group) {
@@ -4200,6 +4209,11 @@ public:
       log::warn("Stream configuration is not valid for group id {}", group->group_id_);
       return;
     }
+
+    /* Send the initial codec info to the BT Audio HAL before it even resumes and CISes are created
+     * Note: This will allow the BT Audio HAL to prepare to the appriopriate coding offloading.
+     */
+    CodecManager::GetInstance()->UpdateSelectedCodecConfig(*audio_set_conf);
 
     bluetooth::le_audio::btle_audio_codec_config_t input_config{};
     bluetooth::le_audio::utils::fillStreamParamsToBtLeAudioCodecConfig(audio_set_conf->confs.source,
@@ -6101,6 +6115,10 @@ public:
 
     if (IsReconfigurationTimeoutRunning(group->group_id_)) {
       log::info("Skip it as group is reconfiguring");
+      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+        auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(group);
+        group->InvalidateCachedConfigurations(new_context_type);
+      }
       return;
     }
 
@@ -6695,6 +6713,17 @@ public:
     if (!group->IsStreaming()) {
       log::error("group_id: {} is not streaming.", group->group_id_);
       return false;
+    }
+
+    auto unspecified = AudioContexts(LeAudioContextType::UNSPECIFIED);
+    auto uninitialized = AudioContexts();
+    auto bidirectional_contexts = get_bidirectional(remote_contexts);
+    if (com::android::bluetooth::flags::leaudio_use_context_type_manager() &&
+        (bidirectional_contexts == unspecified || bidirectional_contexts == uninitialized) &&
+        !audioContextTypeManager_->IsAnyMetadataSet()) {
+      log::info("group_id: {} Skip updating the metadata to sink={}, source={}", group->group_id_,
+                ToString(remote_contexts.sink), ToString(remote_contexts.source));
+      return true;
     }
 
     log::info("group_id: {} Updating the metadata to sink={}, source={}", group->group_id_,
@@ -7580,7 +7609,16 @@ public:
         log::warn("Group {} is doing autonomous release, make it inactive", group_id);
         if (group) {
           group->PrintDebugState();
-          groupSetAndNotifyInactive();
+          if (group->GetAvailableContexts().none()) {
+            log::info("group_id: {} autonomous release due to unavailable contexts.",
+                      group->group_id_);
+            /* This update will also make device inactive, but when available context will be back,
+             * it will bring device active again.
+             */
+            UpdateLocationsAndContextsAvailability(group, true);
+          } else {
+            groupSetAndNotifyInactive();
+          }
         }
         audio_sender_state_ = AudioState::IDLE;
         audio_receiver_state_ = AudioState::IDLE;
