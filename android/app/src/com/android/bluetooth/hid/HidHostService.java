@@ -130,7 +130,7 @@ public class HidHostService extends ProfileService {
 
     @VisibleForTesting
     HidHostService(AdapterService adapterService, HidHostNativeInterface nativeInterface) {
-        super(requireNonNull(adapterService));
+        super(BluetoothProfile.HID_HOST, requireNonNull(adapterService));
         mDatabaseManager = requireNonNull(mAdapterService.getDatabase());
         mNativeInterface =
                 requireNonNullElseGet(nativeInterface, () -> new HidHostNativeInterface(this));
@@ -765,8 +765,7 @@ public class HidHostService extends ProfileService {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "setConnectionPolicy: device=" + device);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(
-                device, BluetoothProfile.HID_HOST, connectionPolicy)) {
+        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         Log.d(TAG, "Saved connectionPolicy=" + connectionPolicy + " for device=" + device);
@@ -824,7 +823,7 @@ public class HidHostService extends ProfileService {
      */
     public int getConnectionPolicy(BluetoothDevice device) {
         Log.d(TAG, "getConnectionPolicy: device=" + device);
-        return mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HID_HOST);
+        return mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
     }
 
     /**

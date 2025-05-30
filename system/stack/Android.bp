@@ -347,6 +347,7 @@ cc_fuzz {
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
+        ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackL2cap",
         "fuzzers/sdp_fuzzer.cc",
@@ -398,6 +399,7 @@ cc_defaults {
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
         ":TestMockSrvcDis",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackArbiter",
         ":TestMockStackBtm",
@@ -453,6 +455,7 @@ cc_fuzz {
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
         ":TestMockSrvcDis",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackArbiter",
         ":TestMockStackBtm",
@@ -484,8 +487,17 @@ cc_fuzz {
     ],
 }
 
-cc_fuzz {
-    name: "smp-fuzzer",
+
+filegroup {
+    name: "SmpFuzzerSources",
+    srcs: [
+        "fuzzers/smp_fuzzer.cc",
+        "smp/*.cc", // add other sources files  (p256 related) under smp into this test
+    ],
+}
+
+cc_defaults {
+    name: "smp_fuzzer_default",
     defaults: [
         "btstack_fuzzer_default",
         "fluoride_defaults",
@@ -497,6 +509,7 @@ cc_fuzz {
     ],
     srcs: [
         ":BluetoothPacketSources",
+        ":SmpFuzzerSources",
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestFakeOsi",
@@ -505,12 +518,11 @@ cc_fuzz {
         ":TestMockMainShim",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
         ":TestMockStackL2cap",
-        "fuzzers/smp_fuzzer.cc",
-        "smp/*.cc", // add other sources files  (p256 related) under smp into this test
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
@@ -533,7 +545,23 @@ cc_fuzz {
 }
 
 cc_fuzz {
-    name: "bnep-fuzzer",
+    name: "smp-fuzzer",
+    team: "trendy_team_bluetooth",
+    defaults: [
+        "smp_fuzzer_default",
+    ],
+}
+
+filegroup {
+    name: "BnepFuzzerSources",
+    srcs: [
+        "bnep/*.cc",
+        "fuzzers/bnep_fuzzer.cc",
+    ],
+}
+
+cc_defaults {
+    name: "bnep_fuzzer_default",
     defaults: [
         "btstack_fuzzer_default",
         "fluoride_defaults",
@@ -545,6 +573,7 @@ cc_fuzz {
     ],
     srcs: [
         ":BluetoothPacketSources",
+        ":BnepFuzzerSources",
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestFakeOsi",
@@ -553,12 +582,11 @@ cc_fuzz {
         ":TestMockMainShim",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
         ":TestMockStackL2cap",
-        "bnep/*.cc",
-        "fuzzers/bnep_fuzzer.cc",
     ],
     static_libs: [
         "libbluetooth-types",
@@ -566,6 +594,14 @@ cc_fuzz {
         "libbluetooth_l2cap_pdl",
         "libbluetooth_log",
         "libbluetooth_smp_pdl",
+    ],
+}
+
+cc_fuzz {
+    name: "bnep-fuzzer",
+    team: "trendy_team_bluetooth",
+    defaults: [
+        "bnep_fuzzer_default",
     ],
 }
 
@@ -590,6 +626,7 @@ cc_fuzz {
         ":TestMockMainShim",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
@@ -615,8 +652,16 @@ cc_fuzz {
     ],
 }
 
-cc_fuzz {
-    name: "l2cap-fuzzer",
+filegroup {
+    name: "L2capFuzzerSources",
+    srcs: [
+        "fuzzers/l2cap_fuzzer.cc",
+        "l2cap/*.cc",
+    ],
+}
+
+cc_defaults {
+    name: "l2cap_fuzzer_default",
     defaults: [
         "btstack_fuzzer_default",
         "fluoride_defaults",
@@ -628,6 +673,7 @@ cc_fuzz {
     ],
     srcs: [
         ":BluetoothPacketSources",
+        ":L2capFuzzerSources",
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestFakeOsi",
@@ -635,11 +681,10 @@ cc_fuzz {
         ":TestMockDevice",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
-        "fuzzers/l2cap_fuzzer.cc",
-        "l2cap/*.cc",
     ],
     static_libs: [
         "bluetooth_flags_c_lib",
@@ -665,6 +710,14 @@ cc_fuzz {
             ],
         },
     },
+}
+
+cc_fuzz {
+    name: "l2cap-fuzzer",
+    team: "trendy_team_bluetooth",
+    defaults: [
+        "l2cap_fuzzer_default",
+    ],
 }
 
 // Bluetooth stack unit tests for target
@@ -894,6 +947,7 @@ cc_test {
         ":TestMockMainShim",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
@@ -1306,6 +1360,7 @@ cc_test {
         ":TestCommonMockFunctions",
         ":TestMockAudioHalInterface",
         ":TestMockBta",
+        ":TestMockBtif",
         ":TestMockStackA2dpApi",
         ":TestMockStackBtmInterface",
         "a2dp/a2dp_aac.cc",
@@ -1336,7 +1391,6 @@ cc_test {
         "test/a2dp/a2dp_vendor_ldac_unittest.cc",
         "test/a2dp/a2dp_vendor_regression_tests.cc",
         "test/a2dp/media_codec_capabilities_test.cc",
-        "test/a2dp/mock_bta_av_codec.cc",
         "test/a2dp/test_util.cc",
         "test/a2dp/wav_reader.cc",
         "test/a2dp/wav_reader_unittest.cc",
@@ -1353,8 +1407,8 @@ cc_test {
     ],
     static_libs: [
         "bluetooth_flags_c_lib_for_test",
-        "libaconfig_storage_read_api_cc",
         "libFraunhoferAAC",
+        "libaconfig_storage_read_api_cc",
         "libbase",
         "libbluetooth-types",
         "libbluetooth_crypto_toolbox",
@@ -1410,6 +1464,7 @@ cc_test {
         ":TestMockDevice",
         ":TestMockMainShim",
         ":TestMockMainShim",
+        ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackConnMgr",
         ":TestMockStackL2cap",
@@ -1623,6 +1678,7 @@ cc_test {
         ":TestMockLegacyHciInterface",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackBtu",
         ":TestMockStackConnMgr",
         ":TestMockStackGap",
@@ -1877,6 +1933,7 @@ cc_test {
         ":TestMockBtif",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackHcic",
@@ -1955,6 +2012,7 @@ cc_test {
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
         ":TestMockSrvcDis",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackGap",
@@ -2055,6 +2113,7 @@ cc_test {
         ":TestMockJni",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackConnMgr",
@@ -2154,6 +2213,7 @@ cc_test {
         ":TestMockMainShim",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackBtu",
         ":TestMockStackConnMgr",
@@ -2248,6 +2308,7 @@ cc_test {
         ":TestMockLegacyHciInterface",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
+        ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackBtu",
         ":TestMockStackGap",
@@ -2337,6 +2398,7 @@ cc_test {
         ":TestMockBta",
         ":TestMockBtif",
         ":TestMockMainShim",
+        ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackL2cap",
         "test/sdp/stack_sdp_api_test.cc",

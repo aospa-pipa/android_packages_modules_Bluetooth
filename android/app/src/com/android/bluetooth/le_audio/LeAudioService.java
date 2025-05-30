@@ -37,6 +37,7 @@ import static com.android.bluetooth.flags.Flags.leaudioMonitorUnicastSourceWhenM
 import static com.android.bluetooth.flags.Flags.leaudioUseAudioRecordingListener;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
@@ -270,7 +271,7 @@ public class LeAudioService extends ProfileService {
     BluetoothLeScanner mAudioServersScanner;
 
     public LeAudioService(AdapterService adapterService) {
-        this(adapterService, LeAudioNativeInterface.getInstance(adapterService));
+        this(adapterService, null, null);
     }
 
     private SharedPreferences getLeAudioCodecMap() {
@@ -278,9 +279,14 @@ public class LeAudioService extends ProfileService {
     }
 
     @VisibleForTesting
-    LeAudioService(AdapterService adapterService, LeAudioNativeInterface nativeInterface) {
-        super(requireNonNull(adapterService));
-        mNativeInterface = requireNonNull(nativeInterface);
+    LeAudioService(
+            AdapterService adapterService,
+            LeAudioNativeInterface nativeInterface,
+            LeAudioBroadcasterNativeInterface leAudioBroadcasterNativeInterface) {
+        super(BluetoothProfile.LE_AUDIO, requireNonNull(adapterService));
+        mNativeInterface =
+                requireNonNullElseGet(
+                        nativeInterface, () -> new LeAudioNativeInterface(adapterService, this));
         mDatabaseManager = requireNonNull(mAdapterService.getDatabase());
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
 
@@ -301,9 +307,10 @@ public class LeAudioService extends ProfileService {
             }
             if (isProfileSupported(BluetoothProfile.LE_AUDIO_BROADCAST)) {
                 Log.i(TAG, "Init Le Audio broadcaster");
-                LeAudioBroadcasterNativeInterface broadcastNativeInterface =
-                        requireNonNull(
-                                LeAudioBroadcasterNativeInterface.getInstance(mAdapterService));
+                final var broadcastNativeInterface =
+                        requireNonNullElseGet(
+                                leAudioBroadcasterNativeInterface,
+                                () -> new LeAudioBroadcasterNativeInterface(mAdapterService, this));
                 broadcastNativeInterface.init();
                 mLeAudioBroadcasterNativeInterface = Optional.of(broadcastNativeInterface);
 
@@ -318,9 +325,10 @@ public class LeAudioService extends ProfileService {
                             & (1 << BluetoothProfile.LE_AUDIO_BROADCAST))
                     != 0) {
                 Log.i(TAG, "Init Le Audio broadcaster");
-                LeAudioBroadcasterNativeInterface broadcastNativeInterface =
-                        requireNonNull(
-                                LeAudioBroadcasterNativeInterface.getInstance(mAdapterService));
+                final var broadcastNativeInterface =
+                        requireNonNullElseGet(
+                                leAudioBroadcasterNativeInterface,
+                                () -> new LeAudioBroadcasterNativeInterface(mAdapterService, this));
                 broadcastNativeInterface.init();
                 mLeAudioBroadcasterNativeInterface = Optional.of(broadcastNativeInterface);
                 mTmapRoleMask =
@@ -4802,8 +4810,7 @@ public class LeAudioService extends ProfileService {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(
-                device, BluetoothProfile.LE_AUDIO, connectionPolicy)) {
+        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
 
@@ -4932,8 +4939,7 @@ public class LeAudioService extends ProfileService {
      * @return connection policy of the device
      */
     public int getConnectionPolicy(BluetoothDevice device) {
-        int connection_policy =
-                mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.LE_AUDIO);
+        int connection_policy = mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
         Log.d(TAG, device + " connection policy = " + connection_policy);
         return connection_policy;
     }
