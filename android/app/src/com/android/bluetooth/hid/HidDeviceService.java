@@ -25,6 +25,7 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.RequiresPermission;
 import android.app.ActivityManager;
@@ -85,7 +86,7 @@ public class HidDeviceService extends ProfileService {
     private BluetoothHidDeviceDeathRecipient mDeathRcpt;
 
     public HidDeviceService(AdapterService adapterService) {
-        this(adapterService, Looper.getMainLooper(), new HidDeviceNativeInterface(adapterService));
+        this(adapterService, Looper.getMainLooper(), null);
     }
 
     @VisibleForTesting
@@ -93,15 +94,16 @@ public class HidDeviceService extends ProfileService {
             AdapterService adapterService,
             Looper looper,
             HidDeviceNativeInterface nativeInterface) {
-        super(requireNonNull(adapterService));
+        super(BluetoothProfile.HID_DEVICE, requireNonNull(adapterService));
         mDatabaseManager = requireNonNull(mAdapterService.getDatabase());
         mHandler = new HidDeviceServiceHandler(requireNonNull(looper));
-        mNativeInterface = requireNonNull(nativeInterface);
+        mNativeInterface =
+                requireNonNullElseGet(
+                        nativeInterface, () -> new HidDeviceNativeInterface(adapterService, this));
         mNativeInterface.init();
         mActivityManager = requireNonNull(obtainSystemService(ActivityManager.class));
         mActivityManager.addOnUidImportanceListener(
                 mUidImportanceListener, FOREGROUND_IMPORTANCE_CUTOFF);
-        setHidDeviceService(this);
     }
 
     public static boolean isEnabled() {
@@ -454,8 +456,7 @@ public class HidDeviceService extends ProfileService {
                 BLUETOOTH_PRIVILEGED, "Need BLUETOOTH_PRIVILEGED permission");
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(
-                device, BluetoothProfile.HID_DEVICE, connectionPolicy)) {
+        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
@@ -481,7 +482,7 @@ public class HidDeviceService extends ProfileService {
         }
         enforceCallingOrSelfPermission(
                 BLUETOOTH_PRIVILEGED, "Need BLUETOOTH_PRIVILEGED permission");
-        return mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HID_DEVICE);
+        return mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
     }
 
     synchronized boolean reportError(BluetoothDevice device, byte error) {
@@ -507,32 +508,8 @@ public class HidDeviceService extends ProfileService {
             return;
         }
 
-        setHidDeviceService(null);
         mNativeInterface.cleanup();
         mActivityManager.removeOnUidImportanceListener(mUidImportanceListener);
-    }
-
-    /**
-     * Get the HID Device Service instance
-     *
-     * @return HID Device Service instance
-     */
-    public static synchronized HidDeviceService getHidDeviceService() {
-        if (sHidDeviceService == null) {
-            Log.d(TAG, "getHidDeviceService(): service is NULL");
-            return null;
-        }
-        if (!sHidDeviceService.isAvailable()) {
-            Log.d(TAG, "getHidDeviceService(): service is not available");
-            return null;
-        }
-        return sHidDeviceService;
-    }
-
-    @VisibleForTesting
-    static synchronized void setHidDeviceService(HidDeviceService instance) {
-        Log.d(TAG, "setHidDeviceService(): set to: " + instance);
-        sHidDeviceService = instance;
     }
 
     /**

@@ -24,11 +24,7 @@ package com.android.bluetooth.gatt;
 
 import android.bluetooth.BluetoothStatusCodes;
 
-import com.android.internal.annotations.GuardedBy;
-import com.android.internal.annotations.VisibleForTesting;
-
 /** Distance Measurement Native Interface to/from JNI. */
-@VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
 public class DistanceMeasurementNativeInterface {
     private static final String TAG = DistanceMeasurementNativeInterface.class.getSimpleName();
 
@@ -48,37 +44,13 @@ public class DistanceMeasurementNativeInterface {
 
     private static final Object INSTANCE_LOCK = new Object();
 
-    @GuardedBy("INSTANCE_LOCK")
-    private static DistanceMeasurementNativeInterface sInstance;
+    private final DistanceMeasurementManager mManager;
 
-    private DistanceMeasurementManager mDistanceMeasurementManager;
-
-    private DistanceMeasurementNativeInterface() {}
-
-    /**
-     * This class is a singleton because native library should only be loaded once
-     *
-     * @return default instance
-     */
-    public static DistanceMeasurementNativeInterface getInstance() {
-        synchronized (INSTANCE_LOCK) {
-            if (sInstance == null) {
-                sInstance = new DistanceMeasurementNativeInterface();
-            }
-            return sInstance;
-        }
+    DistanceMeasurementNativeInterface(DistanceMeasurementManager manager) {
+        mManager = manager;
     }
 
-    /** Set singleton instance. */
-    @VisibleForTesting
-    public static void setInstance(DistanceMeasurementNativeInterface instance) {
-        synchronized (INSTANCE_LOCK) {
-            sInstance = instance;
-        }
-    }
-
-    void init(DistanceMeasurementManager manager) {
-        mDistanceMeasurementManager = manager;
+    void init() {
         initializeNative();
     }
 
@@ -100,14 +72,14 @@ public class DistanceMeasurementNativeInterface {
     }
 
     void onDistanceMeasurementStarted(String address, int method) {
-        mDistanceMeasurementManager.postOnDistanceMeasurementThread(
-                () -> mDistanceMeasurementManager.onDistanceMeasurementStarted(address, method));
+        mManager.postOnDistanceMeasurementThread(
+                () -> mManager.onDistanceMeasurementStarted(address, method));
     }
 
     void onDistanceMeasurementStopped(String address, int reason, int method) {
-        mDistanceMeasurementManager.postOnDistanceMeasurementThread(
+        mManager.postOnDistanceMeasurementThread(
                 () ->
-                        mDistanceMeasurementManager.onDistanceMeasurementStopped(
+                        mManager.onDistanceMeasurementStopped(
                                 address, convertErrorCode(reason), method));
     }
 
@@ -125,9 +97,9 @@ public class DistanceMeasurementNativeInterface {
             int detectedAttackLevel,
             double velocityMetersPerSecond,
             int method) {
-        mDistanceMeasurementManager.postOnDistanceMeasurementThread(
+        mManager.postOnDistanceMeasurementThread(
                 () ->
-                        mDistanceMeasurementManager.onDistanceMeasurementResult(
+                        mManager.onDistanceMeasurementResult(
                                 address,
                                 centimeter,
                                 errorCentimeter,

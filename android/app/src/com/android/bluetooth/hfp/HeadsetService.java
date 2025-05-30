@@ -27,6 +27,7 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.media.audio.Flags.deprecateStreamBtSco;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -189,7 +190,7 @@ public class HeadsetService extends ProfileService {
     @VisibleForTesting ServiceFactory mFactory = new ServiceFactory();
 
     public HeadsetService(AdapterService adapterService) {
-        this(adapterService, HeadsetNativeInterface.getInstance(adapterService), null);
+        this(adapterService, null, null);
     }
 
     @VisibleForTesting
@@ -200,9 +201,11 @@ public class HeadsetService extends ProfileService {
     @VisibleForTesting
     HeadsetService(
             AdapterService adapterService, HeadsetNativeInterface nativeInterface, Looper looper) {
-        super(requireNonNull(adapterService));
+        super(BluetoothProfile.HEADSET, requireNonNull(adapterService));
         mDatabaseManager = requireNonNull(mAdapterService.getDatabase());
-        mNativeInterface = requireNonNull(nativeInterface);
+        mNativeInterface =
+                requireNonNullElseGet(
+                        nativeInterface, () -> new HeadsetNativeInterface(mAdapterService, this));
         if (looper != null) {
             mHandler = new Handler(looper);
             mStateMachinesThread = null;
@@ -759,8 +762,7 @@ public class HeadsetService extends ProfileService {
                         + ", "
                         + Utils.getUidPidString());
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(
-                device, BluetoothProfile.HEADSET, connectionPolicy)) {
+        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
@@ -782,7 +784,7 @@ public class HeadsetService extends ProfileService {
      * @return connection policy of the device
      */
     public int getConnectionPolicy(BluetoothDevice device) {
-        return mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
+        return mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
     }
 
     boolean isNoiseReductionSupported(BluetoothDevice device) {
