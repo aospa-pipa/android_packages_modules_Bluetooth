@@ -333,7 +333,7 @@ class BluetoothManagerService {
         if (Flags.factoryResetClearAdditionalData()) {
             AutoOnFeature.factoryResetAutoOn(mCurrentUserContext);
             AirplaneModeListener.factoryReset(mContentResolver, mCurrentUserContext);
-            setBtHciSnoopLogMode(BT_SNOOP_LOG_MODE_DISABLED);
+            setBtHciSnoopLogMode(-1);
         }
         if (count == 10 || mState.oneOf(State.OFF)) {
             Log.e(TAG, "factoryReset(" + count + "): Set property to retry when Bluetooth start");
@@ -413,7 +413,7 @@ class BluetoothManagerService {
                 || mHandler.hasMessages(MESSAGE_HANDLE_ENABLE_DELAYED)
                 || mHandler.hasMessages(MESSAGE_HANDLE_DISABLE_DELAYED)
                 || mHandler.hasMessages(MESSAGE_RESTART_BLUETOOTH_SERVICE)
-                || mHandler.hasMessages(MESSAGE_TIMEOUT_BIND)) {
+                || isBinding()) {
             Log.d(
                     TAG,
                     "Busy reason:"
@@ -427,8 +427,8 @@ class BluetoothManagerService {
                             + mHandler.hasMessages(MESSAGE_HANDLE_DISABLE_DELAYED)
                             + " RESTART_BLUETOOTH_SERVICE="
                             + mHandler.hasMessages(MESSAGE_RESTART_BLUETOOTH_SERVICE)
-                            + " TIMEOUT_BIND="
-                            + mHandler.hasMessages(MESSAGE_TIMEOUT_BIND));
+                            + " isBinding="
+                            + isBinding());
             // Bluetooth is restarting
             return SERVICE_RESTART_TIME_MS;
         }
@@ -1437,7 +1437,11 @@ class BluetoothManagerService {
     /** Called when switching to a different foreground user. */
     private void handleSwitchUser(UserHandle userHandle) {
         Log.d(TAG, "handleSwitchUser(" + userHandle + ")");
-        mHandler.obtainMessage(MESSAGE_USER_SWITCHED, userHandle).sendToTarget();
+        if (Flags.cleanupStartingUser()) {
+            handleSwitchMessage(userHandle, 0);
+        } else {
+            mHandler.obtainMessage(MESSAGE_USER_SWITCHED, userHandle).sendToTarget();
+        }
     }
 
     /** Called when user is unlocked. */
@@ -1779,6 +1783,7 @@ class BluetoothManagerService {
                     }
 
                     mHandler.removeMessages(MESSAGE_BLUETOOTH_STATE_CHANGE);
+                    mHandler.removeMessages(MESSAGE_BLUETOOTH_SERVICE_CONNECTED);
                     mState.set(State.OFF);
                 }
                 case MESSAGE_RESTART_BLUETOOTH_SERVICE -> {
@@ -1809,39 +1814,7 @@ class BluetoothManagerService {
                     UserHandle userTo = (UserHandle) msg.obj;
                     Log.d(TAG, "MESSAGE_USER_SWITCHED: userTo=" + userTo);
                     mHandler.removeMessages(MESSAGE_USER_SWITCHED);
-
-                    AutoOnFeature.pause();
-                    int state = getState();
-
-                    if (mAdapter != null && isEnabled()) {
-                         mCurrentUser = userTo;
-                         mCurrentUserContext = mContext.createContextAsUser(userTo, 0);
-                        /* disable and enable BT when detect a user switch */
-                        if (mState.oneOf(State.ON)) {
-                            restartForNewUser(userTo);
-                        } else {
-                            Log.i(TAG, "Turn off from BLE state");
-                            clearBleApps();
-                            ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, false,
-                                        mContext.getPackageName(), false);
-                            mEnable = false;
-                            bleOnToOff();
-                        }
-                    } else if (isBinding() || mAdapter != null) {
-                        Message userMsg = Message.obtain(msg);
-                        userMsg.arg1++;
-                        // if user is switched when service is binding retry after a delay
-                        mHandler.sendMessageDelayed(userMsg, USER_SWITCHED_TIME_MS);
-                        Log.d(
-                            TAG,
-                            "MESSAGE_USER_SWITCHED:"
-                                    + (" userTo=" + userTo)
-                                    + (" number of retry attempt=" + userMsg.arg1)
-                                    + (" isBinding=" + isBinding())
-                                    + (" mAdapter=" + mAdapter));
-                    } else {
-                        autoOnSetupTimer();
-                    }
+                    handleSwitchMessage(userTo, msg.arg1);
                 }
                 case MESSAGE_USER_UNLOCKED -> {
                     Log.d(TAG, "MESSAGE_USER_UNLOCKED");
@@ -1858,81 +1831,80 @@ class BluetoothManagerService {
                 default -> {} // Nothing to do
             }
         }
+    }
 
-        private void restartForNewUser(UserHandle unusedNewUser) {
-            try {
-                mAdapter.unregisterCallback(mBluetoothCallback);
-            } catch (RemoteException e) {
-                Log.e(TAG, "Unable to unregister", e);
-            }
-
-            if (mState.oneOf(State.TURNING_OFF)) {
-                // MESSAGE_USER_SWITCHED happened right after MESSAGE_ENABLE
-                bluetoothStateChangeHandler(State.TURNING_OFF, State.OFF);
-                mState.set(State.OFF);
-            }
-            if (mState.oneOf(State.OFF)) {
-                bluetoothStateChangeHandler(State.OFF, State.TURNING_ON);
-                mState.set(State.TURNING_ON);
-            }
-
-            // TODO(b/285046954): We call unregisterCallback, and yet the code is calling
-            // waitForState(State.ON)
-            // This is a non-sense
-            waitForState(State.BLE_ON, State.ON);
-
-            if (mState.oneOf(State.TURNING_ON)) {
-                bluetoothStateChangeHandler(State.TURNING_ON, State.ON);
-            }
-
-            // disable
-            ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, false);
-            clearBleApps();
-            onToBleOn();
-            // Pbap service need receive State.TURNING_OFF intent to close
-            bluetoothStateChangeHandler(State.ON, State.TURNING_OFF);
-
-            /* wait for BLE_ON or OFF state. If its BLE ON state
-             * post BLE ON state to bluetoothStateChangeHandler
-             * to continue off and wait for off state
-             */
-            boolean didDisableTimeout =
-                    !waitForState(State.BLE_ON, State.OFF);
-
-            if(!didDisableTimeout) {
-               int state = getState();
-
-               if (state == State.BLE_ON) {
-                   bluetoothStateChangeHandler(State.TURNING_OFF,
-                                            State.BLE_ON);
-               }
-
-               didDisableTimeout =
-                    !waitForState(State.OFF);
-            }
-            bluetoothStateChangeHandler(State.TURNING_OFF, State.OFF);
-
-            //
-            // If disabling Bluetooth times out, wait for an
-            // additional amount of time to ensure the process is
-            // shut down completely before attempting to restart.
-            //
-            if (didDisableTimeout) {
-                Log.d(TAG, "Force sleep 3000 ms for user switch that timed out");
-                SystemClock.sleep(3000);
-                mHandler.removeMessages(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED);
-            } else {
-                Log.d(TAG, "Force sleep 100 ms for");
-                SystemClock.sleep(100);
-            }
-
-            mHandler.removeMessages(MESSAGE_BLUETOOTH_STATE_CHANGE);
-            // enable
-            ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, true);
-            // mEnable flag could have been reset on stopBle. Reenable it.
-            mEnable = true;
-            handleEnable();
+    private void restartForNewUser(UserHandle unusedNewUser) {
+        try {
+            mAdapter.unregisterCallback(mBluetoothCallback);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Unable to unregister", e);
         }
+        if (mState.oneOf(State.TURNING_OFF)) {
+            // MESSAGE_USER_SWITCHED happened right after MESSAGE_ENABLE
+            bluetoothStateChangeHandler(State.TURNING_OFF, State.OFF);
+            mState.set(State.OFF);
+        }
+        if (mState.oneOf(State.OFF)) {
+            bluetoothStateChangeHandler(State.OFF, State.TURNING_ON);
+            mState.set(State.TURNING_ON);
+        }
+
+        // TODO(b/285046954): We call unregisterCallback, and yet the code is calling
+        // waitForState(State.ON)
+        // This is a non-sense
+        waitForState(State.BLE_ON, State.ON);
+
+        if (mState.oneOf(State.TURNING_ON)) {
+            bluetoothStateChangeHandler(State.TURNING_ON, State.ON);
+        }
+
+        // disable
+        ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, false);
+        clearBleApps();
+        onToBleOn();
+        // Pbap service need receive State.TURNING_OFF intent to close
+        bluetoothStateChangeHandler(State.ON, State.TURNING_OFF);
+
+        /* wait for BLE_ON or OFF state. If its BLE ON state
+          * post BLE ON state to bluetoothStateChangeHandler
+          * to continue off and wait for off state
+          */
+        boolean didDisableTimeout = !waitForState(State.OFF);
+
+        if(!didDisableTimeout) {
+            int state = getState();
+
+            if (state == State.BLE_ON) {
+                bluetoothStateChangeHandler(State.TURNING_OFF,
+                                        State.BLE_ON);
+            }
+
+            didDisableTimeout =
+                !waitForState(State.OFF);
+        }
+
+        bluetoothStateChangeHandler(State.TURNING_OFF, State.OFF);
+
+        //
+        // If disabling Bluetooth times out, wait for an
+        // additional amount of time to ensure the process is
+        // shut down completely before attempting to restart.
+        //
+        if (didDisableTimeout) {
+            Log.d(TAG, "Force sleep 3000 ms for user switch that timed out");
+            SystemClock.sleep(3000);
+            mHandler.removeMessages(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED);
+        } else {
+            Log.d(TAG, "Force sleep 100 ms for");
+            SystemClock.sleep(100);
+        }
+
+        mHandler.removeMessages(MESSAGE_BLUETOOTH_STATE_CHANGE);
+        // enable
+        ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, true);
+        // mEnable flag could have been reset on stopBle. Reenable it.
+        mEnable = true;
+        handleEnable();
     }
 
     private boolean isBinding() {
@@ -2051,6 +2023,46 @@ class BluetoothManagerService {
         mEnable = true;
         ActiveLogs.add(ENABLE_DISABLE_REASON_RESTARTED, true);
         handleEnable();
+    }
+
+    private void handleSwitchMessage(UserHandle userTo, int attempt) {
+        if (Flags.cleanupStartingUser() && mCurrentUser.equals(userTo)) {
+            Log.d(TAG, "Skip redundant switch on user=" + userTo);
+            return;
+        }
+
+        AutoOnFeature.pause();
+        int state = getState();
+
+        if (mAdapter != null && isEnabled()) {
+            mCurrentUser = userTo;
+            mCurrentUserContext = mContext.createContextAsUser(userTo, 0);
+
+            /* disable and enable BT when detect a user switch */
+            if (mState.oneOf(State.ON)) {
+                restartForNewUser(userTo);
+            } else {
+                Log.i(TAG, "Turn off from BLE state");
+                clearBleApps();
+                ActiveLogs.add(ENABLE_DISABLE_REASON_USER_SWITCH, false,
+                            mContext.getPackageName(), false);
+                mEnable = false;
+                bleOnToOff();
+            }
+        } else if (isBinding() || mAdapter != null) {
+            Message userMsg = mHandler.obtainMessage(MESSAGE_USER_SWITCHED, attempt++, 0, userTo);
+            // if user is switched when service is binding retry after a delay
+            mHandler.sendMessageDelayed(userMsg, USER_SWITCHED_TIME_MS);
+            Log.d(
+                    TAG,
+                    "MESSAGE_USER_SWITCHED:"
+                            + (" userTo=" + userTo)
+                            + (" number of retry attempt=" + userMsg.arg1)
+                            + (" isBinding=" + isBinding())
+                            + (" mAdapter=" + mAdapter));
+        } else {
+            autoOnSetupTimer();
+        }
     }
 
     private void bindToAdapterForCurrentUser() {
@@ -2258,9 +2270,7 @@ class BluetoothManagerService {
                         .putExtra(EXTRA_PREVIOUS_STATE, prevState)
                         .putExtra(EXTRA_STATE, newState)
                         .addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-        if (action.equals(IBluetoothManager.ACTION_STATE_CHANGED)) {
-            intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        } else {
+        if (!action.equals(IBluetoothManager.ACTION_STATE_CHANGED)) {
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         }
         mContext.sendBroadcastAsUser(
@@ -2691,9 +2701,7 @@ class BluetoothManagerService {
                     case BT_SNOOP_LOG_MODE_FILTERED ->
                             BluetoothProperties.snoop_log_mode_values.FILTERED;
                     case BT_SNOOP_LOG_MODE_FULL -> BluetoothProperties.snoop_log_mode_values.FULL;
-                    default ->
-                            throw new IllegalArgumentException(
-                                    "Invalid HCI snoop log mode param value");
+                    default -> null;
                 };
         try {
             BluetoothProperties.snoop_log_mode(snoopMode);

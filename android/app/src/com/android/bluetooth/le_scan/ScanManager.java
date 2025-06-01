@@ -23,6 +23,8 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 import static android.bluetooth.le.ScanSettings.getScanModeString;
 
+import static java.util.Objects.requireNonNull;
+
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.AlarmManager;
@@ -221,15 +223,25 @@ public class ScanManager {
     record UidImportance(int uid, int importance) {}
 
     ScanManager(
-            AdapterService adapterService,
+            AdapterService service,
             ScanController scanController,
             Looper looper,
             TimeProvider timeProvider) {
-        mAdapterService = adapterService;
+        this(service, scanController, looper, timeProvider, ScanNativeInterface.getInstance());
+    }
+
+    @VisibleForTesting
+    ScanManager(
+            AdapterService service,
+            ScanController scanController,
+            Looper looper,
+            TimeProvider timeProvider,
+            ScanNativeInterface nativeInterface) {
+        mAdapterService = service;
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
         mScanController = scanController;
         mTimeProvider = timeProvider;
-        mNativeInterface = ScanObjectsFactory.getInstance().getScanNativeInterface();
+        mNativeInterface = requireNonNull(nativeInterface);
         mNativeInterface.init(scanController);
         mAlarmManager = mAdapterService.getSystemService(AlarmManager.class);
         Intent batchIntent = new Intent(ACTION_REFRESH_BATCHED_SCAN, null);

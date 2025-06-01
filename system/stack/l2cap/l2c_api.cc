@@ -1792,7 +1792,7 @@ bool L2CA_Echo(const RawAddress& p_bd_addr, BT_HDR* p_data,
   log::info("BDA: {}", p_bd_addr);
 
   /* Fail if we have not established communications with the controller */
-  if (!BTM_IsDeviceUp()) return (false);
+  if (!get_btm_client_interface().local.BTM_IsDeviceUp()) return (false);
 
   if (RawAddress::kAny == p_bd_addr && (p_data == NULL)) {
     /* Only register callback without sending message. */
