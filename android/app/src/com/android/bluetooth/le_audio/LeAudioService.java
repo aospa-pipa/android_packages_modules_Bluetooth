@@ -4453,7 +4453,7 @@ public class LeAudioService extends ProfileService {
     }
 
     @VisibleForTesting
-    List<BluetoothDevice> getConnectedPeerDevices(int groupId) {
+    public List<BluetoothDevice> getConnectedPeerDevices(int groupId) {
         List<BluetoothDevice> result = new ArrayList<>();
         for (BluetoothDevice peerDevice : getConnectedDevices()) {
             if (getGroupId(peerDevice) == groupId) {
