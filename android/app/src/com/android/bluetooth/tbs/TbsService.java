@@ -101,7 +101,7 @@ public class TbsService extends ProfileService {
         return sTbsService;
     }
 
-    private static synchronized void setTbsService(TbsService instance) {
+    public static synchronized void setTbsService(TbsService instance) {
         Log.d(TAG, "setTbsService: set to=" + instance);
 
         sTbsService = instance;
@@ -209,7 +209,7 @@ public class TbsService extends ProfileService {
         mTbsGeneric.clearInbandRingtoneSupport(device);
     }
 
-    void registerBearer(
+    public void registerBearer(
             String token,
             IBluetoothLeCallControlCallback callback,
             String uci,
@@ -239,7 +239,7 @@ public class TbsService extends ProfileService {
         Log.d(TAG, "registerBearer: token=" + token + " success=" + success);
     }
 
-    void unregisterBearer(String token) {
+    public void unregisterBearer(String token) {
         Log.d(TAG, "unregisterBearer: token=" + token);
 
         mTbsGeneric.removeBearer(token);
@@ -251,19 +251,19 @@ public class TbsService extends ProfileService {
         mTbsGeneric.requestResult(ccid, requestId, result);
     }
 
-    void callAdded(int ccid, BluetoothLeCall call) {
+    public void callAdded(int ccid, BluetoothLeCall call) {
         Log.d(TAG, "callAdded: ccid=" + ccid + " call=" + call);
 
         mTbsGeneric.callAdded(ccid, call);
     }
 
-    void callRemoved(int ccid, UUID callId, int reason) {
+    public void callRemoved(int ccid, UUID callId, int reason) {
         Log.d(TAG, "callRemoved: ccid=" + ccid + " callId=" + callId + " reason=" + reason);
 
         mTbsGeneric.callRemoved(ccid, callId, reason);
     }
 
-    void callStateChanged(int ccid, UUID callId, int state) {
+    public void callStateChanged(int ccid, UUID callId, int state) {
         Log.d(TAG, "callStateChanged: ccid=" + ccid + " callId=" + callId + " state=" + state);
         if (Utils.isTmapPtsTestMode()) {
           if (state == BluetoothLeCall.STATE_ACTIVE) {
@@ -279,7 +279,7 @@ public class TbsService extends ProfileService {
         mTbsGeneric.callStateChanged(ccid, callId, state);
     }
 
-    void currentCallsList(int ccid, List<BluetoothLeCall> calls) {
+    public void currentCallsList(int ccid, List<BluetoothLeCall> calls) {
         Log.d(TAG, "currentCallsList: ccid=" + ccid + " calls=" + calls);
 
         mTbsGeneric.currentCallsList(ccid, calls);

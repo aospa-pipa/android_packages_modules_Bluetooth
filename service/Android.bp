@@ -96,9 +96,6 @@ java_library {
     kotlincflags: [
         "-Werror",
     ],
-    optimize: {
-        ignore_warnings: false,
-    },
 
     sdk_version: "system_server_current",
     min_sdk_version: "36",
@@ -109,6 +106,7 @@ java_library {
 // Apply jarjaring before using library in the apex
 java_library {
     name: "service-bluetooth",
+    defaults: ["standalone-system-server-module-optimize-defaults"],
     installable: true,
     static_libs: [
         "androidx.appcompat_appcompat",
@@ -116,14 +114,6 @@ java_library {
     ],
 
     jarjar_rules: ":bluetooth-jarjar-rules",
-
-    optimize: {
-        enabled: true,
-        shrink: true,
-        proguard_compatibility: true,
-        ignore_warnings: false,
-        proguard_flags_files: ["proguard.flags"],
-    },
 
     libs: [
         "app-compat-annotations",

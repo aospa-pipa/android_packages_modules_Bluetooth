@@ -890,7 +890,7 @@ static bool read_sr_sirk_req(const RawAddress& peer_bda, tCONN_ID conn_id,
                  static_cast<int>(conn_id));
       return false;
     }
-  } else{
+  } else {
     if (GATTC_Read(conn_id, GATT_READ_BY_TYPE, &param) != GATT_SUCCESS) {
       log::error("Read GATT Support features GATT_Read Failed, conn_id: {}",
                  static_cast<int>(conn_id));
