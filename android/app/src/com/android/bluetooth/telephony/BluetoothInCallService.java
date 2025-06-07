@@ -23,13 +23,10 @@ package com.android.bluetooth.telephony;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
-import android.annotation.NonNull;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothLeCall;
-import android.bluetooth.BluetoothLeCallControl;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
+import android.bluetooth.IBluetoothLeCallControlCallback;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -38,6 +35,7 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.telecom.BluetoothCallQualityReport;
 import android.telecom.Call;
 import android.telecom.CallAudioState;
@@ -66,7 +64,8 @@ import androidx.annotation.VisibleForTesting;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfp.HeadsetService;
-import com.android.bluetooth.tbs.BluetoothLeCallControlProxy;
+import com.android.bluetooth.le_audio.ContentControlIdKeeper;
+import com.android.bluetooth.tbs.TbsService;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -82,8 +81,6 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ScheduledFuture;
@@ -96,6 +93,16 @@ import java.util.concurrent.ScheduledFuture;
  */
 public class BluetoothInCallService extends InCallService {
     private static final String TAG = BluetoothInCallService.class.getSimpleName();
+
+    static final int BEARER_TECHNOLOGY_3G = 0x01;
+    static final int BEARER_TECHNOLOGY_4G = 0x02;
+    static final int BEARER_TECHNOLOGY_LTE = 0x03;
+    static final int BEARER_TECHNOLOGY_WIFI = 0x04;
+    static final int BEARER_TECHNOLOGY_5G = 0x05;
+    public static final int BEARER_TECHNOLOGY_GSM = 0x06;
+    static final int BEARER_TECHNOLOGY_CDMA = 0x07;
+    static final int BEARER_TECHNOLOGY_2G = 0x08;
+    static final int BEARER_TECHNOLOGY_WCDMA = 0x09;
 
     // match up with bthf_call_state_t of bt_hf.h
     private static class CallState {
@@ -212,9 +219,6 @@ public class BluetoothInCallService extends InCallService {
 
     private static final Object LOCK = new Object();
 
-    @VisibleForTesting BluetoothLeCallControlProxy mBluetoothLeCallControl;
-    private final ExecutorService mExecutor;
-
     private TelephonyManager mTelephonyManager;
     private TelecomManager mTelecomManager;
 
@@ -236,6 +240,7 @@ public class BluetoothInCallService extends InCallService {
 
     private final CallInfo mCallInfo;
 
+    private int mCcid = ContentControlIdKeeper.CCID_INVALID;
     private int mMaxNumberOfCalls = 0;
 
     private boolean mEnableDsdaMode = false;
@@ -252,46 +257,11 @@ public class BluetoothInCallService extends InCallService {
     private static final String ACTION_MSIM_VOICE_CAPABILITY_CHANGED =
         "org.codeaurora.intent.action.MSIM_VOICE_CAPABILITY_CHANGED";
 
-    private BluetoothAdapter mAdapter = null;
-
     public boolean isConferenceInProgress = false;
 
-    public final ScheduledExecutorService clccScheduler = Executors.newSingleThreadScheduledExecutor();
+    // public final ScheduledExecutorService clccScheduler = Executors.newSingleThreadScheduledExecutor();
 
-    private volatile boolean isClccDelayScheduled = false;
-
-    private final BluetoothProfile.ServiceListener mProfileListener =
-            new BluetoothProfile.ServiceListener() {
-                @Override
-                public void onServiceConnected(int profile, BluetoothProfile proxy) {
-                    Log.d(TAG, "onServiceConnected for profile: " + profile);
-                    synchronized (LOCK) {
-                        mBluetoothLeCallControl =
-                                new BluetoothLeCallControlProxy((BluetoothLeCallControl) proxy);
-
-                        boolean isBearerRegistered =
-                                mBluetoothLeCallControl.registerBearer(
-                                        TAG,
-                                        List.of("tel"),
-                                        Capability.HOLD_CALL,
-                                        getNetworkOperator(),
-                                        getBearerTechnology(),
-                                        mExecutor,
-                                        mBluetoothLeCallControlCallback);
-                        Log.d(TAG, "isBearerRegistered: " + isBearerRegistered);
-                        sendTbsCurrentCallsList();
-                    }
-                    Log.d(TAG, "Calls updated for profile: " + profile);
-                }
-
-                @Override
-                public void onServiceDisconnected(int profile) {
-                    Log.d(TAG, "onServiceDisconnected: profile: " + profile);
-                    synchronized (LOCK) {
-                        mBluetoothLeCallControl = null;
-                    }
-                }
-            };
+    // private volatile boolean isClccDelayScheduled = false;
 
     public class BluetoothAdapterReceiver extends BroadcastReceiver {
         @Override
@@ -301,6 +271,7 @@ public class BluetoothInCallService extends InCallService {
                         intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 Log.d(TAG, "Bluetooth Adapter state: " + state);
                 if (state == BluetoothAdapter.STATE_ON) {
+                    registerBearer(TbsService.getTbsService());
                     queryPhoneState(HeadsetService.getHeadsetService());
                 } else if (state == BluetoothAdapter.STATE_TURNING_OFF) {
                     clear();
@@ -371,13 +342,14 @@ public class BluetoothInCallService extends InCallService {
                 return;
             }
 
+            final var tbsService = TbsService.getTbsService();
             Integer tbsCallState = getTbsCallState(call);
-            if (mBluetoothLeCallControl != null && tbsCallState != null) {
+            if (tbsService != null && tbsCallState != null) {
                 if (mSilentRingingRequested && tbsCallState == BluetoothLeCall.STATE_ACTIVE) {
                    BluetoothLeCall tbsCall = createTbsCall(call);
-                   mBluetoothLeCallControl.onCallAdded(tbsCall);
+                   tbsService.callAdded(mCcid, tbsCall);
                 } else {
-                   mBluetoothLeCallControl.onCallStateChanged(call.getTbsCallId(), tbsCallState);
+                   tbsService.callStateChanged(mCcid, call.getTbsCallId(), tbsCallState);
                 }
                 mSilentRingingRequested = false;
             }
@@ -507,22 +479,19 @@ public class BluetoothInCallService extends InCallService {
         return super.onUnbind(intent);
     }
 
-    private BluetoothInCallService(CallInfo callInfo) {
-        Log.i(TAG, "BluetoothInCallService is created");
-        mCallInfo = requireNonNullElseGet(callInfo, () -> new CallInfo());
-        mExecutor = Executors.newSingleThreadExecutor();
-    }
-
     public BluetoothInCallService() {
         this(null);
     }
 
     @VisibleForTesting
-    BluetoothInCallService(
-            Context context, CallInfo callInfo, BluetoothLeCallControlProxy leCallControl) {
+    BluetoothInCallService(Context context, CallInfo callInfo) {
         this(callInfo);
-        mBluetoothLeCallControl = leCallControl;
         attachBaseContext(context);
+    }
+
+    private BluetoothInCallService(CallInfo callInfo) {
+        Log.i(TAG, "BluetoothInCallService is created");
+        mCallInfo = requireNonNullElseGet(callInfo, () -> new CallInfo());
     }
 
     public static BluetoothInCallService getInstance() {
@@ -1016,9 +985,8 @@ public class BluetoothInCallService extends InCallService {
             // Get the network name from telephony.
             return switch (mTelephonyManager.getDataNetworkType()) {
                 case TelephonyManager.NETWORK_TYPE_UNKNOWN, TelephonyManager.NETWORK_TYPE_GSM ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_GSM;
-                case TelephonyManager.NETWORK_TYPE_GPRS ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_2G;
+                        BEARER_TECHNOLOGY_GSM;
+                case TelephonyManager.NETWORK_TYPE_GPRS -> BEARER_TECHNOLOGY_2G;
                 case TelephonyManager.NETWORK_TYPE_EDGE,
                         TelephonyManager.NETWORK_TYPE_EVDO_0,
                         TelephonyManager.NETWORK_TYPE_EVDO_A,
@@ -1027,22 +995,18 @@ public class BluetoothInCallService extends InCallService {
                         TelephonyManager.NETWORK_TYPE_HSPA,
                         TelephonyManager.NETWORK_TYPE_IDEN,
                         TelephonyManager.NETWORK_TYPE_EVDO_B ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_3G;
+                        BEARER_TECHNOLOGY_3G;
                 case TelephonyManager.NETWORK_TYPE_UMTS, TelephonyManager.NETWORK_TYPE_TD_SCDMA ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_WCDMA;
-                case TelephonyManager.NETWORK_TYPE_LTE ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_LTE;
+                        BEARER_TECHNOLOGY_WCDMA;
+                case TelephonyManager.NETWORK_TYPE_LTE -> BEARER_TECHNOLOGY_LTE;
                 case TelephonyManager.NETWORK_TYPE_EHRPD,
                         TelephonyManager.NETWORK_TYPE_CDMA,
                         TelephonyManager.NETWORK_TYPE_1xRTT ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_CDMA;
-                case TelephonyManager.NETWORK_TYPE_HSPAP ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_4G;
-                case TelephonyManager.NETWORK_TYPE_IWLAN ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_WIFI;
-                case TelephonyManager.NETWORK_TYPE_NR ->
-                        BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_5G;
-                default -> BluetoothLeCallControlProxy.BEARER_TECHNOLOGY_GSM;
+                        BEARER_TECHNOLOGY_CDMA;
+                case TelephonyManager.NETWORK_TYPE_HSPAP -> BEARER_TECHNOLOGY_4G;
+                case TelephonyManager.NETWORK_TYPE_IWLAN -> BEARER_TECHNOLOGY_WIFI;
+                case TelephonyManager.NETWORK_TYPE_NR -> BEARER_TECHNOLOGY_5G;
+                default -> BEARER_TECHNOLOGY_GSM;
             };
         }
     }
@@ -1163,9 +1127,10 @@ public class BluetoothInCallService extends InCallService {
                   processOnCallAdded(call);
                 }
 
+                final var tbsService = TbsService.getTbsService();
                 BluetoothLeCall tbsCall = createTbsCall(call);
-                if (mBluetoothLeCallControl != null && tbsCall != null) {
-                    mBluetoothLeCallControl.onCallAdded(tbsCall);
+                if (tbsService != null && tbsCall != null) {
+                    tbsService.callAdded(mCcid, tbsCall);
                 }
             } else {
                 Log.i(TAG, "onCallAdded: tbs call was not added. might be DND mode");
@@ -1281,9 +1246,9 @@ public class BluetoothInCallService extends InCallService {
               processOnCallRemoved(call);
             }
 
-            if (mBluetoothLeCallControl != null) {
-                mBluetoothLeCallControl.onCallRemoved(
-                    call.getTbsCallId(), getTbsTerminationReason(call));
+            final var tbsService = TbsService.getTbsService();
+            if (tbsService != null) {
+                tbsService.callRemoved(mCcid, call.getTbsCallId(), getTbsTerminationReason(call));
                 mSilentRingingRequested = false;
             }
         }
@@ -1312,10 +1277,8 @@ public class BluetoothInCallService extends InCallService {
         super.onCreate();
         synchronized (LOCK) {
             Log.d(TAG, "onCreate");
-            mAdapter = requireNonNull(getSystemService(BluetoothManager.class)).getAdapter();
             mTelephonyManager = requireNonNull(getSystemService(TelephonyManager.class));
             mTelecomManager = requireNonNull(getSystemService(TelecomManager.class));
-            mAdapter.getProfileProxy(this, mProfileListener, BluetoothProfile.LE_CALL_CONTROL);
             mBluetoothAdapterReceiver = new BluetoothAdapterReceiver();
             IntentFilter intentFilter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
             intentFilter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
@@ -1388,11 +1351,11 @@ public class BluetoothInCallService extends InCallService {
            unregisterReceiver(mVoiceCapabilityChangeReceiver);
            mVoiceCapabilityChangeReceiver = null;
         }
-        if (mBluetoothLeCallControl != null) {
-            mBluetoothLeCallControl.unregisterBearer();
-            mBluetoothLeCallControl.closeBluetoothLeCallControlProxy(mAdapter);
-            mBluetoothLeCallControl = null;
+        final var tbsService = TbsService.getTbsService();
+        if (tbsService != null) {
+            tbsService.unregisterBearer(TAG);
         }
+        mCcid = ContentControlIdKeeper.CCID_INVALID;
         sInstance = null;
         mCallbacks.clear();
         mBluetoothCallHashMap.clear();
@@ -1425,19 +1388,19 @@ public class BluetoothInCallService extends InCallService {
         BluetoothCall conferenceCallChildrenNotReady = null;
        // add a delay for the case where AT+CLCC is received while the callList updation is
        // in progress
-        if(calls.size() == 1 && isHostImsCall(calls.iterator().next()) && isConferenceInProgress) {
-            if(!isClccDelayScheduled) {
-                isClccDelayScheduled = true;
-                Log.w(TAG, "Delaying CLCC for potential host case");
-                ScheduledFuture<?> unused = clccScheduler.schedule(() -> {
-                      Log.w(TAG, "Re-invoking sendListOfCalls after 1050ms delay");
-                      isClccDelayScheduled = false;
-                      sendListOfCalls(headsetService, shouldLog);
-                       }, 1050, TimeUnit.MILLISECONDS);
-            } else {
-                Log.w(TAG, "CLCC delay already scheduled, skipping duplicate schedule");
-            }
-        }
+        // if(calls.size() == 1 && isHostImsCall(calls.iterator().next()) && isConferenceInProgress) {
+        //     if(!isClccDelayScheduled) {
+        //         isClccDelayScheduled = true;
+        //         Log.w(TAG, "Delaying CLCC for potential host case");
+        //         ScheduledFuture<?> unused = clccScheduler.schedule(() -> {
+        //               Log.w(TAG, "Re-invoking sendListOfCalls after 1050ms delay");
+        //               isClccDelayScheduled = false;
+        //               sendListOfCalls(headsetService, shouldLog);
+        //                }, 1050, TimeUnit.MILLISECONDS);
+        //     } else {
+        //         Log.w(TAG, "CLCC delay already scheduled, skipping duplicate schedule");
+        //     }
+        // }
         for (BluetoothCall call : calls) {
             // find the conference call parent among calls
             if (call.isConference() && !mBluetoothConferenceCallInference.isEmpty()) {
@@ -1560,24 +1523,24 @@ public class BluetoothInCallService extends InCallService {
         headsetService.clccResponse(0 /* index */, 0, 0, 0, false, null, 0); // End marker
     }
 
-    private boolean isHostImsCall(BluetoothCall call) {
-        final Uri addressUri;
-        if (call.getGatewayInfo() != null) {
-            addressUri = call.getGatewayInfo().getOriginalAddress();
-        } else {
-            addressUri = call.getHandle();
-        }
+    // private boolean isHostImsCall(BluetoothCall call) {
+    //     final Uri addressUri;
+    //     if (call.getGatewayInfo() != null) {
+    //         addressUri = call.getGatewayInfo().getOriginalAddress();
+    //     } else {
+    //         addressUri = call.getHandle();
+    //     }
 
-        String address = addressUri == null ? null : addressUri.getSchemeSpecificPart();
-        if (address != null) {
-            address = PhoneNumberUtils.stripSeparators(address);
-        }
-        String subsNum = getSubscriberNumber();
-        if(subsNum.equals(address)){
-            return true;
-        }
-        return false;
-    }
+    //     String address = addressUri == null ? null : addressUri.getSchemeSpecificPart();
+    //     if (address != null) {
+    //         address = PhoneNumberUtils.stripSeparators(address);
+    //     }
+    //     String subsNum = getSubscriberNumber();
+    //     if(subsNum.equals(address)){
+    //         return true;
+    //     }
+    //     return false;
+    // }
 
     /** Sends a single clcc (C* List Current Calls) event for the specified call. */
     private void sendClccForCall(
@@ -1875,6 +1838,37 @@ public class BluetoothInCallService extends InCallService {
             }
         }
         return false;
+    }
+
+    private void registerBearer(TbsService tbsService) {
+        if (tbsService == null) {
+            Log.i(TAG, "registerBearer skipped: No tbs service");
+            return;
+        }
+
+        tbsService.registerBearer(
+                TAG,
+                mBluetoothLeCallControlCallback,
+                TAG,
+                List.of("tel"),
+                Capability.HOLD_CALL,
+                getNetworkOperator(),
+                getBearerTechnology());
+
+        sendTbsCurrentCallsList(tbsService);
+    }
+
+    private void sendTbsCurrentCallsList(TbsService tbsService) {
+        List<BluetoothLeCall> tbsCalls = new ArrayList<>();
+
+        for (BluetoothCall call : mBluetoothCallHashMap.values()) {
+            BluetoothLeCall tbsCall = createTbsCall(call);
+            if (tbsCall != null) {
+                tbsCalls.add(tbsCall);
+            }
+        }
+
+        tbsService.currentCallsList(mCcid, tbsCalls);
     }
 
     /**
@@ -2799,26 +2793,21 @@ public class BluetoothInCallService extends InCallService {
         return new BluetoothLeCall(call.getTbsCallId(), uri, friendlyName, state, callFlags);
     }
 
-    private void sendTbsCurrentCallsList() {
-        List<BluetoothLeCall> tbsCalls = new ArrayList<>();
-
-        for (BluetoothCall call : mBluetoothCallHashMap.values()) {
-            BluetoothLeCall tbsCall = createTbsCall(call);
-            if (tbsCall != null) {
-                tbsCalls.add(tbsCall);
-            }
-        }
-
-        mBluetoothLeCallControl.currentCallsList(tbsCalls);
-    }
-
     @VisibleForTesting
-    final BluetoothLeCallControl.Callback mBluetoothLeCallControlCallback =
-            new BluetoothLeCallControl.Callback() {
+    final IBluetoothLeCallControlCallback.Stub mBluetoothLeCallControlCallback =
+            new IBluetoothLeCallControlCallback.Stub() {
+                @Override
+                public void onBearerRegistered(int ccid) {
+                    synchronized (LOCK) {
+                        Log.d(TAG, "onBearerRegistered: ccid is " + ccid);
+                        mCcid = ccid;
+                    }
+                }
 
                 @Override
-                public void onAcceptCall(int requestId, UUID callId) {
+                public void onAcceptCall(int requestId, ParcelUuid uuid) {
                     synchronized (LOCK) {
+                        final var callId = uuid.getUuid();
                         Log.i(TAG, "TBS - accept call=" + callId);
                         int result = Result.SUCCESS;
                         BluetoothCall call = mCallInfo.getCallByCallId(callId);
@@ -2827,13 +2816,17 @@ public class BluetoothInCallService extends InCallService {
                         } else {
                             call.answer(VideoProfile.STATE_AUDIO_ONLY);
                         }
-                        mBluetoothLeCallControl.requestResult(requestId, result);
+                        final var tbsService = TbsService.getTbsService();
+                        if (tbsService != null) {
+                            tbsService.requestResult(mCcid, requestId, result);
+                        }
                     }
                 }
 
                 @Override
-                public void onTerminateCall(int requestId, UUID callId) {
+                public void onTerminateCall(int requestId, ParcelUuid uuid) {
                     synchronized (LOCK) {
+                        final var callId = uuid.getUuid();
                         Log.i(TAG, "TBS - terminate call=" + callId);
                         int result = Result.SUCCESS;
                         BluetoothCall call = mCallInfo.getCallByCallId(callId);
@@ -2843,13 +2836,17 @@ public class BluetoothInCallService extends InCallService {
                             mIsTerminatedByClient = true;
                             call.disconnect();
                         }
-                        mBluetoothLeCallControl.requestResult(requestId, result);
+                        final var tbsService = TbsService.getTbsService();
+                        if (tbsService != null) {
+                            tbsService.requestResult(mCcid, requestId, result);
+                        }
                     }
                 }
 
                 @Override
-                public void onHoldCall(int requestId, UUID callId) {
+                public void onHoldCall(int requestId, ParcelUuid uuid) {
                     synchronized (LOCK) {
+                        final var callId = uuid.getUuid();
                         Log.i(TAG, "TBS - hold call=" + callId);
                         int result = Result.SUCCESS;
                         BluetoothCall call = mCallInfo.getCallByCallId(callId);
@@ -2858,13 +2855,17 @@ public class BluetoothInCallService extends InCallService {
                         } else {
                             call.hold();
                         }
-                        mBluetoothLeCallControl.requestResult(requestId, result);
+                        final var tbsService = TbsService.getTbsService();
+                        if (tbsService != null) {
+                            tbsService.requestResult(mCcid, requestId, result);
+                        }
                     }
                 }
 
                 @Override
-                public void onUnholdCall(int requestId, UUID callId) {
+                public void onUnholdCall(int requestId, ParcelUuid uuid) {
                     synchronized (LOCK) {
+                        final var callId = uuid.getUuid();
                         Log.i(TAG, "TBS - unhold call=" + callId);
                         int result = Result.SUCCESS;
                         BluetoothCall call = mCallInfo.getCallByCallId(callId);
@@ -2873,18 +2874,28 @@ public class BluetoothInCallService extends InCallService {
                         } else {
                             call.unhold();
                         }
-                        mBluetoothLeCallControl.requestResult(requestId, result);
+                        final var tbsService = TbsService.getTbsService();
+                        if (tbsService != null) {
+                            tbsService.requestResult(mCcid, requestId, result);
+                        }
                     }
                 }
 
                 @Override
-                public void onPlaceCall(int requestId, UUID callId, String uri) {
-                    mBluetoothLeCallControl.requestResult(requestId, Result.ERROR_APPLICATION);
+                public void onPlaceCall(int requestId, ParcelUuid uuid, String uri) {
+                    final var tbsService = TbsService.getTbsService();
+                    if (tbsService != null) {
+                        tbsService.requestResult(mCcid, requestId, Result.ERROR_APPLICATION);
+                    }
                 }
 
                 @Override
-                public void onJoinCalls(int requestId, @NonNull List<UUID> callIds) {
+                public void onJoinCalls(int requestId, List<ParcelUuid> parcelUuids) {
                     synchronized (LOCK) {
+                        List<UUID> callIds = new ArrayList<>();
+                        for (ParcelUuid parcelUuid : parcelUuids) {
+                            callIds.add(parcelUuid.getUuid());
+                        }
                         Log.i(TAG, "TBS - onJoinCalls");
                         List<UUID> alreadyJoinedCalls = new ArrayList<>();
                         BluetoothCall baseCallInstance = null;
@@ -2894,8 +2905,11 @@ public class BluetoothInCallService extends InCallService {
                                     TAG,
                                     "TBS - onJoinCalls, join call number is invalid: "
                                             + callIds.size());
-                            mBluetoothLeCallControl.requestResult(
-                                    requestId, Result.ERROR_UNKNOWN_CALL_ID);
+                            final var tbsService = TbsService.getTbsService();
+                            if (tbsService != null) {
+                                tbsService.requestResult(
+                                        mCcid, requestId, Result.ERROR_UNKNOWN_CALL_ID);
+                            }
                             return;
                         }
 
@@ -2925,7 +2939,10 @@ public class BluetoothInCallService extends InCallService {
                             result = Result.ERROR_UNKNOWN_CALL_ID;
                         }
 
-                        mBluetoothLeCallControl.requestResult(requestId, result);
+                        final var tbsService = TbsService.getTbsService();
+                        if (tbsService != null) {
+                            tbsService.requestResult(mCcid, requestId, result);
+                        }
                     }
                 }
             };

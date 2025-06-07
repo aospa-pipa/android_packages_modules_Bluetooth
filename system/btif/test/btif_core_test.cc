@@ -110,11 +110,8 @@ using testing::Matcher;
 using testing::Return;
 using testing::SaveArg;
 
-module_t bt_utils_module;
-module_t gd_controller_module;
 module_t gd_shim_module;
 module_t osi_module;
-module_t rust_module;
 
 bool bta_ag_is_call_present(const RawAddress* peer_addr) { return true; }
 bool L2CA_Echo(const RawAddress& p_bd_addr, BT_HDR* p_data,

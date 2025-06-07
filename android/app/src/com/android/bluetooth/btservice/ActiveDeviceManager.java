@@ -120,7 +120,7 @@ import java.util.concurrent.Executors;
  * streaming over the active Bluetooth device.
  */
 public class ActiveDeviceManager implements AdapterService.BluetoothStateCallback {
-    private static final String TAG = ActiveDeviceManager.class.getSimpleName();
+    private static final String TAG = Utils.BT_PREFIX + ActiveDeviceManager.class.getSimpleName();
 
     @VisibleForTesting
     static final int A2DP_HFP_SYNC_CONNECTION_TIMEOUT_MS = 5_000;
@@ -129,7 +129,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     Bundle contextBundleUpdate = new Bundle();
 
     private final AdapterService mAdapterService;
-    private DatabaseManager mDbManager;
+    private final DatabaseManager mDatabaseManager;
     private final ServiceFactory mFactory;
     private HandlerThread mHandlerThread = null;
     private Handler mHandler = null;
@@ -317,7 +317,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     return;
                 }
                 // Activate A2DP if audio mode is normal or HFP is not supported or enabled.
-                if (mDbManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET)
+                if (mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET)
                                 != CONNECTION_POLICY_ALLOWED
                         || mAudioMode == AudioManager.MODE_NORMAL) {
                     boolean a2dpMadeActive = setA2dpActiveDevice(device);
@@ -387,7 +387,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     return;
                 }
                 // Activate HFP if audio mode is not normal or A2DP is not supported or enabled.
-                if (mDbManager.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
+                if (mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
                                 != CONNECTION_POLICY_ALLOWED
                         || mAudioMode != AudioManager.MODE_NORMAL) {
                     // Tries to make the device active for HFP
@@ -735,7 +735,8 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
                 if (!Objects.equals(mHfpActiveDevice, device)
                         && mHfpConnectedDevices.contains(device)
-                        && mDbManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET)
+                        && mDatabaseManager.getProfileConnectionPolicy(
+                                        device, BluetoothProfile.HEADSET)
                                 == CONNECTION_POLICY_ALLOWED) {
                     mClassicDeviceToBeActivated = device;
                     setHfpActiveDevice(device);
@@ -805,7 +806,8 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
                 if (!Objects.equals(mA2dpActiveDevice, device)
                         && mA2dpConnectedDevices.contains(device)
-                        && mDbManager.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
+                        && mDatabaseManager.getProfileConnectionPolicy(
+                                        device, BluetoothProfile.A2DP)
                                 == CONNECTION_POLICY_ALLOWED) {
                     mClassicDeviceToBeActivated = device;
                     setA2dpActiveDevice(device);
@@ -954,7 +956,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
     ActiveDeviceManager(AdapterService service, ServiceFactory factory) {
         mAdapterService = service;
-        mDbManager = mAdapterService.getDatabase();
+        mDatabaseManager = mAdapterService.getDatabaseManager();
         mFactory = factory;
         mAudioManager = service.getSystemService(AudioManager.class);
         mAudioManagerAudioDeviceCallback = new AudioManagerAudioDeviceCallback();
@@ -1265,7 +1267,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     @GuardedBy("mLock")
     private boolean setFallbackDeviceActiveLocked(BluetoothDevice recentlyRemovedDevice) {
         Log.d(TAG, "setFallbackDeviceActive, recently removed: " + recentlyRemovedDevice);
-        mDbManager = mAdapterService.getDatabase();
         List<BluetoothDevice> connectedHearingAidDevices = new ArrayList<>();
         final LeAudioService leAudioService = mFactory.getLeAudioService();
         if (!mHearingAidConnectedDevices.isEmpty()) {
@@ -1281,7 +1282,8 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
         if (!connectedHearingAidDevices.isEmpty()) {
             BluetoothDevice device =
-                    mDbManager.getMostRecentlyConnectedDevicesInList(connectedHearingAidDevices);
+                    mDatabaseManager.getMostRecentlyConnectedDevicesInList(
+                            connectedHearingAidDevices);
             if (device != null) {
                 /* Check if fallback device shall be used. It should be used when a new
                  * device is connected. If the most recently connected device is the same as
@@ -1357,7 +1359,8 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
             }
         }
-        BluetoothDevice device = mDbManager.getMostRecentlyConnectedDevicesInList(connectedDevices);
+        BluetoothDevice device =
+                mDatabaseManager.getMostRecentlyConnectedDevicesInList(connectedDevices);
         if (device == null) {
             Log.d(TAG, "No fallback devices are found");
             return false;

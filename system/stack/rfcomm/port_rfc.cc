@@ -120,7 +120,7 @@ int port_open_continue(tPORT* p_port) {
 void port_start_control(tPORT* p_port) {
   tRFC_MCB* p_mcb = p_port->rfc.p_mcb;
 
-  if (p_mcb == NULL) {
+  if (p_mcb == nullptr) {
     return;
   }
 
@@ -138,7 +138,7 @@ void port_start_control(tPORT* p_port) {
 void port_start_par_neg(tPORT* p_port) {
   tRFC_MCB* p_mcb = p_port->rfc.p_mcb;
 
-  if (p_mcb == NULL) {
+  if (p_mcb == nullptr) {
     return;
   }
 
@@ -175,12 +175,12 @@ void port_start_close(tPORT* p_port) {
     events |= PORT_EV_ERR;
   }
 
-  if ((p_port->p_callback != NULL) && events) {
+  if ((p_port->p_callback != nullptr) && events) {
     p_port->p_callback(events, p_port->handle);
   }
 
   /* Check if RFCOMM side has been closed while the message was queued */
-  if ((p_mcb == NULL) || (p_port->rfc.sm_cb.state == RFC_STATE_CLOSED)) {
+  if ((p_mcb == nullptr) || (p_port->rfc.sm_cb.state == RFC_STATE_CLOSED)) {
     /* Call management callback function before calling port_release_port() to
      * clear tPort */
     if (p_port->p_mgmt_callback) {
@@ -237,14 +237,22 @@ void PORT_StartCnf(tRFC_MCB* p_mcb, uint16_t result) {
     }
   }
 
-  if (release_mcb) {
-    rfc_release_multiplexer_channel(p_mcb);
-  }
-
-  /* There can be a situation when after starting connection, user closes the */
-  /* port, we can catch it here to close multiplexor channel */
-  if (no_ports_up) {
-    rfc_check_mcb_active(p_mcb);
+  if (com::android::bluetooth::flags::fix_socket_connection_failed_no_callback()) {
+    /* There can be a situation when after starting connection, user closes the */
+    /* port, we can catch it here to close multiplexor channel */
+    if (no_ports_up) {
+      rfc_check_mcb_active(p_mcb);
+    } else if (result != RFCOMM_SUCCESS || release_mcb) {
+      /* If we failed to start rfcomm socket connection, */
+      /* we should release multiplexor channel with p_mcb */
+      rfc_release_multiplexer_channel(p_mcb);
+    }
+  } else {
+    /* There can be a situation when after starting connection, user closes the */
+    /* port, we can catch it here to close multiplexor channel */
+    if (no_ports_up) {
+      rfc_check_mcb_active(p_mcb);
+    }
   }
 }
 
@@ -266,7 +274,7 @@ void PORT_StartInd(tRFC_MCB* p_mcb) {
 
   p_port = &rfc_cb.port.port[0];
   for (i = 0; i < MAX_RFC_PORTS; i++, p_port++) {
-    if ((p_port->rfc.p_mcb == NULL) || (p_port->rfc.p_mcb == p_mcb)) {
+    if ((p_port->rfc.p_mcb == nullptr) || (p_port->rfc.p_mcb == p_mcb)) {
       log::verbose("PORT_StartInd, RFCOMM_StartRsp RFCOMM_SUCCESS: p_mcb:{}",
                    std::format_ptr(p_mcb));
       RFCOMM_StartRsp(p_mcb, RFCOMM_SUCCESS);
@@ -289,10 +297,10 @@ void PORT_StartInd(tRFC_MCB* p_mcb) {
 void PORT_ParNegInd(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl, uint8_t k) {
   log::verbose("bd_addr={}, dlci={}, mtu={}", p_mcb->bd_addr, dlci, mtu);
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (!p_port) {
+  if (p_port == nullptr) {
     /* This can be a first request for this port */
     p_port = port_find_dlci_port(dlci);
-    if (!p_port) {
+    if (p_port == nullptr) {
       log::error("Disconnect RFCOMM, port not found, dlci={}, p_mcb={}, bd_addr={}", dlci,
                  std::format_ptr(p_mcb), p_mcb->bd_addr);
       /* If the port cannot be opened, send a DM.  Per Errata 1205 */
@@ -378,7 +386,7 @@ void PORT_ParNegInd(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl, uin
 void PORT_ParNegCnf(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint8_t cl, uint8_t k) {
   log::verbose("PORT_ParNegCnf dlci:{} mtu:{} cl: {} k: {}", dlci, mtu, cl, k);
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (!p_port) {
+  if (p_port == nullptr) {
     log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
@@ -430,10 +438,10 @@ void PORT_DlcEstablishInd(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
   log::verbose("p_mcb:{}, dlci:{} mtu:{}i, p_port:{}, bd_addr:{}", std::format_ptr(p_mcb), dlci,
                mtu, std::format_ptr(p_port), p_mcb->bd_addr);
 
-  if (!p_port) {
+  if (p_port == nullptr) {
     /* This can be a first request for this port */
     p_port = port_find_dlci_port(dlci);
-    if (!p_port) {
+    if (p_port == nullptr) {
       RFCOMM_DlcEstablishRsp(p_mcb, dlci, 0, RFCOMM_ERROR);
       return;
     }
@@ -487,7 +495,8 @@ void PORT_DlcEstablishCnf(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint16_t 
 
   log::verbose("PORT_DlcEstablishCnf dlci:{} mtu:{} result:{}", dlci, mtu, result);
 
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
 
@@ -528,7 +537,7 @@ void PORT_DlcEstablishCnf(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint16_t 
   /* RPN is required only if we want to tell DTE how the port should be opened
    */
   if ((p_port->uuid == UUID_SERVCLASS_DIALUP_NETWORKING) || (p_port->uuid == UUID_SERVCLASS_FAX)) {
-    RFCOMM_PortParameterNegotiationRequest(p_port->rfc.p_mcb, p_port->dlci, NULL);
+    RFCOMM_PortParameterNegotiationRequest(p_port->rfc.p_mcb, p_port->dlci, nullptr);
   } else {
     RFCOMM_ControlReq(p_port->rfc.p_mcb, p_port->dlci, &p_port->local_ctrl);
   }
@@ -550,10 +559,10 @@ void PORT_PortNegInd(tRFC_MCB* p_mcb, uint8_t dlci, PortSettings* p_settings, ui
 
   log::verbose("PORT_PortNegInd");
 
-  if (!p_port) {
+  if (p_port == nullptr) {
     /* This can be a first request for this port */
     p_port = port_find_dlci_port(dlci);
-    if (!p_port) {
+    if (p_port == nullptr) {
       RFCOMM_PortParameterNegotiationResponse(p_mcb, dlci, p_settings, 0);
       return;
     }
@@ -579,8 +588,8 @@ void PORT_PortNegCnf(tRFC_MCB* p_mcb, uint8_t dlci, PortSettings* /* p_settings 
 
   log::verbose("PORT_PortNegCnf");
 
-  if (!p_port) {
-    log::warn("PORT_PortNegCnf no port");
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
   /* Port negotiation failed. Drop the connection */
@@ -615,7 +624,8 @@ void PORT_ControlInd(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* p_pars) {
 
   log::verbose("PORT_ControlInd");
 
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
 
@@ -680,7 +690,8 @@ void PORT_ControlCnf(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* /* p_pars */) {
 
   log::verbose("PORT_ControlCnf");
 
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
 
@@ -726,7 +737,8 @@ void PORT_LineStatusInd(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t line_status) {
 
   log::verbose("PORT_LineStatusInd");
 
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
 
@@ -744,7 +756,7 @@ void PORT_LineStatusInd(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t line_status) {
     event |= PORT_EV_ERR;
   }
 
-  if ((p_port->p_callback != NULL) && (p_port->ev_mask & event)) {
+  if ((p_port->p_callback != nullptr) && (p_port->ev_mask & event)) {
     p_port->p_callback((p_port->ev_mask & event), p_port->handle);
   }
 }
@@ -760,7 +772,8 @@ void PORT_LineStatusInd(tRFC_MCB* p_mcb, uint8_t dlci, uint8_t line_status) {
 void PORT_DlcReleaseInd(tRFC_MCB* p_mcb, uint8_t dlci) {
   log::verbose("dlci:{}, bd_addr:{}", dlci, p_mcb->bd_addr);
   tPORT* p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     return;
   }
   port_rfc_closed(p_port, PORT_CLOSED);
@@ -832,7 +845,8 @@ void PORT_DataInd(tRFC_MCB* p_mcb, uint8_t dlci, BT_HDR* p_buf) {
 
   log::verbose("PORT_DataInd with data length {}, p_mcb:{},p_port:{},dlci:{}", p_buf->len,
                std::format_ptr(p_mcb), std::format_ptr(p_port), dlci);
-  if (!p_port) {
+  if (p_port == nullptr) {
+    log::warn("port is null for {}", p_mcb->bd_addr);
     osi_free(p_buf);
     return;
   }
@@ -914,7 +928,7 @@ void PORT_DataInd(tRFC_MCB* p_mcb, uint8_t dlci, BT_HDR* p_buf) {
  *
  ******************************************************************************/
 void PORT_FlowInd(tRFC_MCB* p_mcb, uint8_t dlci, bool enable_data) {
-  tPORT* p_port = (tPORT*)NULL;
+  tPORT* p_port = nullptr;
   uint32_t events = 0;
   int i;
 
@@ -924,7 +938,7 @@ void PORT_FlowInd(tRFC_MCB* p_mcb, uint8_t dlci, bool enable_data) {
     p_mcb->peer_ready = enable_data;
   } else {
     p_port = port_find_mcb_dlci_port(p_mcb, dlci);
-    if (p_port == NULL) {
+    if (p_port == nullptr) {
       return;
     }
 
@@ -982,7 +996,7 @@ static uint32_t port_rfc_send_tx_data(tPORT* p_port) {
       mutex_global_lock();
 
       p_buf = (BT_HDR*)fixed_queue_try_dequeue(p_port->tx.queue);
-      if (p_buf != NULL) {
+      if (p_buf != nullptr) {
         p_port->tx.queue_size -= p_buf->len;
 
         mutex_global_unlock();
@@ -1033,12 +1047,12 @@ void port_rfc_closed(tPORT* p_port, uint8_t res) {
     rfc_port_timer_stop(p_port);
     rfc_set_state(RFC_STATE_CLOSED, p_port);
 
-    if (p_mcb) {
+    if (p_mcb != nullptr) {
       p_mcb->port_handles[p_port->dlci] = 0;
 
       /* If there are no more ports opened on this MCB release it */
       rfc_check_mcb_active(p_mcb);
-      p_port->rfc.p_mcb = NULL;
+      p_port->rfc.p_mcb = nullptr;
     }
 
     /* Need to restore DLCI to listening state
@@ -1077,7 +1091,7 @@ void port_rfc_closed(tPORT* p_port, uint8_t res) {
     }
   }
 
-  if ((p_port->p_callback != NULL) && events) {
+  if ((p_port->p_callback != nullptr) && events) {
     p_port->p_callback(events, p_port->handle);
   }
 

@@ -111,9 +111,10 @@ class HeadsetStateMachine extends StateMachine {
     static final int SEND_BSIR = 13;
     static final int DIALING_OUT_RESULT = 14;
     static final int VOICE_RECOGNITION_RESULT = 15;
-    static final int SEND_INCOMING_CALL_IND = 16;
-    static final int SCO_RETRIAL_NOT_REQ = 17;
-    static final int SEND_CLCC_RESP_AFTER_VOIP_CALL = 18;
+    static final int SCO_VOLUME_CHANGED = 16;
+    static final int SEND_INCOMING_CALL_IND = 17;
+    static final int SCO_RETRIAL_NOT_REQ = 18;
+    static final int SEND_CLCC_RESP_AFTER_VOIP_CALL = 19;
     static final int CS_CALL_STATE_CHANGED_ALERTING = 22;
     static final int CS_CALL_STATE_CHANGED_ACTIVE = 23;
     static final int STACK_EVENT = 101;
@@ -252,7 +253,7 @@ class HeadsetStateMachine extends StateMachine {
         mNativeInterface = requireNonNull(nativeInterface);
         mSystemInterface = requireNonNull(systemInterface);
         mAdapterService = requireNonNull(adapterService);
-        mDatabaseManager = requireNonNull(adapterService.getDatabase());
+        mDatabaseManager = requireNonNull(adapterService.getDatabaseManager());
 
         mDeviceSilenced = false;
 
@@ -1467,6 +1468,19 @@ class HeadsetStateMachine extends StateMachine {
                         device, HeadsetHalConstants.VOLUME_TYPE_SPK, mSpeakerVolume);
             }
         }
+
+        void processScoVolume(int volumeValue, BluetoothDevice device) {
+            stateLogD(
+                    "processIntentScoVolume: mSpeakerVolume="
+                            + mSpeakerVolume
+                            + ", volumeValue="
+                            + volumeValue);
+            if (mSpeakerVolume != volumeValue) {
+                mSpeakerVolume = volumeValue;
+                mNativeInterface.setVolume(
+                        device, HeadsetHalConstants.VOLUME_TYPE_SPK, mSpeakerVolume);
+            }
+        }
     }
 
     class Connected extends ConnectedBase {
@@ -1871,6 +1885,9 @@ class HeadsetStateMachine extends StateMachine {
                     break;
                 case INTENT_SCO_VOLUME_CHANGED:
                     processIntentScoVolume((Intent) message.obj, mDevice);
+                    break;
+                case SCO_VOLUME_CHANGED:
+                    processScoVolume(message.arg1, mDevice);
                     break;
                 case STACK_EVENT:
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
@@ -3237,35 +3254,35 @@ class HeadsetStateMachine extends StateMachine {
     }
 
     boolean isConnectedDeviceBlacklistedforIncomingCall() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(
+        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_HFP_FAKE_INCOMING_CALL_INDICATOR,
             mDevice.getAddress());
         return matched;
     }
 
     boolean isConnectedDeviceBlacklistedforRetrySco() {
-       boolean matched = InteropUtil.interopMatchAddrOrName(
+       boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
            InteropUtil.InteropFeature.INTEROP_RETRY_SCO_AFTER_REMOTE_REJECT_SCO,
            mDevice.getAddress());
        return matched;
     }
 
     boolean isDeviceBlacklistedForSendingCallIndsBackToBack() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(
+        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_HFP_SEND_CALL_INDICATORS_BACK_TO_BACK,
             mDevice.getAddress());
             return matched;
     }
 
     boolean isSCONeededImmediatelyAfterSLC() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(
+        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_SETUP_SCO_WITH_NO_DELAY_AFTER_SLC_DURING_CALL,
             mDevice.getAddress());
         return matched;
     }
 
     boolean isDeviceBlacklistedForDelayingCLCCRespAfterVOIPCall() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(
+        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
             mDevice.getAddress());
         return matched;
@@ -3360,6 +3377,7 @@ class HeadsetStateMachine extends StateMachine {
             case DIALING_OUT_RESULT -> "DIALING_OUT_RESULT";
             case CLCC_RSP_TIMEOUT -> "CLCC_RSP_TIMEOUT";
             case CONNECT_TIMEOUT -> "CONNECT_TIMEOUT";
+            case SCO_VOLUME_CHANGED -> "SCO_VOLUME_CHANGED";
             default -> "UNKNOWN(" + what + ")";
         };
     }
