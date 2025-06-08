@@ -44,11 +44,8 @@ bool L2CA_Ping(const RawAddress& p_bd_addr,
                tL2CA_ECHO_RSP_CB* p_callback) { return true; }
 
 // Used the legacy stack manager
-module_t bt_utils_module;
-module_t gd_controller_module;
 module_t gd_shim_module;
 module_t osi_module;
-module_t rust_module;
 
 const tBTA_AG_RES_DATA tBTA_AG_RES_DATA::kEmpty = {};
 

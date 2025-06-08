@@ -60,7 +60,6 @@ void on_connection_timed_out(uint8_t app_id, const RawAddress& address) {
     on_connection_complete(address);
   }
 }
-void on_connection_cancelled(uint8_t /*app_id*/, const RawAddress& /*address*/) {}
 }  // namespace connection_manager
 
 namespace connection_manager {

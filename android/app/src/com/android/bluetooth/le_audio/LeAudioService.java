@@ -95,10 +95,10 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.bass_client.BassClientService;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.btservice.ServiceFactory;
-import com.android.bluetooth.btservice.storage.DatabaseManager;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hap.HapClientService;
@@ -130,7 +130,7 @@ import java.util.HashMap;
 
 
 /** Provides Bluetooth LeAudio profile, as a service in the Bluetooth application. */
-public class LeAudioService extends ProfileService {
+public class LeAudioService extends ConnectableProfile {
     private static final String TAG = LeAudioService.class.getSimpleName();
 
     // Timeout for state machine thread join, to prevent potential ANR.
@@ -188,7 +188,6 @@ public class LeAudioService extends ProfileService {
     private final ArrayDeque<BluetoothLeBroadcastSettings> mCreateBroadcastQueue =
             new ArrayDeque<>();
 
-    private final DatabaseManager mDatabaseManager;
     private final LeAudioNativeInterface mNativeInterface;
     private final HandlerThread mStateMachinesThread;
     private final LeAudioCodecConfig mLeAudioCodecConfig;
@@ -287,7 +286,6 @@ public class LeAudioService extends ProfileService {
         mNativeInterface =
                 requireNonNullElseGet(
                         nativeInterface, () -> new LeAudioNativeInterface(adapterService, this));
-        mDatabaseManager = requireNonNull(mAdapterService.getDatabase());
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
 
         // Start handler thread for state machines
@@ -945,17 +943,7 @@ public class LeAudioService extends ProfileService {
     }
 
     private void setDefaultBroadcastToUnicastFallbackGroup() {
-        DatabaseManager dbManager = mAdapterService.getDatabase();
-        if (dbManager == null) {
-            Log.i(
-                    TAG,
-                    "Can't get db manager to pick default Broadcast to Unicast fallback group"
-                            + ", leaving: "
-                            + mUnicastGroupIdDeactivatedForBroadcastTransition);
-            return;
-        }
-
-        List<BluetoothDevice> devices = dbManager.getMostRecentlyConnectedDevices();
+        List<BluetoothDevice> devices = mDatabaseManager.getMostRecentlyConnectedDevices();
 
         int targetDeviceIdx = -1;
         int targetGroupId = LE_AUDIO_GROUP_ID_INVALID;
@@ -973,6 +961,7 @@ public class LeAudioService extends ProfileService {
         updateFallbackUnicastGroupIdForBroadcast(targetGroupId);
     }
 
+    @Override
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
 
@@ -1020,6 +1009,7 @@ public class LeAudioService extends ProfileService {
      * @param device is the device with which we would like to disconnect LE Audio
      * @return true if profile disconnected, false if device not connected over LE Audio
      */
+    @Override
     public boolean disconnect(BluetoothDevice device) {
         Log.d(TAG, "disconnect(): " + device);
 
@@ -1145,6 +1135,7 @@ public class LeAudioService extends ProfileService {
      *     BluetoothProfile#STATE_CONNECTED} if this profile is connected, or {@link
      *     BluetoothProfile#STATE_DISCONNECTING} if this profile is being disconnected
      */
+    @Override
     public int getConnectionState(BluetoothDevice device) {
         mGroupReadLock.lock();
         try {
@@ -4366,6 +4357,7 @@ public class LeAudioService extends ProfileService {
         return sm;
     }
 
+    @Override
     public void handleBondStateChanged(BluetoothDevice device, int fromState, int toState) {
         mHandler.post(() -> bondStateChanged(device, toState));
     }
@@ -4807,6 +4799,7 @@ public class LeAudioService extends ProfileService {
      * @param connectionPolicy is the connection policy to set to for this profile
      * @return true on success, otherwise false
      */
+    @Override
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
@@ -4926,22 +4919,6 @@ public class LeAudioService extends ProfileService {
                 && Utils.arrayContains(featureUuids, BluetoothUuid.BASS)) {
             mBassClientService.setConnectionPolicy(device, connectionPolicy);
         }
-    }
-
-    /**
-     * Get the connection policy of the profile.
-     *
-     * <p>The connection policy can be any of: {@link BluetoothProfile#CONNECTION_POLICY_ALLOWED},
-     * {@link BluetoothProfile#CONNECTION_POLICY_FORBIDDEN}, {@link
-     * BluetoothProfile#CONNECTION_POLICY_UNKNOWN}
-     *
-     * @param device Bluetooth device
-     * @return connection policy of the device
-     */
-    public int getConnectionPolicy(BluetoothDevice device) {
-        int connection_policy = mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
-        Log.d(TAG, device + " connection policy = " + connection_policy);
-        return connection_policy;
     }
 
     /**
