@@ -159,10 +159,10 @@ struct HciLayer::impl {
   impl(os::Handler* handler, hal::HciHal* hal, storage::StorageModule* storage, HciLayer& module)
       : hal_(hal), storage_(storage), module_(module) {
     handler_ = handler;
-    hci_timeout_alarm_ = new Alarm(handler);
 
     hal_test_supported = osi_property_get_bool("persist.vendor.bluetooth.haltest", false);
     log::warn("hal_test_supported: {}", hal_test_supported);
+    hci_timeout_alarm_ = new Alarm(&handler->thread());
   }
 
   ~impl() {
@@ -380,7 +380,7 @@ struct HciLayer::impl {
       hci_timeout_alarm_ = nullptr;
     }
     if (hci_abort_alarm_ == nullptr) {
-      hci_abort_alarm_ = new Alarm(handler_);
+      hci_abort_alarm_ = new Alarm(&handler_->thread());
       hci_abort_alarm_->Schedule(BindOnce(&abort_after_time_out, op_code),
                                  getHciTimeoutRestartMs());
     } else {
@@ -487,7 +487,7 @@ struct HciLayer::impl {
       hci_timeout_alarm_ = nullptr;
     }
     if (hci_abort_alarm_ == nullptr) {
-      hci_abort_alarm_ = new Alarm(handler_);
+      hci_abort_alarm_ = new Alarm(&handler_->thread());
       hci_abort_alarm_->Schedule(BindOnce(&abort_after_root_inflammation, vse_error_reason),
                                  getHciTimeoutRestartMs());
     } else {
