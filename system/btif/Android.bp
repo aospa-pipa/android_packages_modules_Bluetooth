@@ -128,6 +128,7 @@ cc_library_static {
     static_libs: [
         "aics",
         "avrcp-target-service",
+        "bluetooth_constants-cpp",
         "bluetooth_flags_c_lib",
         "lib-bt-packets",
         "lib-bt-packets-avrcp",
@@ -143,11 +144,7 @@ cc_library_static {
         "libcom.android.sysprop.bluetooth.wrapped",
         "libflatbuffers-cpp",
     ],
-    aidl: {
-        libs: ["bluetooth_constants"],
-    },
     shared_libs: [
-        "libbinder",
         "libcrypto",
         "libcutils",
     ],
@@ -178,13 +175,9 @@ cc_test {
         "test/btif_storage_test.cc",
     ],
     header_libs: ["libbluetooth_headers"],
-    aidl: {
-        libs: ["bluetooth_constants"],
-    },
     shared_libs: [
         "libaconfig_storage_read_api_cc",
         "libbase",
-        "libbinder",
         "libcrypto",
         "libcutils",
         "libhidlbase",
@@ -198,6 +191,7 @@ cc_test {
         "android.hardware.audio.common@5.0",
         "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth.audio@2.1",
+        "bluetooth_constants-cpp",
         "bluetooth_flags_c_lib_for_test",
         "libFraunhoferAAC",
         "libbase",
@@ -464,13 +458,9 @@ cc_test {
         "test/btif_hh_test.cc",
     ],
     header_libs: ["libbluetooth_headers"],
-    aidl: {
-        libs: ["bluetooth_constants"],
-    },
     shared_libs: [
         "libaconfig_storage_read_api_cc",
         "libbase",
-        "libbinder",
         "libcrypto",
         "libcutils",
         "libfmq",
@@ -485,6 +475,7 @@ cc_test {
         "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth.audio@2.1",
         "avrcp-target-service",
+        "bluetooth_constants-cpp",
         "bluetooth_flags_c_lib",
         "lib-bt-packets",
         "lib-bt-packets-avrcp",
@@ -585,13 +576,9 @@ cc_test {
         "test/btif_core_test.cc",
     ],
     header_libs: ["libbluetooth_headers"],
-    aidl: {
-        libs: ["bluetooth_constants"],
-    },
     shared_libs: [
         "libaconfig_storage_read_api_cc",
         "libbase",
-        "libbinder",
         "libcrypto",
         "libcutils",
         "libfmq",
@@ -606,6 +593,7 @@ cc_test {
         "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth.audio@2.1",
         "avrcp-target-service",
+        "bluetooth_constants-cpp",
         "bluetooth_flags_c_lib",
         "lib-bt-packets",
         "lib-bt-packets-avrcp",
