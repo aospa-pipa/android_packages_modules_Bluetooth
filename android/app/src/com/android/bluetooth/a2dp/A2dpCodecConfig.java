@@ -209,7 +209,7 @@ class A2dpCodecConfig {
         }
 
         int value;
-        AdapterService mAdapterService = AdapterService.getAdapterService();
+        AdapterService mAdapterService = AdapterService.deprecatedGetAdapterService();
         try {
             value =
                     SystemProperties.getInt(

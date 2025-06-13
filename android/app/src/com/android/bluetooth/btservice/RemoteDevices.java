@@ -1607,7 +1607,7 @@ public class RemoteDevices {
 
     // TODO: remove when key_missing_public flag is deleted
     @SuppressLint("AndroidFrameworkRequiresPermission")
-    void keyMissingCallback(byte[] address) {
+    void keyMissingCallback(byte[] address, int reason) {
         BluetoothDevice device = getDevice(address);
         if (device == null) {
             errorLog(
@@ -1621,7 +1621,7 @@ public class RemoteDevices {
             return;
         }
 
-        Log.i(TAG, "keyMissingCallback device: " + device);
+        Log.i(TAG, "keyMissingCallback device: " + device + ", reason: " + reason);
         Intent intent =
                 new Intent(BluetoothDevice.ACTION_KEY_MISSING)
                         .putExtra(BluetoothDevice.EXTRA_DEVICE, device)
