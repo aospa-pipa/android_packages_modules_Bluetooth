@@ -537,7 +537,6 @@ public class A2dpService extends ConnectableProfile {
      * @param silence true to enable silence mode, false to disable.
      * @return true on success, false on error
      */
-    @VisibleForTesting
     public boolean setSilenceMode(@NonNull BluetoothDevice device, boolean silence) {
         Log.d(TAG, "setSilenceMode(" + device + "): " + silence);
         synchronized (mStateMachines) {
@@ -1220,11 +1219,11 @@ public class A2dpService extends ConnectableProfile {
             mFactory.getAvrcpTargetService().handleA2dpActiveDeviceChanged(device);
         }
 
-        mAdapterService.handleActiveDeviceChange(BluetoothProfile.A2DP, device);
+        mAdapterService.handleActiveDeviceChange(mProfileId, device);
 
         BluetoothStatsLog.write(
                 BluetoothStatsLog.BLUETOOTH_ACTIVE_DEVICE_CHANGED,
-                BluetoothProfile.A2DP,
+                mProfileId,
                 mAdapterService.obfuscateAddress(device),
                 mAdapterService.getMetricId(device));
 
@@ -1439,18 +1438,16 @@ public class A2dpService extends ConnectableProfile {
         if (mFactory.getAvrcpTargetService() != null) {
             mFactory.getAvrcpTargetService().handleA2dpConnectionStateChanged(device, toState);
         }
-        mAdapterService.notifyProfileConnectionStateChangeToGatt(
-                BluetoothProfile.A2DP, fromState, toState);
-        mAdapterService.handleProfileConnectionStateChange(
-                BluetoothProfile.A2DP, device, fromState, toState);
+        mAdapterService.notifyProfileConnectionStateChangeToGatt(mProfileId, fromState, toState);
+        mAdapterService.handleProfileConnectionStateChange(mProfileId, device, fromState, toState);
         mAdapterService
                 .getActiveDeviceManager()
-                .profileConnectionStateChanged(BluetoothProfile.A2DP, device, fromState, toState);
+                .profileConnectionStateChanged(mProfileId, device, fromState, toState);
         mAdapterService
                 .getSilenceDeviceManager()
                 .a2dpConnectionStateChanged(device, fromState, toState);
         mAdapterService.updateProfileConnectionAdapterProperties(
-                device, BluetoothProfile.A2DP, toState, fromState);
+                device, mProfileId, toState, fromState);
     }
 
     /** Retrieves the most recently connected device in the A2DP connected devices list. */

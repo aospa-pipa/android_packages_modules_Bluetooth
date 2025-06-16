@@ -1167,6 +1167,12 @@ class BluetoothManagerService {
         }
 
         if (mState.oneOf(State.BLE_ON) && !isBleAppPresent()) {
+            if (Flags.userSwitchDuringBleOn()) {
+                mEnable = false;
+                ActiveLogs.add(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, false, packageName, true);
+                sendBrEdrDownCallback();
+                return true;
+            }
             if (mEnable) {
                 disableBleScanMode();
             }

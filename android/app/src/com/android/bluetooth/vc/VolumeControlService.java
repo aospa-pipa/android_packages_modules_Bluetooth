@@ -1685,8 +1685,7 @@ public class VolumeControlService extends ConnectableProfile {
                 removeDeviceData(device);
             }
         }
-        mAdapterService.handleProfileConnectionStateChange(
-                BluetoothProfile.VOLUME_CONTROL, device, fromState, toState);
+        mAdapterService.handleProfileConnectionStateChange(mProfileId, device, fromState, toState);
     }
 
     @Override

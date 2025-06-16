@@ -726,7 +726,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             value = {
                 METADATA_MANUFACTURER_NAME,
                 METADATA_MODEL_NAME,
-                METADATA_MODEL_YEAR,
                 METADATA_SOFTWARE_VERSION,
                 METADATA_HARDWARE_VERSION,
                 METADATA_COMPANION_APP,
@@ -755,10 +754,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
                 METADATA_GMCS_CCCD,
                 METADATA_GTBS_CCCD,
                 METADATA_EXCLUSIVE_MANAGER,
-                METADATA_HEAD_UNIT_MANUFACTURER_NAME,
-                METADATA_HEAD_UNIT_MODEL_NAME,
-                METADATA_HEAD_UNIT_BUILD,
-                METADATA_HEAD_UNIT_SOFTWARE_VERSION,
                 METADATA_ZOOMED_IN_ICON,
             })
     @Retention(RetentionPolicy.SOURCE)
@@ -1035,56 +1030,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
 
     // Need to update this value after adding new Metadata
     private static final int METADATA_MAX_KEY = METADATA_EXCLUSIVE_MANAGER;
-
-    /**
-     * Model year of the Bluetooth device. Data type should be {@link String} as {@link Byte} array.
-     *
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_SUPPORT_REMOTE_DEVICE_METADATA)
-    @SystemApi
-    public static final int METADATA_MODEL_YEAR = 31;
-
-    /**
-     * Head unit manufacturer name of the Bluetooth device. Data type should be {@link String} as
-     * {@link Byte} array. Should only be set/available for a car device.
-     *
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_SUPPORT_REMOTE_DEVICE_METADATA)
-    @SystemApi
-    public static final int METADATA_HEAD_UNIT_MANUFACTURER_NAME = 32;
-
-    /**
-     * Head unit model name of the Bluetooth device. Data type should be {@link String} as {@link
-     * Byte} array. Should only be set/available for a car device.
-     *
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_SUPPORT_REMOTE_DEVICE_METADATA)
-    @SystemApi
-    public static final int METADATA_HEAD_UNIT_MODEL_NAME = 33;
-
-    /**
-     * Build of the overall head unit device. Not specific to hardware or software. Example can be
-     * 'manufacturer_country'. Data type should be {@link String} as {@link Byte} array. Should only
-     * be set/available for a car device.
-     *
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_SUPPORT_REMOTE_DEVICE_METADATA)
-    @SystemApi
-    public static final int METADATA_HEAD_UNIT_BUILD = 34;
-
-    /**
-     * Head unit software version of the Bluetooth device. Data type should be {@link String} as
-     * {@link Byte} array. Should only be set/available for a car device.
-     *
-     * @hide
-     */
-    @FlaggedApi(Flags.FLAG_SUPPORT_REMOTE_DEVICE_METADATA)
-    @SystemApi
-    public static final int METADATA_HEAD_UNIT_SOFTWARE_VERSION = 35;
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1631,6 +1576,53 @@ public final class BluetoothDevice implements Parcelable, Attributable {
 
     /** Address type used to indicate an anonymous advertisement. */
     public static final int ADDRESS_TYPE_ANONYMOUS = 0xFF;
+
+    /**
+     * On-head detection enabled state: Unknown. Indicates that the enabled state for on-head
+     * detection is not known.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_ENABLED_STATE_UNKNOWN = 0;
+
+    /**
+     * On-head detection enabled state: Enabled. Indicates that on-head detection is currently
+     * enabled on the device.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_ENABLED_STATE_ENABLED = 1;
+
+    /**
+     * On-head detection enabled state: Disabled. Indicates that on-head detection is currently
+     * disabled on the device.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_ENABLED_STATE_DISABLED = 2;
+
+    /**
+     * On-head detection state: Unknown. Indicates that the current on-head state is not known.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_STATE_UNKNOWN = 0;
+
+    /**
+     * On-head detection state: On Head. Indicates that the device is currently detected as being on
+     * the user's head.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_STATE_ON_HEAD = 1;
+
+    /**
+     * On-head detection state: Not On Head. Indicates that the device is currently detected as not
+     * being on the user's head.
+     *
+     * @hide
+     */
+    public static final int ON_HEAD_DETECTION_STATE_NOT_ON_HEAD = 2;
 
     /**
      * Indicates default active audio device policy is applied to this device
@@ -4068,14 +4060,92 @@ public final class BluetoothDevice implements Parcelable, Attributable {
         return true;
     }
 
+    /** @hide */
+    @IntDef(
+            value = {
+                BluetoothStatusCodes.SUCCESS,
+                BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED,
+                BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED,
+                BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION,
+                BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED,
+            })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface SetOnHeadDetectionParamsReturnValues {}
+
     /**
-     * Get the number of times {@link ACTION_KEY_MISSING} intent is thrown for this device since
-     * last successful encrypted connection
+     * Sets the on-head detection enabled state for this Bluetooth device.
      *
-     * @return number of times {@link ACTION_KEY_MISSING} intent is thrown for this device since
-     *     last successful encrypted connection
+     * <p>This method is used to inform the Bluetooth system about the on-head detection enabled
+     * state of the remote device.
+     *
+     * @param enabled True if the on-head detection is enabled, false if not enabled.
+     * @return Whether the on-head detection enabled state was set properly.
      * @hide
      */
+    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
+    @SystemApi
+    @RequiresBluetoothConnectPermission
+    @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
+    public @SetOnHeadDetectionParamsReturnValues int setOnHeadDetectionEnabled(boolean enabled) {
+        final IBluetooth service = getService();
+        if (service == null || !isBluetoothEnabled()) {
+            Log.e(TAG, "Bluetooth is not enabled. Cannot set on-head detection enable state.");
+            if (DBG) log(Log.getStackTraceString(new Throwable()));
+        } else {
+            try {
+                int enabledState =
+                        enabled
+                                ? ON_HEAD_DETECTION_ENABLED_STATE_ENABLED
+                                : ON_HEAD_DETECTION_ENABLED_STATE_DISABLED;
+                return service.setOnHeadDetectionEnabled(this, enabledState, mAttributionSource);
+            } catch (RemoteException e) {
+                Log.e(TAG, e.toString() + "\n" + Log.getStackTraceString(new Throwable()));
+            }
+        }
+        return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
+    }
+
+    /**
+     * Sets whether this Bluetooth device is on-head.
+     *
+     * <p>This method is used to inform the Bluetooth system about the on-head detection state of
+     * the remote device.
+     *
+     * @param isOnHead True if the device is on-head, false if it is not on-head.
+     * @return Whether the on head detection state was set properly.
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
+    @SystemApi
+    @RequiresBluetoothConnectPermission
+    @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
+    public @SetOnHeadDetectionParamsReturnValues int setOnHead(boolean isOnHead) {
+        final IBluetooth service = getService();
+        if (service == null || !isBluetoothEnabled()) {
+            Log.e(TAG, "Bluetooth is not enabled. Cannot set on-head detection state.");
+            if (DBG) log(Log.getStackTraceString(new Throwable()));
+        } else {
+            try {
+                int state =
+                        isOnHead
+                                ? ON_HEAD_DETECTION_STATE_ON_HEAD
+                                : ON_HEAD_DETECTION_STATE_NOT_ON_HEAD;
+                return service.setOnHead(this, state, mAttributionSource);
+            } catch (RemoteException e) {
+                Log.e(TAG, e.toString() + "\n" + Log.getStackTraceString(new Throwable()));
+            }
+        }
+        return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
+    }
+
+    /**
+     * Get the number of times {@link ACTION_KEY_MISSING} intent was thrown for this device since
+     * the last successful encrypted connection
+     *
+     * @return number of times {@link ACTION_KEY_MISSING} intent was thrown for this device since
+     *     the last successful encrypted connection
+     */
+    @FlaggedApi(Flags.FLAG_KEY_MISSING_COUNT_API)
     @RequiresPermission(BLUETOOTH_CONNECT)
     public int getKeyMissingCount() {
         final IBluetooth service = getService();

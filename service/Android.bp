@@ -74,7 +74,6 @@ java_library {
     ],
 
     libs: [
-        "PlatformProperties",
         "framework-annotations-lib",
         "framework-configinfrastructure.stubs.module_lib",
         "framework-permission-s.stubs.module_lib",
@@ -84,6 +83,7 @@ java_library {
     ],
 
     static_libs: [
+        "PlatformProperties",
         "androidx.annotation_annotation",
         "androidx.appcompat_appcompat",
         "bluetooth-nano-protos",
@@ -117,7 +117,6 @@ java_library {
 
     libs: [
         "app-compat-annotations",
-        "framework-bluetooth.impl",
     ],
 
     sdk_version: "system_server_current",
