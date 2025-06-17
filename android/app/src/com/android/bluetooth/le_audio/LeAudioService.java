@@ -1029,7 +1029,6 @@ public class LeAudioService extends ConnectableProfile {
             return false;
         }
 
-        setDisconnected(true);
         sm.sendMessage(LeAudioStateMachine.DISCONNECT);
 
         return true;
@@ -3657,7 +3656,13 @@ public class LeAudioService extends ConnectableProfile {
                         case LeAudioStackEvent.CONNECTION_STATE_DISCONNECTING,
                                 LeAudioStackEvent.CONNECTION_STATE_DISCONNECTED -> {
                             deviceDescriptor.mAclConnected = false;
-                            setDisconnected(true);
+                            if (descriptor.isActive()) {
+                                if (getConnectedPeerDevices(groupId).size() > 1) {
+                                    Log.d(TAG, "There are other connected group members.");
+                                } else {
+                                    setDisconnected(true);
+                                }
+                            }
 
                             if (isScannerNeeded()) {
                                 mScanCallback.startBackgroundScan();
@@ -4552,6 +4557,8 @@ public class LeAudioService extends ConnectableProfile {
                             false,
                             hasFallbackDevice,
                             false);
+                    Log.d(TAG, "Device updated had been done, reset mHasFallback");
+                    mHasFallback = true;
                     /* Set by default earliest connected device */
                     if (Flags.leaudioBroadcastPrimaryGroupSelection()
                             && mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
