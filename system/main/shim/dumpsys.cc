@@ -67,8 +67,9 @@ void bluetooth::shim::Dump(int fd) {
   std::future future = promise.get_future();
   bluetooth::shim::Stack::GetInstance()->Dump(fd, std::move(promise));
   if (!com::android::bluetooth::flags::dump_without_promise_timeout()) {
-    log::assert_that(future.wait_for(std::chrono::seconds(1)) == std::future_status::ready,
-                     "Timed out waiting for dumpsys to complete");
+    if (future.wait_for(std::chrono::seconds(2)) != std::future_status::ready) {
+      log::warn("Timed out waiting for dumpsys to complete");
+    }
   } else {
     // Wait for the dump to complete without a timeout. This is to avoid the dumpsys command to
     // timeout when the stack is unresponsive.
