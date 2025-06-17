@@ -176,7 +176,7 @@ public class RemoteDevices {
                         Log.v(TAG, "Skipping device matching denylist: " + device);
                         return true;
                     }
-                    final String name = Utils.getName(device);
+                    final String name = getName(device);
                     if (mAdapterService.getLocationDenylistName().test(name)) {
                         Log.v(TAG, "Skipping name matching denylist: " + name);
                         return true;
@@ -394,6 +394,9 @@ public class RemoteDevices {
         private int mAshaCapability;
         private int mAshaTruncatedHiSyncId;
         private String mModelName;
+        private int mOnHeadDetectionEnabledState =
+                BluetoothDevice.ON_HEAD_DETECTION_ENABLED_STATE_UNKNOWN;
+        private int mOnHeadDetectionState = BluetoothDevice.ON_HEAD_DETECTION_STATE_UNKNOWN;
         @VisibleForTesting int mBondState;
         @VisibleForTesting int mDeviceType;
         @VisibleForTesting ParcelUuid[] mUuidsBrEdr;
@@ -876,6 +879,36 @@ public class RemoteDevices {
         String getModelName() {
             synchronized (mObject) {
                 return mModelName;
+            }
+        }
+
+        public void setOnheadDetectionEnabledState(int enabledState) {
+            synchronized (mObject) {
+                this.mOnHeadDetectionEnabledState = enabledState;
+            }
+        }
+
+        /**
+         * @return the mOnHeadDetectionEnabledState
+         */
+        int getOnHeadDetectionEnabledState() {
+            synchronized (mObject) {
+                return mOnHeadDetectionEnabledState;
+            }
+        }
+
+        public void setOnHeadDetectionState(int state) {
+            synchronized (mObject) {
+                this.mOnHeadDetectionState = state;
+            }
+        }
+
+        /**
+         * @return the mOnHeadDetectionState
+         */
+        int getOnHeadDetectionState() {
+            synchronized (mObject) {
+                return mOnHeadDetectionState;
             }
         }
 
@@ -1524,7 +1557,7 @@ public class RemoteDevices {
         if (connectionState == BluetoothAdapter.STATE_CONNECTED) {
             connectionChangeConsumer = cb -> cb.onDeviceConnected(device);
             if (Flags.watchDeviceOverrideAirplaneMode()) {
-                mWatchConnectionStateListener.connectedDevice(device);
+                mWatchConnectionStateListener.onDeviceConnected(device, transport);
             }
         } else {
             final int disconnectReason;
@@ -1547,7 +1580,7 @@ public class RemoteDevices {
                                     device,
                                     AdapterService.hciToAndroidDisconnectReason(disconnectReason));
             if (Flags.watchDeviceOverrideAirplaneMode()) {
-                mWatchConnectionStateListener.disconnectedDevice(device);
+                mWatchConnectionStateListener.onDeviceDisconnected(device, transport);
             }
         }
 
@@ -1607,7 +1640,7 @@ public class RemoteDevices {
 
     // TODO: remove when key_missing_public flag is deleted
     @SuppressLint("AndroidFrameworkRequiresPermission")
-    void keyMissingCallback(byte[] address) {
+    void keyMissingCallback(byte[] address, int reason) {
         BluetoothDevice device = getDevice(address);
         if (device == null) {
             errorLog(
@@ -1621,7 +1654,7 @@ public class RemoteDevices {
             return;
         }
 
-        Log.i(TAG, "keyMissingCallback device: " + device);
+        Log.i(TAG, "keyMissingCallback device: " + device + ", reason: " + reason);
         Intent intent =
                 new Intent(BluetoothDevice.ACTION_KEY_MISSING)
                         .putExtra(BluetoothDevice.EXTRA_DEVICE, device)

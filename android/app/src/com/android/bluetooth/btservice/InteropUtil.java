@@ -58,7 +58,7 @@ public class InteropUtil {
      * @return true if matched, false otherwise.
      */
     public static boolean interopMatchAddr(InteropFeature feature, String address) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,
@@ -92,7 +92,7 @@ public class InteropUtil {
      * @return true if matched, false otherwise.
      */
     public static boolean interopMatchName(InteropFeature feature, String name) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,
@@ -148,7 +148,7 @@ public class InteropUtil {
      *     usually it is 3.
      */
     public static void interopDatabaseAddAddr(InteropFeature feature, String address, int length) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,
@@ -181,7 +181,7 @@ public class InteropUtil {
      * @param address a given address to be removed.
      */
     public static void interopDatabaseRemoveAddr(InteropFeature feature, String address) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,
@@ -211,7 +211,7 @@ public class InteropUtil {
      * @param name a given name to be added.
      */
     public static void interopDatabaseAddName(InteropFeature feature, String name) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,
@@ -236,7 +236,7 @@ public class InteropUtil {
      * @param name a given name to be removed.
      */
     public static void interopDatabaseRemoveName(InteropFeature feature, String name) {
-        AdapterService adapterService = AdapterService.getAdapterService();
+        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
         if (adapterService == null) {
             Log.d(
                     TAG,

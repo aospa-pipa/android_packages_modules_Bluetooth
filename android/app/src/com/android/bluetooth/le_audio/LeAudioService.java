@@ -105,7 +105,6 @@ import com.android.bluetooth.hap.HapClientService;
 import com.android.bluetooth.hfp.HeadsetService;
 import com.android.bluetooth.mcp.McpService;
 import com.android.bluetooth.tbs.TbsGatt;
-import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.tbs.TbsGeneric;
 import com.android.bluetooth.vc.VolumeControlService;
 import com.android.internal.annotations.GuardedBy;
@@ -247,8 +246,6 @@ public class LeAudioService extends ConnectableProfile {
             new BluetoothEventLogger(LOG_NB_EVENTS, TAG + " event log");
 
     @VisibleForTesting McpService mMcpService;
-
-    @VisibleForTesting TbsService mTbsService;
 
     @VisibleForTesting VolumeControlService mVolumeControlService;
 
@@ -868,7 +865,6 @@ public class LeAudioService extends ConnectableProfile {
         mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
 
         mMcpService = null;
-        mTbsService = null;
         mVolumeControlService = null;
         mCsipSetCoordinatorService = null;
         mBassClientService = null;
@@ -886,8 +882,7 @@ public class LeAudioService extends ConnectableProfile {
         return sLeAudioService;
     }
 
-    @VisibleForTesting
-    public static synchronized void setLeAudioService(LeAudioService instance) {
+    private static synchronized void setLeAudioService(LeAudioService instance) {
         Log.d(TAG, "setLeAudioService(): set to: " + instance);
         sLeAudioService = instance;
     }
@@ -2037,16 +2032,13 @@ public class LeAudioService extends ConnectableProfile {
             removeAuthorizationInfoForRelatedProfiles(device);
         }
 
-        mAdapterService.notifyProfileConnectionStateChangeToGatt(
-                BluetoothProfile.LE_AUDIO, prevState, newState);
-        mAdapterService.handleProfileConnectionStateChange(
-                BluetoothProfile.LE_AUDIO, device, prevState, newState);
+        mAdapterService.notifyProfileConnectionStateChangeToGatt(mProfileId, prevState, newState);
+        mAdapterService.handleProfileConnectionStateChange(mProfileId, device, prevState, newState);
         mAdapterService
                 .getActiveDeviceManager()
-                .profileConnectionStateChanged(
-                        BluetoothProfile.LE_AUDIO, device, prevState, newState);
+                .profileConnectionStateChanged(mProfileId, device, prevState, newState);
         mAdapterService.updateProfileConnectionAdapterProperties(
-                device, BluetoothProfile.LE_AUDIO, newState, prevState);
+                device, mProfileId, newState, prevState);
 
         Intent intent = new Intent(BluetoothLeAudio.ACTION_LE_AUDIO_CONNECTION_STATE_CHANGED);
         intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
@@ -2106,7 +2098,7 @@ public class LeAudioService extends ConnectableProfile {
                         + " Currently exposed device "
                         + mExposedActiveDevice);
 
-        mAdapterService.handleActiveDeviceChange(BluetoothProfile.LE_AUDIO, device);
+        mAdapterService.handleActiveDeviceChange(mProfileId, device);
         notifyVolumeControlServiceAboutActiveGroup(device);
         sendActiveDeviceChangeIntent(device);
     }
@@ -2285,9 +2277,9 @@ public class LeAudioService extends ConnectableProfile {
         if (device.equals(mExposedActiveDevice)) {
             Log.d(TAG, " onAudioDevicesAdded: " + device + " is already exposed");
             Log.d(TAG, " handleAudioDeviceAdded(): mCachedOpcode: " + mCachedOpcode);
-            TbsService tbsService = getTbsService();
+            var tbsService = mAdapterService.getTbsService();
             if (tbsService != null && isSource && mCachedOpcode != -1) {
-                TbsGeneric tbsGeneric = tbsService.getTbsGeneric();
+                TbsGeneric tbsGeneric = tbsService.get().getTbsGeneric();
                 if (tbsGeneric != null) {
                     tbsGeneric.processCallControlOp(device, mCachedOpcode, mCachedArgs);
                 }
@@ -3346,8 +3338,8 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
 
-        TbsService tbsService = getTbsService();
-        if (tbsService == null) {
+        final var tbsService = mAdapterService.getTbsService();
+        if (tbsService.isEmpty()) {
             Log.w(TAG, "updateInbandRingtoneForTheGroup, tbsService not available");
             return;
         }
@@ -3424,9 +3416,9 @@ public class LeAudioService extends ConnectableProfile {
                     deviceDescriptor.mDevInbandRingtoneEnabled =
                             groupDescriptor.mInbandRingtoneEnabled;
                     if (deviceDescriptor.mDevInbandRingtoneEnabled) {
-                        tbsService.setInbandRingtoneSupport(device);
+                        tbsService.get().setInbandRingtoneSupport(device);
                     } else {
-                        tbsService.clearInbandRingtoneSupport(device);
+                        tbsService.get().clearInbandRingtoneSupport(device);
                     }
                 }
             }
@@ -5189,15 +5181,6 @@ public class LeAudioService extends ConnectableProfile {
         return mMcpService;
     }
 
-    private TbsService getTbsService() {
-        if (mTbsService != null) {
-            return mTbsService;
-        }
-
-        mTbsService = mServiceFactory.getTbsService();
-        return mTbsService;
-    }
-
     synchronized void storeSetLc3ForDevice(@NonNull BluetoothDevice device, boolean value) {
         if (mAdapterService.getBondState(device) != BluetoothDevice.BOND_BONDED) {
             return;
@@ -5219,17 +5202,15 @@ public class LeAudioService extends ConnectableProfile {
         pref.remove(device.getAddress());
         pref.apply();
     }
-
     private void setAuthorizationForRelatedProfiles(BluetoothDevice device, boolean authorize) {
         McpService mcpService = getMcpService();
         if (mcpService != null) {
             mcpService.setDeviceAuthorized(device, authorize);
         }
 
-        TbsService tbsService = getTbsService();
-        if (tbsService != null) {
-            tbsService.setDeviceAuthorized(device, authorize);
-        }
+        mAdapterService
+                .getTbsService()
+                .ifPresent(tbsService -> tbsService.setDeviceAuthorized(device, authorize));
     }
 
     private void removeAuthorizationInfoForRelatedProfiles(BluetoothDevice device) {
@@ -5238,10 +5219,9 @@ public class LeAudioService extends ConnectableProfile {
             mcpService.removeDeviceAuthorizationInfo(device);
         }
 
-        TbsService tbsService = getTbsService();
-        if (tbsService != null) {
-            tbsService.removeDeviceAuthorizationInfo(device);
-        }
+        mAdapterService
+                .getTbsService()
+                .ifPresent(tbsService -> tbsService.removeDeviceAuthorizationInfo(device));
     }
 
     /**

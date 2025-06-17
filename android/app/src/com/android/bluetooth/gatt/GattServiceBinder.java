@@ -238,6 +238,19 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return;
         }
+
+        try {
+            service.permissionCheck(callback, device, handle);
+        } catch (SecurityException ex) {
+            String callingPackage = source.getPackageName();
+            // Only throws on apps with target SDK T+ as this old API did not throw prior to T
+            if (checkCallerTargetSdk(service, callingPackage, Build.VERSION_CODES.TIRAMISU)) {
+                throw ex;
+            }
+            Log.w(TAG, "readCharacteristic() - permission check failed!");
+            return;
+        }
+
         service.readCharacteristic(callback, device, handle, authReq, source);
     }
 
@@ -285,6 +298,7 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return BluetoothStatusCodes.ERROR_PROFILE_SERVICE_NOT_BOUND;
         }
+        service.permissionCheck(callback, device, handle);
         return service.writeCharacteristic(callback, device, handle, writeType, authReq, value);
     }
 
@@ -299,6 +313,19 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return;
         }
+
+        try {
+            service.permissionCheck(callback, device, handle);
+        } catch (SecurityException ex) {
+            String callingPackage = source.getPackageName();
+            // Only throws on apps with target SDK T+ as this old API did not throw prior to T
+            if (checkCallerTargetSdk(service, callingPackage, Build.VERSION_CODES.TIRAMISU)) {
+                throw ex;
+            }
+            Log.w(TAG, "readDescriptor() - permission check failed!");
+            return;
+        }
+
         service.readDescriptor(callback, device, handle, authReq, source);
     }
 
@@ -314,6 +341,7 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return BluetoothStatusCodes.ERROR_PROFILE_SERVICE_NOT_BOUND;
         }
+        service.permissionCheck(callback, device, handle);
         return service.writeDescriptor(callback, device, handle, authReq, value);
     }
 
@@ -350,6 +378,18 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         if (service == null) {
             return;
         }
+        try {
+            service.permissionCheck(callback, device, handle);
+        } catch (SecurityException ex) {
+            String callingPackage = source.getPackageName();
+            // Only throws on apps with target SDK T+ as this old API did not throw prior to T
+            if (checkCallerTargetSdk(service, callingPackage, Build.VERSION_CODES.TIRAMISU)) {
+                throw ex;
+            }
+            Log.w(TAG, "registerForNotification() - permission check failed!");
+            return;
+        }
+
         service.registerForNotification(callback, device, handle, enable, source);
     }
 
@@ -435,8 +475,8 @@ class GattServiceBinder extends IBluetoothGatt.Stub implements IProfileServiceBi
         Utils.enforceCdmAssociationIfNotBluetoothPrivileged(
                 service, service.getCompanionDeviceManager(), source, device);
 
-        if (subrateMode < BluetoothGatt.SUBRATE_REQUEST_MODE_BALANCED
-                || subrateMode > BluetoothGatt.SUBRATE_REQUEST_MODE_LOW_POWER) {
+        if (subrateMode < BluetoothGatt.SUBRATE_MODE_OFF
+                || subrateMode > BluetoothGatt.SUBRATE_MODE_HIGH) {
             throw new IllegalArgumentException("Subrate Mode not within valid range");
         }
 
