@@ -4035,10 +4035,12 @@ public class AdapterService extends Service {
         getSapService().ifPresent(profile -> profile.aclDisconnected(device));
         getPbapClientService().ifPresent(profile -> profile.aclDisconnected(device, transport));
 
-        Message msg = mBondStateMachine.obtainMessage(BondStateMachine.ACL_DISCONNECTED);
-        msg.obj = device;
-        msg.arg1 = transport;
-        mBondStateMachine.sendMessage(msg);
+        if (transport == BluetoothDevice.TRANSPORT_LE) {
+            Message msg = mBondStateMachine.obtainMessage(BondStateMachine.ACL_DISCONNECTED);
+            msg.obj = device;
+            msg.arg1 = transport;
+            mBondStateMachine.sendMessage(msg);
+        }
     }
 
     /**
