@@ -5562,7 +5562,9 @@ public:
           case AudioState::READY_TO_RELEASE:
             StopSuspendTimeout();
             audio_sender_state_ = AudioState::READY_TO_START;
-            if (!isDynamicDirectionsEnabled(group)) {
+            if (!isDynamicDirectionsEnabled(group) ||
+                (group->GetActiveEnabledDirections() &
+                 bluetooth::le_audio::types::kLeAudioDirectionSink)) {
               /* Stream is up just restore it */
               ConfirmLocalAudioSourceStreamingRequest(false);
               bluetooth::le_audio::MetricsCollector::Get()->OnStreamStarted(
@@ -5936,7 +5938,9 @@ public:
           case AudioState::READY_TO_RELEASE:
             audio_receiver_state_ = AudioState::READY_TO_START;
             StopSuspendTimeout();
-            if (!isDynamicDirectionsEnabled(group)) {
+            if (!isDynamicDirectionsEnabled(group) ||
+                (group->GetActiveEnabledDirections() &
+                 bluetooth::le_audio::types::kLeAudioDirectionSource)) {
               /* Stream is up just restore it */
               ConfirmLocalAudioSinkStreamingRequest(false);
             } else if (!reenableDirectionIfNeeded(

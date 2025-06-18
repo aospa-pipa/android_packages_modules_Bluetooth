@@ -789,6 +789,7 @@ public class MediaControlProfile implements MediaControlServiceCallbacks {
             // Instantiate a Service Instance and it's state machine
             int ccid =
                     ContentControlIdKeeper.acquireCcid(
+                            mAdapterService,
                             BluetoothUuid.GENERIC_MEDIA_CONTROL,
                             BluetoothLeAudio.CONTEXT_TYPE_MEDIA
                                     | BluetoothLeAudio.CONTEXT_TYPE_LIVE);
@@ -888,7 +889,7 @@ public class MediaControlProfile implements MediaControlServiceCallbacks {
                 service.destroy();
 
                 // Release ccid
-                ContentControlIdKeeper.releaseCcid(ccid);
+                ContentControlIdKeeper.releaseCcid(mAdapterService, ccid);
 
                 mServiceMap.remove(appToken);
             }

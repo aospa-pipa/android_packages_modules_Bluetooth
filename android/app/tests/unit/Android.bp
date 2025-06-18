@@ -38,6 +38,7 @@ android_test {
         "androidx.test.ext.truth",
         "androidx.test.rules",
         "androidx.test.uiautomator_uiautomator",
+        "bluetooth-common-java-tests",
         "bluetooth_flags_java_lib",
         "com.android.sysprop.bluetooth",
         "flag-junit",
@@ -70,6 +71,7 @@ android_test {
         include_filter: [
             "android.bluetooth.**",
             "com.android.bluetooth.**",
+            "com.android.server.bluetooth.**",
         ],
         exclude_filter: [],
     },

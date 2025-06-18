@@ -56,8 +56,6 @@ std::bitset<8> GmapServer::UGG_feature_ =
         static_cast<uint8_t>(bluetooth::gmap::UGGFeatureBitMask::MultisinkFeatureSupport);
 
 bool GmapServer::IsGmapServerEnabled() {
-  // for UGG, both GMAP Server and Client are needed. So server and client share the same flag.
-  bool flag = com::android::bluetooth::flags::leaudio_gmap_client();
   bool system_prop = osi_property_get_bool("bluetooth.profile.gmap.enabled", false);
   bool is_gmap_supported_in_software_datapath =
           android::sysprop::bluetooth::LeAudio::is_gmap_supported_in_software_datapath().value_or(
@@ -65,19 +63,19 @@ bool GmapServer::IsGmapServerEnabled() {
   bool pts_gmap = osi_property_get_bool("persist.vendor.qcom.bluetooth.pts_gmap", false);
   log::info(" pts_gmap: {}", pts_gmap);
 
-  bool result = flag && system_prop &&
-                (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
+  bool result =
+          system_prop && (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
   if(pts_gmap) {
     result = true;
   } else {
-    result = flag && system_prop &&
-                (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
+    result =
+          system_prop && (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
   }
   log::info(
-          "GmapServerEnabled={}, flag={}, system_prop={}, "
+          "GmapServerEnabled={}, system_prop={}, "
           "is_gmap_supported_in_software_datapath={}, "
           "offloader_support={}",
-          result, flag, system_prop, is_gmap_supported_in_software_datapath,
+          result, system_prop, is_gmap_supported_in_software_datapath,
           GmapServer::is_offloader_support_gmap_);
   return result;
 }

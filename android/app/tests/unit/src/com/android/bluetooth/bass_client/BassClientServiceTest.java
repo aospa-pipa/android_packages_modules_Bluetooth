@@ -328,9 +328,16 @@ public class BassClientServiceTest {
         mBassClientService = new BassClientService(mAdapterService);
         mBassClientService.setAvailable(true);
 
-        mBassClientService.mServiceFactory = mServiceFactory;
-        doReturn(mCsipService).when(mServiceFactory).getCsipSetCoordinatorService();
-        doReturn(mLeAudioService).when(mServiceFactory).getLeAudioService();
+        if (Flags.adapterServiceProfilesUseOptional()) {
+            doReturn(Optional.of(mCsipService))
+                    .when(mAdapterService)
+                    .getCsipSetCoordinatorService();
+            doReturn(Optional.of(mLeAudioService)).when(mAdapterService).getLeAudioService();
+        } else {
+            mBassClientService.mServiceFactory = mServiceFactory;
+            doReturn(mCsipService).when(mServiceFactory).getCsipSetCoordinatorService();
+            doReturn(mLeAudioService).when(mServiceFactory).getLeAudioService();
+        }
 
         when(mCallback.asBinder()).thenReturn(mBinder);
         mBassClientService.registerCallback(mCallback);
@@ -2118,6 +2125,101 @@ public class BassClientServiceTest {
         }
     }
 
+    @Test
+    public void testCompatibilityOfAudioQuality() throws RemoteException {
+        prepareConnectedDeviceGroup();
+        prepareSyncToSourceAndVerify();
+
+        // Remotes has unknown quality
+        doReturn(Optional.empty())
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice);
+        doReturn(Optional.empty())
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice1);
+
+        // Broadcast has high quality only
+        BluetoothLeBroadcastMetadata metadataHighQuality =
+                new BluetoothLeBroadcastMetadata.Builder(mBroadcastMetadata1)
+                        .setAudioConfigQuality(
+                                BluetoothLeBroadcastMetadata.AUDIO_CONFIG_QUALITY_HIGH)
+                        .build();
+
+        // Verify add source pass, unknown quality, broadcast HQ only
+        verifyAddSourceForGroup(metadataHighQuality);
+        mBassClientService.removeSource(mCurrentDevice1, TEST_SOURCE_ID);
+
+        // Remotes do not support high quality
+        doReturn(Optional.of(false))
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice);
+        doReturn(Optional.of(false))
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice1);
+
+        // Broadcast has not defined quality
+        BluetoothLeBroadcastMetadata metadataNoQuality =
+                new BluetoothLeBroadcastMetadata.Builder(mBroadcastMetadata1)
+                        .setAudioConfigQuality(
+                                BluetoothLeBroadcastMetadata.AUDIO_CONFIG_QUALITY_NONE)
+                        .build();
+
+        // Verify add source pass, group id does not support HQ, broadcast no Q set
+        verifyAddSourceForGroup(metadataNoQuality);
+        mBassClientService.removeSource(mCurrentDevice1, TEST_SOURCE_ID);
+
+        // Broadcast has standard quality only
+        BluetoothLeBroadcastMetadata metadataStandardQuality =
+                new BluetoothLeBroadcastMetadata.Builder(mBroadcastMetadata1)
+                        .setAudioConfigQuality(
+                                BluetoothLeBroadcastMetadata.AUDIO_CONFIG_QUALITY_STANDARD)
+                        .build();
+
+        // Verify add source pass, group id does not support HQ, broadcast SQ only
+        verifyAddSourceForGroup(metadataStandardQuality);
+        mBassClientService.removeSource(mCurrentDevice1, TEST_SOURCE_ID);
+
+        // Verify add source fail, group id does not support HQ, broadcast HQ only
+        mBassClientService.addSource(mCurrentDevice, metadataHighQuality, /* isGroupOp */ true);
+        verify(mCallback, timeout(TIMEOUT_MS))
+                .onSourceAddFailed(
+                        eq(mCurrentDevice),
+                        eq(metadataHighQuality),
+                        eq(BluetoothStatusCodes.ERROR_BAD_PARAMETERS));
+        verify(mCallback, timeout(TIMEOUT_MS))
+                .onSourceAddFailed(
+                        eq(mCurrentDevice1),
+                        eq(metadataHighQuality),
+                        eq(BluetoothStatusCodes.ERROR_BAD_PARAMETERS));
+
+        // Broadcast has standard and high quality
+        BluetoothLeBroadcastMetadata metadataBothQuality =
+                new BluetoothLeBroadcastMetadata.Builder(mBroadcastMetadata1)
+                        .setAudioConfigQuality(
+                                BluetoothLeBroadcastMetadata.AUDIO_CONFIG_QUALITY_STANDARD
+                                        | BluetoothLeBroadcastMetadata.AUDIO_CONFIG_QUALITY_HIGH)
+                        .build();
+
+        // Verify add source pass, group id does not support HQ, broadcast SQ and HQ
+        verifyAddSourceForGroup(metadataBothQuality);
+        mBassClientService.removeSource(mCurrentDevice1, TEST_SOURCE_ID);
+
+        // Remotes support high quality
+        doReturn(Optional.of(true))
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice);
+        doReturn(Optional.of(true))
+                .when(mLeAudioService)
+                .isCapableToReceiveHighQualityBroadcastAudio(mCurrentDevice1);
+
+        // Verify add source pass, group id supports HQ, broadcast SQ and HQ
+        verifyAddSourceForGroup(metadataBothQuality);
+        mBassClientService.removeSource(mCurrentDevice1, TEST_SOURCE_ID);
+
+        // Verify add source pass, group id supports HQ, broadcast HQ only
+        verifyAddSourceForGroup(metadataHighQuality);
+    }
+
     /**
      * Test that an outgoing connection to two device that have BASS UUID is successful and a
      * connection state change intent is sent
@@ -3021,9 +3123,7 @@ public class BassClientServiceTest {
         prepareSyncToSourceAndVerify();
 
         /* Fake external broadcast - no Broadcast Metadata from LE Audio service */
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>())
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(null).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
         doReturn(testGroupId).when(mLeAudioService).getActiveGroupId();
         doReturn(new ArrayList<BluetoothDevice>(Arrays.asList(mCurrentDevice)))
                 .when(mLeAudioService)
@@ -3739,9 +3839,7 @@ public class BassClientServiceTest {
         prepareSyncToSourceAndVerify();
 
         /* Fake external broadcast - no Broadcast Metadata from LE Audio service */
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>())
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(null).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
 
         verifyAddSourceForGroup(mBroadcastMetadata1);
         prepareRemoteSourceState(
@@ -3770,9 +3868,7 @@ public class BassClientServiceTest {
         prepareSyncToSourceAndVerify();
 
         /* Fake external broadcast - no Broadcast Metadata from LE Audio service */
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>())
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(null).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
 
         verifyAddSourceForGroup(mBroadcastMetadata1);
         prepareRemoteSourceState(
@@ -3898,9 +3994,7 @@ public class BassClientServiceTest {
     }
 
     private void prepareTwoSynchronizedDevicesForLocalBroadcast() throws RemoteException {
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>(Arrays.asList(mBroadcastMetadata1)))
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
         prepareConnectedDeviceGroup();
         verifyAddSourceForGroup(mBroadcastMetadata1);
         for (BassClientStateMachine sm : mStateMachines.values()) {
@@ -3963,9 +4057,7 @@ public class BassClientServiceTest {
         doReturn(false).when(mLeAudioService).isPlaying(TEST_BROADCAST_ID);
         doReturn(false).when(mLeAudioService).isPaused(TEST_BROADCAST_ID);
 
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>(Arrays.asList(mBroadcastMetadata1)))
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
         prepareConnectedDeviceGroup();
         mBassClientService.addSource(mCurrentDevice, mBroadcastMetadata1, /* isGroupOp */ true);
         verify(mCallback, timeout(TIMEOUT_MS).atLeastOnce())
@@ -5457,23 +5549,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @DisableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
-    public void bigMonitoring_autoSyncToBroadcast_onStopSearching() {
-        bigMonitoringDuringScanning();
-
-        // Verify that start searching cause sync when broadcaster synced to sinks
-        mBassClientService.stopSearchingForSources();
-        mInOrderMethodProxy
-                .verify(mMethodProxy)
-                .periodicAdvertisingManagerUnregisterSync(any(), any());
-        mInOrderMethodProxy
-                .verify(mMethodProxy)
-                .periodicAdvertisingManagerRegisterSync(
-                        any(), any(), anyInt(), anyInt(), any(), any());
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void bigMonitoring_remainEstablishedSync_onStopSearching() {
         bigMonitoringDuringScanning();
 
@@ -5541,7 +5616,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void waitingForPast_remainPendingSync_onStopSearching() {
         prepareSynchronizedPair();
 
@@ -5604,7 +5678,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void pendingSourceToAdd_remainPendingSync_onStopSearching() {
         prepareConnectedDeviceGroup();
         prepareSyncToSourceAndVerify();
@@ -5666,7 +5739,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void alreadySynced_remainSyncAndCache_onStartSearching() {
         prepareConnectedDeviceGroup();
         prepareSyncToSourceAndVerify();
@@ -5746,7 +5818,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void alreadySyncedWithSinks_syncAndRemainCache_onStartSearching() {
         prepareSynchronizedPair();
 
@@ -5819,7 +5890,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void waitingForPast_remainPendingSyncAndCache_onStartSearching() {
         prepareSynchronizedPair();
 
@@ -5898,7 +5968,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void pendingSourcesToAdd_remainPendingSyncAndCache_onStartSearching() {
         prepareConnectedDeviceGroup();
         prepareSyncToSourceAndVerify();
@@ -5980,7 +6049,6 @@ public class BassClientServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_PREVENT_RESUME_INTERRUPTION)
     public void suspendedByHost_SyncAndRemainCache_onStartSearching() {
         prepareSynchronizedPair();
 
@@ -6602,9 +6670,7 @@ public class BassClientServiceTest {
             doReturn(false).when(sm).isBassStateReady();
         }
         doReturn(true).when(mLeAudioService).isPlaying(TEST_BROADCAST_ID);
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>(Arrays.asList(mBroadcastMetadata1)))
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
         // Add broadcast source and got queued due to BASS not ready
         mBassClientService.addSource(mCurrentDevice, mBroadcastMetadata1, /* isGroupOp */ false);
 
@@ -6670,9 +6736,7 @@ public class BassClientServiceTest {
             doReturn(false).when(sm).isBassStateReady();
         }
         doReturn(true).when(mLeAudioService).isPlaying(TEST_BROADCAST_ID);
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>(Arrays.asList(mBroadcastMetadata1)))
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
         // Add broadcast source and got queued due to BASS not ready
         mBassClientService.addSource(mCurrentDevice, mBroadcastMetadata1, /* isGroupOp */ true);
 
@@ -6748,17 +6812,13 @@ public class BassClientServiceTest {
                                 .collect(Collectors.toList()));
 
         /* External broadcast check */
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>())
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(null).when(mLeAudioService).getBroadcastMetadata(broadcastId);
 
         assertThat(mBassClientService.isLocalBroadcast(metadata)).isFalse();
         assertThat(mBassClientService.isLocalBroadcast(receiveState)).isFalse();
 
         /* Local broadcast check */
-        doReturn(new ArrayList<BluetoothLeBroadcastMetadata>(Arrays.asList(metadata)))
-                .when(mLeAudioService)
-                .getAllBroadcastMetadata();
+        doReturn(metadata).when(mLeAudioService).getBroadcastMetadata(broadcastId);
 
         assertThat(mBassClientService.isLocalBroadcast(metadata)).isTrue();
         assertThat(mBassClientService.isLocalBroadcast(receiveState)).isTrue();
