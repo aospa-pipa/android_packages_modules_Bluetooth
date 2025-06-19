@@ -699,6 +699,7 @@ cc_defaults {
         ":TestMockStackA2dp",
         ":TestMockStackAcl",
         ":TestMockStackBtm",
+        ":TestMockStackGatt",
         ":TestMockStackHcic",
     ],
     static_libs: [
@@ -2113,6 +2114,7 @@ cc_test {
         ":TestMockStackHcic",
         ":TestMockStackSdp",
         ":TestMockStackSmp",
+        ":TestMockStackGatt",
         "l2cap/l2c_api.cc",
         "l2cap/l2c_ble.cc",
         "l2cap/l2c_ble_conn_params.cc",
