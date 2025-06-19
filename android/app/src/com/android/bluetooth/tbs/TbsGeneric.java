@@ -39,7 +39,9 @@ import android.util.Log;
 import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ServiceFactory;
+import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_audio.ContentControlIdKeeper;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.internal.annotations.VisibleForTesting;
@@ -51,6 +53,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -130,10 +133,11 @@ public class TbsGeneric {
     private final List<Bearer> mBearerList = new ArrayList<>();
     private final Map<Integer, TbsCall> mCurrentCallsList = new TreeMap<>();
     private final Receiver mReceiver = new Receiver();
-    private final ServiceFactory mFactory = new ServiceFactory();
+    // TODO(b/422543753) Delete on flag cleanup
+    @VisibleForTesting ServiceFactory mFactory = new ServiceFactory();
 
+    private final AdapterService mAdapterService;
     private final TbsGatt mTbsGatt;
-    private final Context mContext;
 
     private boolean mIsInitialized;
     private int mLastIndexAssigned = TbsCall.INDEX_UNASSIGNED;
@@ -141,7 +145,6 @@ public class TbsGeneric {
     private int mLastRequestIdAssigned = 0;
     private List<String> mUriSchemes = new ArrayList<>(Arrays.asList("tel"));
     private int mStoredRingerMode = -1;
-    private LeAudioService mLeAudioService;
 
     private final class Receiver extends BroadcastReceiver {
         @Override
@@ -171,12 +174,13 @@ public class TbsGeneric {
     }
     ;
 
-    TbsGeneric(Context ctx, TbsGatt tbsGatt) {
+    TbsGeneric(AdapterService adapterService, TbsGatt tbsGatt) {
+        mAdapterService = requireNonNull(adapterService);
         mTbsGatt = requireNonNull(tbsGatt);
-        mContext = requireNonNull(ctx);
 
         int ccid =
                 ContentControlIdKeeper.acquireCcid(
+                        mAdapterService,
                         new ParcelUuid(TbsGatt.UUID_GTBS),
                         BluetoothLeAudio.CONTEXT_TYPE_CONVERSATIONAL);
         if (!isCcidValid(ccid)) {
@@ -199,8 +203,8 @@ public class TbsGeneric {
             return;
         }
 
-        AudioManager audioManager = requireNonNull(mContext.getSystemService(AudioManager.class));
-
+        final var audioManager =
+                requireNonNull(mAdapterService.getSystemService(AudioManager.class));
         // read initial value of ringer mode
         mStoredRingerMode = audioManager.getRingerMode();
 
@@ -212,16 +216,25 @@ public class TbsGeneric {
 
         IntentFilter filter = new IntentFilter(AudioManager.RINGER_MODE_CHANGED_ACTION);
         filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
-        mContext.registerReceiver(mReceiver, filter);
+        mAdapterService.registerReceiver(mReceiver, filter);
 
         mIsInitialized = true;
+    }
+
+    // TODO(b/422543753) Delete on flag cleanup
+    Optional<LeAudioService> getLeAudioService() {
+        if (Flags.adapterServiceProfilesUseOptional()) {
+            return mAdapterService.getLeAudioService();
+        } else {
+            return Optional.ofNullable(mFactory.getLeAudioService());
+        }
     }
 
     public synchronized void cleanup() {
         Log.d(TAG, "cleanup");
 
         if (mIsInitialized) {
-            mContext.unregisterReceiver(mReceiver);
+            mAdapterService.unregisterReceiver(mReceiver);
         }
         mTbsGatt.cleanup();
 
@@ -344,6 +357,7 @@ public class TbsGeneric {
                         providerName,
                         technology,
                         ContentControlIdKeeper.acquireCcid(
+                                mAdapterService,
                                 new ParcelUuid(UUID.randomUUID()),
                                 BluetoothLeAudio.CONTEXT_TYPE_CONVERSATIONAL));
         if (isCcidValid(bearer.ccid)) {
@@ -392,7 +406,7 @@ public class TbsGeneric {
         }
 
         // Release the ccid acquired
-        ContentControlIdKeeper.releaseCcid(bearer.ccid);
+        ContentControlIdKeeper.releaseCcid(mAdapterService, bearer.ccid);
 
         mBearerList.remove(bearer);
 
@@ -725,7 +739,7 @@ public class TbsGeneric {
             Log.i(TAG, "originate uri=" + uri);
             Intent intent = new Intent(Intent.ACTION_CALL_PRIVILEGED, Uri.parse(uri));
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            mContext.startActivity(intent);
+            mAdapterService.startActivity(intent);
             mTbsGatt.setCallControlPointResult(
                     device,
                     TbsGatt.CALL_CONTROL_POINT_OPCODE_ORIGINATE,
@@ -767,12 +781,14 @@ public class TbsGeneric {
             Log.w(TAG, "isDeviceGroupAlreadyActive: ignore null device");
             return false;
         }
-        if (!isLeAudioServiceAvailable()) {
-            Log.w(TAG, "mLeAudioService not available");
+
+        final var leAudio = getLeAudioService();
+        if (leAudio.isEmpty()) {
+            Log.w(TAG, "LeAudio service not available");
             return false;
         }
 
-        int currentlyActiveGroupId = mLeAudioService.getActiveGroupId();
+        int currentlyActiveGroupId = leAudio.get().getActiveGroupId();
         Log.d(TAG, "isDeviceGroupAlreadyActive(): currentlyActiveGroupId: " +
                                                         currentlyActiveGroupId);
         if (currentlyActiveGroupId == LE_AUDIO_GROUP_ID_INVALID) {
@@ -780,7 +796,7 @@ public class TbsGeneric {
             return false;
         }
 
-        for (BluetoothDevice dev : mLeAudioService.getGroupDevices(currentlyActiveGroupId)) {
+        for (BluetoothDevice dev : leAudio.get().getGroupDevices(currentlyActiveGroupId)) {
             Log.d(TAG, "isDeviceGroupAlreadyActive() dev: " + dev);
             if (Objects.equals(dev, device)) {
                 Log.w(TAG, "isDeviceGroupAlreadyActive: Device is already part of active group.");
@@ -824,9 +840,10 @@ public class TbsGeneric {
             if (opcode == TbsGatt.CALL_CONTROL_POINT_OPCODE_ACCEPT) {
                 bearer.callback.onAcceptCall(requestId, new ParcelUuid(callId));
                 opResult = TbsGatt.CALL_CONTROL_POINT_RESULT_SUCCESS;
-                if (isLeAudioServiceAvailable()) {
+                final var leAudio = getLeAudioService();
+                if (leAudio.isEmpty()) {
                     Log.d(TAG, "processCallControlOp(): clear cached ccp ops");
-                    mLeAudioService.clearCachedRemoteCcpOps();
+                    leAudio.get().clearCachedRemoteCcpOps();
                 }
             } else if (opcode == TbsGatt.CALL_CONTROL_POINT_OPCODE_TERMINATE) {
                 bearer.callback.onTerminateCall( requestId, new ParcelUuid(callId));
@@ -874,12 +891,13 @@ public class TbsGeneric {
 
                 @Override
                 public boolean isInbandRingtoneEnabled(BluetoothDevice device) {
-                    if (!isLeAudioServiceAvailable()) {
+                    final var leAudio = getLeAudioService();
+                    if (leAudio.isEmpty()) {
                         Log.i(TAG, "LeAudio service not available");
                         return false;
                     }
-                    int groupId = mLeAudioService.getGroupId(device);
-                    return mLeAudioService.isInbandRingtoneEnabled(groupId);
+                    int groupId = leAudio.get().getGroupId(device);
+                    return leAudio.get().isInbandRingtoneEnabled(groupId);
                 }
 
                 @Override
@@ -910,9 +928,10 @@ public class TbsGeneric {
                                 processCallControlOp(device, opcode, args);
                                 return;
                             } else {
-                                if (isLeAudioServiceAvailable()) {
+                                final var leAudio = getLeAudioService();
+                                if (leAudio.isEmpty()) {
                                     Log.d(TAG, "onCallControlPointRequest: caching ccp operation");
-                                    mLeAudioService.cacheRemoteCcpOps(opcode, args);
+                                    leAudio.get().cacheRemoteCcpOps(opcode, args);
                                 }
                                 setActiveLeDevice(device);
                                 return;
@@ -1153,35 +1172,18 @@ public class TbsGeneric {
         mForegroundBearer = bearer;
     }
 
-    private boolean isLeAudioServiceAvailable() {
-        if (mLeAudioService != null) {
-            return true;
-        }
-
-        mLeAudioService = mFactory.getLeAudioService();
-        if (mLeAudioService == null) {
-            Log.e(TAG, "leAudioService not available");
-            return false;
-        }
-
-        return true;
-    }
-
-    @VisibleForTesting
-    void setLeAudioServiceForTesting(LeAudioService leAudioService) {
-        mLeAudioService = leAudioService;
-    }
-
     private synchronized void notifyCclc() {
         Log.d(TAG, "notifyCclc");
 
-        if (isLeAudioServiceAvailable()) {
-            if (mCurrentCallsList.size() > 0) {
-                mLeAudioService.setInCall(true);
-            } else {
-                mLeAudioService.setInCall(false);
-            }
-        }
+        getLeAudioService()
+                .ifPresent(
+                        leAudio -> {
+                            if (mCurrentCallsList.size() > 0) {
+                                leAudio.setInCall(true);
+                            } else {
+                                leAudio.setInCall(false);
+                            }
+                        });
 
         mTbsGatt.setCallState(mCurrentCallsList);
         mTbsGatt.setBearerListCurrentCalls(mCurrentCallsList);
@@ -1208,11 +1210,15 @@ public class TbsGeneric {
             Log.w(TAG, "setActiveLeDevice: ignore null device");
             return;
         }
-        if (!isLeAudioServiceAvailable()) {
-            Log.w(TAG, "mLeAudioService not available");
-            return;
-        }
-        mLeAudioService.setActiveDevice(device);
+
+        getLeAudioService()
+                .ifPresentOrElse(
+                        leAudio -> {
+                            leAudio.setActiveDevice(device);
+                        },
+                        () -> {
+                            Log.w(TAG, "mLeAudioService not available");
+                        });
     }
 
     private static boolean isCallStateTransitionValid(int callState, int requestedOpcode) {
@@ -1254,13 +1260,15 @@ public class TbsGeneric {
             Log.w(TAG, "shouldBlockTbsForBroadcastReceiver: Ignore null device");
             return false;
         }
-        if (!isLeAudioServiceAvailable()) {
+
+        final var leAudio = getLeAudioService();
+        if (leAudio.isEmpty()) {
             Log.w(TAG, "shouldBlockTbsForBroadcastReceiver: LeAudioService is not available");
             return false;
         }
 
-        return mLeAudioService.getLocalBroadcastReceivers().contains(device)
-                && !mLeAudioService.isPrimaryDevice(device);
+        return leAudio.get().getLocalBroadcastReceivers().contains(device)
+                && !leAudio.get().isPrimaryDevice(device);
     }
 
     /**

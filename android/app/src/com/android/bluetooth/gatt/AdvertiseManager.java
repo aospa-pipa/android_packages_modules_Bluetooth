@@ -20,8 +20,7 @@
 
 package com.android.bluetooth.gatt;
 
-import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringRunnable;
-
+import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.gatt.AdvertiseHelper.advertiseDataToBytes;
 
 import static java.util.Objects.requireNonNullElseGet;
@@ -43,7 +42,6 @@ import android.util.Log;
 
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.HashMap;
@@ -190,7 +188,7 @@ public class AdvertiseManager {
             mAdvertiserMap.removeAppAdvertiseStats(regId);
         }
 
-        sendToCallback(
+        callbackToApp(
                 () ->
                         callback.onAdvertisingSetStarted(
                                 mAdvertiseBinder, advertiserId, txPower, status));
@@ -217,7 +215,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onAdvertisingEnabled(advertiserId, enable, status));
+        callbackToApp(() -> callback.onAdvertisingEnabled(advertiserId, enable, status));
 
         if (!enable && status != 0) {
             final var appAdvertiseStats = mAdvertiserMap.getAppAdvertiseStatsById(advertiserId);
@@ -375,7 +373,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onOwnAddressRead(advertiserId, addressType, address));
+        callbackToApp(() -> callback.onOwnAddressRead(advertiserId, addressType, address));
     }
 
     void getOwnAddress(int advertiserId) {
@@ -550,7 +548,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onAdvertisingDataSet(advertiserId, status));
+        callbackToApp(() -> callback.onAdvertisingDataSet(advertiserId, status));
     }
 
     void onScanResponseDataSet(int advertiserId, int status) {
@@ -564,7 +562,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onScanResponseDataSet(advertiserId, status));
+        callbackToApp(() -> callback.onScanResponseDataSet(advertiserId, status));
     }
 
     void onAdvertisingParametersUpdated(int advertiserId, int txPower, int status) {
@@ -585,8 +583,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(
-                () -> callback.onAdvertisingParametersUpdated(advertiserId, txPower, status));
+        callbackToApp(() -> callback.onAdvertisingParametersUpdated(advertiserId, txPower, status));
     }
 
     void onPeriodicAdvertisingParametersUpdated(int advertiserId, int status) {
@@ -607,7 +604,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onPeriodicAdvertisingParametersUpdated(advertiserId, status));
+        callbackToApp(() -> callback.onPeriodicAdvertisingParametersUpdated(advertiserId, status));
     }
 
     void onPeriodicAdvertisingDataSet(int advertiserId, int status) {
@@ -626,7 +623,7 @@ public class AdvertiseManager {
         }
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onPeriodicAdvertisingDataSet(advertiserId, status));
+        callbackToApp(() -> callback.onPeriodicAdvertisingDataSet(advertiserId, status));
     }
 
     void onPeriodicAdvertisingEnabled(int advertiserId, boolean enable, int status) {
@@ -645,7 +642,7 @@ public class AdvertiseManager {
         checkThread();
 
         final var callback = entry.getValue().callback;
-        sendToCallback(() -> callback.onPeriodicAdvertisingEnabled(advertiserId, enable, status));
+        callbackToApp(() -> callback.onPeriodicAdvertisingEnabled(advertiserId, enable, status));
 
         final var appAdvertiseStats = mAdvertiserMap.getAppAdvertiseStatsById(advertiserId);
         if (appAdvertiseStats != null) {
@@ -654,31 +651,23 @@ public class AdvertiseManager {
     }
 
     void doOnAdvertiseThread(Runnable r) {
-        if (mIsAvailable) {
-            if (Flags.advertiseThread()) {
-                final boolean posted =
-                        mHandler.post(
-                                () -> {
-                                    if (mIsAvailable) {
-                                        r.run();
-                                    }
-                                });
-                if (!posted) {
-                    Log.w(TAG, "Unable to post async task");
-                }
-            } else {
-                r.run();
-            }
+        if (!mIsAvailable) return;
+
+        final var posted =
+                mHandler.post(
+                        () -> {
+                            if (mIsAvailable) {
+                                r.run();
+                            }
+                        });
+        if (!posted) {
+            Log.w(TAG, "Unable to post async task to the handler");
         }
     }
 
     private void forceRunSyncOnAdvertiseThread(Runnable r) {
-        if (!Flags.advertiseThread()) {
-            r.run();
-            return;
-        }
         final CompletableFuture<Void> future = new CompletableFuture<>();
-        final boolean posted =
+        final var posted =
                 mHandler.postAtFrontOfQueue(
                         () -> {
                             r.run();
@@ -696,14 +685,8 @@ public class AdvertiseManager {
     }
 
     private void checkThread() {
-        if (Flags.advertiseThread()
-                && !mHandler.getLooper().isCurrentThread()
-                && !Utils.isInstrumentationTestMode()) {
+        if (!mHandler.getLooper().isCurrentThread() && !Utils.isInstrumentationTestMode()) {
             throw new IllegalStateException("Not on advertise thread");
         }
-    }
-
-    private static void sendToCallback(RemoteExceptionIgnoringRunnable wrapper) {
-        wrapper.run();
     }
 }

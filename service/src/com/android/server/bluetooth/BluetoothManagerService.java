@@ -18,6 +18,7 @@ package com.android.server.bluetooth;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.bluetooth.BluetoothProtoEnums.ENABLE_DISABLE_REASON_AIRPLANE_MODE;
+import static android.bluetooth.BluetoothProtoEnums.ENABLE_DISABLE_REASON_APPLICATION_DIED;
 import static android.bluetooth.BluetoothProtoEnums.ENABLE_DISABLE_REASON_APPLICATION_REQUEST;
 import static android.bluetooth.BluetoothProtoEnums.ENABLE_DISABLE_REASON_CRASH;
 import static android.bluetooth.BluetoothProtoEnums.ENABLE_DISABLE_REASON_DISALLOWED;
@@ -306,6 +307,9 @@ class BluetoothManagerService {
     }
 
     public void onUserRestrictionsChanged(UserHandle userHandle) {
+        if (Flags.userRestrictionRefactor()) {
+            throw new IllegalStateException("userRestrictionRefactor is enabled");
+        }
         final boolean newBluetoothDisallowed =
                 mUserManager.hasUserRestrictionForUser(UserManager.DISALLOW_BLUETOOTH, userHandle);
         // Disallow Bluetooth sharing when either Bluetooth is disallowed or Bluetooth sharing
@@ -651,6 +655,10 @@ class BluetoothManagerService {
         // Observe BLE scan only mode settings change.
         BleScanSettingListener.initialize(mLooper, mContentResolver, this::onBleScanDisabled);
 
+        if (Flags.userRestrictionRefactor()) {
+            UserRestriction.initialize(mContext, mLooper, this::onBluetoothDisallowed);
+        }
+
         // Disable ASHA if BLE is not supported, overriding any system property
         if (!isBleSupported(mContext)) {
             mIsHearingAidProfileSupported = false;
@@ -673,7 +681,9 @@ class BluetoothManagerService {
         mContext.registerReceiver(mReceiver, filter, null, mHandler);
 
         IntentFilter filterUser = new IntentFilter();
-        filterUser.addAction(UserManager.ACTION_USER_RESTRICTIONS_CHANGED);
+        if (!Flags.userRestrictionRefactor()) {
+            filterUser.addAction(UserManager.ACTION_USER_RESTRICTIONS_CHANGED);
+        }
         if (!Flags.limitUserSwitchPropagation()) {
             filterUser.addAction(Intent.ACTION_USER_SWITCHED);
         }
@@ -731,6 +741,27 @@ class BluetoothManagerService {
         mDeviceConfigAllowAutoOn =
                 SystemProperties.getBoolean("bluetooth.server.automatic_turn_on", false);
         Log.d(TAG, "AutoOnFeature property=" + mDeviceConfigAllowAutoOn);
+    }
+
+    private Unit onBluetoothDisallowed() {
+        if (mState.oneOf(State.OFF)) {
+            return Unit.INSTANCE;
+        }
+
+        Log.i(TAG, "onBluetoothDisallowed: Shutting down");
+
+        clearBleApps();
+
+        mEnable = false;
+        mEnableExternal = false;
+        ActiveLogs.add(ENABLE_DISABLE_REASON_DISALLOWED, false);
+
+        if (mState.oneOf(State.BLE_ON)) {
+            bleOnToOff();
+        } else if (mState.oneOf(State.ON)) {
+            onToBleOn();
+        }
+        return Unit.INSTANCE;
     }
 
     private Unit onBleScanDisabled() {
@@ -936,7 +967,7 @@ class BluetoothManagerService {
         return mState.get();
     }
 
-    class ClientDeathRecipient implements IBinder.DeathRecipient {
+    private class ClientDeathRecipient implements IBinder.DeathRecipient {
         private final String mPackageName;
         private final IBinder mBinder;
 
@@ -954,10 +985,16 @@ class BluetoothManagerService {
             mBinder = null;
         }
 
+        @Override
         public void binderDied() {
             if (Flags.bleDeathRecipientThread()) {
                 Log.w(TAG, "Binder is dead - posting the unregister of " + mPackageName);
-                mHandler.post(() -> removeBleApp(mBinder, mPackageName));
+                mHandler.post(
+                        () ->
+                                removeBleApp(
+                                        ENABLE_DISABLE_REASON_APPLICATION_DIED,
+                                        mBinder,
+                                        mPackageName));
                 return;
             }
             Log.w(TAG, "Binder is dead - unregister " + mPackageName);
@@ -990,7 +1027,8 @@ class BluetoothManagerService {
             }
         }
 
-        public String getPackageName() {
+        @Override
+        public String toString() {
             return mPackageName;
         }
     }
@@ -1049,8 +1087,8 @@ class BluetoothManagerService {
         Log.v(TAG, header + "Monitoring lifecycle");
     }
 
-    private void removeBleApp(IBinder token, String packageName) {
-        String header = "removeBleApp(" + token + ", " + packageName + "): ";
+    private void removeBleApp(int reason, IBinder token, String packageName) {
+        String header = "removeBleApp(" + reason + ", " + token + ", " + packageName + "): ";
         ClientDeathRecipient r = mBleApps.get(token);
         if (r == null) {
             Log.v(TAG, header + "Lifecycle is already un-monitored");
@@ -1059,6 +1097,7 @@ class BluetoothManagerService {
         token.unlinkToDeath(r, 0);
         mBleApps.remove(token);
         Log.d(TAG, header + "Lifecycle no longer monitored");
+        bleOnToOffIfNeeded(reason, packageName);
     }
 
     private int updateBleAppCount(IBinder token, boolean enable, String packageName) {
@@ -1161,27 +1200,36 @@ class BluetoothManagerService {
         }
 
         if (Flags.bleDeathRecipientThread()) {
-            removeBleApp(token, packageName);
+            removeBleApp(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, token, packageName);
         } else {
             updateBleAppCount(token, false, packageName);
-        }
-
-        if (mState.oneOf(State.BLE_ON) && !isBleAppPresent()) {
-            if (Flags.userSwitchDuringBleOn()) {
-                mEnable = false;
-                ActiveLogs.add(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, false, packageName, true);
-                sendBrEdrDownCallback();
-                return true;
-            }
-            if (mEnable) {
-                disableBleScanMode();
-            }
-            if (!mEnableExternal) {
-                ActiveLogs.add(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, false, packageName, true);
-                sendBrEdrDownCallback();
-            }
+            bleOnToOffIfNeeded(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, packageName);
         }
         return true;
+    }
+
+    private void bleOnToOffIfNeeded(int reason, String packageName) {
+        if (!mState.oneOf(State.BLE_ON)) {
+            Log.d(TAG, "bleOnToOffIfNeeded: Incorrect state=" + mState);
+            return;
+        }
+        if (isBleAppPresent()) {
+            Log.d(TAG, "bleOnToOffIfNeeded: Needed by other apps=" + mBleApps);
+            return;
+        }
+        if (Flags.userSwitchDuringBleOn()) {
+            mEnable = false;
+            ActiveLogs.add(reason, false, packageName, true);
+            bleOnToOff();
+            return;
+        }
+        if (mEnable) {
+            disableBleScanMode();
+        }
+        if (!mEnableExternal) {
+            ActiveLogs.add(reason, false, packageName, true);
+            bleOnToOff();
+        }
     }
 
     // Clear all apps using BLE scan only mode.
@@ -1438,6 +1486,8 @@ class BluetoothManagerService {
                 TimeSource.Monotonic.INSTANCE);
 
         SatelliteModeListener.initialize(mLooper, mContentResolver, this::onSatelliteModeChanged);
+
+        UserRestriction.initializeUser(mCurrentUserContext);
 
         if (isBluetoothDisallowed()) {
             Log.i(TAG, "internalHandleOnBootPhase: Bluetooth is disallowed");
@@ -2578,6 +2628,9 @@ class BluetoothManagerService {
     }
 
     private boolean isBluetoothDisallowed() {
+        if (Flags.userRestrictionRefactor()) {
+            return !UserRestriction.isBluetoothAllowed();
+        }
         final long callingIdentity = Binder.clearCallingIdentity();
         try {
             return mContext.getSystemService(UserManager.class)
@@ -2705,7 +2758,7 @@ class BluetoothManagerService {
         writer.println("");
         writer.println("Number of Ble app registered: " + mBleApps.size());
         for (ClientDeathRecipient app : mBleApps.values()) {
-            writer.println("  " + app.getPackageName());
+            writer.println("  " + app);
         }
 
         writer.println("");

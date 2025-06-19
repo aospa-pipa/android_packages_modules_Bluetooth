@@ -57,6 +57,7 @@ import android.bluetooth.IBluetoothCsipSetCoordinatorLockCallback;
 import android.content.Intent;
 import android.os.ParcelUuid;
 import android.os.RemoteException;
+import android.platform.test.flag.junit.SetFlagsRule;
 
 import androidx.test.filters.MediumTest;
 import androidx.test.runner.AndroidJUnit4;
@@ -66,6 +67,7 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ServiceFactory;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
+import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_audio.LeAudioService;
 
 import org.hamcrest.Matcher;
@@ -81,14 +83,17 @@ import org.mockito.Spy;
 import org.mockito.hamcrest.MockitoHamcrest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Test cases for {@link CsipSetCoordinatorService}. */
 @MediumTest
 @RunWith(AndroidJUnit4.class)
 public class CsipSetCoordinatorServiceTest {
+    @Rule public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
     @Rule public final MockitoRule mMockitoRule = new MockitoRule();
 
+    // TODO(b/422543753) Delete on flag cleanup
     @Spy private ServiceFactory mServiceFactory = new ServiceFactory();
     @Mock private AdapterService mAdapterService;
     @Mock private LeAudioService mLeAudioService;
@@ -107,7 +112,6 @@ public class CsipSetCoordinatorServiceTest {
 
     @Before
     public void setUp() throws Exception {
-        mNativeCallback = new CsipSetCoordinatorNativeInterface(mAdapterService);
         doReturn(mDatabaseManager).when(mAdapterService).getDatabaseManager();
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(any());
         doReturn(new ParcelUuid[] {BluetoothUuid.COORDINATED_SET})
@@ -123,7 +127,11 @@ public class CsipSetCoordinatorServiceTest {
                 .when(mAdapterService)
                 .getRemoteUuids(any());
 
-        doReturn(mLeAudioService).when(mServiceFactory).getLeAudioService();
+        if (Flags.adapterServiceProfilesUseOptional()) {
+            doReturn(Optional.of(mLeAudioService)).when(mAdapterService).getLeAudioService();
+        } else {
+            doReturn(mLeAudioService).when(mServiceFactory).getLeAudioService();
+        }
 
         mInOrder = inOrder(mAdapterService);
         mLooper = new TestLooper();
@@ -132,6 +140,7 @@ public class CsipSetCoordinatorServiceTest {
                 new CsipSetCoordinatorService(
                         mAdapterService, mLooper.getLooper(), mNativeInterface, mServiceFactory);
         mService.setAvailable(true);
+        mNativeCallback = new CsipSetCoordinatorNativeInterface(mAdapterService, mService);
 
         mockGetRemoteDevice(mAdapterService, mDevice1, mDevice2, mDevice3);
     }

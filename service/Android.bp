@@ -69,6 +69,7 @@ java_library {
         "src/Log.kt",
         "src/RadioModeListener.kt",
         "src/RolePermissionListener.kt",
+        "src/UserRestriction.kt",
         "src/airplane/ModeListener.kt",
         "src/satellite/ModeListener.kt",
     ],
@@ -171,6 +172,8 @@ android_robolectric_test {
         "src/RadioModeListenerTest.kt",
         "src/RolePermissionListener.kt",
         "src/RolePermissionListenerTest.kt",
+        "src/UserRestriction.kt",
+        "src/UserRestrictionTest.kt",
         "src/airplane/ModeListener.kt",
         "src/airplane/ModeListenerTest.kt",
         "src/satellite/ModeListener.kt",
@@ -182,6 +185,7 @@ android_robolectric_test {
     static_libs: [
         "androidx.test.core",
         "androidx.test.ext.truth",
+        "bluetooth-common-java-tests",
         "bluetooth-nano-protos",
         "bluetooth-proto-enums-java-gen",
         "bluetooth_flags_java_lib",
@@ -198,9 +202,19 @@ android_robolectric_test {
     ],
 
     libs: [
+        "PlatformProperties",
         "framework-annotations-lib",
         "framework-statsd.stubs.module_lib",
     ],
+
+    jacoco: {
+        include_filter: [
+            "android.bluetooth.**",
+            "com.android.bluetooth.**",
+            "com.android.server.bluetooth.**",
+        ],
+        exclude_filter: [],
+    },
 
     sdk_version: "test_current",
     test_suites: ["general-tests"],

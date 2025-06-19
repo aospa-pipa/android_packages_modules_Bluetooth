@@ -15,11 +15,12 @@
 
 package com.android.bluetooth.map;
 
+import static java.util.Objects.requireNonNull;
+
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothProtoEnums;
 import android.content.ContentProviderClient;
 import android.content.ContentResolver;
-import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -35,6 +36,7 @@ import com.android.bluetooth.DeviceWorkArounds;
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.SignedLongLong;
+import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.content_profiles.ContentProfileErrorReportUtils;
 import com.android.bluetooth.map.BluetoothMapUtils.TYPE;
 import com.android.internal.annotations.VisibleForTesting;
@@ -103,7 +105,8 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
 
     private static final int MAS_INSTANCE_INFORMATION_LENGTH = 200;
 
-    private final Context mContext;
+    private final AdapterService mAdapterService;
+    private final BluetoothMapService mMapService;
 
     private BluetoothMapFolderElement mCurrentFolder;
     private BluetoothMapContentObserver mObserver = null;
@@ -127,7 +130,8 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
     private ContentProviderClient mProviderClient = null;
 
     public BluetoothMapObexServer(
-            Context context,
+            AdapterService adapterService,
+            BluetoothMapService mapService,
             Handler callback,
             BluetoothMapContentObserver observer,
             BluetoothMapMasInstance mas,
@@ -135,7 +139,8 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
             boolean enableSmsMms)
             throws RemoteException {
         super();
-        mContext = context;
+        mAdapterService = requireNonNull(adapterService);
+        mMapService = mapService;
         mCallback = callback;
         mObserver = observer;
         mEnableSmsMms = enableSmsMms;
@@ -147,7 +152,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
         if (account != null && account.getProviderAuthority() != null) {
             mAccountId = account.getAccountId();
             mAuthority = account.getProviderAuthority();
-            mResolver = mContext.getContentResolver();
+            mResolver = mAdapterService.getContentResolver();
             Log.d(TAG, "BluetoothMapObexServer(): accountId=" + mAccountId);
             mBaseUriString = account.mBase_uri + "/";
             Log.d(TAG, "BluetoothMapObexServer(): baseUri=" + mBaseUriString);
@@ -163,7 +168,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
                                 mCurrentFolder to root folder */
         mObserver.setFolderStructure(mCurrentFolder.getRoot());
 
-        mOutContent = new BluetoothMapContent(mContext, mAccount, mMasInstance);
+        mOutContent = new BluetoothMapContent(mAdapterService, mMapService, mAccount, mMasInstance);
     }
 
     /** */
@@ -418,7 +423,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
     }
 
     private boolean isUserUnlocked() {
-        UserManager manager = mContext.getSystemService(UserManager.class);
+        UserManager manager = mAdapterService.getSystemService(UserManager.class);
         return (manager == null || manager.isUserUnlocked());
     }
 
@@ -712,7 +717,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
             BluetoothMapbMessage message;
             bMsgStream = op.openInputStream();
             // Decode the messageBody
-            message = BluetoothMapbMessage.parse(bMsgStream, appParams.getCharset());
+            message = BluetoothMapbMessage.parse(mMapService, bMsgStream, appParams.getCharset());
             message.setVersionString(messageVersion);
             Log.d(
                     TAG,
@@ -726,7 +731,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
                             + message.getType());
             if (message.getType().equals(TYPE.SMS_GSM) || message.getType().equals(TYPE.SMS_CDMA)) {
                 // Convert messages to the default network type.
-                TelephonyManager tm = mContext.getSystemService(TelephonyManager.class);
+                TelephonyManager tm = mAdapterService.getSystemService(TelephonyManager.class);
                 if (tm.getPhoneType() == TelephonyManager.PHONE_TYPE_GSM) {
                     message.setType(TYPE.SMS_GSM);
                 } else if (tm.getPhoneType() == TelephonyManager.PHONE_TYPE_CDMA) {

@@ -37,7 +37,6 @@ import android.annotation.NonNull;
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.app.compat.CompatChanges;
-import android.bluetooth.BluetoothActivityEnergyInfo;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothAdapter.ActiveDeviceProfile;
 import android.bluetooth.BluetoothAdapter.ActiveDeviceUse;
@@ -47,6 +46,7 @@ import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothStatusCodes;
+import android.bluetooth.EncryptionStatusParcel;
 import android.bluetooth.IBluetooth;
 import android.bluetooth.IBluetoothActivityEnergyInfoListener;
 import android.bluetooth.IBluetoothConnectionCallback;
@@ -1386,19 +1386,6 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
-    public BluetoothActivityEnergyInfo reportActivityInfo(AttributionSource source) {
-        AdapterService service = getService();
-        if (service == null
-                || !checkConnectPermissionForDataDelivery(
-                        service, source, TAG, "reportActivityInfo")) {
-            return null;
-        }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        return service.reportActivityInfo();
-    }
-
-    @Override
     public boolean registerMetadataListener(
             IBluetoothMetadataListener listener, BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
@@ -1530,9 +1517,17 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public void requestActivityInfo(
             IBluetoothActivityEnergyInfoListener listener, AttributionSource source) {
-        BluetoothActivityEnergyInfo info = reportActivityInfo(source);
+        AdapterService service = getService();
+        if (service == null
+                || !checkConnectPermissionForDataDelivery(
+                        service, source, TAG, "requestActivityInfo")) {
+            return;
+        }
+
+        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+
         try {
-            listener.onBluetoothActivityEnergyInfoAvailable(info);
+            listener.onBluetoothActivityEnergyInfoAvailable(service.requestActivityInfo());
         } catch (RemoteException e) {
             Log.e(TAG, "onBluetoothActivityEnergyInfo: RemoteException", e);
         }
@@ -2001,11 +1996,11 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         if (service == null) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
         }
-        if (!callerIsSystemOrActiveOrManagedUser(service, TAG, "setOnheadDetectionEnabled")) {
+        if (!callerIsSystemOrActiveOrManagedUser(service, TAG, "setOnHeadDetectionEnabled")) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED;
         }
         if (!checkConnectPermissionForDataDelivery(
-                service, source, TAG, "setOnheadDetectionEnabled")) {
+                service, source, TAG, "setOnHeadDetectionEnabled")) {
             return BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION;
         }
 
@@ -2014,7 +2009,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         if (deviceProp == null) {
             return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
         }
-        deviceProp.setOnheadDetectionEnabledState(enabledState);
+        deviceProp.setOnHeadDetectionEnabledState(enabledState);
         Log.d(
                 TAG,
                 "Successfully set on-head detection enabled state for device "
@@ -2126,6 +2121,33 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         }
 
         return service.getDatabaseManager().getKeyMissingCount(device);
+    }
+
+    @Override
+    public EncryptionStatusParcel getEncryptionStatus(
+            BluetoothDevice device, AttributionSource source, int transport) {
+        AdapterService service = getService();
+        if (!BluetoothAdapter.checkBluetoothAddress(device.getAddress())) {
+            throw new IllegalArgumentException("device cannot have an invalid address");
+        }
+        if (!checkConnectPermissionForDataDelivery(service, source, TAG, "getEncryptionStatus")) {
+            return null;
+        }
+
+        return service == null ? null : service.getEncryptionStatus(device, transport);
+    }
+
+    @Override
+    public boolean isConnected(BluetoothDevice device, AttributionSource source, int transport) {
+        AdapterService service = getService();
+        if (!BluetoothAdapter.checkBluetoothAddress(device.getAddress())) {
+            throw new IllegalArgumentException("device cannot have an invalid address");
+        }
+        if (!checkConnectPermissionForDataDelivery(service, source, TAG, "isConnected")) {
+            return false;
+        }
+
+        return service == null ? false : service.isConnected(device, transport);
     }
 
     // Either implement these custom methods, or remove them from IBluetooth.

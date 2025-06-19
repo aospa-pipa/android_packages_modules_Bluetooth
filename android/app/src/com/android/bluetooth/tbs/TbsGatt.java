@@ -62,7 +62,7 @@ public class TbsGatt {
 
     /* TBS assigned uuid's */
     @VisibleForTesting static final UUID UUID_TBS = makeUuid("184B");
-    @VisibleForTesting public static final UUID UUID_GTBS = makeUuid("184C");
+    public static final UUID UUID_GTBS = makeUuid("184C");
     @VisibleForTesting static final UUID UUID_BEARER_PROVIDER_NAME = makeUuid("2BB3");
     @VisibleForTesting static final UUID UUID_BEARER_UCI = makeUuid("2BB4");
     @VisibleForTesting static final UUID UUID_BEARER_TECHNOLOGY = makeUuid("2BB5");
@@ -160,8 +160,8 @@ public class TbsGatt {
             AdapterService adapterService,
             TbsService tbsService,
             BluetoothGattServerProxy gattServerProxy) {
-        mTbsService = requireNonNull(tbsService);
         mAdapterService = requireNonNull(adapterService);
+        mTbsService = requireNonNull(tbsService);
         mBluetoothGattServer = requireNonNull(gattServerProxy);
         mHandler = new Handler(Looper.getMainLooper());
 

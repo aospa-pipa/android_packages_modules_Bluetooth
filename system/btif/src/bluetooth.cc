@@ -346,7 +346,7 @@ struct CoreInterfaceImpl : bluetooth::core::CoreInterface {
   }
 
   void onLinkDown(const RawAddress& bd_addr, tBT_TRANSPORT transport) override {
-    btif_hh_disconnected(bd_addr, transport);
+    btif_hh_acl_disconnected(bd_addr, transport);
 
     if (transport != BT_TRANSPORT_BR_EDR) {
       return;
@@ -387,7 +387,7 @@ static bluetooth::core::CoreInterface* CreateInterfaceToProfiles() {
           .btif_av_set_dynamic_audio_buffer_size = btif_av_set_dynamic_audio_buffer_size,
 
           // ASHA
-          .GetHearingAidDeviceCount = HearingAid::GetDeviceCount,
+          .GetHearingAidDeviceCount = bluetooth::asha::HearingAid::GetDeviceCount,
 
           // LE Audio
           .IsLeAudioClientRunning = LeAudioClient::IsLeAudioClientRunning,
@@ -898,7 +898,7 @@ static void dump(int fd, const char** /*arguments*/) {
   alarm_debug_dump(fd);
   bluetooth::csis::CsisClient::DebugDump(fd);
   ::bluetooth::le_audio::has::HasClient::DebugDump(fd);
-  HearingAid::DebugDump(fd);
+  ::bluetooth::asha::HearingAid::DebugDump(fd);
   LeAudioClient::DebugDump(fd);
   LeAudioBroadcaster::DebugDump(fd);
   VolumeControl::DebugDump(fd);

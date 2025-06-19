@@ -141,6 +141,8 @@ class HeadsetStateMachine extends StateMachine {
     // maintain call states in state machine as well
     private final HeadsetCallState mStateMachineCallState =
                  new HeadsetCallState(0, 0, 0, "", 0, "");
+
+    // Disconnection reason from BluetoothStatusCodes.
     private int mReason = 0;
 
     // State machine states
@@ -198,6 +200,7 @@ class HeadsetStateMachine extends StateMachine {
     private int mAudioDisconnectRetry = 0;
 
     private BluetoothSinkAudioPolicy mHsClientAudioPolicy;
+    boolean mHasRfcommConnectionCompleted = false;
 
     // Keys are AT commands, and values are the company IDs.
     private static final Map<String, Integer> VENDOR_SPECIFIC_AT_COMMAND_COMPANY_ID;
@@ -409,7 +412,7 @@ class HeadsetStateMachine extends StateMachine {
             intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, fromState);
             intent.putExtra(BluetoothProfile.EXTRA_STATE, toState);
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
-            if (Flags.hfpConnectionFailuresApi()
+            if (Flags.a2dpDisconnectReasonApi()
                     && toState == BluetoothProfile.STATE_DISCONNECTED
                     && fromState == BluetoothProfile.STATE_CONNECTING) {
                 intent.putExtra(BluetoothHeadset.EXTRA_DISCONNECTED_REASON, mReason);
@@ -635,6 +638,8 @@ class HeadsetStateMachine extends StateMachine {
             mHasSwbLc3Enabled = false;
             mHasNrecEnabled = false;
             mHasSwbAptXEnabled = false;
+            mHasRfcommConnectionCompleted = false;
+
             mIsSwbSupportedByRemote = false;
             // reset call information
             mStateMachineCallState.mNumActive = 0;
@@ -897,6 +902,9 @@ class HeadsetStateMachine extends StateMachine {
                 case DEVICE_STATE_CHANGED:
                     stateLogD("ignoring DEVICE_STATE_CHANGED event");
                     break;
+                case SEND_CLCC_RESPONSE:
+                    processSendClccResponse((HeadsetClccResponse) message.obj);
+                    break;
                 case STACK_EVENT:
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
@@ -910,7 +918,7 @@ class HeadsetStateMachine extends StateMachine {
                     }
                     switch (event.type) {
                         case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED:
-                            mReason = event.reason;
+                            mReason = reasonToBluetoothStatusCode(event.reason);
                             processConnectionEvent(message, event.valueInt);
                             break;
                         case HeadsetStackEvent.EVENT_TYPE_AT_CIND:
@@ -1025,6 +1033,7 @@ class HeadsetStateMachine extends StateMachine {
                     break;
                 case HeadsetHalConstants.CONNECTION_STATE_CONNECTED:
                     stateLogD("RFCOMM connected");
+                    mHasRfcommConnectionCompleted = true;
                     break;
                 case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED:
                     stateLogD("SLC connected");
@@ -2081,8 +2090,7 @@ class HeadsetStateMachine extends StateMachine {
      * @param silence true to enter silence mode, false on exit
      * @return true on success, false on error
      */
-    @VisibleForTesting
-    public boolean setSilenceDevice(boolean silence) {
+    boolean setSilenceDevice(boolean silence) {
         if (silence == mDeviceSilenced) {
             return false;
         }
@@ -3201,6 +3209,10 @@ class HeadsetStateMachine extends StateMachine {
         if (!hasMessages(CLCC_RSP_TIMEOUT)) {
             return;
         }
+        if (!mHasRfcommConnectionCompleted) {
+            log("rfcomm not completed, not sending clcc response");
+            return;
+        }
         if (clcc.mIndex == 0) {
             removeMessages(CLCC_RSP_TIMEOUT);
         }
@@ -3353,6 +3365,18 @@ class HeadsetStateMachine extends StateMachine {
         } else {
             log("handleAccessPermissionResult - RESULT_NONE");
         }
+    }
+
+    // Convert AG status codes defined in `bta/include/bta_ag_api.h` to BluetoothStatusCodes values.
+    // TODO: migrate the values to AIDL constants to avoid hardcoded values.
+    private static int reasonToBluetoothStatusCode(int reason) {
+        return switch (reason) {
+            case /* BTA_AG_SUCCESS */ 0 -> BluetoothStatusCodes.SUCCESS;
+            case /* BTA_AG_FAIL_SDP */ 1 -> BluetoothStatusCodes.SDP_DISCOVERY_FAILED;
+            case /* BTA_AG_FAIL_RFCOMM */ 2 -> BluetoothStatusCodes.RFCOMM_CONNECTION_FAILED;
+            case /* BTA_AG_FAIL_RESOURCES */ 3 -> BluetoothStatusCodes.INSUFFICIENT_RESOURCES;
+            default -> BluetoothStatusCodes.ERROR_UNKNOWN;
+        };
     }
 
     private static int getConnectionStateFromAudioState(int audioState) {
