@@ -2092,9 +2092,7 @@ public class BluetoothInCallService extends InCallService {
                     CallState.ALERTING;
 
             case Call.STATE_RINGING, Call.STATE_SIMULATED_RINGING -> {
-                if (call.isSilentRingingRequested()) {
-                    yield CallState.IDLE;
-                } else if (isForeground) {
+                if (isForeground) {
                     yield CallState.INCOMING;
                 } else {
                     yield CallState.WAITING;
