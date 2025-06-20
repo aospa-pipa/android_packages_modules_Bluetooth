@@ -585,6 +585,9 @@ cc_fuzz {
         ":TestMockMainShim",
         "hci/fuzz/acl_manager_fuzz_test.cc",
     ],
+    static_libs: [
+        "libbtdevice",
+    ],
     include_dirs: [
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/include",

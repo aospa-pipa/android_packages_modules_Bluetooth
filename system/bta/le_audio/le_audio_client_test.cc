@@ -61,6 +61,7 @@
 #include "test/common/mock_functions.h"
 #include "test/mock/mock_main_shim_entry.h"
 #include "test/mock/mock_stack_btm_iso.h"
+#include "test/mock/mock_stack_gatt_api.h"
 #include "test/mock/mock_stack_l2cap_interface.h"
 
 #define TEST_BT com::android::bluetooth::flags
@@ -103,7 +104,7 @@ using bluetooth::le_audio::types::LeAudioContextType;
 
 extern struct fake_osi_alarm_set_on_mloop fake_osi_alarm_set_on_mloop_;
 
-constexpr int max_num_of_ases = 5;
+constexpr int max_num_of_ases = GATT_MAX_READ_MULTI_HANDLES;  // 10
 constexpr bluetooth::le_audio::types::LeAudioContextType kLeAudioDefaultConfigurationContext =
         bluetooth::le_audio::types::LeAudioContextType::UNSPECIFIED;
 
@@ -713,7 +714,7 @@ protected:
               if (handle == ascs->ctp_ccc) {
                 value = UINT16_TO_VEC_UINT8(ascs->ctp_ccc_val);
               } else {
-                for (idx = 0; idx < max_num_of_ases; idx++) {
+                for (idx = 0; idx < ascs->ase_count; idx++) {
                   if (handle == ascs->sink_ase_ccc[idx] + 1) {
                     value = UINT16_TO_VEC_UINT8(ascs->sink_ase_ccc_val[idx]);
                     break;
@@ -942,6 +943,8 @@ protected:
                     continue;
                   }
                   if (ase.state == types::AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED) {
+                    ase.cis_state = types::CisState::CONNECTED;
+                    ase.data_path_state = types::DataPathState::CONFIGURED;
                     ase.state = types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING;
                   }
                 }
@@ -1201,6 +1204,9 @@ protected:
                 return true;
               }
 
+              auto enabled_directions =
+                      state_machine_callbacks_->OnGetEnabledDirections(group->group_id_);
+
               // Inject the state
               group->SetTargetState(types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING);
 
@@ -1253,11 +1259,16 @@ protected:
                     continue;
                   }
 
-                  // And also skip the ase establishment procedure which should
-                  // be tested as part of the state machine unit tests
-                  ase.cis_state = types::CisState::CONNECTED;
-                  ase.data_path_state = types::DataPathState::CONFIGURED;
-                  ase.state = types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING;
+                  if (enabled_directions & ase.direction) {
+                    // And also skip the ase establishment procedure which should
+                    // be tested as part of the state machine unit tests
+                    ase.cis_state = types::CisState::CONNECTED;
+                    ase.data_path_state = types::DataPathState::CONFIGURED;
+                    ase.state = types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING;
+                  } else {
+                    ase.state = types::AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED;
+                  }
+
                   ase.qos_preferences.pres_delay_min = 2500;
                   ase.qos_preferences.pres_delay_max = 2500;
                   ase.qos_preferences.preferred_pres_delay_min = 2500;
@@ -1432,7 +1443,7 @@ protected:
               for (LeAudioDevice* device = group->GetFirstActiveDevice(); device != nullptr;
                    device = group->GetNextActiveDevice(device)) {
                 for (auto& ase : device->ases_) {
-                  if (!ase.active) {
+                  if (!ase.active || !(enabled_directions & ase.direction)) {
                     continue;
                   }
                   group->SetStreamingMetadataContexts(metadata_context_types.get(ase.direction),
@@ -1869,6 +1880,7 @@ protected:
       uint16_t ctp_ccc = 0;
       uint16_t ctp_ccc_val = 0;
       uint16_t end = 0;
+      uint16_t ase_count = 0;
 
       MOCK_METHOD((std::pair<GattStatus, std::vector<uint8_t>>), OnGetCharacteristicValue,
                   (uint16_t handle), (override));
@@ -2433,7 +2445,7 @@ protected:
       bool is_primary = true;
       bob.AddService(ascs->start, ascs->end,
                      bluetooth::le_audio::uuid::kAudioStreamControlServiceUuid, is_primary);
-      for (int i = 0; i < max_num_of_ases; i++) {
+      for (int i = 0; i < ascs->ase_count; i++) {
         if (ascs->sink_ase_char[i]) {
           bob.AddCharacteristic(ascs->sink_ase_char[i], ascs->sink_ase_char[i] + 1,
                                 bluetooth::le_audio::uuid::kSinkAudioStreamEndpointUuid,
@@ -2611,11 +2623,29 @@ protected:
       // other params
     }
 
+    auto gmas = std::make_unique<NiceMock<MockDeviceWrapper::gmas_mock>>();
+    auto add_gmap = params.ugt_features.count() != 0;
+    if (add_gmap) {
+      // attribute handles
+      uint16_t handle = 0x0090;
+      gmas->start = handle++;
+
+      gmas->role_char = handle;
+      handle += 2;
+
+      gmas->ugt_features_char = handle;
+      handle += 2;
+
+      gmas->end = handle;
+      gmas->ugt_features = params.ugt_features;
+    }
+
     auto ascs = std::make_unique<NiceMock<MockDeviceWrapper::ascs_mock>>();
     if (add_ascs_cnt > 0) {
       // attribute handles
-      ascs->start = 0x0090;
-      uint16_t handle = 0x0091;
+      ascs->start = 0x00A0;
+      uint16_t handle = 0x00A1;
+      ascs->ase_count = add_ascs_cnt;
       for (int i = 0; i < add_ascs_cnt; i++) {
         if (sink_audio_allocation.has_value()) {
           ascs->sink_ase_char[i] = handle;
@@ -2637,23 +2667,6 @@ protected:
       handle++;
       ascs->end = handle;
       // other params
-    }
-
-    auto gmas = std::make_unique<NiceMock<MockDeviceWrapper::gmas_mock>>();
-    auto add_gmap = params.ugt_features.count() != 0;
-    if (add_gmap) {
-      // attribute handles
-      uint16_t handle = 0x00B0;
-      gmas->start = handle++;
-
-      gmas->role_char = handle;
-      handle += 2;
-
-      gmas->ugt_features_char = handle;
-      handle += 2;
-
-      gmas->end = handle;
-      gmas->ugt_features = params.ugt_features;
     }
 
     set_sample_database(conn_id, addr, std::move(csis), std::move(cas), std::move(ascs),
@@ -2852,7 +2865,7 @@ protected:
                   if (handle == ascs->ctp_ccc) {
                     value = UINT16_TO_VEC_UINT8(ascs->ctp_ccc_val);
                   } else {
-                    for (idx = 0; idx < max_num_of_ases; idx++) {
+                    for (idx = 0; idx < ascs->ase_count; idx++) {
                       if (handle == ascs->sink_ase_ccc[idx] + 1) {
                         value = UINT16_TO_VEC_UINT8(ascs->sink_ase_ccc_val[idx]);
                         break;
@@ -2864,7 +2877,7 @@ protected:
                     }
                   }
 
-                  for (idx = 0; idx < max_num_of_ases; idx++) {
+                  for (idx = 0; idx < ascs->ase_count; idx++) {
                     if (handle == ascs->sink_ase_char[idx] + 1) {
                       is_ase_sink_request = true;
                       break;
@@ -3529,6 +3542,25 @@ TEST_F(UnicastTest, ConnectOneEarbudNoAscs) {
               OnConnectionState(ConnectionState::DISCONNECTED, test_address0))
           .Times(1);
   EXPECT_CALL(mock_gatt_interface_, Close(_)).Times(1);
+  ConnectLeAudio(test_address0);
+}
+
+TEST_F(UnicastTest, ConnectOneEarbudAscsMultipleOfGattMultiRead) {
+  com::android::bluetooth::flags::provider_->le_ase_read_multiple_variable(true);
+
+  const RawAddress test_address0 = GetTestAddress(0);
+  uint16_t conn_id = 1;
+  SetSampleDatabaseEarbudsValid(conn_id, test_address0, codec_spec_conf::kLeAudioLocationStereo,
+                                codec_spec_conf::kLeAudioLocationStereo, default_channel_cnt,
+                                default_channel_cnt, 0x0004, /* source sample freq 16khz */
+                                true,                        /*add_csis*/
+                                true,                        /*add_cas*/
+                                true,                        /*add_pacs*/
+                                GATT_MAX_READ_MULTI_HANDLES /*add_ascs*/);
+
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnConnectionState(ConnectionState::CONNECTED, test_address0))
+          .Times(1);
   ConnectLeAudio(test_address0);
 }
 
@@ -12108,7 +12140,7 @@ TEST_F(UnicastTest, UpdateMultipleBidirContextTypes_SpeedUpReconfigFlagEnabled) 
   EXPECT_CALL(mock_state_machine_, StartStream(_, _, contexts, _)).Times(1);
 
   /* Make sure GAME is bidirectional */
-  char test_tag[] = "TEST_TAG2;bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
   test_tags_ptr_ = test_tag;
 
   UpdateLocalSourceMetadata(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, false);
@@ -12183,7 +12215,7 @@ TEST_F(UnicastTest, UpdateDisableLocalAudioSinkOnGame) {
 
   // 1) Start the recording. Sink resume will trigger the reconfiguration
   // ---------------------------------------------------------------------
-  char test_tag[] = "TEST_TAG2;bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_MUSIC, group_id, AUDIO_SOURCE_MIC);
 
@@ -13068,7 +13100,7 @@ TEST_F(UnicastTest, BidirectionalGameContextRequestedFromAudioFramework) {
   SyncOnMainLoop();
 
   /* Set TAG */
-  char test_tag[] = "TEST_TAG2;bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC);
 
@@ -13143,7 +13175,7 @@ TEST_F(UnicastTest, SwitchFromUniToBidirectionalGameContext) {
           .Times(1);
 
   /* Set TAG and expect reconfiguration */
-  char test_tag[] = "TEST_TAG2;bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC, true);
 
@@ -15230,7 +15262,6 @@ protected:
     com::android::bluetooth::flags::provider_->reset_flags();
     com::android::bluetooth::flags::provider_->leaudio_use_context_type_manager(true);
     com::android::bluetooth::flags::provider_->leaudio_dynamic_direction_opening(true);
-    com::android::bluetooth::flags::provider_->leaudio_gmap_client(true);
     GmapClient::UpdateGmapOffloaderSupport(true);
     GmapServer::UpdateGmapOffloaderSupport(true);
   }
@@ -15297,7 +15328,6 @@ TEST_F(UnicastTestGmap, MicrophoneOnlyGameStreaming) {
   log::info("Setup the remote device");
   uint16_t conn_id = 1;
   int group_id = bluetooth::groups::kGroupUnknown;
-  ;
   uint8_t ase_cnt = 2;
 
   available_snk_context_types_ = 0;
@@ -15751,6 +15781,192 @@ TEST_F(UnicastTestGmap, LiveRecordingSuspendedOnRemoteSink_ResumeMediaFailed) {
   SyncOnMainLoop();
 
   Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+}
+
+TEST_F(UnicastTestGmap,
+       StartConversational_ToggleLocalSourceSuspend_ResumeLocalSource_ThenSinkResume) {
+  osi_property_set_bool(kPropGmapEnabled, true);
+  uint8_t group_size = 2;
+  int group_id = 2;
+
+  /* Scenario
+   * 1. Set CONVERSATIONAL Context for bidirectional stream. (Note: For GMAP devices dynamic
+   * directions are used)
+   * 2. Local Source Resume
+   * 3. Local Source Suspend (do not let suspend timeout to fire (500ms))
+   * 4. Resume Source
+   * 5. Resume Sink
+   */
+  // Report working CSIS
+  ON_CALL(mock_csis_client_module_, IsCsisClientRunning()).WillByDefault(Return(true));
+  ON_CALL(mock_csis_client_module_, GetDesiredSize(group_id))
+          .WillByDefault(Invoke([&](int /*group_id*/) { return group_size; }));
+
+  // First earbud
+  const RawAddress test_address0 = GetTestAddress(0);
+  EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address0, true)).Times(1);
+  ConnectCsisGmapDevice(test_address0, 1 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontLeft,
+                        codec_spec_conf::kLeAudioLocationFrontLeft, group_size, group_id,
+                        1 /* rank*/);
+
+  // Second earbud
+  const RawAddress test_address1 = GetTestAddress(1);
+  EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address1, true)).Times(1);
+  ConnectCsisGmapDevice(test_address1, 2 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontRight,
+                        codec_spec_conf::kLeAudioLocationFrontRight, group_size, group_id,
+                        2 /* rank*/, true /*connect_through_csis*/);
+
+  // Start streaming
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, Start(_, _, _)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, Start(_, _, _)).Times(1);
+  LeAudioClient::Get()->GroupSetActive(group_id);
+  SyncOnMainLoop();
+
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnGroupStreamStatus(group_id, GroupStreamStatus::STREAMING))
+          .Times(1);
+
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  UpdateLocalSourceMetadata(AUDIO_USAGE_VOICE_COMMUNICATION, AUDIO_CONTENT_TYPE_SPEECH, false);
+  LocalAudioSourceResume();
+  SyncOnMainLoop();
+
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+  SyncOnMainLoop();
+
+  log::info("Suspend local source, don't fire suspend timeout");
+  EXPECT_CALL(mock_state_machine_, StopStream(_)).Times(0);
+  LocalAudioSourceSuspend();
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+
+  ASSERT_NE(0lu, streaming_groups.count(group_id));
+  auto group = streaming_groups.at(group_id);
+
+  log::info("Expect Source directions to be enabled after suspend (due to suspend timeout)");
+  EXPECT_CALL(mock_state_machine_,
+              EnableStreamingDirection(group, bluetooth::le_audio::types::kLeAudioDirectionSink))
+          .Times(0);
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  LocalAudioSourceResume();
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+
+  ASSERT_TRUE(group->IsStreaming());
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+
+  log::info("Resume Local Sink and expect enable call on ASE Source");
+  EXPECT_CALL(mock_state_machine_,
+              EnableStreamingDirection(group, bluetooth::le_audio::types::kLeAudioDirectionSource))
+          .Times(1);
+
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, UpdateRemoteDelay(_)).Times(1);
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  UpdateLocalSinkMetadata(AUDIO_SOURCE_MIC);
+  LocalAudioSinkResume();
+  SyncOnMainLoop();
+
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+}
+
+TEST_F(UnicastTestGmap,
+       StartConversational_ToggleLocalSinkSuspend_ResumeLocalSink_ThenSourceResume) {
+  osi_property_set_bool(kPropGmapEnabled, true);
+  uint8_t group_size = 2;
+  int group_id = 2;
+
+  /* Scenario
+   * 1. Set CONVERSATIONAL Context for bidirectional stream. (Note: For GMAP devices dynamic
+   * directions are used)
+   * 2. Local Sink Resume
+   * 3. Local Sink Suspend (do not let suspend timeout to fire (500ms))
+   * 4. Resume Sink
+   * 5. Resume Source
+   */
+  // Report working CSIS
+  ON_CALL(mock_csis_client_module_, IsCsisClientRunning()).WillByDefault(Return(true));
+  ON_CALL(mock_csis_client_module_, GetDesiredSize(group_id))
+          .WillByDefault(Invoke([&](int /*group_id*/) { return group_size; }));
+
+  // First earbud
+  const RawAddress test_address0 = GetTestAddress(0);
+  EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address0, true)).Times(1);
+  ConnectCsisGmapDevice(test_address0, 1 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontLeft,
+                        codec_spec_conf::kLeAudioLocationFrontLeft, group_size, group_id,
+                        1 /* rank*/);
+
+  // Second earbud
+  const RawAddress test_address1 = GetTestAddress(1);
+  EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address1, true)).Times(1);
+  ConnectCsisGmapDevice(test_address1, 2 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontRight,
+                        codec_spec_conf::kLeAudioLocationFrontRight, group_size, group_id,
+                        2 /* rank*/, true /*connect_through_csis*/);
+
+  // Start streaming
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, Start(_, _, _)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, Start(_, _, _)).Times(1);
+  LeAudioClient::Get()->GroupSetActive(group_id);
+  SyncOnMainLoop();
+
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnGroupStreamStatus(group_id, GroupStreamStatus::STREAMING))
+          .Times(1);
+
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, UpdateRemoteDelay(_)).Times(1);
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  UpdateLocalSourceMetadata(AUDIO_USAGE_VOICE_COMMUNICATION, AUDIO_CONTENT_TYPE_SPEECH, false);
+  UpdateLocalSinkMetadata(AUDIO_SOURCE_VOICE_COMMUNICATION);
+  LocalAudioSinkResume();
+  SyncOnMainLoop();
+
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+  SyncOnMainLoop();
+
+  log::info("Suspend local Sink, don't fire suspend timeout");
+  EXPECT_CALL(mock_state_machine_, StopStream(_)).Times(0);
+  LocalAudioSinkSuspend();
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+
+  ASSERT_NE(0lu, streaming_groups.count(group_id));
+  auto group = streaming_groups.at(group_id);
+
+  log::info("Expect remote Source directions to be enabled");
+  EXPECT_CALL(mock_state_machine_,
+              EnableStreamingDirection(group, bluetooth::le_audio::types::kLeAudioDirectionSource))
+          .Times(0);
+  LocalAudioSinkResume();
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+
+  ASSERT_TRUE(group->IsStreaming());
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+
+  log::info("Resume Local Source");
+  EXPECT_CALL(mock_state_machine_,
+              EnableStreamingDirection(group, bluetooth::le_audio::types::kLeAudioDirectionSink))
+          .Times(1);
+
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  LocalAudioSourceResume();
+  SyncOnMainLoop();
+
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
   Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
 }
 
@@ -16619,7 +16835,7 @@ TEST_F(UnicastTestLockConnParamsForStreaming, UnlockConnParamsForStreaming_Strea
 
   Mock::VerifyAndClearExpectations(&mock_stack_l2cap_interface_);
 
-  //if streaming again, unlocking is not called repeatedly
+  // if streaming again, unlocking is not called repeatedly
   EXPECT_CALL(mock_stack_l2cap_interface_,
               L2CA_LockBleConnParamsForProfileConnection(test_address0, false))
           .Times(0);
@@ -16677,7 +16893,7 @@ TEST_F(UnicastTestLockConnParamsForStreaming, UnlockConnParamsForStreaming_TwoEa
 
   Mock::VerifyAndClearExpectations(&mock_stack_l2cap_interface_);
 
-  //if streaming again, unlocking is not called repeatedly
+  // if streaming again, unlocking is not called repeatedly
   EXPECT_CALL(mock_stack_l2cap_interface_,
               L2CA_LockBleConnParamsForProfileConnection(_, false))
           .Times(0);

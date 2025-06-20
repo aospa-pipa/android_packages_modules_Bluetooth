@@ -55,7 +55,6 @@ void GmapClient::DebugDump(std::stringstream &stream) {
 }
 
 bool GmapClient::IsGmapClientEnabled() {
-  bool flag = com::android::bluetooth::flags::leaudio_gmap_client();
   bool system_prop = osi_property_get_bool("bluetooth.profile.gmap.enabled", false);
   bool is_gmap_supported_in_software_datapath =
           android::sysprop::bluetooth::LeAudio::is_gmap_supported_in_software_datapath().value_or(
@@ -67,14 +66,14 @@ bool GmapClient::IsGmapClientEnabled() {
   if (pts_gmap) {
     result = true;
   } else {
-    result = flag && system_prop &&
-                (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
+    result =
+          system_prop && (is_gmap_supported_in_software_datapath || is_offloader_support_gmap_);
   }
   log::info(
-          "GmapClientEnabled={}, flag={}, system_prop={}, "
+          "GmapClientEnabled={}, system_prop={}, "
           "is_gmap_supported_in_software_datapath={}, "
           "offloader_support={}",
-          result, flag, system_prop, is_gmap_supported_in_software_datapath,
+          result, system_prop, is_gmap_supported_in_software_datapath,
           GmapClient::is_offloader_support_gmap_);
   return result;
 }

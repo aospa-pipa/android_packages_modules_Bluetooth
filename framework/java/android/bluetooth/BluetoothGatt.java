@@ -498,10 +498,7 @@ public final class BluetoothGatt implements BluetoothProfile {
                 s.setDevice(mDevice);
             }
 
-            if (Flags.fixBluetoothGattGettingDuplicateServices()) {
-                mServices.clear();
-            }
-
+            mServices.clear();
             mServices.addAll(services);
 
             // Fix references to included services, as they doesn't point to right objects.
@@ -1378,10 +1375,6 @@ public final class BluetoothGatt implements BluetoothProfile {
 
         if (mService == null || !mClientRegistered) return false;
 
-        if (!Flags.fixBluetoothGattGettingDuplicateServices()) {
-            mServices.clear();
-        }
-
         try {
             mService.discoverServices(mBluetoothGattCallback, mDevice, mAttributionSource);
         } catch (RemoteException e) {
@@ -1406,10 +1399,6 @@ public final class BluetoothGatt implements BluetoothProfile {
     public boolean discoverServiceByUuid(UUID uuid) {
         Log.d(TAG, "discoverServiceByUuid() - device: " + mDevice);
         if (mService == null || !mClientRegistered) return false;
-
-        if (!Flags.fixBluetoothGattGettingDuplicateServices()) {
-            mServices.clear();
-        }
 
         try {
             mService.discoverServiceByUuid(

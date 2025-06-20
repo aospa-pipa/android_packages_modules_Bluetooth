@@ -41,6 +41,7 @@ public class HapClientStackEvent {
     public static final int EVENT_TYPE_ON_PRESET_INFO = 6;
     public static final int EVENT_TYPE_ON_PRESET_NAME_SET_ERROR = 7;
     public static final int EVENT_TYPE_ON_PRESET_INFO_ERROR = 8;
+    public static final int EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED_FOR_GROUP = 9;
 
     // Possible operation results
     /* WARNING: Matches status codes defined in bta_has.h */
@@ -52,6 +53,7 @@ public class HapClientStackEvent {
     static final int STATUS_INVALID_PRESET_INDEX = 5;
     static final int STATUS_GROUP_OPERATION_NOT_SUPPORTED = 6;
     static final int STATUS_PROCEDURE_ALREADY_IN_PROGRESS = 7;
+    static final int STATUS_TIMEOUT = 8;
 
     // Supported features
     public static final int FEATURE_BIT_NUM_TYPE_MONAURAL =
@@ -120,6 +122,7 @@ public class HapClientStackEvent {
             case EVENT_TYPE_ON_PRESET_INFO_ERROR ->
                     "{statusCode: " + statusCodeValueToString(value) + "}";
             case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED -> "{presetIndex: " + value + "}";
+            case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED_FOR_GROUP -> "{presetIndex: " + value + "}";
             case EVENT_TYPE_ON_ACTIVE_PRESET_SELECT_ERROR ->
                     "{statusCode: " + statusCodeValueToString(value) + "}";
             default -> "{unused: " + value + "}";
@@ -144,7 +147,7 @@ public class HapClientStackEvent {
             case EVENT_TYPE_ON_PRESET_NAME_SET_ERROR -> "{presetIndex: " + value + "}";
             case EVENT_TYPE_ON_PRESET_INFO -> "{info_reason: " + infoReasonToString(value) + "}";
             case EVENT_TYPE_ON_PRESET_INFO_ERROR -> "{presetIndex: " + value + "}";
-            case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED -> "{groupId: " + value + "}";
+            case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED_FOR_GROUP -> "{groupId: " + value + "}";
             case EVENT_TYPE_ON_ACTIVE_PRESET_SELECT_ERROR -> "{groupId: " + value + "}";
             default -> "{unused: " + value + "}";
         };
@@ -207,6 +210,8 @@ public class HapClientStackEvent {
             case EVENT_TYPE_DEVICE_AVAILABLE -> "EVENT_TYPE_DEVICE_AVAILABLE";
             case EVENT_TYPE_DEVICE_FEATURES -> "EVENT_TYPE_DEVICE_FEATURES";
             case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED -> "EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED";
+            case EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED_FOR_GROUP ->
+                    "EVENT_TYPE_ON_ACTIVE_PRESET_SELECTED_FOR_GROUP";
             case EVENT_TYPE_ON_ACTIVE_PRESET_SELECT_ERROR ->
                     "EVENT_TYPE_ON_ACTIVE_PRESET_SELECT_ERROR";
             case EVENT_TYPE_ON_PRESET_INFO -> "EVENT_TYPE_ON_PRESET_INFO";

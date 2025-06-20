@@ -138,6 +138,7 @@ public class BluetoothMapService extends ConnectableProfile {
     private boolean mSdpSearchInitiated = false;
     private SdpMnsRecord mMnsRecord = null;
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static BluetoothMapService sBluetoothMapService;
 
     private static final ParcelUuid[] MAP_UUIDS = {
@@ -272,7 +273,9 @@ public class BluetoothMapService extends ConnectableProfile {
         boolean connected = false;
         for (int i = 0, c = mMasInstances.size(); i < c; i++) {
             try {
-                if (mMasInstances.valueAt(i).startObexServerSession(mBluetoothMnsObexClient)) {
+                if (mMasInstances
+                        .valueAt(i)
+                        .startObexServerSession(this, mBluetoothMnsObexClient)) {
                     connected = true;
                 }
             } catch (IOException e) {
@@ -519,7 +522,7 @@ public class BluetoothMapService extends ConnectableProfile {
                                 + mRemoteDevice
                                 + " automatically as trusted device");
                 if (mBluetoothMnsObexClient != null && masInst != null) {
-                    masInst.startObexServerSession(mBluetoothMnsObexClient);
+                    masInst.startObexServerSession(this, mBluetoothMnsObexClient);
                 } else {
                     startObexServerSessions();
                 }
@@ -686,6 +689,7 @@ public class BluetoothMapService extends ConnectableProfile {
     /**
      * @return current instance of {@link BluetoothMapService}
      */
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     public static synchronized BluetoothMapService getBluetoothMapService() {
         if (sBluetoothMapService == null) {
             Log.w(TAG, "getBluetoothMapService(): service is null");
@@ -708,6 +712,7 @@ public class BluetoothMapService extends ConnectableProfile {
         return sBluetoothMapService;
     }
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static synchronized void setBluetoothMapService(BluetoothMapService instance) {
         Log.d(TAG, "setBluetoothMapService(): set to: " + instance);
         sBluetoothMapService = instance;

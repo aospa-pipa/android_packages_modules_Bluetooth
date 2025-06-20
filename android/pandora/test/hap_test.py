@@ -14,7 +14,7 @@
 import asyncio
 import secrets
 
-from avatar import BumblePandoraDevice, PandoraDevice, PandoraDevices, asynchronous
+from avatar import BumblePandoraDevice, PandoraDevice, PandoraDevices, asynchronous, enableFlag
 from bumble.gatt import GATT_HEARING_ACCESS_SERVICE, GATT_AUDIO_STREAM_CONTROL_SERVICE, GATT_PUBLISHED_AUDIO_CAPABILITIES_SERVICE, GATT_COORDINATED_SET_IDENTIFICATION_SERVICE
 
 from bumble.profiles import hap
@@ -33,7 +33,7 @@ from pandora.security_pb2 import LE_LEVEL3
 from pandora.host_pb2 import RANDOM, AdvertiseResponse, Connection, DataTypes, ScanningResponse
 from mobly import base_test, signals
 from mobly.asserts import assert_equal, assert_is_not_none, assert_not_in  # type: ignore
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 HAP_UUID = GATT_HEARING_ACCESS_SERVICE.to_hex_str('-')
 CSIS_UUID = GATT_COORDINATED_SET_IDENTIFICATION_SERVICE.to_hex_str('-')
@@ -145,13 +145,19 @@ class HearingAidDevice:
             (await dut_hap.GetAllPresets(connection=self.to_ref)).preset_record_list)
         assert_equal(remote_preset, get_server_preset_sorted(self.has))
 
-    async def assert_active_preset(self, dut_hap: HAP, expected_preset: PresetRecord) -> None:
+    async def assert_active_preset(self,
+                                   dut_hap: HAP,
+                                   expected_preset: PresetRecord,
+                                   has_preset: Optional[int] = None) -> None:
         # first validate the active preset reported by dut
         assert_equal(
             expected_preset,
             to_bumble_preset((await dut_hap.GetActivePreset(connection=self.to_ref)).preset_record))
-        # then validate the active preset reported by ref
-        assert_equal(expected_preset.index, self.has.active_preset_index)
+        has_expected_preset = expected_preset.index
+        if not has_preset is None:
+            # Some test are voluntarily setting a different preset in has
+            has_expected_preset = has_preset
+        assert_equal(has_expected_preset, self.has.active_preset_index)
 
 
 def synchronize_has(left: HearingAidDevice, right: HearingAidDevice):
@@ -318,7 +324,8 @@ class HapTest(base_test.BaseTestClass):
         await self.ref_left.has.notify_active_preset()
 
         await self.verify_no_crash()
-        await self.ref_left.assert_active_preset(self.dut_hap, foo_preset)
+        await self.ref_left.assert_active_preset(self.dut_hap, foo_preset,
+                                                 non_existing_preset_index)
 
     @asynchronous
     async def test__set_non_existing_preset_as_available__verify_no_crash_and_no_update(
@@ -355,7 +362,6 @@ class HapTest(base_test.BaseTestClass):
         await self.dut_hap.SetActivePresetForGroup(connection=self.ref_left.to_ref,
                                                    index=bar_preset.index)
         await self.dut.aio.host.Disconnect(connection=self.ref_left.to_ref)
-        await asyncio.gather(self.ref_left.ref.reset())
 
     @asynchronous
     async def test__set_active_monaural__when_disconnecting__do_not_crash(self) -> None:
@@ -379,6 +385,42 @@ class HapTest(base_test.BaseTestClass):
         await self.dut_hap.SetActivePresetForGroup(connection=self.ref_left.to_ref,
                                                    index=bar_preset.index)
         await asyncio.sleep(3)  # TODO wait event
+
+        await self.ref_left.assert_active_preset(self.dut_hap, bar_preset)
+        await self.ref_right.assert_active_preset(self.dut_hap, bar_preset)
+
+    @asynchronous
+    @enableFlag('com.android.bluetooth.flags.synchronize_preset_can_timeout')
+    async def test__synchronize_operation_failed__when_selecting_preset__can_recover(self) -> None:
+        await self.setup_binaural()
+        await asyncio.sleep(1)  # TODO wait event
+
+        # remove synchronization capabilities
+        self.ref_left.has.other_server_in_binaural_set = None
+        self.ref_right.has.other_server_in_binaural_set = None
+
+        # preliminary check to be sure we are setting a new & different preset
+        await self.ref_left.assert_active_preset(self.dut_hap, foo_preset)
+
+        await self.dut_hap.SetActivePresetForGroup(connection=self.ref_left.to_ref,
+                                                   index=bar_preset.index)
+        await asyncio.sleep(3)  # TODO wait event
+        # Left is updated
+        await self.ref_left.assert_active_preset(self.dut_hap, bar_preset)
+
+        await asyncio.sleep(13)  # Timeout operation is 10 secondes
+
+        # As expected, only left preset has been updated
+        await self.ref_left.assert_active_preset(self.dut_hap, bar_preset)
+        await self.ref_right.assert_active_preset(self.dut_hap, foo_preset)
+
+        # restore synchronization capabilities
+        synchronize_has(self.ref_left, self.ref_right)
+
+        await self.dut_hap.SetActivePresetForGroup(connection=self.ref_left.to_ref,
+                                                   index=bar_preset.index)
+
+        await asyncio.sleep(13)  # TODO wait event + TODO this should be faster
 
         await self.ref_left.assert_active_preset(self.dut_hap, bar_preset)
         await self.ref_right.assert_active_preset(self.dut_hap, bar_preset)

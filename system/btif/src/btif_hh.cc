@@ -731,15 +731,6 @@ static void hh_open_handler_(tBTA_HH_CONN& conn) {
 
   log::info("Found device, getting dscp info for handle {}", conn.handle);
   hh_connect_complete(conn, BTHH_CONN_STATE_CONNECTED);
-
-  if (!com::android::bluetooth::flags::dont_send_hid_set_idle()) {
-    // Send set_idle if the peer_device is a keyboard
-    // TODO (b/307923455): clean this, set idle is deprecated in HID spec v1.1.1
-    if (btif_check_cod_hid_major(conn.link_spec.addrt.bda, COD_HID_KEYBOARD) ||
-        btif_check_cod_hid_major(conn.link_spec.addrt.bda, COD_HID_COMBO)) {
-      BTA_HhSetIdle(conn.handle, 0);
-    }
-  }
   BTA_HhGetDscpInfo(conn.handle);
 }
 
@@ -1061,7 +1052,7 @@ void btif_hh_load_bonded_dev(const tAclLinkSpec& link_spec_ref, tBTA_HH_ATTR_MAS
   }
 }
 
-void btif_hh_disconnected(const RawAddress& addr, tBT_TRANSPORT transport) {
+void btif_hh_acl_disconnected(const RawAddress& addr, tBT_TRANSPORT transport) {
   if (!com::android::bluetooth::flags::hogp_reconnection()) {
     return;
   }
@@ -1400,14 +1391,15 @@ bt_status_t btif_hh_connect(const tAclLinkSpec& link_spec) {
  * Returns          void
  *
  ******************************************************************************/
-static void btif_hh_disconnect(const tAclLinkSpec& link_spec) {
+static bool btif_hh_disconnect(const tAclLinkSpec& link_spec) {
   btif_hh_device_t* p_dev = btif_hh_find_connected_dev_by_link_spec(link_spec);
   if (p_dev == nullptr) {
     log::warn("Unable to disconnect unknown HID device:{}", link_spec);
-    return;
+    return false;
   }
   log::debug("Disconnect and close request for HID device:{}", link_spec);
   BTA_HhClose(p_dev->dev_handle);
+  return true;
 }
 
 /*******************************************************************************
@@ -1681,8 +1673,9 @@ static void btif_hh_handle_evt(uint16_t event, char* p_param) {
 
     case BTIF_HH_DISCONNECT_REQ_EVT: {
       log::debug("BTIF_HH_DISCONNECT_REQ_EVT: link spec:{}", link_spec);
-      btif_hh_disconnect(link_spec);
-      BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_DISCONNECTING);
+      if (btif_hh_disconnect(link_spec)) {
+        BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_DISCONNECTING);
+      }
     } break;
 
     case BTIF_HH_VUP_REQ_EVT: {

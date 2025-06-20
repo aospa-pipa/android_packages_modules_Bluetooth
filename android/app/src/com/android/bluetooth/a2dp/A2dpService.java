@@ -55,6 +55,7 @@ import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.avrcp.AvrcpTargetService;
 import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
@@ -70,6 +71,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -81,6 +83,7 @@ public class A2dpService extends ConnectableProfile {
     private static final int SOURCE_CODEC_TYPE_MAX = 7;
     private static final int SOURCE_CODEC_TYPE_APTX_ADAPTIVE = SOURCE_CODEC_TYPE_MAX;
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static A2dpService sA2dpService;
 
     private final A2dpNativeInterface mNativeInterface;
@@ -92,6 +95,7 @@ public class A2dpService extends ConnectableProfile {
     // Upper limit of all A2DP devices that are Connected or Connecting
     private final int mMaxConnectedAudioDevices;
 
+    // TODO(b/422543753) Delete on flag cleanup
     @VisibleForTesting ServiceFactory mFactory = new ServiceFactory();
 
     @GuardedBy("mStateMachines")
@@ -170,6 +174,24 @@ public class A2dpService extends ConnectableProfile {
         setA2dpService(this);
     }
 
+    // TODO(b/422543753) Delete on flag cleanup
+    Optional<AvrcpTargetService> getAvrcpTargetService() {
+        if (Flags.adapterServiceProfilesUseOptional()) {
+            return mAdapterService.getAvrcpTargetService();
+        } else {
+            return Optional.ofNullable(mFactory.getAvrcpTargetService());
+        }
+    }
+
+    // TODO(b/422543753) Delete on flag cleanup
+    Optional<HeadsetService> getHeadsetService() {
+        if (Flags.adapterServiceProfilesUseOptional()) {
+            return mAdapterService.getHeadsetService();
+        } else {
+            return Optional.ofNullable(HeadsetService.getHeadsetService());
+        }
+    }
+
     public static boolean isEnabled() {
         return BluetoothProperties.isProfileA2dpSourceEnabled().orElse(false);
     }
@@ -221,6 +243,7 @@ public class A2dpService extends ConnectableProfile {
         return mCompanionDeviceManager;
     }
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     public static synchronized A2dpService getA2dpService() {
         if (sA2dpService == null) {
             Log.w(TAG, "getA2dpService(): service is null");
@@ -233,6 +256,7 @@ public class A2dpService extends ConnectableProfile {
         return sA2dpService;
     }
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static synchronized void setA2dpService(A2dpService instance) {
         Log.d(TAG, "setA2dpService(): set to: " + instance);
         sA2dpService = instance;
@@ -378,7 +402,6 @@ public class A2dpService extends ConnectableProfile {
      *     for incoming connection request
      * @return true if connection is allowed, otherwise false
      */
-    @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public boolean okToConnect(BluetoothDevice device, boolean isOutgoingRequest) {
         Log.i(TAG, "okToConnect: device " + device + " isOutgoingRequest: " + isOutgoingRequest);
         // Check if this is an incoming connection in Quiet mode.
@@ -398,13 +421,13 @@ public class A2dpService extends ConnectableProfile {
         if (connectionPolicy != CONNECTION_POLICY_UNKNOWN
                 && connectionPolicy != CONNECTION_POLICY_ALLOWED) {
             if (!isOutgoingRequest) {
-                HeadsetService headsetService = HeadsetService.getHeadsetService();
-                if (headsetService != null && headsetService.okToAcceptConnection(device, true)) {
+                final var headset = getHeadsetService();
+                if (headset.isPresent() && headset.get().okToAcceptConnection(device, true)) {
                     Log.d(
                             TAG,
-                            "okToConnect: return false,"
-                                    + " Fallback connection to allowed HFP profile");
-                    headsetService.connect(device);
+                            "okToConnect: return false, Fallback connection to allowed HFP"
+                                    + " profile");
+                    headset.get().connect(device);
                     return false;
                 }
             }
@@ -639,10 +662,9 @@ public class A2dpService extends ConnectableProfile {
 
             // Tasks of Bluetooth are done, and now restore the AudioManager side.
             int rememberedVolume = -1;
-            if (mFactory.getAvrcpTargetService() != null) {
-                rememberedVolume =
-                        mFactory.getAvrcpTargetService()
-                                .getRememberedVolumeForDevice(newActiveDevice);
+            final var avrcpTarget = getAvrcpTargetService();
+            if (avrcpTarget.isPresent()) {
+                rememberedVolume = avrcpTarget.get().getRememberedVolumeForDevice(newActiveDevice);
             }
             // Make sure the Audio Manager knows the previous Active device is disconnected,
             // and the new Active device is connected.
@@ -709,12 +731,7 @@ public class A2dpService extends ConnectableProfile {
     }
 
     public void setAvrcpAbsoluteVolume(int volume) {
-        // TODO (apanicke): Instead of using A2DP as a middleman for volume changes, add a binder
-        // service to the new AVRCP Profile and have the audio manager use that instead.
-        if (mFactory.getAvrcpTargetService() != null) {
-            mFactory.getAvrcpTargetService().sendVolumeChanged(volume);
-            return;
-        }
+        getAvrcpTargetService().ifPresent(avrcpTarget -> avrcpTarget.sendVolumeChanged(volume));
     }
 
     boolean isA2dpPlaying(BluetoothDevice device) {
@@ -1215,9 +1232,8 @@ public class A2dpService extends ConnectableProfile {
         Log.d(TAG, "updateAndBroadcastActiveDevice(" + device + ")");
 
         // Make sure volume has been store before device been remove from active.
-        if (mFactory.getAvrcpTargetService() != null) {
-            mFactory.getAvrcpTargetService().handleA2dpActiveDeviceChanged(device);
-        }
+        getAvrcpTargetService()
+                .ifPresent(avrcpTarget -> avrcpTarget.handleA2dpActiveDeviceChanged(device));
 
         mAdapterService.handleActiveDeviceChange(mProfileId, device);
 
@@ -1283,10 +1299,12 @@ public class A2dpService extends ConnectableProfile {
         if (bondState != BluetoothDevice.BOND_NONE) {
             return;
         }
-        if (mFactory.getAvrcpTargetService() != null) {
-            Log.d(TAG, "bondStateChanged: going for removeStoredVolumeForDevice");
-            mFactory.getAvrcpTargetService().removeStoredVolumeForDevice(device);
-        }
+        getAvrcpTargetService()
+                .ifPresent(
+                        avrcpTarget -> {
+                            Log.d(TAG, "bondStateChanged: going for removeStoredVolumeForDevice");
+                            avrcpTarget.removeStoredVolumeForDevice(device);
+                        });
         synchronized (mStateMachines) {
             A2dpStateMachine sm = mStateMachines.get(device);
             if (sm == null) {
@@ -1429,15 +1447,15 @@ public class A2dpService extends ConnectableProfile {
         // Check if the device is disconnected - if unbond, remove the state machine
         if (toState == STATE_DISCONNECTED) {
             if (mAdapterService.getBondState(device) == BluetoothDevice.BOND_NONE) {
-                if (mFactory.getAvrcpTargetService() != null) {
-                    mFactory.getAvrcpTargetService().removeStoredVolumeForDevice(device);
-                }
+                getAvrcpTargetService()
+                        .ifPresent(avrcpTarget -> avrcpTarget.removeStoredVolumeForDevice(device));
                 removeStateMachine(device);
             }
         }
-        if (mFactory.getAvrcpTargetService() != null) {
-            mFactory.getAvrcpTargetService().handleA2dpConnectionStateChanged(device, toState);
-        }
+        getAvrcpTargetService()
+                .ifPresent(
+                        avrcpTarget ->
+                                avrcpTarget.handleA2dpConnectionStateChanged(device, toState));
         mAdapterService.notifyProfileConnectionStateChangeToGatt(mProfileId, fromState, toState);
         mAdapterService.handleProfileConnectionStateChange(mProfileId, device, fromState, toState);
         mAdapterService

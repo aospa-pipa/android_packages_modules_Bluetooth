@@ -612,7 +612,7 @@ SnoopLogger::SnoopLogger(os::Handler* handler, std::string snoop_log_path,
   SnoopLoggerTracing::InitializePerfetto();
 #endif  // __ANDROID__
 
-  alarm_ = std::make_unique<os::RepeatingAlarm>(handler_);
+  alarm_ = std::make_unique<os::RepeatingAlarm>(&handler_->thread());
   alarm_->Schedule(common::Bind(&delete_old_btsnooz_files, snooz_log_path_, snooz_log_life_time_),
                    snooz_log_delete_alarm_interval_);
 }
@@ -635,8 +635,7 @@ void SnoopLogger::OpenNextSnoopLogFile() {
   auto last_file_path = get_last_log_path(snoop_log_path_);
 
 #ifdef __ANDROID__
-  if (com::android::bluetooth::flags::snoop_logger_recreate_logs_directory() &&
-      !create_log_directories()) {
+  if (!create_log_directories()) {
     log::error("Could not recreate log directory");
   }
 #endif  // __ANDROID__
@@ -1362,8 +1361,7 @@ void SnoopLogger::DumpSnoozLogToFile() {
   }
 
 #ifdef __ANDROID__
-  if (com::android::bluetooth::flags::snoop_logger_recreate_logs_directory() &&
-      !create_log_directories()) {
+  if (!create_log_directories()) {
     log::error("Could not recreate log directory");
   }
 #endif  // __ANDROID__

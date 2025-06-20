@@ -60,6 +60,7 @@ import android.util.Log;
 
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
@@ -115,6 +116,7 @@ public class ScanController {
 
     private final AdapterService mAdapterService;
     private final BluetoothAdapter mAdapter;
+    private final ScanRadioStats mScanRadioStats;
     private final String mExposureNotificationPackage;
     private final Predicate<ScanResult> mLocationDenylistPredicate;
     private final Looper mMainLooper;
@@ -130,7 +132,7 @@ public class ScanController {
     private Handler mTestModeHandler;
 
     public ScanController(AdapterService service) {
-        this(service, null, null, new ScannerMap());
+        this(service, null, null, new ScannerMap(), getSystemClock());
     }
 
     @VisibleForTesting
@@ -138,9 +140,11 @@ public class ScanController {
             AdapterService service,
             ScanManager scanManager,
             PeriodicScanManager periodicScanManager,
-            ScannerMap scannerMap) {
+            ScannerMap scannerMap,
+            TimeProvider timeProvider) {
         mAdapterService = requireNonNull(service);
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
+        mScanRadioStats = new ScanRadioStats(timeProvider);
         mExposureNotificationPackage =
                 mAdapterService.getString(R.string.exposure_notification_package);
         mLocationDenylistPredicate =
@@ -175,7 +179,7 @@ public class ScanController {
                         scanManager,
                         () ->
                                 new ScanManager(
-                                        mAdapterService, this, scanThreadLooper, getSystemClock()));
+                                        mAdapterService, this, scanThreadLooper, timeProvider));
         mPeriodicScanManager =
                 requireNonNullElseGet(
                         periodicScanManager,
@@ -202,6 +206,10 @@ public class ScanController {
 
     ScannerMap getScannerMap() {
         return mScannerMap;
+    }
+
+    ScanRadioStats getScanRadioStats() {
+        return mScanRadioStats;
     }
 
     /** Example raw beacons captured from a Blue Charm BC011 */
@@ -351,7 +359,7 @@ public class ScanController {
         // When in testing mode, ignore all real-world events
         if (mTestModeEnabled) return;
 
-        AppScanStats.recordScanRadioResultCount();
+        mScanRadioStats.recordScanRadioResultCount();
         onScanResultInternal(
                 eventType,
                 addressType,
@@ -419,7 +427,7 @@ public class ScanController {
             final ScanSettings settings = client.mSettings;
             final byte[] scanRecordData;
             boolean isScanResponse = (eventType & ET_SCAN_RESPONSE_MASK) != 0;
-            boolean requiresScanResponse = (eventType & ET_SCANNABLE_MASK) == 0 || !isScanResponse;
+            boolean requiresScanResponse = (eventType & ET_SCANNABLE_MASK) != 0 && !isScanResponse;
             if (Flags.supportPassiveScanning()
                     && ((settings.getScanType() == ScanSettings.SCAN_TYPE_ACTIVE
                                     && requiresScanResponse)
@@ -736,7 +744,7 @@ public class ScanController {
         // When in testing mode, ignore all real-world events
         if (mTestModeEnabled) return;
 
-        AppScanStats.recordBatchScanRadioResultCount(numRecords);
+        mScanRadioStats.recordBatchScanRadioResultCount(numRecords);
         onBatchScanReportsInternal(status, scannerId, reportType, numRecords, recordData);
     }
 

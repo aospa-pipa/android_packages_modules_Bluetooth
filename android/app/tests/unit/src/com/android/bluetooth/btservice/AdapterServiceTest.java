@@ -32,6 +32,7 @@ import static com.android.bluetooth.TestUtils.StaticMockitoRule;
 import static com.android.bluetooth.TestUtils.getBluetoothManager;
 import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
+import static com.android.tests.bluetooth.Utils.FlagsWrapper;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -81,7 +82,6 @@ import android.os.UserManager;
 import android.permission.PermissionManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
-import android.platform.test.flag.junit.FlagsParameterization;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
@@ -134,8 +134,17 @@ public class AdapterServiceTest {
     @Rule public final SetFlagsRule mSetFlagsRule;
 
     @Mock private Context mMockContext;
-    @Mock private ApplicationInfo mMockApplicationInfo;
+    @Mock private AdapterNativeInterface mNativeInterface;
+    @Mock private BluetoothKeystoreNativeInterface mKeystoreNativeInterface;
+    @Mock private BluetoothQualityReportNativeInterface mQualityNativeInterface;
+    @Mock private BluetoothHciVendorSpecificNativeInterface mHciVendorSpecificNativeInterface;
+    @Mock private GattNativeInterface mGattNativeInterface;
+    @Mock private AdvertiseManagerNativeInterface mAdvertiseNativeInterface;
+    @Mock private DistanceMeasurementNativeInterface mDistanceNativeInterface;
+    @Mock private SdpManagerNativeInterface mSdpNativeInterface;
     @Mock private LeAudioService mMockLeAudioService;
+
+    @Mock private ApplicationInfo mMockApplicationInfo;
     @Mock private Resources mMockResources;
     @Mock private ProfileService mMockGattService;
     @Mock private ProfileService mMockService1;
@@ -143,14 +152,6 @@ public class AdapterServiceTest {
     @Mock private IBluetoothCallback mIBluetoothCallback;
     @Mock private Binder mBinder;
     @Mock private MetricsLogger mMockMetricsLogger;
-    @Mock private AdapterNativeInterface mNativeInterface;
-    @Mock private GattNativeInterface mGattNativeInterface;
-    @Mock private AdvertiseManagerNativeInterface mAdvertiseNativeInterface;
-    @Mock private DistanceMeasurementNativeInterface mDistanceNativeInterface;
-    @Mock private BluetoothKeystoreNativeInterface mKeystoreNativeInterface;
-    @Mock private BluetoothQualityReportNativeInterface mQualityNativeInterface;
-    @Mock private BluetoothHciVendorSpecificNativeInterface mHciVendorSpecificNativeInterface;
-    @Mock private SdpManagerNativeInterface mSdpNativeInterface;
     @Mock private PeriodicScanNativeInterface mPeriodicNativeInterface;
     @Mock private ScanNativeInterface mScanNativeInterface;
     @Mock private JniCallbacks mJniCallbacks;
@@ -194,6 +195,7 @@ public class AdapterServiceTest {
                 GattNativeInterface gattNativeInterface,
                 AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
                 DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
+                SdpManagerNativeInterface sdpNativeInterface,
                 LeAudioService leAudio) {
             super(
                     looper,
@@ -204,12 +206,13 @@ public class AdapterServiceTest {
                     bluetoothHciVendorSpecificNativeInterface,
                     gattNativeInterface,
                     advertiseManagerNativeInterface,
-                    distanceMeasurementNativeInterface);
+                    distanceMeasurementNativeInterface,
+                    sdpNativeInterface);
             mTestLeAudio = leAudio;
         }
 
         @Override
-        protected Optional<LeAudioService> getLeAudioService() {
+        public Optional<LeAudioService> getLeAudioService() {
             return Optional.ofNullable(mTestLeAudio);
         }
 
@@ -233,14 +236,14 @@ public class AdapterServiceTest {
     }
 
     @Parameters(name = "{0}")
-    public static List<FlagsParameterization> getParams() {
-        return FlagsParameterization.progressionOf(
+    public static List<FlagsWrapper> getParams() {
+        return FlagsWrapper.progressionOf(
                 Flags.FLAG_LIMIT_USER_SWITCH_PROPAGATION,
                 Flags.FLAG_WATCH_DEVICE_OVERRIDE_AIRPLANE_MODE);
     }
 
-    public AdapterServiceTest(FlagsParameterization flags) {
-        mSetFlagsRule = new SetFlagsRule(flags);
+    public AdapterServiceTest(FlagsWrapper flags) {
+        mSetFlagsRule = new SetFlagsRule(flags.getFlags());
     }
 
     @Before
@@ -251,7 +254,6 @@ public class AdapterServiceTest {
         doReturn(true).when(mMockLeAudioService).isAvailable();
         doReturn(CONNECTION_POLICY_ALLOWED).when(mMockLeAudioService).getConnectionPolicy(any());
 
-        SdpManagerNativeInterface.setInstance(mSdpNativeInterface);
         PeriodicScanNativeInterface.setInstance(mPeriodicNativeInterface);
         ScanNativeInterface.setInstance(mScanNativeInterface);
 
@@ -271,6 +273,7 @@ public class AdapterServiceTest {
                                         mGattNativeInterface,
                                         mAdvertiseNativeInterface,
                                         mDistanceNativeInterface,
+                                        mSdpNativeInterface,
                                         mMockLeAudioService));
         assertThat(mLooper.dispatchAll()).isEqualTo(1);
         assertThat(mAdapterService).isNotNull();
@@ -363,7 +366,6 @@ public class AdapterServiceTest {
 
         mAdapterService.cleanup();
         mAdapterService.unregisterRemoteCallback(mIBluetoothCallback);
-        SdpManagerNativeInterface.setInstance(null);
         PeriodicScanNativeInterface.setInstance(null);
         ScanNativeInterface.setInstance(null);
         MetricsLogger.setInstanceForTesting(null);
@@ -930,7 +932,6 @@ public class AdapterServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_IDENTITY_ADDRESS_TYPE_API)
     public void testIdentityAddressType() {
         doEnable(false); // Need BluetoothAdapter for mAdapterService.getRemoteDevice
         RemoteDevices remoteDevices = mAdapterService.getRemoteDevices();

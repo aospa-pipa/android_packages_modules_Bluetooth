@@ -57,6 +57,7 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.Utils.callbackToApp;
+import static com.android.bluetooth.Utils.getSystemClock;
 import static com.android.bluetooth.Utils.transportToString;
 import static com.android.bluetooth.util.AttributionSourceUtil.getLastAttributionTag;
 
@@ -85,13 +86,13 @@ import android.content.pm.PackageManager.PackageInfoFlags;
 import android.os.Binder;
 import android.os.HandlerThread;
 import android.os.IBinder;
-import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
+import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AbstractionLayer;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
@@ -198,9 +199,6 @@ public class GattService extends ProfileService {
     @VisibleForTesting static final int RSSI_READ_THROTTLE_MS_MAX = 200;
     @VisibleForTesting static final int GATT_CLIENT_LIMIT_PER_APP = 32;
 
-    /** This is only used when Flags.onlyStartScanDuringBleOn() is true. */
-    private static GattService sGattService;
-
     /** List of our registered clients. */
     @VisibleForTesting ContextMap<IBluetoothGattCallback> mClientMap = new ContextMap<>();
 
@@ -238,6 +236,7 @@ public class GattService extends ProfileService {
     private final AdvertiseManager mAdvertiseManager;
     @Nullable private final ScanController mScanController;
     private final DistanceMeasurementManager mDistanceMeasurementManager;
+    private final TimeProvider mTimeProvider;
     @VisibleForTesting int mRssiReadThrottleMs;
 
     public GattService(AdapterService adapterService) {
@@ -254,7 +253,8 @@ public class GattService extends ProfileService {
                 nativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
-                null);
+                null,
+                getSystemClock());
     }
 
     @VisibleForTesting
@@ -263,11 +263,13 @@ public class GattService extends ProfileService {
             GattNativeInterface nativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
-            ScanController scanController) {
+            ScanController scanController,
+            TimeProvider timeProvider) {
         super(BluetoothProfile.GATT, requireNonNull(adapterService));
         mActivityManager = requireNonNull(obtainSystemService(ActivityManager.class));
         mPackageManager = requireNonNull(mAdapterService.getPackageManager());
         mCompanionDeviceManager = requireNonNull(obtainSystemService(CompanionDeviceManager.class));
+        mTimeProvider = timeProvider;
 
         Settings.Global.putInt(
                 getContentResolver(), "bluetooth_sanitized_exposure_notification_supported", 1);
@@ -307,10 +309,6 @@ public class GattService extends ProfileService {
         mDistanceMeasurementManager =
                 new DistanceMeasurementManager(
                         mAdapterService, distanceMeasurementNativeInterface, looper);
-
-        if (Flags.onlyStartScanDuringBleOn()) {
-            setGattService(this);
-        }
 
         mSubrateLowParameters =
                 new int[] {
@@ -373,13 +371,6 @@ public class GattService extends ProfileService {
     public void cleanup() {
         Log.i(TAG, "cleanup()");
 
-        if (Flags.onlyStartScanDuringBleOn() && sGattService == null) {
-            Log.w(TAG, "cleanup() called before initialization");
-            return;
-        }
-        if (Flags.onlyStartScanDuringBleOn()) {
-            setGattService(null);
-        }
         if (mScanController != null) {
             mScanController.cleanup();
         }
@@ -393,24 +384,6 @@ public class GattService extends ProfileService {
         mAdvertiseManager.cleanup();
         mDistanceMeasurementManager.cleanup();
         mHandlerThread.quit();
-    }
-
-    /** This is only used when Flags.onlyStartScanDuringBleOn() is true. */
-    public static synchronized GattService getGattService() {
-        if (sGattService == null) {
-            Log.w(TAG, "getGattService(): service is null");
-            return null;
-        }
-        if (!sGattService.isAvailable()) {
-            Log.w(TAG, "getGattService(): service is not available");
-            return null;
-        }
-        return sGattService;
-    }
-
-    private static synchronized void setGattService(GattService instance) {
-        Log.d(TAG, "setGattService(): set to: " + instance);
-        sGattService = instance;
     }
 
     @Nullable
@@ -921,7 +894,7 @@ public class GattService extends ProfileService {
         if (Flags.readRssiThrottling() && status == BluetoothGatt.GATT_SUCCESS) {
             Log.d(TAG, "onReadRemoteRssi() - putting timestamp and rssi into cache");
             mRssiCache.put(
-                    device.getAddress(), new RssiCacheEntry(SystemClock.elapsedRealtime(), rssi));
+                    device.getAddress(), new RssiCacheEntry(mTimeProvider.elapsedRealtime(), rssi));
         }
 
         callbackToApp(() -> app.callback.onReadRemoteRssi(device, rssi, status));
@@ -1528,7 +1501,7 @@ public class GattService extends ProfileService {
         if (Flags.readRssiThrottling() && mRssiReadThrottleMs > 0) {
             final var entry = mRssiCache.get(device.getAddress());
             if (entry != null
-                    && (SystemClock.elapsedRealtime() - entry.readTimeStamp)
+                    && (mTimeProvider.elapsedRealtime() - entry.readTimeStamp)
                             < mRssiReadThrottleMs) {
                 Log.d(TAG, "readRemoteRssi() - rssi value found in cache, returning to callback");
                 callbackToApp(
