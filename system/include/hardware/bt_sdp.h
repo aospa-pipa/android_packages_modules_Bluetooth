@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <bluetooth/uuid.h>
-#include <raw_address.h>
+#include "types/bluetooth/uuid.h"
+#include "types/raw_address.h"
 
 #include "bluetooth.h"
 

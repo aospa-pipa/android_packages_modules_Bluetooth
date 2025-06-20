@@ -29,6 +29,7 @@
 
 package android.bluetooth;
 
+import android.annotation.RequiresNoPermission;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.ParcelUuid;
@@ -86,6 +87,7 @@ public final class DeviceGroup implements Parcelable {
      *
      * @return  Identifier of the Device Group.
      */
+    @RequiresNoPermission
     public int getDeviceGroupId() {
         return mGroupId;
     }
@@ -95,6 +97,7 @@ public final class DeviceGroup implements Parcelable {
      *
      * @return size of the Device Group
      */
+    @RequiresNoPermission
     public int getDeviceGroupSize() {
         return mSize;
     }
@@ -104,6 +107,7 @@ public final class DeviceGroup implements Parcelable {
      *
      * @return total group devices discovered in the Device Group.
      */
+    @RequiresNoPermission
     public int getTotalDiscoveredGroupDevices() {
         return mGroupDevices.size();
     }
@@ -114,6 +118,7 @@ public final class DeviceGroup implements Parcelable {
      *
      *@return List of group devices {@link BluetoothDevice} in the Device Group.
      */
+    @RequiresNoPermission
     public List<BluetoothDevice> getDeviceGroupMembers() {
         return mGroupDevices;
     }
@@ -126,6 +131,7 @@ public final class DeviceGroup implements Parcelable {
      *
      *@return UUID of the GATT primary Service which has included this device group.
      */
+    @RequiresNoPermission
     public ParcelUuid getIncludingServiceUUID() {
         return mIncludingSrvcUUID;
     }
@@ -136,6 +142,7 @@ public final class DeviceGroup implements Parcelable {
      * @return true, if exclusive access operation is supported by this Device Group.
      * Otherwise, false.
      */
+    @RequiresNoPermission
     public boolean isExclusiveAccessSupported() {
         return mExclusiveAccessSupport;
     }
@@ -145,6 +152,7 @@ public final class DeviceGroup implements Parcelable {
      *
      * @return true, if all group devices are discovered. Otherwise, false.
      */
+    @RequiresNoPermission
     public boolean isGroupDiscoveredCompleted() {
       return (mSize == getTotalDiscoveredGroupDevices());
     }

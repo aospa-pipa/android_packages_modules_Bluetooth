@@ -20,7 +20,7 @@
 
 #include "btm_api_types.h"
 #include "device/include/esco_parameters.h"
-#include "raw_address.h"
+#include "types/raw_address.h"
 
 // Used by the Bluetooth stack to get WBS supported and codec, or notify SCO
 // connection change to lower layer (kernel) when SCO-over-HCI is used. So far

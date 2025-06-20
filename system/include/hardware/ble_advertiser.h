@@ -22,7 +22,7 @@
 #define ANDROID_INCLUDE_BLE_ADVERTISER_H
 
 #include <base/functional/callback_forward.h>
-#include <raw_address.h>
+#include "types/raw_address.h"
 #include <stdint.h>
 
 #include <vector>

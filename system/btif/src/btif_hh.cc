@@ -41,8 +41,8 @@
 #include <cstdint>
 #include <cstring>
 
-#include "ble_address_with_type.h"
-#include "bluetooth/uuid.h"
+#include "types/ble_address_with_type.h"
+#include "types/bluetooth/uuid.h"
 #include "bt_device_type.h"
 #include "bt_transport.h"
 #include "bta_api.h"

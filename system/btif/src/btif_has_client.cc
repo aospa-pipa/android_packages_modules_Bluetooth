@@ -30,7 +30,7 @@
 #include "btif_common.h"
 #include "btif_le_audio.h"
 #include "btif_profile_storage.h"
-#include "raw_address.h"
+#include "types/raw_address.h"
 #include "stack/include/main_thread.h"
 
 using base::Bind;

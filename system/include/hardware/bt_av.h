@@ -19,7 +19,7 @@
 
 #include <bluetooth/log.h>
 #include <hardware/bluetooth.h>
-#include <raw_address.h>
+#include "types/raw_address.h"
 
 #include <optional>
 #include <sstream>

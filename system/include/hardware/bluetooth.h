@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "avrcp/avrcp.h"
-#include "bluetooth/uuid.h"
+#include "types/bluetooth/uuid.h"
 #include "types/ble_address_with_type.h"
 
 /**
