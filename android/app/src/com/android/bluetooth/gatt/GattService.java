@@ -472,9 +472,9 @@ public class GattService extends ProfileService {
             mClientMap.remove(uuid, ContextMap.RemoveReason.REASON_REGISTER_FAILED);
         } else {
             app.id = clientIf;
-            app.linkToDeath(new ClientDeathRecipient(app.callback, app.packageName));
+            app.linkToDeath(new ClientDeathRecipient(app.getCallback(), app.packageName));
         }
-        callbackToApp(() -> app.callback.onClientRegistered(status));
+        callbackToApp(() -> app.getCallback().onClientRegistered(status));
     }
 
     void onConnectedFromNative(
@@ -507,7 +507,7 @@ public class GattService extends ProfileService {
             return;
         }
         final var connected = status == BluetoothGatt.GATT_SUCCESS;
-        callbackToApp(() -> app.callback.onClientConnectionState(status, connected, device));
+        callbackToApp(() -> app.getCallback().onClientConnectionState(status, connected, device));
         MetricsLogger.getInstance()
                 .logBluetoothEvent(
                         device,
@@ -567,7 +567,8 @@ public class GattService extends ProfileService {
         } else {
             disconnectStatus = status;
         }
-        callbackToApp(() -> app.callback.onClientConnectionState(disconnectStatus, false, device));
+        callbackToApp(
+                () -> app.getCallback().onClientConnectionState(disconnectStatus, false, device));
         MetricsLogger.getInstance()
                 .logBluetoothEvent(
                         device,
@@ -590,7 +591,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onPhyUpdate(device, txPhy, rxPhy, status));
+        callbackToApp(() -> app.getCallback().onPhyUpdate(device, txPhy, rxPhy, status));
     }
 
     void onClientPhyReadFromNative(
@@ -613,7 +614,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onPhyRead(device, txPhy, rxPhy, status));
+        callbackToApp(() -> app.getCallback().onPhyRead(device, txPhy, rxPhy, status));
     }
 
     void onClientConnUpdateFromNative(
@@ -631,7 +632,9 @@ public class GattService extends ProfileService {
         }
 
         callbackToApp(
-                () -> app.callback.onConnectionUpdated(device, interval, latency, timeout, status));
+                () ->
+                        app.getCallback()
+                                .onConnectionUpdated(device, interval, latency, timeout, status));
     }
 
     void onServiceChangedFromNative(int connId) {
@@ -647,7 +650,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onServiceChanged(device));
+        callbackToApp(() -> app.getCallback().onServiceChanged(device));
     }
 
     void onClientSubrateChangeFromNative(
@@ -672,7 +675,9 @@ public class GattService extends ProfileService {
             subrateMode = BluetoothGatt.SUBRATE_MODE_NOT_UPDATED;
         }
         callbackToApp(
-                () -> app.callback.onSubrateChange(device, subrateMode, translateHciCode(status)));
+                () ->
+                        app.getCallback()
+                                .onSubrateChange(device, subrateMode, translateHciCode(status)));
     }
 
     GattDbElement getSampleGattDbElement() {
@@ -684,7 +689,7 @@ public class GattService extends ProfileService {
         Log.d(TAG, "onGetGattDb() - device=" + device);
 
         final ContextMap<IBluetoothGattCallback>.App app = mClientMap.getByConnId(connId);
-        if (app == null || app.callback == null) {
+        if (app == null || app.getCallback() == null) {
             Log.e(TAG, "app or callback is null");
             return;
         }
@@ -759,7 +764,7 @@ public class GattService extends ProfileService {
             mRestrictedHandles.put(connId, restrictedIds);
         }
         // Search is complete when there was error, or nothing more to process
-        callbackToApp(() -> app.callback.onSearchComplete(device, dbOut, 0 /* status */));
+        callbackToApp(() -> app.getCallback().onSearchComplete(device, dbOut, 0 /* status */));
     }
 
     void onRegisterForNotificationsFromNative(int connId, int status, int registered, int handle) {
@@ -783,7 +788,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onNotify(device, handle, data));
+        callbackToApp(() -> app.getCallback().onNotify(device, handle, data));
     }
 
     void onReadCharacteristicFromNative(int connId, int status, int handle, byte[] data) {
@@ -799,7 +804,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onCharacteristicRead(device, status, handle, data));
+        callbackToApp(() -> app.getCallback().onCharacteristicRead(device, status, handle, data));
     }
 
     void onWriteCharacteristicFromNative(int connId, int status, int handle, byte[] data) {
@@ -822,7 +827,8 @@ public class GattService extends ProfileService {
         }
 
         if (!app.isCongested) {
-            callbackToApp(() -> app.callback.onCharacteristicWrite(device, status, handle, data));
+            callbackToApp(
+                    () -> app.getCallback().onCharacteristicWrite(device, status, handle, data));
         } else {
             int queuedStatus = status;
             if (queuedStatus == BluetoothGatt.GATT_CONNECTION_CONGESTED) {
@@ -842,7 +848,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onExecuteWrite(device, status));
+        callbackToApp(() -> app.getCallback().onExecuteWrite(device, status));
     }
 
     void onReadDescriptorFromNative(int connId, int status, int handle, byte[] data) {
@@ -858,7 +864,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onDescriptorRead(device, status, handle, data));
+        callbackToApp(() -> app.getCallback().onDescriptorRead(device, status, handle, data));
     }
 
     void onWriteDescriptorFromNative(int connId, int status, int handle, byte[] data) {
@@ -874,7 +880,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onDescriptorWrite(device, status, handle, data));
+        callbackToApp(() -> app.getCallback().onDescriptorWrite(device, status, handle, data));
     }
 
     void onReadRemoteRssiFromNative(int clientIf, BluetoothDevice device, int rssi, int status) {
@@ -897,7 +903,7 @@ public class GattService extends ProfileService {
                     device.getAddress(), new RssiCacheEntry(mTimeProvider.elapsedRealtime(), rssi));
         }
 
-        callbackToApp(() -> app.callback.onReadRemoteRssi(device, rssi, status));
+        callbackToApp(() -> app.getCallback().onReadRemoteRssi(device, rssi, status));
     }
 
     void onConfigureMTUFromNative(int connId, int status, int mtu) {
@@ -908,7 +914,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        callbackToApp(() -> app.callback.onConfigureMTU(device, mtu, status));
+        callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
     }
 
     void onClientCongestionFromNative(int connId, boolean congested) {
@@ -926,11 +932,12 @@ public class GattService extends ProfileService {
             }
             callbackToApp(
                     () ->
-                            app.callback.onCharacteristicWrite(
-                                    callbackInfo.device(),
-                                    callbackInfo.status(),
-                                    callbackInfo.handle(),
-                                    callbackInfo.valueByteArray()));
+                            app.getCallback()
+                                    .onCharacteristicWrite(
+                                            callbackInfo.device(),
+                                            callbackInfo.status(),
+                                            callbackInfo.handle(),
+                                            callbackInfo.valueByteArray()));
         }
     }
 
@@ -1506,8 +1513,10 @@ public class GattService extends ProfileService {
                 Log.d(TAG, "readRemoteRssi() - rssi value found in cache, returning to callback");
                 callbackToApp(
                         () ->
-                                clientApp.callback.onReadRemoteRssi(
-                                        device, entry.rssi, BluetoothGatt.GATT_SUCCESS));
+                                clientApp
+                                        .getCallback()
+                                        .onReadRemoteRssi(
+                                                device, entry.rssi, BluetoothGatt.GATT_SUCCESS));
                 return;
             }
         }
@@ -1650,8 +1659,8 @@ public class GattService extends ProfileService {
             return;
         }
         app.id = serverIf;
-        app.linkToDeath(new ServerDeathRecipient(app.callback, app.packageName));
-        callbackToApp(() -> app.callback.onServerRegistered(status));
+        app.linkToDeath(new ServerDeathRecipient(app.getCallback(), app.packageName));
+        callbackToApp(() -> app.getCallback().onServerRegistered(status));
     }
 
     void onServiceAddedFromNative(int status, int serverIf, List<GattDbElement> service) {
@@ -1713,7 +1722,7 @@ public class GattService extends ProfileService {
             return;
         }
         final BluetoothGattService serviceAdded = svc;
-        callbackToApp(() -> app.callback.onServiceAdded(status, serviceAdded));
+        callbackToApp(() -> app.getCallback().onServiceAdded(status, serviceAdded));
     }
 
     void onServiceStoppedFromNative(int status, int serverIf, int srvcHandle) {
@@ -1818,7 +1827,7 @@ public class GattService extends ProfileService {
         // Lambdas require an effectively final variable. This should be removed when the
         // gattMultiBearerConnections flag is removed.
         final boolean state = stateToReport;
-        callbackToApp(() -> app.callback.onServerConnectionState((byte) 0, state, device));
+        callbackToApp(() -> app.getCallback().onServerConnectionState((byte) 0, state, device));
         statsLogAppPackage(device, applicationUid, serverIf);
         statsLogGattConnectionStateChange(
                 BluetoothProfile.GATT_SERVER, device, serverIf, connectionState, -1);
@@ -1837,7 +1846,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onPhyUpdate(device, txPhy, rxPhy, status));
+        callbackToApp(() -> app.getCallback().onPhyUpdate(device, txPhy, rxPhy, status));
     }
 
     void onServerPhyReadFromNative(
@@ -1861,7 +1870,7 @@ public class GattService extends ProfileService {
         // Lambdas require an effectively final variable. This should be removed when the
         // gattMultiBearerConnections flag is removed.
         final ContextMap<IBluetoothGattServerCallback>.App finalApp = app;
-        callbackToApp(() -> finalApp.callback.onPhyRead(device, txPhy, rxPhy, status));
+        callbackToApp(() -> finalApp.getCallback().onPhyRead(device, txPhy, rxPhy, status));
     }
 
     void onServerConnUpdateFromNative(
@@ -1879,7 +1888,9 @@ public class GattService extends ProfileService {
         }
 
         callbackToApp(
-                () -> app.callback.onConnectionUpdated(device, interval, latency, timeout, status));
+                () ->
+                        app.getCallback()
+                                .onConnectionUpdated(device, interval, latency, timeout, status));
     }
 
     void onServerSubrateChangeFromNative(
@@ -1904,7 +1915,9 @@ public class GattService extends ProfileService {
             subrateMode = BluetoothGatt.SUBRATE_MODE_NOT_UPDATED;
         }
         callbackToApp(
-                () -> app.callback.onSubrateChange(device, subrateMode, translateHciCode(status)));
+                () ->
+                        app.getCallback()
+                                .onSubrateChange(device, subrateMode, translateHciCode(status)));
     }
 
     void onServerReadCharacteristicFromNative(
@@ -1943,8 +1956,9 @@ public class GattService extends ProfileService {
 
         callbackToApp(
                 () ->
-                        app.callback.onCharacteristicReadRequest(
-                                device, requestId, offset, isLong, handle));
+                        app.getCallback()
+                                .onCharacteristicReadRequest(
+                                        device, requestId, offset, isLong, handle));
     }
 
     void onServerReadDescriptorFromNative(
@@ -1984,8 +1998,9 @@ public class GattService extends ProfileService {
 
         callbackToApp(
                 () ->
-                        app.callback.onDescriptorReadRequest(
-                                device, requestId, offset, isLong, handle));
+                        app.getCallback()
+                                .onDescriptorReadRequest(
+                                        device, requestId, offset, isLong, handle));
     }
 
     void onServerWriteCharacteristicFromNative(
@@ -2029,8 +2044,10 @@ public class GattService extends ProfileService {
 
         callbackToApp(
                 () ->
-                        app.callback.onCharacteristicWriteRequest(
-                                device, requestId, offset, length, isPrep, needRsp, handle, data));
+                        app.getCallback()
+                                .onCharacteristicWriteRequest(
+                                        device, requestId, offset, length, isPrep, needRsp, handle,
+                                        data));
     }
 
     void onServerWriteDescriptorFromNative(
@@ -2074,8 +2091,10 @@ public class GattService extends ProfileService {
 
         callbackToApp(
                 () ->
-                        app.callback.onDescriptorWriteRequest(
-                                device, requestId, offset, length, isPrep, needRsp, handle, data));
+                        app.getCallback()
+                                .onDescriptorWriteRequest(
+                                        device, requestId, offset, length, isPrep, needRsp, handle,
+                                        data));
     }
 
     void onExecuteWriteFromNative(BluetoothDevice device, int connId, int transId, int execWrite) {
@@ -2091,7 +2110,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onExecuteWrite(device, transId, execWrite == 1));
+        callbackToApp(() -> app.getCallback().onExecuteWrite(device, transId, execWrite == 1));
     }
 
     void onResponseSendCompletedFromNative(int status, int attrHandle) {
@@ -2112,7 +2131,7 @@ public class GattService extends ProfileService {
         }
 
         if (!app.isCongested) {
-            callbackToApp(() -> app.callback.onNotificationSent(device, status));
+            callbackToApp(() -> app.getCallback().onNotificationSent(device, status));
         } else {
             int queuedStatus = status;
             if (queuedStatus == BluetoothGatt.GATT_CONNECTION_CONGESTED) {
@@ -2138,8 +2157,9 @@ public class GattService extends ProfileService {
             }
             callbackToApp(
                     () ->
-                            app.callback.onNotificationSent(
-                                    callbackInfo.device(), callbackInfo.status()));
+                            app.getCallback()
+                                    .onNotificationSent(
+                                            callbackInfo.device(), callbackInfo.status()));
         }
     }
 
@@ -2156,7 +2176,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        callbackToApp(() -> app.callback.onMtuChanged(device, mtu));
+        callbackToApp(() -> app.getCallback().onMtuChanged(device, mtu));
     }
 
     /**************************************************************************
@@ -2482,7 +2502,7 @@ public class GattService extends ProfileService {
             return BluetoothStatusCodes.ERROR_CALLBACK_NOT_REGISTERED;
         }
         final var serverIf = serverApp.id;
-        final var transportPreference = serverApp.transport;
+        final var transportPreference = serverApp.getTransport();
 
         Log.v(
                 TAG,
@@ -2779,7 +2799,7 @@ public class GattService extends ProfileService {
                             + appId
                             + ", appName: "
                             + app.packageName
-                            + (", transport: " + transportToString(app.transport))
+                            + (", transport: " + transportToString(app.getTransport()))
                             + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
             final List<ContextMap.Connection> clientConnections =
                     mClientMap.getConnectionByApp(appId);
@@ -2796,7 +2816,7 @@ public class GattService extends ProfileService {
                             + appId
                             + ", appName: "
                             + app.packageName
-                            + (", transport: " + transportToString(app.transport))
+                            + (", transport: " + transportToString(app.getTransport()))
                             + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
             final List<ContextMap.Connection> serverConnections =
                     mServerMap.getConnectionByApp(appId);

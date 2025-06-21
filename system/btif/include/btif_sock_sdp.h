@@ -19,7 +19,7 @@
 #ifndef BTIF_SOCK_SDP_H
 #define BTIF_SOCK_SDP_H
 
-#include <bluetooth/uuid.h>
+#include "types/bluetooth/uuid.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>

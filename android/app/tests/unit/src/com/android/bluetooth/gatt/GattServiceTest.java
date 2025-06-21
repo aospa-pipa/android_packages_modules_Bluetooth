@@ -18,7 +18,6 @@ package com.android.bluetooth.gatt;
 
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 
-import static com.android.bluetooth.TestUtils.MockitoRule;
 import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.TestUtils.mockGetBluetoothManager;
 import static com.android.bluetooth.TestUtils.mockGetRemoteDevice;
@@ -66,11 +65,11 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.TestUtils.FakeTimeProvider;
-import com.android.bluetooth.TestUtils.MockitoRule;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_scan.ScanController;
+import com.android.tests.bluetooth.MockitoRule;
 
 import org.junit.After;
 import org.junit.Before;
@@ -162,7 +161,7 @@ public class GattServiceTest {
 
         doReturn(CLIENT_CONN_LIST).when(mClientMap).getConnectionsByDevice(CLIENT_IF, mDevice);
         ContextMap<IBluetoothGattCallback>.App clientApp = mock(ContextMap.App.class);
-        clientApp.callback = mGattCallback;
+        doReturn(mGattCallback).when(clientApp).getCallback();
         clientApp.id = CLIENT_IF;
         doReturn(clientApp).when(mClientMap).getByCallbackId(mGattCallback);
         doReturn(clientApp).when(mClientMap).getById(CLIENT_IF);
@@ -350,7 +349,7 @@ public class GattServiceTest {
         ContextMap<IBluetoothGattCallback>.App app = mock(ContextMap.App.class);
         IBluetoothGattCallback callback = mock(IBluetoothGattCallback.class);
         app.id = appId;
-        app.callback = callback;
+        doReturn(callback).when(app).getCallback();
         doReturn(app).when(mClientMap).getByCallbackId(callback);
 
         List<IBluetoothGattCallback> callbacks = new ArrayList<>();
@@ -773,7 +772,7 @@ public class GattServiceTest {
         IBluetoothGattCallback callback = mock(IBluetoothGattCallback.class);
 
         doReturn(app).when(mClientMap).getByConnId(CLIENT_CONN_ID);
-        app.callback = callback;
+        doReturn(callback).when(app).getCallback();
 
         GattDbElement hidService =
                 GattDbElement.createPrimaryService(
@@ -1437,8 +1436,8 @@ public class GattServiceTest {
     private void addServerAppRecord(int serverIf, int transport, IBluetoothGattServerCallback cb) {
         ContextMap<IBluetoothGattServerCallback>.App serverApp = mock(ContextMap.App.class);
         serverApp.id = serverIf;
-        serverApp.transport = transport;
-        serverApp.callback = cb;
+        doReturn(transport).when(serverApp).getTransport();
+        doReturn(cb).when(serverApp).getCallback();
         doReturn(serverApp).when(mServerMap).getByCallbackId(mGattServerCallback);
         doReturn(serverApp).when(mServerMap).getById(serverIf);
     }

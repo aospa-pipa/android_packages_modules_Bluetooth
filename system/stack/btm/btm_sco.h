@@ -25,7 +25,7 @@
 #include "device/include/esco_parameters.h"
 #include "internal_include/bt_target.h"
 #include "macros.h"
-#include "raw_address.h"
+#include "types/raw_address.h"
 #include "stack/btm/sco_pkt_status.h"
 #include "stack/include/btm_api_types.h"
 

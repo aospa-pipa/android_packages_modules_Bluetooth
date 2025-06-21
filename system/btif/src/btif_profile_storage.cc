@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "ble_address_with_type.h"
+#include "types/ble_address_with_type.h"
 #include "bt_transport.h"
 #include "bta_csis_api.h"
 #include "bta_groups.h"

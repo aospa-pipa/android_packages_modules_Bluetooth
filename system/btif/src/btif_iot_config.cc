@@ -29,7 +29,7 @@
 #include "device/include/device_iot_conf_defs.h"
 #include "device/include/device_iot_config.h"
 #include "hardware/bluetooth.h"
-#include "raw_address.h"
+#include "types/raw_address.h"
 #include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
 

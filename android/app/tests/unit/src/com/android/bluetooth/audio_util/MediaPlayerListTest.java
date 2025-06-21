@@ -19,8 +19,6 @@ package com.android.bluetooth.audio_util;
 import static android.Manifest.permission.MEDIA_CONTENT_CONTROL;
 import static android.Manifest.permission.MODIFY_PHONE_STATE;
 
-import static com.android.bluetooth.TestUtils.MockitoRule;
-import static com.android.bluetooth.TestUtils.StaticMockitoRule;
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
 
 import static com.google.common.truth.Truth.assertThat;
@@ -47,6 +45,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.tests.bluetooth.StaticMockitoRule;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -62,8 +62,9 @@ import java.util.ArrayList;
 @SmallTest
 @RunWith(AndroidJUnit4.class)
 public class MediaPlayerListTest {
-    @Rule public final StaticMockitoRule mStaticMockitoRule =
-              new StaticMockitoRule(MediaPlayerWrapper.class);
+    @Rule
+    public final StaticMockitoRule mStaticMockitoRule =
+            new StaticMockitoRule(MediaPlayerWrapper.class);
 
     @Mock private Context mMockContext;
     @Mock private MediaPlayerList.MediaUpdateCallback mMediaUpdateCallback;

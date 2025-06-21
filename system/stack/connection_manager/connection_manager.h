@@ -20,7 +20,7 @@
 
 #include <set>
 
-#include "ble_address_with_type.h"
+#include "types/ble_address_with_type.h"
 #include "types/raw_address.h"
 
 /* Must be provided by stack to connection manager, so it can dump nice client names in dumpsys */

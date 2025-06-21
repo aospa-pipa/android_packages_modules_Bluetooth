@@ -23,7 +23,7 @@
 #ifndef SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 #define SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 
-#include <bluetooth/uuid.h>
+#include "types/bluetooth/uuid.h"
 #include <hardware/bluetooth.h>
 
 #include <string>
