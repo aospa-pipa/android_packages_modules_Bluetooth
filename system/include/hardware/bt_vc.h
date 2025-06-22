@@ -19,7 +19,7 @@
 
 #include <aics/api.h>
 #include <hardware/bluetooth.h>
-#include <raw_address.h>
+#include "types/raw_address.h"
 
 #include <string>
 #include <variant>

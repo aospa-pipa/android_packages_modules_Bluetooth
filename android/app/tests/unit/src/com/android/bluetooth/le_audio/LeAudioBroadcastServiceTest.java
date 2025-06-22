@@ -30,7 +30,6 @@ import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasAction;
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra;
 
-import static com.android.bluetooth.TestUtils.MockitoRule;
 import static com.android.bluetooth.TestUtils.getRealDevice;
 import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
@@ -93,6 +92,8 @@ import com.android.bluetooth.btservice.ServiceFactory;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.tbs.TbsService;
+import com.android.bluetooth.vc.VolumeControlService;
+import com.android.tests.bluetooth.MockitoRule;
 
 import org.hamcrest.Matcher;
 import org.hamcrest.core.AllOf;
@@ -127,6 +128,7 @@ public class LeAudioBroadcastServiceTest {
     @Mock private LeAudioNativeInterface mLeAudioNativeInterface;
     @Mock private LeAudioTmapGattServer mTmapGattServer;
     @Mock private BassClientService mBassClientService;
+    @Mock private VolumeControlService mVolumeControlService;
     @Mock private TbsService mTbsService;
     @Mock private MetricsLogger mMetricsLogger;
     @Mock private IBluetoothLeBroadcastCallback mCallbacks;
@@ -225,6 +227,9 @@ public class LeAudioBroadcastServiceTest {
 
         if (Flags.adapterServiceProfilesUseOptional()) {
             doReturn(Optional.of(mBassClientService)).when(mAdapterService).getBassClientService();
+            doReturn(Optional.of(mVolumeControlService))
+                    .when(mAdapterService)
+                    .getVolumeControlService();
         } else {
             mService.mServiceFactory = mServiceFactory;
             when(mServiceFactory.getBassClientService()).thenReturn(mBassClientService);

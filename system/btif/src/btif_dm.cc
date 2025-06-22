@@ -32,7 +32,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
-#include <bluetooth/uuid.h>
+#include "types/bluetooth/uuid.h"
 #include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/metrics/metric_id_api.h>
 #include <bluetooth/metrics/os_metrics.h>
@@ -1377,7 +1377,7 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case HCI_ERR_ENCRY_MODE_NOT_ACCEPTABLE:
       case HCI_ERR_UNIT_KEY_USED:
       case HCI_ERR_PAIRING_WITH_UNIT_KEY_NOT_SUPPORTED:
-      case HCI_ERR_INSUFFCIENT_SECURITY:
+      case HCI_ERR_INSUFFICIENT_SECURITY:
       case HCI_ERR_PEER_USER:
       case HCI_ERR_UNSPECIFIED:
         log::warn("Authentication fail:{}", hci_reason_code_text(p_auth_cmpl->fail_reason));

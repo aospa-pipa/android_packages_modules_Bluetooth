@@ -28,7 +28,6 @@ public:
   virtual ~AudioSetConfigurationProvider() = default;
   static AudioSetConfigurationProvider* Get();
   static void Initialize(types::CodecLocation location);
-  static void DebugDump(int fd);
   static void Cleanup();
   virtual const types::AudioSetConfigurations* GetConfigurations(
           ::bluetooth::le_audio::types::LeAudioContextType content_type) const;
@@ -37,6 +36,8 @@ public:
   virtual bool CheckConfigurationIsBiDirSwb(
           const types::AudioSetConfiguration& set_configuration) const;
   virtual bool CheckConfigurationIsDualBiDirSwb(
+          const types::AudioSetConfiguration& set_configuration) const;
+  virtual bool CheckQHSConfig(
           const types::AudioSetConfiguration& set_configuration) const;
 
 private:

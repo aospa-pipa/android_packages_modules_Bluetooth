@@ -22,6 +22,7 @@ package android.bluetooth.le;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresNoPermission;
 import android.os.Parcel;
 import android.os.ParcelUuid;
 import android.os.Parcelable;
@@ -109,6 +110,7 @@ public final class AdvertiseData implements Parcelable {
      * Returns a list of service UUIDs within the advertisement that are used to identify the
      * Bluetooth GATT services.
      */
+    @RequiresNoPermission
     public List<ParcelUuid> getServiceUuids() {
         return mServiceUuids;
     }
@@ -118,6 +120,7 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getServiceUuidsEnc() {
         return mServiceUuidsEnc;
     }
@@ -126,8 +129,8 @@ public final class AdvertiseData implements Parcelable {
      * Returns a list of service solicitation UUIDs within the advertisement that we invite to
      * connect.
      */
-    @NonNull
-    public List<ParcelUuid> getServiceSolicitationUuids() {
+    @RequiresNoPermission
+    public @NonNull List<ParcelUuid> getServiceSolicitationUuids() {
         return mServiceSolicitationUuids;
     }
 
@@ -136,13 +139,14 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getServiceSolicitationUuidsEnc() {
         return mServiceSolicitationUuidsEnc;
     }
 
     /** Returns a list of {@link TransportDiscoveryData} within the advertisement. */
-    @NonNull
-    public List<TransportDiscoveryData> getTransportDiscoveryData() {
+    @RequiresNoPermission
+    public @NonNull List<TransportDiscoveryData> getTransportDiscoveryData() {
         if (mTransportDiscoveryData == null) {
             return Collections.emptyList();
         }
@@ -154,6 +158,7 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getTransportDiscoveryDataEnc() {
         return mTransportDiscoveryDataEnc;
     }
@@ -162,6 +167,7 @@ public final class AdvertiseData implements Parcelable {
      * Returns an array of manufacturer Id and the corresponding manufacturer specific data. The
      * manufacturer id is a non-negative number assigned by Bluetooth SIG.
      */
+    @RequiresNoPermission
     public SparseArray<byte[]> getManufacturerSpecificData() {
         return mManufacturerSpecificData;
     }
@@ -171,11 +177,13 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getManufacturerSpecificDataEnc() {
         return mManufacturerSpecificDataEnc;
     }
 
     /** Returns a map of 16-bit UUID and its corresponding service data. */
+    @RequiresNoPermission
     public Map<ParcelUuid, byte[]> getServiceData() {
         return mServiceData;
     }
@@ -185,11 +193,13 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getServiceDataEnc() {
         return mServiceDataEnc;
     }
 
     /** Whether the transmission power level will be included in the advertisement packet. */
+    @RequiresNoPermission
     public boolean getIncludeTxPowerLevel() {
         return mIncludeTxPowerLevel;
     }
@@ -199,11 +209,13 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getTxPowerLevelEnc() {
         return mTxPowerLevelEnc;
     }
 
     /** Whether the device name will be included in the advertisement packet. */
+    @RequiresNoPermission
     public boolean getIncludeDeviceName() {
         return mIncludeDeviceName;
     }
@@ -214,6 +226,7 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getDeviceNameEnc() {
         return mDeviceNameEnc;
     }
@@ -223,6 +236,7 @@ public final class AdvertiseData implements Parcelable {
      *
      * @hide
      */
+    @RequiresNoPermission
     public boolean getIncludePublicBroadcastDeviceName() {
         return mIncludePublicBroadcastDeviceName;
     }
@@ -231,6 +245,7 @@ public final class AdvertiseData implements Parcelable {
      * Returns public broadcast name
      * @hide
      */
+    @RequiresNoPermission
     public String getPublicBroadcastDeviceName() {
         return mPublicBroadcastDeviceName;
     }
@@ -239,6 +254,7 @@ public final class AdvertiseData implements Parcelable {
      * Returns whether Public Broadcast Device Name needs to be encrypted.
      * @hide
      */
+    @RequiresNoPermission
     public boolean getPublicBroadcastDeviceNameEnc() {
         return mPublicBroadcastDeviceNameEnc;
     }
@@ -470,6 +486,7 @@ public final class AdvertiseData implements Parcelable {
          * @param serviceUuid A service UUID to be advertised.
          * @throws IllegalArgumentException If the {@code serviceUuid} is null.
          */
+        @RequiresNoPermission
         public Builder addServiceUuid(ParcelUuid serviceUuid) {
             if (serviceUuid == null) {
                 throw new IllegalArgumentException("serviceUuid is null");
@@ -484,6 +501,7 @@ public final class AdvertiseData implements Parcelable {
          * @param enableEncryption enables encryption for service uuid
          * @hide
          */
+        @RequiresNoPermission
         public Builder setServiceUuidEncrypted(boolean enableEncryption) {
             mServiceUuidsEnc = enableEncryption;
             return this;
@@ -495,8 +513,9 @@ public final class AdvertiseData implements Parcelable {
          * @param serviceSolicitationUuid A service solicitation UUID to be advertised.
          * @throws IllegalArgumentException If the {@code serviceSolicitationUuid} is null.
          */
-        @NonNull
-        public Builder addServiceSolicitationUuid(@NonNull ParcelUuid serviceSolicitationUuid) {
+        @RequiresNoPermission
+        public @NonNull Builder addServiceSolicitationUuid(
+                @NonNull ParcelUuid serviceSolicitationUuid) {
             if (serviceSolicitationUuid == null) {
                 throw new IllegalArgumentException("serviceSolicitationUuid is null");
             }
@@ -511,6 +530,7 @@ public final class AdvertiseData implements Parcelable {
          * @hide
          */
         @NonNull
+        @RequiresNoPermission
         public Builder setSolicitationUuidEncrypted(boolean enableEncryption) {
             mServiceSolicitationUuidsEnc = enableEncryption;
             return this;
@@ -524,6 +544,7 @@ public final class AdvertiseData implements Parcelable {
          * @throws IllegalArgumentException If the {@code serviceDataUuid} or {@code serviceData} is
          *     empty.
          */
+        @RequiresNoPermission
         public Builder addServiceData(ParcelUuid serviceDataUuid, byte[] serviceData) {
             if (serviceDataUuid == null || serviceData == null) {
                 throw new IllegalArgumentException("serviceDataUuid or serviceDataUuid is null");
@@ -538,6 +559,7 @@ public final class AdvertiseData implements Parcelable {
          * @param enableEncryption enables encryption for service data
          * @hide
          */
+        @RequiresNoPermission
         public Builder setServiceDataEncrypted(boolean enableEncryption) {
             mServiceDataEnc = enableEncryption;
             return this;
@@ -550,8 +572,8 @@ public final class AdvertiseData implements Parcelable {
          *     Transport Blocks. Transport Discovery Data AD Type Code is already included.
          * @throws IllegalArgumentException If the {@code transportDiscoveryData} is empty
          */
-        @NonNull
-        public Builder addTransportDiscoveryData(
+        @RequiresNoPermission
+        public @NonNull Builder addTransportDiscoveryData(
                 @NonNull TransportDiscoveryData transportDiscoveryData) {
             if (transportDiscoveryData == null) {
                 throw new IllegalArgumentException("transportDiscoveryData is null");
@@ -567,6 +589,7 @@ public final class AdvertiseData implements Parcelable {
          * @hide
          */
         @NonNull
+        @RequiresNoPermission
         public Builder setTransportDiscoveryDataEncrypted(boolean enableEncryption) {
             mTransportDiscoveryDataEnc = enableEncryption;
             return this;
@@ -584,6 +607,7 @@ public final class AdvertiseData implements Parcelable {
          * @throws IllegalArgumentException If the {@code manufacturerId} is negative or {@code
          *     manufacturerSpecificData} is null.
          */
+        @RequiresNoPermission
         public Builder addManufacturerData(int manufacturerId, byte[] manufacturerSpecificData) {
             if (manufacturerId < 0) {
                 throw new IllegalArgumentException("invalid manufacturerId - " + manufacturerId);
@@ -601,6 +625,7 @@ public final class AdvertiseData implements Parcelable {
          * @param enableEncryption enables encryption for manufacturer data
          * @hide
          */
+        @RequiresNoPermission
         public Builder setManufacturerDataEncrypted(boolean enableEncryption) {
             mManufacturerSpecificDataEnc = enableEncryption;
             return this;
@@ -610,6 +635,7 @@ public final class AdvertiseData implements Parcelable {
          * Whether the transmission power level should be included in the advertise packet. Tx power
          * level field takes 3 bytes in advertise packet.
          */
+        @RequiresNoPermission
         public Builder setIncludeTxPowerLevel(boolean includeTxPowerLevel) {
             mIncludeTxPowerLevel = includeTxPowerLevel;
             return this;
@@ -621,12 +647,14 @@ public final class AdvertiseData implements Parcelable {
          * @param enableEncryption enables encryption for Include Tx Power Level
          * @hide
          */
+        @RequiresNoPermission
         public Builder setIncludeTxPowerLevelEncrypted(boolean enableEncryption) {
             mTxPowerLevelEnc = enableEncryption;
             return this;
         }
 
         /** Set whether the device name should be included in advertise packet. */
+        @RequiresNoPermission
         public Builder setIncludeDeviceName(boolean includeDeviceName) {
             mIncludeDeviceName = includeDeviceName;
             return this;
@@ -639,6 +667,7 @@ public final class AdvertiseData implements Parcelable {
          * @param enableEncryption enables encryption for Device Name
          * @hide
          */
+        @RequiresNoPermission
         public Builder setIncludeDeviceNameEncrypted(boolean enableEncryption) {
             mDeviceNameEnc = enableEncryption;
             return this;
@@ -650,6 +679,7 @@ public final class AdvertiseData implements Parcelable {
          * @hide
          */
         @NonNull
+        @RequiresNoPermission
         public Builder setIncludePublicBroadcastDeviceName(boolean includeDeviceName) {
             return setIncludePublicBroadcastDeviceName(includeDeviceName, null);
         }
@@ -659,6 +689,7 @@ public final class AdvertiseData implements Parcelable {
          * @hide
          */
         @NonNull
+        @RequiresNoPermission
         public Builder setIncludePublicBroadcastDeviceName(boolean includeDeviceName, String pubBroadcastName) {
             mIncludePublicBroadcastDeviceName = includeDeviceName;
             mPublicBroadcastDeviceName = pubBroadcastName;
@@ -672,12 +703,14 @@ public final class AdvertiseData implements Parcelable {
          * @hide
          */
         @NonNull
+        @RequiresNoPermission
         public Builder setIncludePublicBroadcastDeviceNameEncrypted(boolean enableEncryption) {
             mPublicBroadcastDeviceNameEnc = enableEncryption;
             return this;
         }
 
         /** Build the {@link AdvertiseData}. */
+        @RequiresNoPermission
         public AdvertiseData build() {
             return new AdvertiseData(
                     mServiceUuids,

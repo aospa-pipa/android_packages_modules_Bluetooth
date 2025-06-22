@@ -28,7 +28,6 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasAction;
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra;
 
-import static com.android.bluetooth.TestUtils.MockitoRule;
 import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.hap.HapClientStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED;
 import static com.android.bluetooth.hap.HapClientStateMachine.CONNECT_TIMEOUT;
@@ -51,6 +50,7 @@ import androidx.test.filters.SmallTest;
 import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.TestLooper;
+import com.android.tests.bluetooth.MockitoRule;
 
 import org.hamcrest.Matcher;
 import org.hamcrest.core.AllOf;
@@ -139,7 +139,7 @@ public class HapClientStateMachineTest {
         sendAndDispatchMessage(MESSAGE_CONNECT);
         verifyConnectionStateIntent(STATE_CONNECTING, STATE_DISCONNECTED);
         assertThat(mStateMachine.getCurrentState())
-            .isInstanceOf(HapClientStateMachine.Connecting.class);
+                .isInstanceOf(HapClientStateMachine.Connecting.class);
 
         sendAndDispatchMessage(MESSAGE_CONNECT);
         mLooper.moveTimeForward(CONNECT_TIMEOUT.toMillis());

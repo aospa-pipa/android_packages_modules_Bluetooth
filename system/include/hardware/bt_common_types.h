@@ -23,8 +23,8 @@
 #ifndef ANDROID_INCLUDE_BT_COMMON_TYPES_H
 #define ANDROID_INCLUDE_BT_COMMON_TYPES_H
 
-#include <bluetooth/uuid.h>
-#include <raw_address.h>
+#include "types/bluetooth/uuid.h"
+#include "types/raw_address.h"
 
 #include <vector>
 

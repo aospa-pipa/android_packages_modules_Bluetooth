@@ -74,7 +74,7 @@ import android.bluetooth.BluetoothSocket;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.BluetoothUtils;
 import android.bluetooth.BufferConstraints;
-import android.bluetooth.EncryptionStatusParcel;
+import android.bluetooth.EncryptionStatus;
 import android.bluetooth.IBluetoothCallback;
 import android.bluetooth.IBluetoothConnectionCallback;
 import android.bluetooth.IBluetoothGatt;
@@ -131,7 +131,6 @@ import com.android.bluetooth.bas.BatteryService;
 import com.android.bluetooth.bass_client.BassClientService;
 import com.android.bluetooth.btservice.InteropUtil.InteropFeature;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
-import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties.LinkState;
 import com.android.bluetooth.btservice.bluetoothkeystore.BluetoothKeystoreNativeInterface;
 import com.android.bluetooth.btservice.bluetoothkeystore.BluetoothKeystoreService;
 import com.android.bluetooth.btservice.storage.DatabaseManager;
@@ -171,6 +170,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.BackgroundThread;
 import com.android.modules.utils.BytesMatcher;
 
+import libcore.util.SneakyThrow;
+
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -198,9 +199,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 public class AdapterService extends Service {
@@ -453,6 +459,33 @@ public class AdapterService extends Service {
         mServiceFactory = new ServiceFactory();
         mSilenceDeviceManager = new SilenceDeviceManager(this, mServiceFactory, mLooper);
         mDatabaseManager = new DatabaseManager(this);
+    }
+
+    <T> T syncPost(Supplier<T> supplier, T defaultValue) {
+        Utils.enforceMainLooperIsNotUsed();
+
+        final FutureTask<T> task =
+                new FutureTask<>(
+                        () -> {
+                            if (!isAvailable()) {
+                                return defaultValue;
+                            }
+                            return supplier.get();
+                        });
+        if (!mHandler.post(task)) {
+            Log.w(TAG, "Failed to post task to handler");
+            Log.d(TAG, Log.getStackTraceString(new Throwable()));
+            return defaultValue;
+        }
+        try {
+            // Any method calling syncPost should most likely be done in under 1 seconds.
+            return task.get(1, TimeUnit.SECONDS);
+        } catch (TimeoutException | InterruptedException e) {
+            SneakyThrow.sneakyThrow(e);
+        } catch (ExecutionException e) {
+            SneakyThrow.sneakyThrow(e.getCause());
+        }
+        return defaultValue;
     }
 
     @Deprecated // Do not expand this method usage and use injection pattern when needed.
@@ -1144,13 +1177,7 @@ public class AdapterService extends Service {
 
     private void startGattProfileService() {
         Log.i(TAG, "startGattProfileService() called");
-        mGattService =
-                new GattService(
-                        this,
-                        mGattNativeInterface,
-                        mAdvertiseManagerNativeInterface,
-                        mDistanceMeasurementNativeInterface);
-
+        constructProfile(BluetoothProfile.GATT);
         mStartedProfiles.put(BluetoothProfile.GATT, mGattService);
         addProfile(mGattService);
         mGattService.setAvailable(true);
@@ -1206,6 +1233,7 @@ public class AdapterService extends Service {
         }
     }
 
+    // TODO(b/422543753) Delete on flag cleanup
     private static final Map<Integer, Function<AdapterService, ProfileService>>
             PROFILE_CONSTRUCTORS =
                     Map.ofEntries(
@@ -1240,6 +1268,52 @@ public class AdapterService extends Service {
                             Map.entry(BluetoothProfile.SAP, SapService::new),
                             Map.entry(BluetoothProfile.VOLUME_CONTROL, VolumeControlService::new));
 
+    /**
+     * Constructs a {@link ProfileService} instance for the given profile ID.
+     *
+     * <p><b>Note:</b> This method assumes that any dependencies required by the profile being
+     * constructed have already been initialized. This relies on the strict startup order defined in
+     * {@code Config.PROFILE_SERVICES_AND_FLAGS}.
+     */
+    private ProfileService constructProfile(int id) {
+        return switch (id) {
+            case BluetoothProfile.GATT -> {
+                mGattService =
+                        new GattService(
+                                this,
+                                mGattNativeInterface,
+                                mAdvertiseManagerNativeInterface,
+                                mDistanceMeasurementNativeInterface);
+                yield mGattService;
+            }
+            case BluetoothProfile.A2DP -> new A2dpService(this);
+            case BluetoothProfile.A2DP_SINK -> new A2dpSinkService(this);
+            case BluetoothProfile.AVRCP -> new AvrcpTargetService(this);
+            case BluetoothProfile.AVRCP_CONTROLLER -> new AvrcpControllerService(this);
+            case BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT -> new BassClientService(this);
+            case BluetoothProfile.BATTERY -> new BatteryService(this);
+            case BluetoothProfile.CSIP_SET_COORDINATOR -> new CsipSetCoordinatorService(this);
+            case BluetoothProfile.HAP_CLIENT -> new HapClientService(this);
+            case BluetoothProfile.HEADSET -> new HeadsetService(this);
+            case BluetoothProfile.HEADSET_CLIENT -> new HeadsetClientService(this);
+            case BluetoothProfile.HEARING_AID -> new HearingAidService(this);
+            case BluetoothProfile.HID_DEVICE -> new HidDeviceService(this);
+            case BluetoothProfile.HID_HOST -> new HidHostService(this);
+            case BluetoothProfile.LE_CALL_CONTROL -> new TbsService(this, mGattService);
+            case BluetoothProfile.MAP -> new BluetoothMapService(this);
+            case BluetoothProfile.MAP_CLIENT -> new MapClientService(this);
+            case BluetoothProfile.MCP_SERVER -> new McpService(this);
+            case BluetoothProfile.OPP -> new BluetoothOppService(this);
+            case BluetoothProfile.PAN -> new PanService(this);
+            case BluetoothProfile.PBAP -> new BluetoothPbapService(this);
+            case BluetoothProfile.PBAP_CLIENT -> new PbapClientService(this);
+            case BluetoothProfile.SAP -> new SapService(this);
+            case BluetoothProfile.VOLUME_CONTROL -> new VolumeControlService(this);
+            case BluetoothProfile.LE_AUDIO -> new LeAudioService(this);
+            default -> throw new IllegalArgumentException(getProfileName(id));
+        };
+    }
+
     @VisibleForTesting
     void setProfileServiceState(int profileId, int state) {
         Instant start = Instant.now();
@@ -1251,15 +1325,24 @@ public class AdapterService extends Service {
                 return;
             }
             Log.i(TAG, logHdr + " starting profile");
-            ProfileService profileService = PROFILE_CONSTRUCTORS.get(profileId).apply(this);
+            final ProfileService profileService;
+            if (Flags.adapterServiceProfilesUseOptional()) {
+                profileService = constructProfile(profileId);
+            } else {
+                profileService = PROFILE_CONSTRUCTORS.get(profileId).apply(this);
+            }
             mStartedProfiles.put(profileId, profileService);
             addProfile(profileService);
             profileService.setAvailable(true);
-            // With `Flags.onlyStartScanDuringBleOn()` GattService initialization is pushed back to
-            // `ON` state instead of `BLE_ON`. Here we ensure mGattService is set prior
-            // to other Profiles using it.
-            if (profileId == BluetoothProfile.GATT && Flags.onlyStartScanDuringBleOn()) {
-                mGattService = (GattService) profileService;
+            // With `Flags.adapterServiceProfilesUseOptional()` on, this assignment is not required
+            // as it already happens within `constructProfile`
+            if (!Flags.adapterServiceProfilesUseOptional()) {
+                // With `Flags.onlyStartScanDuringBleOn()` GattService initialization is pushed back
+                // to `ON` state instead of `BLE_ON`. Here we ensure mGattService is set prior to
+                // other Profiles using it.
+                if (profileId == BluetoothProfile.GATT && Flags.onlyStartScanDuringBleOn()) {
+                    mGattService = (GattService) profileService;
+                }
             }
             onProfileServiceStateChanged(profileService, BluetoothAdapter.STATE_ON);
         } else if (state == BluetoothAdapter.STATE_OFF) {
@@ -5089,21 +5172,12 @@ public class AdapterService extends Service {
      * @param transport the transport to get the link status for
      * @return the link status of the given transport
      */
-    public EncryptionStatusParcel getEncryptionStatus(BluetoothDevice device, int transport) {
+    public EncryptionStatus getEncryptionStatus(BluetoothDevice device, int transport) {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp == null) {
             return null;
         }
-        LinkState.EncryptionAttributes encryptionAttributes =
-                deviceProp.getEncryptionAttributes(transport);
-        EncryptionStatusParcel deviceEncryptionStatusParcel = null;
-
-        if (encryptionAttributes != null) {
-            deviceEncryptionStatusParcel =
-                    new EncryptionStatusParcel(
-                            encryptionAttributes.keySize(), encryptionAttributes.algorithm());
-        }
-        return deviceEncryptionStatusParcel;
+        return deviceProp.getEncryptionStatus(transport);
     }
 
     /**

@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include <bluetooth/uuid.h>
+#include "types/bluetooth/uuid.h"
 #include <hardware/bluetooth.h>
 
 #include <vector>

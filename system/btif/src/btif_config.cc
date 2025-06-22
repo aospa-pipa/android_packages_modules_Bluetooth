@@ -37,7 +37,7 @@
 #include "common/address_obfuscator.h"
 #include "main/shim/config.h"
 #include "main/shim/shim.h"
-#include "raw_address.h"
+#include "types/raw_address.h"
 #include "storage/config_keys.h"
 
 #define TEMPORARY_SECTION_CAPACITY 10000
