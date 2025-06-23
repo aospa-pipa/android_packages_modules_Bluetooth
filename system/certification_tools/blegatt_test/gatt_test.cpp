@@ -415,7 +415,7 @@ static void register_client_cb(int status, int client_if,
   printf("%s:: status=%d, client_if=%d \n", __FUNCTION__, status, client_if);
 }
 
-static void connect_cb(int conn_id, int status, int client_if,
+static void connect_cb(int conn_id, int status, int client_if, int transport,
                        const RawAddress& remote_bd_addr) {
   printf(
       "%s:: remote_bd_addr=%02x:%02x:%02x:%02x:%02x:%02x, conn_id=0x%x, "
@@ -1012,8 +1012,8 @@ static void register_server_cb(int status, int server_if,
   }
 }
 
-static void server_connection_cb(int conn_id, int server_if, int connected,
-                                 const RawAddress& bda) {
+static void server_connection_cb(int conn_id, int server_if, int transport,
+                                         int connected, const RawAddress& bda) {
   printf("%s:: conn_id=%d, server_if=%d \n", __FUNCTION__, conn_id, server_if);
   g_conn_id = conn_id;
 }
@@ -2001,19 +2001,18 @@ static void bond_state_changed_cb(bt_status_t status,
   g_PairState = state;
 }
 
-static void acl_state_changed(bt_status_t status, RawAddress* remote_bd_addr,
-                              bt_acl_state_t state, int transport_link_type,
-                              bt_hci_error_code_t hci_reason,
+static void acl_state_changed(bt_status_t status, tAclLinkSpec& link_spec,
+                              bt_acl_state_t state, bt_hci_error_code_t hci_reason,
                               bt_conn_direction_t direction,
                               uint16_t acl_handle) {
-  printf(
+ printf(
       "acl_state_changed : remote_bd_addr=%02x:%02x:%02x:%02x:%02x:%02x, acl "
       "status=%s \n",
-      remote_bd_addr->address[0], remote_bd_addr->address[1],
-      remote_bd_addr->address[2], remote_bd_addr->address[3],
-      remote_bd_addr->address[4], remote_bd_addr->address[5],
-      (state == BT_ACL_STATE_CONNECTED) ? "ACL Connected" : "ACL Disconnected");
-  remote_bd_address = *remote_bd_addr;
+      link_spec.addrt.bda.address[0], link_spec.addrt.bda.address[1],
+      link_spec.addrt.bda.address[2], link_spec.addrt.bda.address[3],
+      link_spec.addrt.bda.address[4], link_spec.addrt.bda.address[5],
+      (state == BT_ACL_STATE_CONNECTED) ? "ACL Connected" : " ACL Disconnected");
+  remote_bd_address = link_spec.addrt.bda;
 }
 
 static void le_test_mode(bt_status_t status, uint16_t packet_count) {
@@ -2256,7 +2255,7 @@ static btgatt_callbacks_t sGatt_cb = {
 void bdt_init(void) {
   bdt_log("INIT BT ");
   status =
-      sBtInterface->init(&bt_callbacks, false, false, 0, false);
+      sBtInterface->init(&bt_callbacks, false, false, 0, false, "default");
   if (status == BT_STATUS_SUCCESS) {
     // Get Vendor Interface
     btvendorInterface =
@@ -2486,10 +2485,10 @@ void do_le_send_connect_req(int client_if, RawAddress bd_addr, int transport,
     // Phys
     if (is_ext)
       Ret = sGattIfaceScan->client->connect(client_if, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251);
+                                            transport, FALSE, 0x01, 251, FALSE);
     else
       Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251);
+                                            transport, FALSE, 0x01, 251, FALSE);
   } else if (transport == BT_TRANSPORT_BR_EDR) {
     // Outgoing Connection
     g_PSM = 31;
@@ -2592,7 +2591,7 @@ void do_le_client_connect_auto(char* p) {
 
   if (Btif_gatt_layer) {
     Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, FALSE,
-                                          transport, FALSE, 0x01, 251);
+                                          transport, FALSE, 0x01, 251, FALSE);
   } else {
     Ret = sGattInterface->Connect(g_client_if, bd_addr.address, FALSE,
                                   BT_TRANSPORT_LE);
