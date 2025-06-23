@@ -587,9 +587,8 @@ static void bond_state_changed_cb(bt_status_t status,
   g_PairState = state;
 }
 
-static void acl_state_changed(bt_status_t status, RawAddress* remote_bd_addr,
-                              bt_acl_state_t state, int transport_link_type,
-                              bt_hci_error_code_t hci_reason,
+static void acl_state_changed(bt_status_t status, tAclLinkSpec& link_spec,
+                              bt_acl_state_t state, bt_hci_error_code_t hci_reason,
                               bt_conn_direction_t direction,
                               uint16_t acl_handle) {}
 
@@ -631,7 +630,7 @@ static bt_os_callouts_t callouts = {
 void bdt_init(void) {
   printf("INIT BT \n");
   status = (bt_status_t)sBtInterface->init(&bt_callbacks, false, false, 0,
-                                           false);
+                                           false, "default");
   if (status == BT_STATUS_SUCCESS) {
     // Get Vendor Interface
     btvendorInterface =
