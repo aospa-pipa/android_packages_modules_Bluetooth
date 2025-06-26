@@ -162,10 +162,10 @@ cc_defaults {
     static_libs: [
         "libaconfig_storage_read_api_cc",
         "libbase",
-        "libbluetooth-types",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_log",
         "libbluetooth_metrics",
+        "libbluetooth_types",
         "libbt-common",
         "libcom.android.sysprop.bluetooth.wrapped",
         "libosi",
@@ -213,7 +213,7 @@ cc_library_static {
     ],
     static_libs: [
         "bluetooth_flags_c_lib",
-        "libbluetooth-types",
+        "libbluetooth_types",
         "libbt-common",
         "libchrome",
         "libosi",
@@ -236,7 +236,7 @@ cc_library_static {
     ],
     static_libs: [
         "bluetooth_flags_c_lib_for_test",
-        "libbluetooth-types",
+        "libbluetooth_types",
         "libbt-common",
         "libchrome",
         "libosi",
@@ -417,7 +417,6 @@ cc_test {
     static_libs: [
         "bluetooth_flags_c_lib_for_test",
         "libbase",
-        "libbluetooth-types",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd_unit_tests",
         "libbluetooth_hci_pdl",
@@ -426,7 +425,9 @@ cc_test {
         "libbluetooth_metrics_mock",
         "libbluetooth_ras_pdl",
         "libbluetooth_smp_pdl",
+        "libbluetooth_types",
         "libbt-common",
+        "libbtdevice",
         "libchrome",
         "libcom.android.sysprop.bluetooth.wrapped",
         "libflagtest",
@@ -434,7 +435,6 @@ cc_test {
         "libgmock",
         "libosi",
         "server_configurable_flags",
-        "libbtdevice",
     ],
     shared_libs: [
         "libPlatformProperties",
@@ -511,11 +511,11 @@ cc_defaults {
     ],
     static_libs: [
         "bluetooth_flags_c_lib",
-        "libbluetooth-types",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd_fuzzing",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
+        "libbluetooth_types",
         "libbt-common",
         "libchrome",
         "libcom.android.sysprop.bluetooth.wrapped",

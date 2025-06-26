@@ -29,6 +29,6 @@ cc_binary {
         "libbinder_ndk",
     ],
 
-    static_libs: ["libbluetooth-types"],
+    static_libs: ["libbluetooth_types"],
 
 }
