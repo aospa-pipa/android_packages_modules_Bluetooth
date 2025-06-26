@@ -374,8 +374,6 @@ typedef enum {
   // function.
   INTEROP_HOGP_FORCE_MTU_EXCHANGE,
 
-  INTEROP_DISABLE_OUTGOING_BR_SMP,
-
   // Some devices claim to support HFP in EIR but does not actually support it.
   INTEROP_DISABLE_HF_PROFILE,
 
@@ -389,6 +387,9 @@ typedef enum {
   // with central role.
   INTEROP_REMAIN_PERIPHERAL_ON_ACCEPT_CONNECTION_REQUEST,
   INTEROP_A2DP_DELAY_SNIFF_SUBRATING,
+
+  // Some devices do not work well with incoming SMP over BR/EDR pairing requests
+  INTEROP_DISABLE_OUTGOING_BR_SMP,
 
   END_OF_INTEROP_LIST
 } interop_feature_t;
