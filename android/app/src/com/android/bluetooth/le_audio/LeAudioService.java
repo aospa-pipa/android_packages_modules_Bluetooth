@@ -2115,7 +2115,7 @@ public class LeAudioService extends ConnectableProfile {
             removeAuthorizationInfoForRelatedProfiles(device);
         }
 
-        mAdapterService.notifyProfileConnectionStateChangeToGatt(mProfileId, prevState, newState);
+        mAdapterService.notifyProfileConnectionStateChangeToScan(mProfileId, prevState, newState);
         mAdapterService.handleProfileConnectionStateChange(mProfileId, device, prevState, newState);
         mAdapterService
                 .getActiveDeviceManager()

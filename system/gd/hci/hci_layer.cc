@@ -28,6 +28,7 @@
 #include "common/stop_watch.h"
 #include "hal/hci_hal.h"
 #include "hci/class_of_device.h"
+#include "hci/hci_data_router.h"
 #include "hci/hci_metrics_logging.h"
 #include "hci/inquiry_interface.h"
 #include "os/alarm.h"
@@ -157,7 +158,7 @@ public:
 
 struct HciLayer::impl {
   impl(os::Handler* handler, hal::HciHal* hal, storage::StorageModule* storage, HciLayer& module)
-      : hal_(hal), storage_(storage), module_(module) {
+      : hal_(hal), storage_(storage), module_(module), router_(handler, acl_queue_.GetUpEnd()) {
     handler_ = handler;
 
     hal_test_supported = osi_property_get_bool("persist.vendor.bluetooth.haltest", false);
@@ -176,6 +177,13 @@ struct HciLayer::impl {
       delete hci_abort_alarm_;
     }
     command_queue_.clear();
+  }
+
+  void SetLeAclDataConsumer(LeAclDataConsumer* le_acl_data_consumer) {
+    router_.SetLeAclDataConsumer(le_acl_data_consumer);
+  }
+  void SetClassicAclDataConsumer(ClassicAclDataConsumer* classic_acl_data_consumer) {
+    router_.SetClassicAclDataConsumer(classic_acl_data_consumer);
   }
 
   void drop(EventView event) {
@@ -650,6 +658,8 @@ struct HciLayer::impl {
   // ISO packets
   BidiQueue<IsoView, IsoBuilder> iso_queue_{3 /* TODO: Set queue depth */};
   os::EnqueueBuffer<IsoView> incoming_iso_buffer_{iso_queue_.GetDownEnd()};
+
+  HciDataRouter router_;
 };
 
 
@@ -1015,6 +1025,13 @@ std::unique_ptr<InquiryInterface> HciLayer::GetInquiryInterface(
           },
           common::Unretained(this));
   return std::make_unique<CommandInterfaceImpl<DiscoveryCommandBuilder>>(this, std::move(cleanup));
+}
+
+void HciLayer::SetLeAclDataConsumer(LeAclDataConsumer* le_acl_data_consumer) {
+  impl_->SetLeAclDataConsumer(le_acl_data_consumer);
+}
+void HciLayer::SetClassicAclDataConsumer(ClassicAclDataConsumer* classic_acl_data_consumer) {
+  impl_->SetClassicAclDataConsumer(classic_acl_data_consumer);
 }
 
 HciLayer::HciLayer(Handler* handler, hal::HciHal* hal, storage::StorageModule* storage) {

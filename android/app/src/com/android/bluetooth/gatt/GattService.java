@@ -66,7 +66,6 @@ import static com.android.bluetooth.util.AttributionSourceUtil.getLastAttributio
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
-import android.annotation.Nullable;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.bluetooth.BluetoothAdapter;
@@ -102,7 +101,6 @@ import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hid.HidHostService;
-import com.android.bluetooth.le_scan.ScanController;
 import com.android.internal.annotations.VisibleForTesting;
 
 import com.google.protobuf.ByteString;
@@ -236,7 +234,6 @@ public class GattService extends ProfileService {
     private final GattNativeInterface mNativeInterface;
     private final HandlerThread mHandlerThread;
     private final AdvertiseManager mAdvertiseManager;
-    @Nullable private final ScanController mScanController;
     private final DistanceMeasurementManager mDistanceMeasurementManager;
     private final TimeProvider mTimeProvider;
     @VisibleForTesting int mRssiReadThrottleMs;
@@ -255,7 +252,6 @@ public class GattService extends ProfileService {
                 nativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
-                null,
                 getSystemClock());
     }
 
@@ -265,7 +261,6 @@ public class GattService extends ProfileService {
             GattNativeInterface nativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
-            ScanController scanController,
             TimeProvider timeProvider) {
         super(BluetoothProfile.GATT, requireNonNull(adapterService));
         mActivityManager = requireNonNull(obtainSystemService(ActivityManager.class));
@@ -299,13 +294,6 @@ public class GattService extends ProfileService {
                             + RSSI_READ_THROTTLE_MS_MAX
                             + "ms");
             mRssiReadThrottleMs = RSSI_READ_THROTTLE_MS_MAX;
-        }
-
-        if (!Flags.onlyStartScanDuringBleOn()) {
-            mScanController =
-                    requireNonNullElseGet(scanController, () -> new ScanController(adapterService));
-        } else {
-            mScanController = null;
         }
 
         mDistanceMeasurementManager =
@@ -373,9 +361,6 @@ public class GattService extends ProfileService {
     public void cleanup() {
         Log.i(TAG, "cleanup()");
 
-        if (mScanController != null) {
-            mScanController.cleanup();
-        }
         mClientMap.clear();
         mRestrictedHandles.clear();
         mServerMap.clear();
@@ -386,11 +371,6 @@ public class GattService extends ProfileService {
         mAdvertiseManager.cleanup();
         mDistanceMeasurementManager.cleanup();
         mHandlerThread.quit();
-    }
-
-    @Nullable
-    public ScanController getScanController() {
-        return mScanController;
     }
 
     ContextMap<IBluetoothGattServerCallback> getServerMap() {
@@ -2789,9 +2769,6 @@ public class GattService extends ProfileService {
     }
 
     void dumpRegisterId(StringBuilder sb) {
-        if (mScanController != null) {
-            mScanController.dumpRegisterId(sb);
-        }
         sb.append("  Client:\n");
         for (Integer appId : mClientMap.getAllAppsIds()) {
             final ContextMap.App app = mClientMap.getById(appId);
@@ -2834,10 +2811,6 @@ public class GattService extends ProfileService {
         super.dump(sb);
         sb.append("\nRegistered App\n");
         dumpRegisterId(sb);
-
-        if (mScanController != null) {
-            mScanController.dump(sb);
-        }
 
         sb.append("GATT Advertiser Map\n");
         mAdvertiseManager.dump(sb);
