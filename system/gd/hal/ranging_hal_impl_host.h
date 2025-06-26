@@ -64,5 +64,8 @@ public:
 
   bool IsAbortedProcedureRequired(uint16_t /*connection_handle*/) override { return false; }
 
+  std::vector<RangingSessionType> GetSupportedSessionTypes() override {
+    return {RangingSessionType::SOFTWARE_STACK_DATA_PARSING};
+  }
 };
 }  // namespace bluetooth::hal
