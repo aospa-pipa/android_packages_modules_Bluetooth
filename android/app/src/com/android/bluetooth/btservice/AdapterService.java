@@ -524,8 +524,6 @@ public class AdapterService extends Service {
 
         @Override
         public void handleMessage(Message msg) {
-            Log.v(TAG, "handleMessage() - Message: " + msg.what);
-
             switch (msg.what) {
                 case MESSAGE_PROFILE_SERVICE_STATE_CHANGED -> {
                     Log.v(TAG, "handleMessage() - MESSAGE_PROFILE_SERVICE_STATE_CHANGED");
@@ -562,7 +560,7 @@ public class AdapterService extends Service {
                         }
                     }
                 }
-                default -> {} // Nothing to do
+                default -> Log.e(TAG, "handleMessage() - Unknown message: " + msg.what);
             }
         }
 

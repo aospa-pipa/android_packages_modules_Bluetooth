@@ -214,6 +214,8 @@ public class LeAudioService extends ConnectableProfile {
     boolean mBluetoothEnabled = false;
     boolean mUserPreferred = false;
 
+    private boolean mSystemSuspended = false;
+
     /**
      * During a call that has LE Audio -> HFP handover, the HFP device that is going to connect SCO
      * after LE Audio group becomes idle
@@ -2206,6 +2208,22 @@ public class LeAudioService extends ConnectableProfile {
         return false;
     }
 
+    /**
+     * Configure LE audio service when the system is suspended and resumed. Stop LE scanner if LE
+     * audio devices should not reconnect when the system is suspended and restore LE scanner after
+     * resume if needed.
+     */
+    public void setSystemSuspended(boolean suspended) {
+        mSystemSuspended = suspended;
+        if (suspended) {
+            Log.d(TAG, "system suspended, stop background scan");
+            mScanCallback.stopBackgroundScan();
+        } else if (isScannerNeeded()) {
+            Log.d(TAG, "system resumed, restore background scan");
+            mScanCallback.startBackgroundScan();
+        }
+    }
+
     boolean isScannerNeeded() {
         if (mDeviceDescriptors.isEmpty() || !mBluetoothEnabled) {
             Log.d(TAG, "isScannerNeeded: false, mBluetoothEnabled: " + mBluetoothEnabled);
@@ -2219,6 +2237,11 @@ public class LeAudioService extends ConnectableProfile {
 
         if (allLeAudioDevicesConnected()) {
             Log.d(TAG, "isScannerNeeded: all devices connected, scanner not needed");
+            return false;
+        }
+
+        if (mSystemSuspended) {
+            Log.d(TAG, "isScannerNeeded: system suspended, scanner not needed");
             return false;
         }
 
