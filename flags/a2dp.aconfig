@@ -105,3 +105,27 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "a2dp_set_configuration_during_discovery"
+    namespace: "bluetooth"
+    description: "Accept AVDTP SetConfiguration during ongoing AVDTP Discovery"
+    bug: "425738557"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "lhdc_codec_support"
+    namespace: "bluetooth"
+    description: "Implement support for the LHDCv5 codec"
+    bug: "423977897"
+}
+
+flag {
+    name: "a2dp_delay_report_in_dumpsys"
+    namespace: "bluetooth"
+    description: "Log AVDTP delay report events in dumpsys"
+    bug: "426021684"
+}

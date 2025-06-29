@@ -214,6 +214,8 @@ public class LeAudioService extends ConnectableProfile {
     boolean mBluetoothEnabled = false;
     boolean mUserPreferred = false;
 
+    private boolean mSystemSuspended = false;
+
     /**
      * During a call that has LE Audio -> HFP handover, the HFP device that is going to connect SCO
      * after LE Audio group becomes idle
@@ -708,6 +710,9 @@ public class LeAudioService extends ConnectableProfile {
 
     List<BluetoothLeAudioCodecConfig> mInputLocalCodecCapabilities = new ArrayList<>();
     List<BluetoothLeAudioCodecConfig> mOutputLocalCodecCapabilities = new ArrayList<>();
+
+    private final Map<Integer, Pair<BluetoothLeAudioCodecConfig, BluetoothLeAudioCodecConfig>>
+            mActiveGroupCodecPreferences = new LinkedHashMap<>();
 
     @GuardedBy("mGroupWriteLock")
     private final Map<Integer, LeAudioGroupDescriptor> mGroupDescriptors = new LinkedHashMap<>();
@@ -2112,7 +2117,7 @@ public class LeAudioService extends ConnectableProfile {
             removeAuthorizationInfoForRelatedProfiles(device);
         }
 
-        mAdapterService.notifyProfileConnectionStateChangeToGatt(mProfileId, prevState, newState);
+        mAdapterService.notifyProfileConnectionStateChangeToScan(mProfileId, prevState, newState);
         mAdapterService.handleProfileConnectionStateChange(mProfileId, device, prevState, newState);
         mAdapterService
                 .getActiveDeviceManager()
@@ -2203,6 +2208,22 @@ public class LeAudioService extends ConnectableProfile {
         return false;
     }
 
+    /**
+     * Configure LE audio service when the system is suspended and resumed. Stop LE scanner if LE
+     * audio devices should not reconnect when the system is suspended and restore LE scanner after
+     * resume if needed.
+     */
+    public void setSystemSuspended(boolean suspended) {
+        mSystemSuspended = suspended;
+        if (suspended) {
+            Log.d(TAG, "system suspended, stop background scan");
+            mScanCallback.stopBackgroundScan();
+        } else if (isScannerNeeded()) {
+            Log.d(TAG, "system resumed, restore background scan");
+            mScanCallback.startBackgroundScan();
+        }
+    }
+
     boolean isScannerNeeded() {
         if (mDeviceDescriptors.isEmpty() || !mBluetoothEnabled) {
             Log.d(TAG, "isScannerNeeded: false, mBluetoothEnabled: " + mBluetoothEnabled);
@@ -2216,6 +2237,11 @@ public class LeAudioService extends ConnectableProfile {
 
         if (allLeAudioDevicesConnected()) {
             Log.d(TAG, "isScannerNeeded: all devices connected, scanner not needed");
+            return false;
+        }
+
+        if (mSystemSuspended) {
+            Log.d(TAG, "isScannerNeeded: system suspended, scanner not needed");
             return false;
         }
 
@@ -3113,7 +3139,8 @@ public class LeAudioService extends ConnectableProfile {
     }
 
     private void handleGroupTransitToActive(int groupId) {
-        int currentlyActiveGroupId = getActiveGroupId();
+        Log.d(TAG, "handleGroupTransitToActive for group: " + groupId);
+
         mGroupReadLock.lock();
         try {
             LeAudioGroupDescriptor descriptor = getGroupDescriptor(groupId);
@@ -3126,6 +3153,8 @@ public class LeAudioService extends ConnectableProfile {
                 return;
             }
 
+            final int currentlyActiveGroupId = getActiveGroupId();
+
             if (updateActiveDevices(
                     groupId, AUDIO_DIRECTION_NONE, descriptor.mDirection, true, false, false)) {
                 descriptor.setActiveState(ACTIVE_STATE_ACTIVE);
@@ -3134,11 +3163,14 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             if (descriptor.isActive()) {
+                restoreActiveGroupCodecConfigPreference(groupId);
+
                 mHandler.post(
                         () ->
                                 notifyGroupStatusChanged(
                                         groupId, LeAudioStackEvent.GROUP_STATUS_ACTIVE));
                 updateInbandRingtoneForTheGroup(groupId);
+
                 if (currentlyActiveGroupId != LE_AUDIO_GROUP_ID_INVALID) {
                     updateInbandRingtoneForTheGroup(currentlyActiveGroupId);
                 }
@@ -5812,6 +5844,141 @@ public class LeAudioService extends ConnectableProfile {
         return null;
     }
 
+    private boolean shouldUpdateCodecConfigPreference(BluetoothLeAudioCodecConfig codecConfig) {
+        // Note: Opus and Opus Hi-res are a different codecs at the API level, but still
+        // the same codec at the Bluetooth specification level. If we have both flavors of the Opus
+        // codec
+        // configuration priorities set by the API, we should call to native only with the higher
+        // codec
+        // priority of the two, since the BT Audio HAL receives the same Bluetooth domain codec
+        // identifier
+        // when setting the priority for both.
+        if (codecConfig.getCodecType() != BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS
+                && codecConfig.getCodecType()
+                        != BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS_HI_RES) {
+            return true;
+        }
+
+        int checkAgainstCodecType =
+                codecConfig.getCodecType()
+                                == BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS_HI_RES
+                        ? BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS
+                        : BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS_HI_RES;
+        if (mActiveGroupCodecPreferences.containsKey(checkAgainstCodecType)) {
+            return mActiveGroupCodecPreferences.get(checkAgainstCodecType).second.getCodecPriority()
+                    < codecConfig.getCodecPriority();
+        }
+        return true;
+    }
+
+    private void storeActiveGroupCodecConfigPreference(
+            int groupId,
+            BluetoothLeAudioCodecConfig inputCodecConfig,
+            BluetoothLeAudioCodecConfig outputCodecConfig) {
+        if (!Flags.leaudioAddOpusHiResCodecTypeApi()) {
+            Log.w(
+                    TAG,
+                    "storeActiveGroupCodecConfigPreference() skipped due to disabled feature flag");
+            return;
+        }
+
+        Log.d(
+                TAG,
+                "storeActiveGroupCodecConfigPreference("
+                        + groupId
+                        + "): "
+                        + Objects.toString(inputCodecConfig)
+                        + Objects.toString(outputCodecConfig));
+
+        // Update the active group codec preference map
+        mActiveGroupCodecPreferences.put(
+                Integer.valueOf(outputCodecConfig.getCodecType()),
+                new Pair<>(inputCodecConfig, outputCodecConfig));
+
+        for (Map.Entry<BluetoothDevice, LeAudioDeviceDescriptor> entry :
+                mDeviceDescriptors.entrySet()) {
+            if (entry.getValue().mGroupId != groupId) {
+                continue;
+            }
+
+            List<BluetoothLeAudioCodecConfig> output_configs = new ArrayList<>();
+            List<BluetoothLeAudioCodecConfig> input_configs = new ArrayList<>();
+            for (Pair<BluetoothLeAudioCodecConfig, BluetoothLeAudioCodecConfig> codecPreference :
+                    mActiveGroupCodecPreferences.values()) {
+                input_configs.add(codecPreference.first);
+                output_configs.add(codecPreference.second);
+            }
+
+            if (input_configs.size() > 0) {
+                mAdapterService
+                        .getDatabaseManager()
+                        .setLeAudioUnicastInputCodecPreferenceList(entry.getKey(), input_configs);
+            }
+
+            if (output_configs.size() > 0) {
+                mAdapterService
+                        .getDatabaseManager()
+                        .setLeAudioUnicastOutputCodecPreferenceList(entry.getKey(), output_configs);
+            }
+        }
+    }
+
+    private void restoreActiveGroupCodecConfigPreference(int groupId) {
+        if (!Flags.leaudioAddOpusHiResCodecTypeApi()) {
+            Log.w(
+                    TAG,
+                    "storeActiveGroupCodecConfigPreference() skipped due to disabled feature flag");
+            return;
+        }
+
+        Log.d(TAG, "restoreActiveGroupCodecConfigPreference(" + groupId + ")");
+
+        // Reload the active group codec preferences map from storage
+        mActiveGroupCodecPreferences.clear();
+        for (Map.Entry<BluetoothDevice, LeAudioDeviceDescriptor> entry :
+                mDeviceDescriptors.entrySet()) {
+            if (entry.getValue().mGroupId != groupId) {
+                continue;
+            }
+
+            List<BluetoothLeAudioCodecConfig> output_configs =
+                    mAdapterService
+                            .getDatabaseManager()
+                            .getLeAudioUnicastOutputCodecPreferenceList(entry.getKey());
+            List<BluetoothLeAudioCodecConfig> input_configs =
+                    mAdapterService
+                            .getDatabaseManager()
+                            .getLeAudioUnicastInputCodecPreferenceList(entry.getKey());
+
+            if (input_configs != null && output_configs != null) {
+                Log.d(
+                        TAG,
+                        "restoreActiveGroupCodecConfigPreference: restoring "
+                                + input_configs.size()
+                                + " input and "
+                                + output_configs.size()
+                                + " output codec preferences");
+
+                // Note: It is required to set Input and Output codec preferences at one call,
+                //       therefore it should be an equal amount of both.
+                if ((output_configs.size() != 0)
+                        && (output_configs.size() == input_configs.size())) {
+                    for (int i = 0; i < output_configs.size(); i++) {
+                        mActiveGroupCodecPreferences.put(
+                                Integer.valueOf(output_configs.get(i).getCodecType()),
+                                new Pair<>(input_configs.get(i), output_configs.get(i)));
+
+                        if (shouldUpdateCodecConfigPreference(output_configs.get(i))) {
+                            mNativeInterface.setCodecConfigPreference(
+                                    groupId, input_configs.get(i), output_configs.get(i));
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
     /**
      * Sets the codec configuration preference.
      *
@@ -5858,13 +6025,18 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
 
+        storeActiveGroupCodecConfigPreference(groupId, inputCodecConfig, outputCodecConfig);
+
         if (!mLeAudioNativeIsInitialized) {
             Log.e(TAG, "Le Audio not initialized properly.");
             return;
         }
 
         mUserPreferred = true;
-        mNativeInterface.setCodecConfigPreference(groupId, inputCodecConfig, outputCodecConfig);
+        if (shouldUpdateCodecConfigPreference(outputCodecConfig)) {
+            Log.d(TAG, "setCodecConfigPreference: Send codec preference to native.");
+            mNativeInterface.setCodecConfigPreference(groupId, inputCodecConfig, outputCodecConfig);
+        }
     }
 
     void setBroadcastToUnicastFallbackGroup(int groupId) {

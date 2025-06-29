@@ -45,6 +45,7 @@ static struct {
   jmethodID onConnectionStateChanged;
   jmethodID onAudioStateChanged;
   jmethodID onCodecConfigChanged;
+  jmethodID onAudioDelayReported;
   jmethodID isMandatoryCodecPreferred;
   jmethodID onMetadataUpdate;
 } android_bluetooth_A2dpNativeCallback;
@@ -244,6 +245,28 @@ static void bta2dp_metadata_update_callback(uint16_t context) {
           (jint)context);
 }
 
+static void bta2dp_audio_delay_reported_callback(const RawAddress& bd_addr, int delay) {
+  log::info("bd_addr={} delay={}", bd_addr, delay);
+
+  std::shared_lock<std::shared_timed_mutex> lock(callbacks_mutex);
+  CallbackEnv sCallbackEnv(__func__);
+  if (!sCallbackEnv.valid() || mCallbacksObj == nullptr) {
+    return;
+  }
+
+  ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
+                                  sCallbackEnv->NewByteArray(RawAddress::kLength));
+  if (!addr.get()) {
+    log::error("Fail to new jbyteArray bd addr");
+    return;
+  }
+  sCallbackEnv->SetByteArrayRegion(addr.get(), 0, RawAddress::kLength,
+                                   reinterpret_cast<const jbyte*>(bd_addr.address));
+  sCallbackEnv->CallVoidMethod(mCallbacksObj,
+                               android_bluetooth_A2dpNativeCallback.onAudioDelayReported,
+                               addr.get(), (jint)delay);
+}
+
 static btav_source_callbacks_t sBluetoothA2dpCallbacks = {
         sizeof(sBluetoothA2dpCallbacks),
         bta2dp_connection_state_callback,
@@ -251,6 +274,7 @@ static btav_source_callbacks_t sBluetoothA2dpCallbacks = {
         bta2dp_audio_config_callback,
         bta2dp_mandatory_codec_preferred_callback,
         bta2dp_metadata_update_callback,
+        bta2dp_audio_delay_reported_callback,
 };
 
 static std::vector<btav_a2dp_codec_config_t> prepareCodecPreferences(
@@ -546,6 +570,8 @@ int register_com_android_bluetooth_a2dp(JNIEnv* env) {
            "[Landroid/bluetooth/BluetoothCodecConfig;"
            "[Landroid/bluetooth/BluetoothCodecConfig;)V",
            &android_bluetooth_A2dpNativeCallback.onCodecConfigChanged},
+          {"onAudioDelayReported", "([BI)V",
+           &android_bluetooth_A2dpNativeCallback.onAudioDelayReported},
           {"isMandatoryCodecPreferred", "([B)Z",
            &android_bluetooth_A2dpNativeCallback.isMandatoryCodecPreferred},
           {"onMetadataUpdate", "(I)V",

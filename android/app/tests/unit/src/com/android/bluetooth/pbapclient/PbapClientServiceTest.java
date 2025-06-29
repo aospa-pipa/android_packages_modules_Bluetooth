@@ -16,6 +16,8 @@
 
 package com.android.bluetooth.pbapclient;
 
+import static android.bluetooth.BluetoothDevice.TRANSPORT_BREDR;
+import static android.bluetooth.BluetoothDevice.TRANSPORT_LE;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_UNKNOWN;
@@ -90,8 +92,7 @@ public class PbapClientServiceTest {
     // Constant for testing ACL disconnection events with a bad transport
     public static final int TRANSPORT_UNKNOWN = -1;
 
-    private final Context mTargetContext =
-            InstrumentationRegistry.getInstrumentation().getContext();
+    private final Context mContext = InstrumentationRegistry.getInstrumentation().getContext();
     private final BluetoothDevice mDevice = getTestDevice(56);
     private final Map<BluetoothDevice, PbapClientStateMachine> mDeviceMap =
             new HashMap<BluetoothDevice, PbapClientStateMachine>();
@@ -110,7 +111,7 @@ public class PbapClientServiceTest {
                 .getProfileConnectionPolicy(any(), anyInt());
         doReturn(true).when(mDatabaseManager).setProfileConnectionPolicy(any(), anyInt(), anyInt());
 
-        doReturn(mTargetContext.getPackageName()).when(mAdapterService).getPackageName();
+        doReturn(mContext.getPackageName()).when(mAdapterService).getPackageName();
         doReturn(mPackageManager).when(mAdapterService).getPackageManager();
 
         doReturn(mResources).when(mAdapterService).getResources();
@@ -203,7 +204,7 @@ public class PbapClientServiceTest {
 
     @Test
     public void testOnBrEdrAclDisconnected_forConnectedDevice_deviceCleanedUp() {
-        mService.aclDisconnected(mDevice, BluetoothDevice.TRANSPORT_BREDR);
+        mService.aclDisconnected(mDevice, TRANSPORT_BREDR);
         mTestLooper.dispatchAll();
         verify(mDeviceStateMachine, times(1)).disconnect();
     }
@@ -211,14 +212,14 @@ public class PbapClientServiceTest {
     @Test
     public void testOnBrEdrAclDisconnected_forDisconnectedDevice_eventDropped() {
         mDeviceMap.clear();
-        mService.aclDisconnected(mDevice, BluetoothDevice.TRANSPORT_BREDR);
+        mService.aclDisconnected(mDevice, TRANSPORT_BREDR);
         mTestLooper.dispatchAll();
         verify(mDeviceStateMachine, never()).disconnect();
     }
 
     @Test
     public void testOnLeAclDisconnected_forConnectedDevice_eventDropped() {
-        mService.aclDisconnected(mDevice, BluetoothDevice.TRANSPORT_LE);
+        mService.aclDisconnected(mDevice, TRANSPORT_LE);
         mTestLooper.dispatchAll();
         verify(mDeviceStateMachine, never()).disconnect();
     }

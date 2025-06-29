@@ -36,8 +36,8 @@
 #include "hal/snoop_logger.h"
 #include "hal/socket_hal_impl.h"
 #include "hci/acl_manager/acl_manager_classic_impl.h"
+#include "hci/acl_manager/acl_manager_le_impl.h"
 #include "hci/acl_manager/acl_scheduler.h"
-#include "hci/acl_manager_impl.h"
 #include "hci/controller_impl.h"
 #include "hci/distance_measurement_manager_impl.h"
 #include "hci/hci_layer.h"
@@ -86,7 +86,7 @@ struct Stack::impl {
         acl_manager_classic_(handler, hci_layer_, acl_scheduler_, remote_name_request_,
                              round_robin_scheduler_),
         acl_manager_(handler, hci_layer_, controller_, storage_, round_robin_scheduler_,
-                     acl_manager_classic_, acl_manager_classic_),
+                     acl_manager_classic_),
         le_scanning_manager_(handler, &hci_layer_, &controller_, acl_manager_.GetLeAddressManager(),
                              &storage_),
         msft_extension_manager_(handler, &hci_hal_, &hci_layer_),
@@ -129,7 +129,7 @@ struct Stack::impl {
   hci::RemoteNameRequestModuleImpl remote_name_request_;
   hci::acl_manager::RoundRobinScheduler round_robin_scheduler_;
   hci::acl_manager::AclManagerClassicImpl acl_manager_classic_;
-  hci::AclManagerImpl acl_manager_;
+  hci::acl_manager::AclManagerLeImpl acl_manager_;
   hci::LeScanningManagerImpl le_scanning_manager_;
   hci::MsftExtensionManager msft_extension_manager_;
   hci::LeAdvertisingManagerImpl le_advertising_manager_;
@@ -294,7 +294,7 @@ hci::RemoteNameRequestModule* Stack::GetRemoteNameRequest() const {
   return &pimpl_->remote_name_request_;
 }
 
-hci::AclManager* Stack::GetAclManager() const {
+hci::AclManagerLe* Stack::GetAclManagerLe() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   log::assert_that(is_running_, "assert failed: is_running_");
   return &pimpl_->acl_manager_;
@@ -342,7 +342,7 @@ void Stack::Dump(int fd, std::promise<void> promise) const {
     stack_handler_->Call(
             [](int fd, std::promise<void> promise) {
               bluetooth::shim::GetController()->Dump(fd);
-              bluetooth::shim::GetAclManager()->Dump(fd);
+              bluetooth::shim::GetAclManagerLe()->Dump(fd);
               bluetooth::os::WakelockManager::Get().Dump(fd);
               bluetooth::shim::GetSnoopLogger()->DumpSnoozLogToFile();
               promise.set_value();

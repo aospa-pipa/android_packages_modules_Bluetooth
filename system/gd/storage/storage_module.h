@@ -46,13 +46,16 @@ class SecurityManagerImpl;
 }
 
 namespace hci {
-class AclManagerImpl;
 class LeAdvertisingManager;
 class LeAdvertisingManagerImpl;
 class LeScanningManager;
 class LeScanningReassembler;
 class LeScanningManagerImpl;
 }  // namespace hci
+
+namespace hci::acl_manager {
+class AclManagerLeImpl;
+}
 
 namespace storage {
 
@@ -144,7 +147,7 @@ public:
 
 protected:
   friend shim::BtifConfigInterface;
-  friend hci::AclManagerImpl;
+  friend hci::acl_manager::AclManagerLeImpl;
   friend security::internal::SecurityManagerImpl;
   friend hci::LeAdvertisingManagerImpl;
   friend hci::LeScanningManager;

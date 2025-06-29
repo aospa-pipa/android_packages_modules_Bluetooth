@@ -23,6 +23,7 @@ import static android.bluetooth.BluetoothAdapter.STATE_OFF;
 import static android.bluetooth.BluetoothAdapter.STATE_ON;
 import static android.bluetooth.BluetoothAdapter.STATE_TURNING_OFF;
 import static android.bluetooth.BluetoothAdapter.STATE_TURNING_ON;
+import static android.bluetooth.BluetoothDevice.TRANSPORT_LE;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
@@ -644,14 +645,22 @@ public class AdapterServiceTest {
 
         mLooper.moveTimeForward(120_000); // Skip time so the timeout fires
         syncHandler(AdapterState.BLE_START_TIMEOUT);
+
+        // After the timeout, the state transitions to BLE_TURNING_OFF
+        verifyStateChange(STATE_BLE_TURNING_ON, STATE_BLE_TURNING_OFF);
         assertThat(mAdapterService.getBluetoothGatt()).isNull();
 
+        // The shutdown sequence for GATT profile posts these messages
+        syncHandler(MESSAGE_PROFILE_SERVICE_STATE_CHANGED);
+        syncHandler(MESSAGE_PROFILE_SERVICE_UNREGISTERED);
+
+        // Simulate the native stack confirming shutdown
+        mAdapterService.stateChangeCallback(AbstractionLayer.BT_STATE_OFF);
         syncHandler(AdapterState.BLE_STOPPED);
+
         // When reaching the OFF state, the cleanup is called that will destroy the state machine of
         // the adapterService. Destroying state machine send a -1 event on the handler
         syncHandler(-1);
-        syncHandler(MESSAGE_PROFILE_SERVICE_STATE_CHANGED);
-        syncHandler(MESSAGE_PROFILE_SERVICE_UNREGISTERED);
 
         verifyStateChange(STATE_BLE_TURNING_OFF, STATE_OFF);
         assertThat(mAdapterService.getState()).isEqualTo(STATE_OFF);
@@ -1167,7 +1176,7 @@ public class AdapterServiceTest {
 
         mAdapterService.notifyGattClientDisconnect(clientIf, mDevice1);
         order.verify(mMockLeAudioService).setAutoActiveModeState(groupId, true);
-        orderNative.verify(mNativeInterface).disconnectAcl(any(), eq(BluetoothDevice.TRANSPORT_LE));
+        orderNative.verify(mNativeInterface).disconnectAcl(any(), eq(TRANSPORT_LE));
         assertThat(mAdapterService.mLeGattClientsControllingAutoActiveMode).isEmpty();
     }
 
@@ -1213,9 +1222,7 @@ public class AdapterServiceTest {
         // Disconnect second client to device
         mAdapterService.notifyGattClientDisconnect(clientIfTwo, mDevice1);
         order.verify(mMockLeAudioService).setAutoActiveModeState(groupId, true);
-        orderNative
-                .verify(mNativeInterface, times(1))
-                .disconnectAcl(any(), eq(BluetoothDevice.TRANSPORT_LE));
+        orderNative.verify(mNativeInterface, times(1)).disconnectAcl(any(), eq(TRANSPORT_LE));
         assertThat(mAdapterService.mLeGattClientsControllingAutoActiveMode).isEmpty();
     }
 
@@ -1262,9 +1269,7 @@ public class AdapterServiceTest {
         // Disconnect second device
         mAdapterService.notifyGattClientDisconnect(clientIfTwo, mDevice2);
         order.verify(mMockLeAudioService).setAutoActiveModeState(groupId, true);
-        orderNative
-                .verify(mNativeInterface, times(2))
-                .disconnectAcl(any(), eq(BluetoothDevice.TRANSPORT_LE));
+        orderNative.verify(mNativeInterface, times(2)).disconnectAcl(any(), eq(TRANSPORT_LE));
         assertThat(mAdapterService.mLeGattClientsControllingAutoActiveMode).isEmpty();
     }
 
