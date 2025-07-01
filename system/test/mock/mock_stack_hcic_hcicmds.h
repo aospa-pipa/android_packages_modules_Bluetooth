@@ -291,16 +291,6 @@ struct btsnd_hcic_read_rssi {
 };
 extern struct btsnd_hcic_read_rssi btsnd_hcic_read_rssi;
 
-// Name: btsnd_hcic_accept_conn
-// Params: const RawAddress& dest, uint8_t role
-// Return: void
-struct btsnd_hcic_accept_conn {
-  std::function<void(const RawAddress& dest, uint8_t role)> body{
-          [](const RawAddress& /* dest */, uint8_t /* role */) {}};
-  void operator()(const RawAddress& dest, uint8_t role) { body(dest, role); }
-};
-extern struct btsnd_hcic_accept_conn btsnd_hcic_accept_conn;
-
 // Name: btsnd_hcic_reject_conn
 // Params: const RawAddress& dest, uint8_t reason
 // Return: void
