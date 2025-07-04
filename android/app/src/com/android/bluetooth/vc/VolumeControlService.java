@@ -179,6 +179,8 @@ public class VolumeControlService extends ConnectableProfile {
                     Executors.newSingleThreadExecutor(), mBluetoothOnModeChangedListener);
         setVolumeControlService(this);
         mNativeInterface.init();
+
+        mAudioMode = mAudioManager.getMode();
     }
 
     // TODO(b/422543753) Delete on flag cleanup
