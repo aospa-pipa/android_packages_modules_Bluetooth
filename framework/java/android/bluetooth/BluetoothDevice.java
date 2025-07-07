@@ -2769,7 +2769,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @RequiresPermission(BLUETOOTH_CONNECT)
     public ParcelUuid[] getUuids() {
         final IBluetooth service = getService();
-        if (service == null || !isBluetoothEnabled()) {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (service == null || (adapter != null && adapter.getState() != BluetoothAdapter.STATE_ON && adapter.getState() != BluetoothAdapter.STATE_TURNING_ON)) {
             Log.e(TAG, "BT not enabled. Cannot get remote device Uuids");
             if (DBG) log(Log.getStackTraceString(new Throwable()));
         } else {
