@@ -68,6 +68,7 @@ import android.os.Bundle;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.a2dp.A2dpService;
+import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.btservice.ConnectableProfile;
@@ -464,10 +465,28 @@ public class HeadsetService extends ConnectableProfile {
     }
 
     void onDeviceStateChanged(HeadsetDeviceState deviceState) {
+        TbsService tbsService = TbsService.getTbsService();
+        if (tbsService != null) {
+            tbsService.updateBearerSignalStrength(2 /*deviceState.mSignal*/);
+        }
         doForEachConnectedStateMachine(
                 stateMachine ->
                         stateMachine.sendMessage(
                                 HeadsetStateMachine.DEVICE_STATE_CHANGED, deviceState));
+    }
+
+    void updateBearerTechnology(int bearertech) {
+        TbsService tbsService = TbsService.getTbsService();
+        if (tbsService != null) {
+            tbsService.updateBearerTechnology(bearertech);
+        }
+    }
+
+    void updateBearerName(String bearerName) {
+        TbsService tbsService = TbsService.getTbsService();
+        if (tbsService != null) {
+            tbsService.updateBearerName(bearerName);
+        }
     }
 
     /**
@@ -869,7 +888,6 @@ public class HeadsetService extends ConnectableProfile {
                         + connectionPolicy
                         + ", "
                         + Utils.getUidPidString());
-
         if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }

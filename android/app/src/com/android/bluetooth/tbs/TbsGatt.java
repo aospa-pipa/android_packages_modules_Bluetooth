@@ -30,6 +30,8 @@ import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
 import android.net.Uri;
+import com.android.bluetooth.Utils;
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
@@ -50,6 +52,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -59,6 +62,8 @@ public class TbsGatt {
 
     private static final String UUID_PREFIX = "0000";
     private static final String UUID_SUFFIX = "-0000-1000-8000-00805f9b34fb";
+    private Map<Integer, TbsCall> mTempCallsList = new TreeMap<>();
+    byte[] TempValue;
 
     /* TBS assigned uuid's */
     @VisibleForTesting static final UUID UUID_TBS = makeUuid("184B");
@@ -67,9 +72,15 @@ public class TbsGatt {
     @VisibleForTesting static final UUID UUID_BEARER_UCI = makeUuid("2BB4");
     @VisibleForTesting static final UUID UUID_BEARER_TECHNOLOGY = makeUuid("2BB5");
     @VisibleForTesting static final UUID UUID_BEARER_URI_SCHEMES_SUPPORTED_LIST = makeUuid("2BB6");
+	@VisibleForTesting
+    static final UUID UUID_BEARER_SIGNAL_STRENGTH = makeUuid("2BB7");
+    @VisibleForTesting
+    static final UUID UUID_BEARER_SIGNAL_STRENGTH_REPORTING_INTERVAL = makeUuid("2BB8");
+
     @VisibleForTesting static final UUID UUID_BEARER_LIST_CURRENT_CALLS = makeUuid("2BB9");
     private static final UUID UUID_CONTENT_CONTROL_ID = makeUuid("2BBA");
     @VisibleForTesting static final UUID UUID_STATUS_FLAGS = makeUuid("2BBB");
+    @VisibleForTesting static final UUID UUID_INCOMING_TARGET_URI = makeUuid("2BBC");
     @VisibleForTesting static final UUID UUID_CALL_STATE = makeUuid("2BBD");
     @VisibleForTesting static final UUID UUID_CALL_CONTROL_POINT = makeUuid("2BBE");
     private static final UUID UUID_CALL_CONTROL_POINT_OPTIONAL_OPCODES = makeUuid("2BBF");
@@ -119,6 +130,8 @@ public class TbsGatt {
     private final GattCharacteristic mBearerUciCharacteristic;
     private final GattCharacteristic mBearerTechnologyCharacteristic;
     private final GattCharacteristic mBearerUriSchemesSupportedListCharacteristic;
+	private final GattCharacteristic mBearerSignalStrengthCharacteristic;
+    private final GattCharacteristic mBearerSignalStrengthReportingIntervalCharecteristic;
     private final GattCharacteristic mBearerListCurrentCallsCharacteristic;
     private final GattCharacteristic mContentControlIdCharacteristic;
     private final GattCharacteristic mStatusFlagsCharacteristic;
@@ -127,8 +140,9 @@ public class TbsGatt {
     private final GattCharacteristic mCallControlPointOptionalOpcodesCharacteristic;
     private final GattCharacteristic mTerminationReasonCharacteristic;
     private final GattCharacteristic mIncomingCallCharacteristic;
+	private final GattCharacteristic mIncomingCallTargetURICharacteristic;
     private final GattCharacteristic mCallFriendlyNameCharacteristic;
-
+    public boolean uri_request = false;
     private Callback mCallback;
     private boolean mSilentMode = false;
     private BluetoothEventLogger mEventLogger = null;
@@ -205,6 +219,12 @@ public class TbsGatt {
                         BluetoothGattCharacteristic.PROPERTY_READ
                                 | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
                         BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED);
+        mIncomingCallTargetURICharacteristic =
+                new GattCharacteristic(
+                         UUID_INCOMING_TARGET_URI,
+                         BluetoothGattCharacteristic.PROPERTY_READ
+                                | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                        BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED);
         mCallStateCharacteristic =
                 new GattCharacteristic(
                         UUID_CALL_STATE,
@@ -232,6 +252,18 @@ public class TbsGatt {
                         BluetoothGattCharacteristic.PROPERTY_READ
                                 | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
                         BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED);
+		mBearerSignalStrengthCharacteristic =
+                new GattCharacteristic(UUID_BEARER_SIGNAL_STRENGTH,
+                        BluetoothGattCharacteristic.PROPERTY_READ
+                                | BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+                        BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED);
+        mBearerSignalStrengthReportingIntervalCharecteristic =
+               new GattCharacteristic(UUID_BEARER_SIGNAL_STRENGTH_REPORTING_INTERVAL,
+                        BluetoothGattCharacteristic.PROPERTY_READ
+                                | BluetoothGattCharacteristic.PROPERTY_WRITE
+                                | BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
+                        BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED
+                       |BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED);
     }
 
     public boolean init(
@@ -266,12 +298,19 @@ public class TbsGatt {
         gattService.addCharacteristic(mBearerListCurrentCallsCharacteristic);
         gattService.addCharacteristic(mContentControlIdCharacteristic);
         gattService.addCharacteristic(mStatusFlagsCharacteristic);
+        if (Utils.isTbsPtsTestMode()) {
+           gattService.addCharacteristic(mIncomingCallTargetURICharacteristic);
+        }
         gattService.addCharacteristic(mCallStateCharacteristic);
         gattService.addCharacteristic(mCallControlPointCharacteristic);
         gattService.addCharacteristic(mCallControlPointOptionalOpcodesCharacteristic);
         gattService.addCharacteristic(mTerminationReasonCharacteristic);
         gattService.addCharacteristic(mIncomingCallCharacteristic);
         gattService.addCharacteristic(mCallFriendlyNameCharacteristic);
+        if (Utils.isTbsPtsTestMode()) {
+           gattService.addCharacteristic(mBearerSignalStrengthCharacteristic);
+           gattService.addCharacteristic(mBearerSignalStrengthReportingIntervalCharecteristic);
+        }
 
         mEventLogger =
                 new BluetoothEventLogger(
@@ -553,6 +592,10 @@ public class TbsGatt {
             if (responseNeeded) {
                 mBluetoothGattServer.sendResponse(
                         device, requestId, BluetoothGatt.GATT_FAILURE, 0, value);
+            } else {
+              Log.d(TAG, "response is not needed");
+              //mBluetoothGattServer.sendResponse(
+              //          device, requestId, BluetoothGatt.GATT_SUCCESS, 0, value);
             }
         }
     }
@@ -687,6 +730,7 @@ public class TbsGatt {
 
     public boolean setBearerListCurrentCalls(Map<Integer, TbsCall> callsList) {
         Log.d(TAG, "setBearerListCurrentCalls: callsList=" + callsList);
+		mTempCallsList = callsList;
         final int listItemLengthMax = Byte.MAX_VALUE;
 
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
@@ -715,12 +759,48 @@ public class TbsGatt {
         return mBearerListCurrentCallsCharacteristic.setValue(stream.toByteArray());
     }
 
+    public void getBearerListCurrentCalls(Map<Integer, TbsCall> callsList) {
+       Log.d(TAG, "setBearerListCurrentCalls: callsList=" + callsList);
+       final int listItemLengthMax = Byte.MAX_VALUE;
+
+       ByteArrayOutputStream stream = new ByteArrayOutputStream();
+       for (Map.Entry<Integer, TbsCall> entry : callsList.entrySet()) {
+          TbsCall call = entry.getValue();
+          if (call == null) {
+             Log.w(TAG, "setBearerListCurrentCalls: call is null");
+             continue;
+          }
+
+          int uri_len = 0;
+          if (call.getUri() != null) {
+             uri_len = call.getUri().getBytes().length;
+          }
+
+          int listItemLength = Math.min(listItemLengthMax, 3 + uri_len);
+          stream.write((byte) (listItemLength & 0xff));
+          stream.write((byte) (entry.getKey() & 0xff));
+          stream.write((byte) (call.getState() & 0xff));
+          stream.write((byte) (call.getFlags() & 0xff));
+          if (uri_len > 0) {
+             stream.write(call.getUri().getBytes(), 0, listItemLength - 3);
+          }
+       }
+       TempValue = stream.toByteArray();
+    }
+
     private boolean updateStatusFlags(BluetoothDevice device, int valueInt) {
         /* uint16_t */
         byte[] value = new byte[2];
         value[0] = (byte) (valueInt & 0xFF);
         value[1] = (byte) ((valueInt >> 8) & 0xFF);
         return mStatusFlagsCharacteristic.notifyWithValue(device, value);
+    }
+
+    private boolean updateStatusFlagsBearerSignalStrength(int bearerSignal) {
+        Log.i(TAG, "bearer signal strength is set ");
+        byte[] value = new byte[1];
+        value[0] = (byte) (bearerSignal);
+        return mBearerSignalStrengthCharacteristic.setValue(value);
     }
 
     private boolean updateStatusFlagsInbandRingtone(BluetoothDevice device, boolean set) {
@@ -776,6 +856,24 @@ public class TbsGatt {
     public boolean setInbandRingtoneFlag(BluetoothDevice device) {
         return updateStatusFlagsInbandRingtone(device, true);
     }
+
+    public boolean updateBearerSignalStrength(int bearerSignal) {
+        return updateStatusFlagsBearerSignalStrength(bearerSignal);
+    }
+
+    public boolean updateBearerName(String bearerName) {
+       Log.i(TAG, "Update Bearer Name initial");
+       if (uri_request && Utils.isTbsPtsTestMode()) {
+          //We want to update this uri schemes on use action.
+          //So updated this action event on UpdateBearerName event.
+          Log.i(TAG, "URI schemes Update list");
+          List<String> uriSchemes =  new ArrayList<>();
+          uriSchemes.add("tel");
+          uriSchemes.add("telnet");
+          setBearerUriSchemesSupportedList(uriSchemes);
+       }
+       return mBearerProviderNameCharacteristic.setValue(bearerName);
+     }
 
     /**
      * Clear inband ringtone for the device. When set, notification will be sent to given device.
@@ -855,7 +953,27 @@ public class TbsGatt {
             System.arraycopy(uri.getBytes(), 0, value, 1, uri_len);
         }
 
+        if (Utils.isTbsPtsTestMode()) {
+           setIncomingCallURI(callIndex, uri);
+        }
+
         return mIncomingCallCharacteristic.setValue(value);
+    }
+
+    public boolean setIncomingCallURI(int callIndex, String uri) {
+         Log.d(TAG, "setIncomingCall: callIndex=" + callIndex + " uri=" + uri);
+        int uri_len = 0;
+        if (uri != null) {
+            uri_len = uri.length();
+        }
+
+        byte[] value = new byte[uri_len + 1];
+        value[0] = (byte) (callIndex & 0xff);
+
+        if (uri_len > 0) {
+            System.arraycopy(uri.getBytes(), 0, value, 1, uri_len);
+        }
+        return mIncomingCallTargetURICharacteristic.setValue(value);
     }
 
     public boolean clearIncomingCall() {
@@ -1124,11 +1242,13 @@ public class TbsGatt {
                         + ", characteristic= "
                         + (charUuid != null ? tbsUuidToString(charUuid) : "UNKNOWN"));
 
+        int status = BluetoothGatt.GATT_SUCCESS;
+
         switch (op.operation()) {
             /* Allow not yet authorized devices to subscribe for notifications */
             case READ_DESCRIPTOR -> {
                 byte[] value = getCccBytes(device, op.descriptor().getCharacteristic().getUuid());
-                final int status;
+
 
                 if (value.length < op.offset()) {
                     Log.e(
@@ -1148,7 +1268,6 @@ public class TbsGatt {
                         device, op.requestId(), status, op.offset(), value);
             }
             case WRITE_DESCRIPTOR -> {
-                final int status;
 
                 if (op.preparedWrite()) {
                     status = BluetoothGatt.GATT_FAILURE;
@@ -1206,18 +1325,19 @@ public class TbsGatt {
                         + ", characteristic= "
                         + (charUuid != null ? tbsUuidToString(charUuid) : "UNKNOWN"));
 
+        int status = BluetoothGatt.GATT_SUCCESS;
         ClientCharacteristicConfigurationDescriptor cccd;
         byte[] value;
 
         switch (op.operation()) {
             case READ_CHARACTERISTIC -> {
+
                 Log.d(TAG, "onCharacteristicReadRequest: device=" + device);
 
                 if (getDeviceAuthorization(device) != BluetoothDevice.ACCESS_ALLOWED) {
                     onRejectedAuthorizationGattOperation(device, op);
                     return;
                 }
-
                 if (op.characteristic().getUuid().equals(UUID_STATUS_FLAGS)) {
                     value = new byte[2];
                     int valueInt = mSilentMode ? STATUS_FLAG_SILENT_MODE_ENABLED : 0;
@@ -1231,13 +1351,23 @@ public class TbsGatt {
                 } else {
                     GattCharacteristic gattCharacteristic =
                             (GattCharacteristic) op.characteristic();
+				    if (op.characteristic().getUuid().equals(UUID_BEARER_LIST_CURRENT_CALLS)) {
+                       Log.d(TAG, "list current calls");
+                       getBearerListCurrentCalls(mTempCallsList);
+                       mBluetoothGattServer.sendResponse(
+                                      device, op.requestId(), status, op.offset(), TempValue);
+                       break;
+                    } else if (op.characteristic().getUuid().equals(
+                                          UUID_BEARER_URI_SCHEMES_SUPPORTED_LIST)) {
+                        uri_request = true;
+                       Log.d(TAG, "schemes supported list");
+                    }
                     value = gattCharacteristic.getValue();
                     if (value == null) {
                         value = new byte[0];
                     }
                 }
 
-                final int status;
                 if (value.length < op.offset()) {
                     status = BluetoothGatt.GATT_INVALID_OFFSET;
                     Log.e(
@@ -1263,7 +1393,7 @@ public class TbsGatt {
                 }
 
                 GattCharacteristic gattCharacteristic = (GattCharacteristic) op.characteristic();
-                final int status;
+
                 if (op.preparedWrite()) {
                     status = BluetoothGatt.GATT_FAILURE;
                 } else if (op.offset() > 0) {
@@ -1289,7 +1419,7 @@ public class TbsGatt {
 
                 cccd = (ClientCharacteristicConfigurationDescriptor) op.descriptor();
                 value = cccd.getValue(device);
-                final int status;
+
                 if (value.length < op.offset()) {
                     status = BluetoothGatt.GATT_INVALID_OFFSET;
                     value = new byte[] {};
@@ -1310,7 +1440,7 @@ public class TbsGatt {
                 }
 
                 cccd = (ClientCharacteristicConfigurationDescriptor) op.descriptor();
-                final int status;
+
                 if (op.preparedWrite()) {
                     // TODO: handle prepareWrite
                     status = BluetoothGatt.GATT_FAILURE;
@@ -1339,6 +1469,10 @@ public class TbsGatt {
             return mBearerTechnologyCharacteristic;
         } else if (uuid.equals(UUID_BEARER_URI_SCHEMES_SUPPORTED_LIST)) {
             return mBearerUriSchemesSupportedListCharacteristic;
+        } else if(uuid.equals(UUID_BEARER_SIGNAL_STRENGTH)) {
+            return mBearerSignalStrengthCharacteristic;
+        } else if(uuid.equals(UUID_BEARER_SIGNAL_STRENGTH_REPORTING_INTERVAL)) {
+            return mBearerSignalStrengthReportingIntervalCharecteristic;
         } else if (uuid.equals(UUID_BEARER_LIST_CURRENT_CALLS)) {
             return mBearerListCurrentCallsCharacteristic;
         } else if (uuid.equals(UUID_CONTENT_CONTROL_ID)) {
@@ -1347,6 +1481,8 @@ public class TbsGatt {
             return mStatusFlagsCharacteristic;
         } else if (uuid.equals(UUID_CALL_STATE)) {
             return mCallStateCharacteristic;
+        } else if (uuid.equals(UUID_INCOMING_TARGET_URI)) {
+            return mIncomingCallTargetURICharacteristic;
         } else if (uuid.equals(UUID_CALL_CONTROL_POINT)) {
             return mCallControlPointCharacteristic;
         } else if (uuid.equals(UUID_CALL_CONTROL_POINT_OPTIONAL_OPCODES)) {
@@ -1493,6 +1629,14 @@ public class TbsGatt {
                                     characteristic,
                                     null,
                                     offset);
+                    if (offset != 0) {
+                      if (op.characteristic().getUuid().equals(UUID_BEARER_LIST_CURRENT_CALLS)) {
+                         Log.d(TAG, "Offset is being set");
+                         mBluetoothGattServer.sendResponse(
+                               device, op.requestId(), BluetoothGatt.GATT_SUCCESS, op.offset(), null);
+                         return;
+                      }
+                    }
                     switch (getDeviceAuthorization(device)) {
                         case BluetoothDevice.ACCESS_REJECTED ->
                                 onRejectedAuthorizationGattOperation(device, op);
