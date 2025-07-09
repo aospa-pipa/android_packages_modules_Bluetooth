@@ -1388,26 +1388,9 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
 
         // TODO: Activate/deactivate devices with ActiveDeviceManager
         if (!isBroadcastActive() && req.opcode() == Request.Opcodes.PLAY) {
-            if (mAdapterService.getActiveDevices(BluetoothProfile.A2DP).size() > 0) {
-                if (Flags.adapterServiceProfilesUseOptional()) {
-                    mAdapterService
-                            .getA2dpService()
-                            .ifPresent(a2dp -> a2dp.removeActiveDevice(false));
-                } else {
-                    A2dpService.getA2dpService().removeActiveDevice(false);
-                }
-            }
-            if (mAdapterService.getActiveDevices(BluetoothProfile.HEARING_AID).size() > 0) {
-                if (Flags.adapterServiceProfilesUseOptional()) {
-                    mAdapterService
-                            .getHearingAidService()
-                            .ifPresent(hearingAid -> hearingAid.removeActiveDevice(false));
-                } else {
-                    HearingAidService.getHearingAidService().removeActiveDevice(false);
-                }
-            } else {
-                getLeAudioService().ifPresent(leAudio -> leAudio.setActiveDevice(device));
-            }
+            Log.w(TAG, "handleMediaControlPointRequest: " +
+                           "making active for leaudio device: " + device);
+            getLeAudioService().ifPresent(leAudio -> leAudio.setActiveDevice(device));
         }
         mCallbacks.onMediaControlRequest(req);
 
