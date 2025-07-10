@@ -25,6 +25,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 
 #include <deque>
 #include <list>
@@ -39,7 +40,6 @@
 #include "macros.h"
 #include "osi/include/fixed_queue.h"
 #include "stack/include/bt_hdr.h"
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
 
 #define GATT_TRANS_ID_MAX 0x0fffffff /* 4 MSB is reserved */

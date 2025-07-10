@@ -31,6 +31,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 
 #include "bta/gatt/bta_gattc_int.h"
@@ -53,7 +54,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_api.h"
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
 #include "internal_include/stack_config.h"
 
