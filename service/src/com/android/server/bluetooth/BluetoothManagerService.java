@@ -1472,7 +1472,9 @@ class BluetoothManagerService {
 
         SatelliteModeListener.initialize(mLooper, mContentResolver, this::onSatelliteModeChanged);
 
-        UserRestriction.initializeUser(mCurrentUserContext);
+        if (Flags.userRestrictionRefactor()) {
+            UserRestriction.initializeUser(mCurrentUserContext);
+        }
 
         if (isBluetoothDisallowed()) {
             Log.i(TAG, "internalHandleOnBootPhase: Bluetooth is disallowed");
