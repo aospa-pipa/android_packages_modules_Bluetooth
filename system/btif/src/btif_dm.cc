@@ -32,10 +32,10 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
-#include "types/bluetooth/uuid.h"
 #include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/metrics/metric_id_api.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_csis.h>

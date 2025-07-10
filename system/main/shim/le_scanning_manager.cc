@@ -25,6 +25,7 @@
 #include <base/functional/bind.h>
 #include <base/threading/thread.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <hardware/bluetooth.h>
 
@@ -54,7 +55,6 @@
 #include "storage/le_device.h"
 #include "storage/storage_module.h"
 #include "types/ble_address_with_type.h"
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
 
 using namespace bluetooth;
@@ -72,6 +72,7 @@ constexpr uint16_t kListLogicOr = 0x01;
 constexpr uint8_t k1mPhyMask = 1;
 constexpr uint8_t kCodedPhyMask = 1 << 2;
 
+constexpr uint16_t kScannableMask = 1 << 1;
 constexpr uint16_t kScanResponseMask = 1 << 3;
 
 class DefaultScanningCallback : public ::ScanningCallbacks {
@@ -519,7 +520,7 @@ void BleScannerInterfaceImpl::on_scan_result(uint16_t event_type, uint8_t addres
 
   // TODO: Remove when StartInquiry in GD part implemented
   if (!com::android::bluetooth::flags::support_passive_scanning() ||
-      (event_type & kScanResponseMask)) {
+      !(event_type & kScannableMask) || (event_type & kScanResponseMask)) {
     btm_ble_process_adv_pkt_cont_for_inquiry(event_type, ble_addr_type, raw_address, primary_phy,
                                              secondary_phy, advertising_sid, tx_power, rssi,
                                              periodic_advertising_interval, advertising_data);

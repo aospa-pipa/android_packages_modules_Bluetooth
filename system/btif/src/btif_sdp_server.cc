@@ -29,6 +29,7 @@
 #define LOG_TAG "bt_btif_sdp_server"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_sdp.h>
 #include <pthread.h>
@@ -47,7 +48,6 @@
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/sdp_api.h"
 #include "stack/sdp/sdpint.h"
-#include "types/bluetooth/uuid.h"
 #include "utl.h"
 
 using namespace bluetooth::legacy::stack::sdp;

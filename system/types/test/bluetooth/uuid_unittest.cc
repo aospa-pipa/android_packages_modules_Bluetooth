@@ -16,7 +16,8 @@
  *
  ******************************************************************************/
 
-#include "types/bluetooth/uuid.h"
+#include <bluetooth/types/uuid.h>
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
