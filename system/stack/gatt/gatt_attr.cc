@@ -29,6 +29,7 @@
 
 #include <bluetooth/log.h>
 #include <com_android_bluetooth_flags.h>
+#include <bluetooth/types/uuid.h>
 
 #include <deque>
 #include <map>
@@ -40,14 +41,12 @@
 #include "gap_api.h"
 #include "gatt_api.h"
 #include "gatt_int.h"
-#include "device/include/interop.h"
 #include "internal_include/bt_target.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
-#include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_ble_addr.h"
-#include "types/bluetooth/uuid.h"
+#include "stack/include/btm_sec_api.h"
 #include "types/raw_address.h"
 
 using bluetooth::Uuid;

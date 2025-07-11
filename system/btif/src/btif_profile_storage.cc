@@ -22,6 +22,7 @@
 
 #include <alloca.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,7 +52,6 @@
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/main_thread.h"
 #include "storage/config_keys.h"
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
 
 using base::Bind;

@@ -17,8 +17,8 @@
 #ifndef ANDROID_INCLUDE_BLE_SCANNER_H
 #define ANDROID_INCLUDE_BLE_SCANNER_H
 
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
+#include <bluetooth/types/uuid.h>
 #include <stdint.h>
 
 #include <memory>

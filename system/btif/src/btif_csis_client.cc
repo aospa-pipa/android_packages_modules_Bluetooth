@@ -18,13 +18,13 @@
 #include <base/functional/bind.h>
 #include <base/location.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <hardware/bt_csis.h>
 
 #include <atomic>
 #include <memory>
 
 #include "bind_helpers.h"
-#include "types/bluetooth/uuid.h"
 #include "bta_csis_api.h"
 #include "btif_common.h"
 #include "btif_le_audio.h"

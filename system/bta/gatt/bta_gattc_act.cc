@@ -31,6 +31,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 
 #include "bta/gatt/bta_gattc_int.h"
@@ -53,8 +54,8 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_api.h"
-#include "types/bluetooth/uuid.h"
 #include "types/raw_address.h"
+#include "internal_include/stack_config.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -571,7 +572,8 @@ void bta_gattc_conn(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data) {
       }
 
       if (!discovery_already_in_progress) {
-        if (db.IsEmpty() || robust_caching_support != RobustCachingSupport::UNSUPPORTED) {
+        if ((db.IsEmpty() || robust_caching_support != RobustCachingSupport::UNSUPPORTED)
+                          && !(stack_config_get_interface()->get_pts_gatt_skip_service_discovery())) {
           // If the peer device is expected to support robust caching, or if we
           // don't know its services yet, then we should do discovery (which may
           // short-circuit through a hash match, but might also do the full

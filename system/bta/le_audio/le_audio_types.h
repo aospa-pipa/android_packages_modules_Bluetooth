@@ -23,6 +23,7 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/uuid.h>
 #include <stdint.h>
 
 #include <bit>
@@ -34,7 +35,6 @@
 #include <variant>
 #include <vector>
 
-#include "types/bluetooth/uuid.h"
 #include "bta/include/bta_le_audio_uuids.h"
 #include "osi/include/alarm.h"
 #include "stack/include/bt_types.h"

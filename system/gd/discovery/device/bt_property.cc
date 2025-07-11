@@ -17,12 +17,12 @@
 #include "discovery/device/bt_property.h"
 
 #include <base/strings/stringprintf.h>
+#include <bluetooth/types/uuid.h>
 
 #include <string>
 
 #include "include/hardware/bluetooth.h"
 #include "stack/include/bt_name.h"
-#include "types/bluetooth/uuid.h"
 
 std::string bt_property_type_text(const bt_property_type_t& type) {
   switch (type) {
