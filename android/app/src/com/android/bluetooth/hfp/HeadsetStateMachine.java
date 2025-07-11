@@ -112,9 +112,10 @@ class HeadsetStateMachine extends StateMachine {
     static final int DIALING_OUT_RESULT = 14;
     static final int VOICE_RECOGNITION_RESULT = 15;
     static final int SCO_VOLUME_CHANGED = 16;
-    static final int SEND_INCOMING_CALL_IND = 17;
-    static final int SCO_RETRIAL_NOT_REQ = 18;
-    static final int SEND_CLCC_RESP_AFTER_VOIP_CALL = 19;
+    static final int MICROPHONE_VOL_MUTE_CHANGED = 17;
+    static final int SEND_INCOMING_CALL_IND = 18;
+    static final int SCO_RETRIAL_NOT_REQ = 19;
+    static final int SEND_CLCC_RESP_AFTER_VOIP_CALL = 20;
     static final int CS_CALL_STATE_CHANGED_ALERTING = 22;
     static final int CS_CALL_STATE_CHANGED_ACTIVE = 23;
     static final int STACK_EVENT = 101;
@@ -130,6 +131,9 @@ class HeadsetStateMachine extends StateMachine {
     // Number of times we should retry disconnecting audio before
     // disconnecting the device.
     private static final int MAX_RETRY_DISCONNECT_AUDIO = 3;
+
+    static final int MIC_MUTE = 0;
+    static final int MIC_UNMUTE = 15;
 
     private static final HeadsetAgIndicatorEnableState DEFAULT_AG_INDICATOR_ENABLE_STATE =
             new HeadsetAgIndicatorEnableState(true, true, true, true);
@@ -684,7 +688,7 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
+                case CONNECT -> {
                     BluetoothDevice device = (BluetoothDevice) message.obj;
                     stateLogD("Connecting to " + device);
                     logHfpSessionMetric(
@@ -724,17 +728,11 @@ class HeadsetStateMachine extends StateMachine {
                     }
                     mRetryConnectCount++;
                     transitionTo(mConnecting);
-                    break;
-                case DISCONNECT:
-                    // ignore
-                    break;
-                case CALL_STATE_CHANGED:
-                    stateLogD("Ignoring CALL_STATE_CHANGED event");
-                    break;
-                case DEVICE_STATE_CHANGED:
-                    stateLogD("Ignoring DEVICE_STATE_CHANGED event");
-                    break;
-                case STACK_EVENT:
+                }
+                case DISCONNECT -> {} // ignore
+                case CALL_STATE_CHANGED -> stateLogD("Ignoring CALL_STATE_CHANGED event");
+                case DEVICE_STATE_CHANGED -> stateLogD("Ignoring DEVICE_STATE_CHANGED event");
+                case STACK_EVENT -> {
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
                     if (!mDevice.equals(event.device)) {
@@ -746,17 +744,15 @@ class HeadsetStateMachine extends StateMachine {
                         break;
                     }
                     switch (event.type) {
-                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED:
-                            processConnectionEvent(message, event.valueInt);
-                            break;
-                        default:
-                            stateLogE("Unexpected stack event: " + event);
-                            break;
+                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED ->
+                                processConnectionEvent(message, event.valueInt);
+                        default -> stateLogE("Unexpected stack event: " + event);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     stateLogE("Unexpected msg " + getMessageName(message.what) + ": " + message);
                     return NOT_HANDLED;
+                }
             }
             return HANDLED;
         }
@@ -765,12 +761,11 @@ class HeadsetStateMachine extends StateMachine {
         public void processConnectionEvent(Message message, int state) {
             super.processConnectionEvent(message, state);
             switch (state) {
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED:
-                    stateLogW("ignore DISCONNECTED event");
-                    break;
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED ->
+                        stateLogW("ignore DISCONNECTED event");
                 // Both events result in Connecting state as SLC establishment is still required
-                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED:
-                case HeadsetHalConstants.CONNECTION_STATE_CONNECTING:
+                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED,
+                        HeadsetHalConstants.CONNECTION_STATE_CONNECTING -> {
                     if (mHeadsetService.okToAcceptConnection(mDevice, false)) {
                         stateLogI("accept incoming connection");
                         logHfpSessionMetric(
@@ -803,13 +798,10 @@ class HeadsetStateMachine extends StateMachine {
                                 BluetoothStatsLog
                                         .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__HFP_CONNECT_REJECT_FAIL);
                     }
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING:
-                    stateLogW("Ignore DISCONNECTING event");
-                    break;
-                default:
-                    stateLogE("Incorrect state: " + state);
-                    break;
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING ->
+                        stateLogW("Ignore DISCONNECTING event");
+                default -> stateLogE("Incorrect state: " + state);
             }
         }
 
@@ -873,39 +865,30 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                case CONNECT_AUDIO:
-                case DISCONNECT:
-                    deferMessage(message);
-                    break;
-                case CONNECT_TIMEOUT:
-                    {
-                        // We timed out trying to connect, transition to Disconnected state
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogE("Unknown device timeout " + device);
-                            break;
-                        }
-                        stateLogW("CONNECT_TIMEOUT");
-                        logHfpSessionMetric(
-                                device,
-                                BluetoothStatsLog
-                                        .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__CONNECTION_TIMEOUT);
-                        transitionTo(mDisconnected);
+                case CONNECT, CONNECT_AUDIO, DISCONNECT -> deferMessage(message);
+                case CONNECT_TIMEOUT -> {
+                    // We timed out trying to connect, transition to Disconnected state
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogE("Unknown device timeout " + device);
                         break;
                     }
-                case CALL_STATE_CHANGED:
+                    stateLogW("CONNECT_TIMEOUT");
+                    logHfpSessionMetric(
+                            device,
+                            BluetoothStatsLog
+                                    .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__CONNECTION_TIMEOUT);
+                    transitionTo(mDisconnected);
+                }
+                case CALL_STATE_CHANGED -> {
                     HeadsetCallState callState = (HeadsetCallState) message.obj;
                     setAptxVoice(callState);
                     processCallState(callState);
-                    break;
-                case DEVICE_STATE_CHANGED:
-                    stateLogD("ignoring DEVICE_STATE_CHANGED event");
-                    break;
-                case SEND_CLCC_RESPONSE:
-                    processSendClccResponse((HeadsetClccResponse) message.obj);
-                    break;
-                case STACK_EVENT:
+                }
+                case DEVICE_STATE_CHANGED -> stateLogD("ignoring DEVICE_STATE_CHANGED event");
+                case SEND_CLCC_RESPONSE ->
+                        processSendClccResponse((HeadsetClccResponse) message.obj);
+                case STACK_EVENT -> {
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
                     if (!mDevice.equals(event.device)) {
@@ -917,69 +900,64 @@ class HeadsetStateMachine extends StateMachine {
                         break;
                     }
                     switch (event.type) {
-                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED:
+                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED -> {
                             mReason = reasonToBluetoothStatusCode(event.reason);
                             processConnectionEvent(message, event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_CIND:
-                            processAtCind(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_WBS:
-                            processWBSEvent(event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SWB:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_AT_CIND -> processAtCind(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_WBS -> processWBSEvent(event.valueInt);
+                        case HeadsetStackEvent.EVENT_TYPE_SWB -> {
                             if (event.valueInt == HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX &&
                                     event.valueInt2 == HeadsetHalConstants.BTHF_SWB_YES) {
                                 mIsSwbSupportedByRemote = true;
                                 stateLogW("Remote supports SWB. setting mIsSwbSupportedByRemote to true");
                             }
                             processSWBEvent(event.valueInt, event.valueInt2);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BIND:
-                            processAtBind(event.valueString, event.device);
-                            break;
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_BIND ->
+                                processAtBind(event.valueString, event.device);
                         // Unexpected AT commands, we only handle them for comparability reasons
-                        case HeadsetStackEvent.EVENT_TYPE_VR_STATE_CHANGED:
+                        case HeadsetStackEvent.EVENT_TYPE_VR_STATE_CHANGED -> {
                             stateLogW(
                                     "Unexpected VR event, device="
                                             + event.device
                                             + ", state="
                                             + event.valueInt);
                             processVrEvent(event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_DIAL_CALL:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_DIAL_CALL -> {
                             stateLogW("Unexpected dial event, device=" + event.device);
                             processDialCall(event.valueString);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SUBSCRIBER_NUMBER_REQUEST:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_SUBSCRIBER_NUMBER_REQUEST -> {
                             stateLogW(
                                     "Unexpected subscriber number event for"
                                             + event.device
                                             + ", state="
                                             + event.valueInt);
                             processSubscriberNumberRequest(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_COPS:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_AT_COPS -> {
                             stateLogW("Unexpected COPS event for " + event.device);
                             processAtCops(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_CLCC:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_AT_CLCC -> {
                             Log.w(TAG, "Connecting: Unexpected CLCC event for" + event.device);
                             processAtClcc(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_UNKNOWN_AT:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_UNKNOWN_AT -> {
                             stateLogW(
                                     "Unexpected unknown AT event for"
                                             + event.device
                                             + ", cmd="
                                             + event.valueString);
                             processUnknownAt(event.valueString, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_KEY_PRESSED:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_KEY_PRESSED -> {
                             stateLogW("Unexpected key-press event for " + event.device);
                             processKeyPressed(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BIEV:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_BIEV -> {
                             stateLogW(
                                     "Unexpected BIEV event for "
                                             + event.device
@@ -988,27 +966,26 @@ class HeadsetStateMachine extends StateMachine {
                                             + ", indVal="
                                             + event.valueInt2);
                             processAtBiev(event.valueInt, event.valueInt2, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_VOLUME_CHANGED:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_VOLUME_CHANGED -> {
                             stateLogW("Unexpected volume event for " + event.device);
                             processVolumeEvent(event.valueInt, event.valueInt2);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_ANSWER_CALL:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_ANSWER_CALL -> {
                             stateLogW("Unexpected answer event for " + event.device);
                             mSystemInterface.answerCall(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_HANGUP_CALL:
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_HANGUP_CALL -> {
                             stateLogW("Unexpected hangup event for " + event.device);
                             mSystemInterface.hangupCall(event.device);
-                            break;
-                        default:
-                            stateLogE("Unexpected event: " + event);
-                            break;
+                        }
+                        default -> stateLogE("Unexpected event: " + event);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     stateLogE("Unexpected msg " + getMessageName(message.what) + ": " + message);
                     return NOT_HANDLED;
+                }
             }
             return HANDLED;
         }
@@ -1017,7 +994,7 @@ class HeadsetStateMachine extends StateMachine {
         public void processConnectionEvent(Message message, int state) {
             super.processConnectionEvent(message, state);
             switch (state) {
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED:
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED -> {
                     stateLogW("Disconnected");
                     stateLogD("mRetryConnectCount = " + mRetryConnectCount);
                     if (mRetryConnectCount == 1 && !hasDeferredMessages(DISCONNECT)) {
@@ -1030,25 +1007,20 @@ class HeadsetStateMachine extends StateMachine {
                         mRetryConnectCount = 0;
                     }
                     transitionTo(mDisconnected);
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED:
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED -> {
                     stateLogD("RFCOMM connected");
                     mHasRfcommConnectionCompleted = true;
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED:
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED -> {
                     stateLogD("SLC connected");
                     mRetryConnectCount = 0;
                     transitionTo(mConnected);
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_CONNECTING:
-                    // Ignored
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING:
-                    stateLogW("Disconnecting");
-                    break;
-                default:
-                    stateLogE("Incorrect state " + state);
-                    break;
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_CONNECTING -> {} // Ignored
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING ->
+                        stateLogW("Disconnecting");
+                default -> stateLogE("Incorrect state " + state);
             }
         }
 
@@ -1083,23 +1055,17 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                case CONNECT_AUDIO:
-                case DISCONNECT:
-                    deferMessage(message);
-                    break;
-                case CONNECT_TIMEOUT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogE("Unknown device timeout " + device);
-                            break;
-                        }
-                        stateLogE("timeout");
-                        transitionTo(mDisconnected);
+                case CONNECT, CONNECT_AUDIO, DISCONNECT -> deferMessage(message);
+                case CONNECT_TIMEOUT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogE("Unknown device timeout " + device);
                         break;
                     }
-                case STACK_EVENT:
+                    stateLogE("timeout");
+                    transitionTo(mDisconnected);
+                }
+                case STACK_EVENT -> {
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
                     if (!mDevice.equals(event.device)) {
@@ -1111,17 +1077,15 @@ class HeadsetStateMachine extends StateMachine {
                         break;
                     }
                     switch (event.type) {
-                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED:
-                            processConnectionEvent(message, event.valueInt);
-                            break;
-                        default:
-                            stateLogE("Unexpected event: " + event);
-                            break;
+                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED ->
+                                processConnectionEvent(message, event.valueInt);
+                        default -> stateLogE("Unexpected event: " + event);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     stateLogE("Unexpected msg " + getMessageName(message.what) + ": " + message);
                     return NOT_HANDLED;
+                }
             }
             return HANDLED;
         }
@@ -1131,17 +1095,15 @@ class HeadsetStateMachine extends StateMachine {
         public void processConnectionEvent(Message message, int state) {
             super.processConnectionEvent(message, state);
             switch (state) {
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED:
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED -> {
                     stateLogD("processConnectionEvent: Disconnected");
                     transitionTo(mDisconnected);
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED:
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED -> {
                     stateLogD("processConnectionEvent: Connected");
                     transitionTo(mConnected);
-                    break;
-                default:
-                    stateLogE("processConnectionEvent: Bad state: " + state);
-                    break;
+                }
+                default -> stateLogE("processConnectionEvent: Bad state: " + state);
             }
         }
 
@@ -1169,47 +1131,36 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                case DISCONNECT:
-                case CONNECT_AUDIO:
-                case DISCONNECT_AUDIO:
-                case CONNECT_TIMEOUT:
-                    throw new IllegalStateException(
-                            "Illegal message in generic handler: " + message);
-                case VOICE_RECOGNITION_START:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "VOICE_RECOGNITION_START failed "
-                                            + device
-                                            + " is not currentDevice");
-                            break;
-                        }
-                        if (!mNativeInterface.startVoiceRecognition(
-                                mDevice, /* sendResult */ true)) {
-                            stateLogW("Failed to start voice recognition");
-                            break;
-                        }
-                        break;
+                case CONNECT, DISCONNECT, CONNECT_AUDIO, DISCONNECT_AUDIO, CONNECT_TIMEOUT ->
+                        throw new IllegalStateException(
+                                "Illegal message in generic handler: " + message);
+                case VOICE_RECOGNITION_START -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW(
+                                "VOICE_RECOGNITION_START failed "
+                                        + device
+                                        + " is not currentDevice");
+			break;
                     }
-                case VOICE_RECOGNITION_STOP:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "VOICE_RECOGNITION_STOP failed "
-                                            + device
-                                            + " is not currentDevice");
-                            break;
-                        }
-                        if (!mNativeInterface.stopVoiceRecognition(mDevice)) {
-                            stateLogW("Failed to stop voice recognition");
-                            break;
-                        }
-                        break;
+                    if (!mNativeInterface.startVoiceRecognition(mDevice, /* sendResult */ true)) {
+                        stateLogW("Failed to start voice recognition");
                     }
-                case CALL_STATE_CHANGED:
+                }
+                case VOICE_RECOGNITION_STOP -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW(
+                                "VOICE_RECOGNITION_STOP failed "
+                                        + device
+                                        + " is not currentDevice");
+			break;
+                    }
+                    if (!mNativeInterface.stopVoiceRecognition(mDevice)) {
+                        stateLogW("Failed to stop voice recognition");
+                    }
+                }
+                case CALL_STATE_CHANGED -> {
                     HeadsetCallState callState = (HeadsetCallState) message.obj;
                     setAptxVoice(callState);
 
@@ -1219,13 +1170,12 @@ class HeadsetStateMachine extends StateMachine {
                     if (isPts) {
                         if (!mNativeInterface.phoneStateChange(mDevice, callState)) {
                             stateLogW("processCallState: failed to update call state " + callState);
-                            break;
                         }
                     }
                     else
                         processCallStatesDelayed(callState);
-                    break;
-                case CS_CALL_STATE_CHANGED_ALERTING:
+                }
+                case CS_CALL_STATE_CHANGED_ALERTING -> {
                     {
                         // get the top of the Q
                         HeadsetCallState tempCallState = mDelayedCSCallStates.peek();
@@ -1251,8 +1201,8 @@ class HeadsetStateMachine extends StateMachine {
                             sendMessageDelayed(msg, CS_CALL_ACTIVE_DELAY_TIME_MSEC);
                         }
                     }
-                    break;
-                case CS_CALL_STATE_CHANGED_ACTIVE:
+                }
+                case CS_CALL_STATE_CHANGED_ACTIVE -> {
                     {
                         // get the top of the Q
                         // top of the queue == call active
@@ -1266,84 +1216,70 @@ class HeadsetStateMachine extends StateMachine {
                             processCallState(tempCallState);
                         }
                     }
-                    break;
-                case DEVICE_STATE_CHANGED:
+                }
+                case DEVICE_STATE_CHANGED -> {
                     if (mDeviceSilenced) {
                         stateLogW(
                                 "DEVICE_STATE_CHANGED: "
                                         + mDevice
                                         + " is silenced, skip notify state changed.");
-                        break;
+			break;
                     }
                     mNativeInterface.notifyDeviceStatus(mDevice, (HeadsetDeviceState) message.obj);
-                    break;
-                case SEND_CLCC_RESPONSE:
-                    processSendClccResponse((HeadsetClccResponse) message.obj);
-                    break;
-                case CLCC_RSP_TIMEOUT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "CLCC_RSP_TIMEOUT failed " + device + " is not currentDevice");
-                            break;
-                        }
-                        mNativeInterface.clccResponse(device, 0, 0, 0, 0, false, "", 0);
+                }
+                case SEND_CLCC_RESPONSE ->
+                        processSendClccResponse((HeadsetClccResponse) message.obj);
+                case CLCC_RSP_TIMEOUT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW("CLCC_RSP_TIMEOUT failed " + device + " is not currentDevice");
+			break;
                     }
-                    break;
-                case SEND_VENDOR_SPECIFIC_RESULT_CODE:
+                    mNativeInterface.clccResponse(device, 0, 0, 0, 0, false, "", 0);
+                }
+                case SEND_VENDOR_SPECIFIC_RESULT_CODE -> {
                     processSendVendorSpecificResultCode(
                             (HeadsetVendorSpecificResultCode) message.obj);
-                    break;
-                case SEND_BSIR:
-                    mNativeInterface.sendBsir(mDevice, message.arg1 == 1);
-                    break;
-                case VOICE_RECOGNITION_RESULT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "VOICE_RECOGNITION_RESULT failed "
-                                            + device
-                                            + " is not currentDevice");
-                            break;
-                        }
+                }
+                case SEND_BSIR -> mNativeInterface.sendBsir(mDevice, message.arg1 == 1);
+                case VOICE_RECOGNITION_RESULT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW(
+                                "VOICE_RECOGNITION_RESULT failed "
+                                        + device
+                                        + " is not currentDevice");
+			break;
+                    }
+                    mNativeInterface.atResponseCode(
+                            mDevice,
+                            message.arg1 == 1
+                                    ? HeadsetHalConstants.AT_RESPONSE_OK
+                                    : HeadsetHalConstants.AT_RESPONSE_ERROR,
+                            0);
+                    if (message.arg1 == 1 && mSystemInterface.isScoManagedByAudioEnabled()) {
+                        mNativeInterface.startVoiceRecognition(mDevice, /* sendResult */ false);
+                    }
+                }
+                case DIALING_OUT_RESULT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW("DIALING_OUT_RESULT failed " + device + " is not currentDevice");
+			break;
+                    }
+                    if (mNeedDialingOutReply) {
+                        mNeedDialingOutReply = false;
                         mNativeInterface.atResponseCode(
                                 mDevice,
                                 message.arg1 == 1
                                         ? HeadsetHalConstants.AT_RESPONSE_OK
                                         : HeadsetHalConstants.AT_RESPONSE_ERROR,
                                 0);
-                        if (message.arg1 == 1 && mSystemInterface.isScoManagedByAudioEnabled()) {
-                            mNativeInterface.startVoiceRecognition(mDevice, /* sendResult */ false);
-                        }
-                        break;
                     }
-                case DIALING_OUT_RESULT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "DIALING_OUT_RESULT failed "
-                                            + device
-                                            + " is not currentDevice");
-                            break;
-                        }
-                        if (mNeedDialingOutReply) {
-                            mNeedDialingOutReply = false;
-                            mNativeInterface.atResponseCode(
-                                    mDevice,
-                                    message.arg1 == 1
-                                            ? HeadsetHalConstants.AT_RESPONSE_OK
-                                            : HeadsetHalConstants.AT_RESPONSE_ERROR,
-                                    0);
-                        }
-                    }
-                    break;
-                case INTENT_CONNECTION_ACCESS_REPLY:
-                    handleAccessPermissionResult((Intent) message.obj);
-                    break;
-                case STACK_EVENT:
+                }
+                case INTENT_CONNECTION_ACCESS_REPLY ->
+                        handleAccessPermissionResult((Intent) message.obj);
+                case STACK_EVENT -> {
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
                     if (!mDevice.equals(event.device)) {
@@ -1352,89 +1288,63 @@ class HeadsetStateMachine extends StateMachine {
                                         + mDevice
                                         + "], event: "
                                         + event);
-                        break;
+			break;
                     }
                     switch (event.type) {
-                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED:
-                            processConnectionEvent(message, event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AUDIO_STATE_CHANGED:
-                            processAudioEvent(event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_VR_STATE_CHANGED:
-                            processVrEvent(event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_ANSWER_CALL:
-                            mSystemInterface.answerCall(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_HANGUP_CALL:
-                            mSystemInterface.hangupCall(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_VOLUME_CHANGED:
-                            processVolumeEvent(event.valueInt, event.valueInt2);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_DIAL_CALL:
-                            processDialCall(event.valueString);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SEND_DTMF:
-                            mSystemInterface.sendDtmf(event.valueInt, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_NOISE_REDUCTION:
-                            processNoiseReductionEvent(event.valueInt == 1);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_WBS:
-                            processWBSEvent(event.valueInt);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SWB:
+                        case HeadsetStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED ->
+                                processConnectionEvent(message, event.valueInt);
+                        case HeadsetStackEvent.EVENT_TYPE_AUDIO_STATE_CHANGED ->
+                                processAudioEvent(event.valueInt);
+                        case HeadsetStackEvent.EVENT_TYPE_VR_STATE_CHANGED ->
+                                processVrEvent(event.valueInt);
+                        case HeadsetStackEvent.EVENT_TYPE_ANSWER_CALL ->
+                                mSystemInterface.answerCall(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_HANGUP_CALL ->
+                                mSystemInterface.hangupCall(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_VOLUME_CHANGED ->
+                                processVolumeEvent(event.valueInt, event.valueInt2);
+                        case HeadsetStackEvent.EVENT_TYPE_DIAL_CALL ->
+                                processDialCall(event.valueString);
+                        case HeadsetStackEvent.EVENT_TYPE_SEND_DTMF ->
+                                mSystemInterface.sendDtmf(event.valueInt, event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_NOISE_REDUCTION ->
+                                processNoiseReductionEvent(event.valueInt == 1);
+                        case HeadsetStackEvent.EVENT_TYPE_WBS -> processWBSEvent(event.valueInt);
+                        case HeadsetStackEvent.EVENT_TYPE_SWB -> {
                             if (event.valueInt == HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX &&
                                     event.valueInt2 == HeadsetHalConstants.BTHF_SWB_YES) {
                                 mIsSwbSupportedByRemote = true;
                                 stateLogW("Remote supports SWB. setting mIsSwbSupportedByRemote to true");
                             }
                             processSWBEvent(event.valueInt, event.valueInt2);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_CHLD:
-                            processAtChld(event.valueInt, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SUBSCRIBER_NUMBER_REQUEST:
-                            processSubscriberNumberRequest(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_CIND:
-                            processAtCind(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_COPS:
-                            processAtCops(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_AT_CLCC:
-                            processAtClcc(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_UNKNOWN_AT:
-                            processUnknownAt(event.valueString, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_KEY_PRESSED:
-                            processKeyPressed(event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BIND:
-                            processAtBind(event.valueString, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BIEV:
-                            processAtBiev(event.valueInt, event.valueInt2, event.device);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BIA:
-                            updateAgIndicatorEnableState(
-                                    (HeadsetAgIndicatorEnableState) event.valueObject);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_BCC:
-                            mHeadsetService.processAtBcc(event.device);
-                            break;
-                        default:
-                            stateLogE("Unknown stack event: " + event);
-                            break;
+                        }
+                        case HeadsetStackEvent.EVENT_TYPE_AT_CHLD ->
+                                processAtChld(event.valueInt, event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_SUBSCRIBER_NUMBER_REQUEST ->
+                                processSubscriberNumberRequest(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_AT_CIND -> processAtCind(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_AT_COPS -> processAtCops(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_AT_CLCC -> processAtClcc(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_UNKNOWN_AT ->
+                                processUnknownAt(event.valueString, event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_KEY_PRESSED ->
+                                processKeyPressed(event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_BIND ->
+                                processAtBind(event.valueString, event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_BIEV ->
+                                processAtBiev(event.valueInt, event.valueInt2, event.device);
+                        case HeadsetStackEvent.EVENT_TYPE_BIA ->
+                                updateAgIndicatorEnableState(
+                                        (HeadsetAgIndicatorEnableState) event.valueObject);
+                        case HeadsetStackEvent.EVENT_TYPE_BCC ->
+                                mHeadsetService.processAtBcc(event.device);
+                        default -> stateLogE("Unknown stack event: " + event);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     stateLogE("Unexpected msg " + getMessageName(message.what) + ": " + message);
                     return NOT_HANDLED;
+                }
             }
             return HANDLED;
         }
@@ -1443,24 +1353,22 @@ class HeadsetStateMachine extends StateMachine {
         public void processConnectionEvent(Message message, int state) {
             super.processConnectionEvent(message, state);
             switch (state) {
-                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED:
-                    stateLogE("processConnectionEvent: RFCOMM connected again, shouldn't happen");
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED:
-                    stateLogE("processConnectionEvent: SLC connected again, shouldn't happen");
-                    mRetryConnectCount = 0;
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING:
+                case HeadsetHalConstants.CONNECTION_STATE_CONNECTED ->
+                        stateLogE(
+                                "processConnectionEvent: RFCOMM connected again, shouldn't happen");
+                case HeadsetHalConstants.CONNECTION_STATE_SLC_CONNECTED -> {
+                        stateLogE("processConnectionEvent: SLC connected again, shouldn't happen");
+                        mRetryConnectCount = 0;
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTING -> {
                     stateLogI("processConnectionEvent: Disconnecting");
                     transitionTo(mDisconnecting);
-                    break;
-                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED:
+                }
+                case HeadsetHalConstants.CONNECTION_STATE_DISCONNECTED -> {
                     stateLogI("processConnectionEvent: Disconnected");
                     transitionTo(mDisconnected);
-                    break;
-                default:
-                    stateLogE("processConnectionEvent: bad state: " + state);
-                    break;
+                }
+                default -> stateLogE("processConnectionEvent: bad state: " + state);
             }
         }
 
@@ -1487,7 +1395,7 @@ class HeadsetStateMachine extends StateMachine {
 
         void processScoVolume(int volumeValue, BluetoothDevice device) {
             stateLogD(
-                    "processIntentScoVolume: mSpeakerVolume="
+                    "processScoVolume: mSpeakerVolume="
                             + mSpeakerVolume
                             + ", volumeValue="
                             + volumeValue);
@@ -1496,6 +1404,19 @@ class HeadsetStateMachine extends StateMachine {
                 mNativeInterface.setVolume(
                         device, HeadsetHalConstants.VOLUME_TYPE_SPK, mSpeakerVolume);
             }
+        }
+
+        void processMicrophoneVolume(BluetoothDevice device) {
+            boolean isAgMicMuted = mSystemInterface.getAudioManager().isMicrophoneMute();
+            // set unmute volume to non zero (15 or previous value)
+            int unmuteVolume = (mMicVolume == MIC_MUTE) ? MIC_UNMUTE : mMicVolume;
+            int micVolume = isAgMicMuted ? MIC_MUTE : unmuteVolume;
+            stateLogD(
+                    "processMicrophoneStatus: isAgMicMuted="
+                            + isAgMicMuted
+                            + ", micVolume="
+                            + micVolume);
+            mNativeInterface.setVolume(device, HeadsetHalConstants.VOLUME_TYPE_MIC, micVolume);
         }
     }
 
@@ -1550,41 +1471,36 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        stateLogW(
-                                "CONNECT, ignored, device=" + device + ", currentDevice" + mDevice);
-                        break;
+                case CONNECT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    stateLogW("CONNECT, ignored, device=" + device + ", currentDevice" + mDevice);
+                }
+                case DISCONNECT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    stateLogD("DISCONNECT from device=" + device);
+                    if (!mDevice.equals(device)) {
+                        stateLogW("DISCONNECT, device " + device + " not connected");
+			break;
                     }
-                case DISCONNECT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        stateLogD("DISCONNECT from device=" + device);
-                        if (!mDevice.equals(device)) {
-                            stateLogW("DISCONNECT, device " + device + " not connected");
-                            break;
-                        }
-                        if (!mNativeInterface.disconnectHfp(device)) {
-                            // broadcast immediately as no state transition is involved
-                            stateLogE("DISCONNECT from " + device + " failed");
-                            broadcastConnectionState(device, STATE_CONNECTED, STATE_CONNECTED);
-                            break;
-                        }
-                        transitionTo(mDisconnecting);
+                    if (!mNativeInterface.disconnectHfp(device)) {
+                        // broadcast immediately as no state transition is involved
+                        stateLogE("DISCONNECT from " + device + " failed");
+                        broadcastConnectionState(device, STATE_CONNECTED, STATE_CONNECTED);
+			break;
                     }
-                    break;
-                case CONNECT_AUDIO:
+                    transitionTo(mDisconnecting);
+                }
+                case CONNECT_AUDIO -> {
                     stateLogD("CONNECT_AUDIO, device=" + mDevice);
                     if (mSystemInterface.isScoManagedByAudioEnabled()) {
                         stateLogD("ScoManagedByAudioEnabled, BT does not CONNECT_AUDIO");
                         transitionTo(mAudioConnecting);
-                        break;
+			break;
                     }
 
                     if (mHeadsetService.isScoAcceptable(mDevice) != BluetoothStatusCodes.SUCCESS) {
                         stateLogW("sco is not acceptable, device=" + mDevice);
-                        break;
+			break;
                     }
 
                     mSystemInterface.getAudioManager().setA2dpSuspended(true);
@@ -1614,16 +1530,16 @@ class HeadsetStateMachine extends StateMachine {
                                 mDevice,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
-                        break;
+			break;
                     }
                     transitionTo(mAudioConnecting);
-                    break;
-                case DISCONNECT_AUDIO:
+                }
+                case DISCONNECT_AUDIO -> {
                     stateLogD("ignore DISCONNECT_AUDIO, device=" + mDevice);
-                    // ignore
-                    break;
-                default:
+                }
+                default -> {
                     return super.processMessage(message);
+                }
             }
             return HANDLED;
         }
@@ -1632,7 +1548,7 @@ class HeadsetStateMachine extends StateMachine {
         public void processAudioEvent(int state) {
             stateLogD("processAudioEvent, state=" + state);
             switch (state) {
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTED:
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTED -> {
                     if (mHeadsetService.isScoAcceptable(mDevice) != BluetoothStatusCodes.SUCCESS) {
                         stateLogW("processAudioEvent: reject incoming audio connection");
                         if (!mNativeInterface.disconnectAudio(mDevice)) {
@@ -1643,12 +1559,12 @@ class HeadsetStateMachine extends StateMachine {
                                 mDevice,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
-                        break;
+			break;
                     }
                     stateLogI("processAudioEvent: audio connected");
                     transitionTo(mAudioOn);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTING:
+                }
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTING -> {
                     if (mHeadsetService.isScoAcceptable(mDevice) != BluetoothStatusCodes.SUCCESS) {
                         stateLogW("processAudioEvent: reject incoming pending audio connection");
                         if (!mNativeInterface.disconnectAudio(mDevice)) {
@@ -1659,18 +1575,14 @@ class HeadsetStateMachine extends StateMachine {
                                 mDevice,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
                                 BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
-                        break;
+			break;
                     }
                     stateLogI("processAudioEvent: audio connecting");
                     transitionTo(mAudioConnecting);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED:
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING:
-                    // ignore
-                    break;
-                default:
-                    stateLogE("processAudioEvent: bad state: " + state);
-                    break;
+                }
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED,
+                        HeadsetHalConstants.AUDIO_STATE_DISCONNECTING -> {} // ignore
+                default -> stateLogE("processAudioEvent: bad state: " + state);
             }
         }
 
@@ -1704,25 +1616,23 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                case DISCONNECT:
-                case CONNECT_AUDIO:
-                case DISCONNECT_AUDIO:
-                    deferMessage(message);
-                    break;
-                case CONNECT_TIMEOUT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW("CONNECT_TIMEOUT for unknown device " + device);
-                            break;
-                        }
-                        stateLogW("CONNECT_TIMEOUT");
-                        transitionTo(mConnected);
-                        break;
+                case CONNECT, DISCONNECT, CONNECT_AUDIO, DISCONNECT_AUDIO -> deferMessage(message);
+                case CONNECT_TIMEOUT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW("CONNECT_TIMEOUT for unknown device " + device);
+			break;
                     }
-                default:
+                    stateLogW("CONNECT_TIMEOUT");
+                    if (!mSystemInterface.isScoManagedByAudioEnabled()) {
+                        mSystemInterface.getAudioManager().setA2dpSuspended(false);
+                        mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+                    }
+                    transitionTo(mConnected);
+                }
+                default -> {
                     return super.processMessage(message);
+                }
             }
             return HANDLED;
         }
@@ -1730,7 +1640,7 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public void processAudioEvent(int state) {
             switch (state) {
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED:
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED -> {
                     stateLogW("processAudioEvent: audio connection failed");
                     if ((mIsBlacklistedDeviceforRetrySCO == true) && (mIsRetrySco == true)) {
                         Log.d(TAG, "blacklisted device, retry SCO after " +
@@ -1740,20 +1650,16 @@ class HeadsetStateMachine extends StateMachine {
                        mIsRetrySco = false;
                     }
                     transitionTo(mConnected);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTING:
-                    // ignore, already in audio connecting state
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING:
-                    // ignore, there is no BluetoothHeadset.STATE_AUDIO_DISCONNECTING
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTED:
+                }
+                // ignore, already in audio connecting state
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTING -> {}
+                // ignore, there is no BluetoothHeadset.STATE_AUDIO_DISCONNECTING
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING -> {}
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTED -> {
                     stateLogI("processAudioEvent: audio connected");
                     transitionTo(mAudioOn);
-                    break;
-                default:
-                    stateLogE("processAudioEvent: bad state: " + state);
-                    break;
+                }
+                default -> stateLogE("processAudioEvent: bad state: " + state);
             }
         }
 
@@ -1829,83 +1735,69 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
+                case CONNECT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    stateLogW("CONNECT, ignored, device=" + device + ", currentDevice" + mDevice);
+                }
+                case DISCONNECT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    stateLogD("DISCONNECT, device=" + device);
+                    if (!mDevice.equals(device)) {
+                        stateLogW("DISCONNECT, device " + device + " not connected");
+			break;
+                    }
+                    // Disconnect BT SCO first
+                    if (!mNativeInterface.disconnectAudio(mDevice)) {
+                        stateLogW("DISCONNECT failed, device=" + mDevice);
+                        // if disconnect BT SCO failed, transition to mConnected state to force
+                        // disconnect device
+                    }
+                    deferMessage(obtainMessage(DISCONNECT, mDevice));
+                    transitionTo(mAudioDisconnecting);
+                }
+                case CONNECT_AUDIO -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW("CONNECT_AUDIO device is not connected " + device);
+			break;
+                    }
+                    stateLogW("CONNECT_AUDIO device audio is already connected " + device);
+                }
+                case DISCONNECT_AUDIO -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
                         stateLogW(
-                                "CONNECT, ignored, device=" + device + ", currentDevice" + mDevice);
-                        break;
+                                "DISCONNECT_AUDIO, failed, device="
+                                        + device
+                                        + ", currentDevice="
+                                        + mDevice);
+			break;
                     }
-                case DISCONNECT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        stateLogD("DISCONNECT, device=" + device);
-                        if (!mDevice.equals(device)) {
-                            stateLogW("DISCONNECT, device " + device + " not connected");
-                            break;
-                        }
-                        // Disconnect BT SCO first
-                        if (!mNativeInterface.disconnectAudio(mDevice)) {
-                            stateLogW("DISCONNECT failed, device=" + mDevice);
-                            // if disconnect BT SCO failed, transition to mConnected state to force
-                            // disconnect device
-                        }
-                        deferMessage(obtainMessage(DISCONNECT, mDevice));
+                    if (mNativeInterface.disconnectAudio(mDevice)) {
+                        stateLogD("DISCONNECT_AUDIO, device=" + mDevice);
                         transitionTo(mAudioDisconnecting);
-                        break;
+                    } else {
+                        stateLogW("DISCONNECT_AUDIO failed, device=" + mDevice);
+                        broadcastAudioState(
+                                mDevice,
+                                BluetoothHeadset.STATE_AUDIO_CONNECTED,
+                                BluetoothHeadset.STATE_AUDIO_CONNECTED);
                     }
-                case CONNECT_AUDIO:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW("CONNECT_AUDIO device is not connected " + device);
-                            break;
-                        }
-                        stateLogW("CONNECT_AUDIO device audio is already connected " + device);
-                        break;
-                    }
-                case DISCONNECT_AUDIO:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW(
-                                    "DISCONNECT_AUDIO, failed, device="
-                                            + device
-                                            + ", currentDevice="
-                                            + mDevice);
-                            break;
-                        }
-
-                        if (mIsRetrySco) {
-                            Log.d(TAG, "reset mIsRetrySco as DISCONNECT_AUDIO");
-                            mIsRetrySco = false;
-                            removeMessages(SCO_RETRIAL_NOT_REQ);
-                        }
-
-                        if (mNativeInterface.disconnectAudio(mDevice)) {
-                            stateLogD("DISCONNECT_AUDIO, device=" + mDevice);
-                            transitionTo(mAudioDisconnecting);
-                        } else {
-                            stateLogW("DISCONNECT_AUDIO failed, device=" + mDevice);
-                            broadcastAudioState(
-                                    mDevice,
-                                    BluetoothHeadset.STATE_AUDIO_CONNECTED,
-                                    BluetoothHeadset.STATE_AUDIO_CONNECTED);
-                        }
-                        break;
-                    }
-                case SCO_RETRIAL_NOT_REQ:
+                }
+                case SCO_RETRIAL_NOT_REQ -> {
                     //after this timeout, sco retrial is not required
                     stateLogD("SCO_RETRIIAL_NOT_REQ: ");
                     mIsRetrySco = false;
-                    break;
-                case INTENT_SCO_VOLUME_CHANGED:
-                    processIntentScoVolume((Intent) message.obj, mDevice);
-                    break;
-                case SCO_VOLUME_CHANGED:
-                    processScoVolume(message.arg1, mDevice);
-                    break;
-                case STACK_EVENT:
+                }
+                case INTENT_SCO_VOLUME_CHANGED ->
+                        processIntentScoVolume((Intent) message.obj, mDevice);
+                case SCO_VOLUME_CHANGED -> processScoVolume(message.arg1, mDevice);
+                case MICROPHONE_VOL_MUTE_CHANGED -> {
+                    if (Flags.microphoneMuteStatusSync()) {
+                        processMicrophoneVolume(mDevice);
+                    }
+                }
+                case STACK_EVENT -> {
                     HeadsetStackEvent event = (HeadsetStackEvent) message.obj;
                     stateLogD("STACK_EVENT: " + event);
                     if (!mDevice.equals(event.device)) {
@@ -1914,22 +1806,23 @@ class HeadsetStateMachine extends StateMachine {
                                         + mDevice
                                         + "], event: "
                                         + event);
-                        break;
+			break;
                     }
                     switch (event.type) {
-                        case HeadsetStackEvent.EVENT_TYPE_WBS:
-                            stateLogE("Cannot change WBS state when audio is connected: " + event);
-                            break;
-                        case HeadsetStackEvent.EVENT_TYPE_SWB:
-                            stateLogE("Cannot change SWB state when audio is connected: " + event);
-                            break;
-                        default:
-                            super.processMessage(message);
-                            break;
+                        case HeadsetStackEvent.EVENT_TYPE_WBS ->
+                                stateLogE(
+                                        "Cannot change WBS state when audio is connected: "
+                                                + event);
+                        case HeadsetStackEvent.EVENT_TYPE_SWB ->
+                                stateLogE(
+                                        "Cannot change SWB state when audio is connected: "
+                                                + event);
+                        default -> super.processMessage(message);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     return super.processMessage(message);
+                }
             }
             return HANDLED;
         }
@@ -1937,7 +1830,7 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public void processAudioEvent(int state) {
             switch (state) {
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED:
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED -> {
                     stateLogI("processAudioEvent: audio disconnected by remote");
                     if ((mIsBlacklistedDeviceforRetrySCO == true) && (mIsRetrySco == true)) {
                         Log.d(TAG, "blacklisted device, retry SCO after " +
@@ -1947,14 +1840,12 @@ class HeadsetStateMachine extends StateMachine {
                         mIsRetrySco = false;
                     }
                     transitionTo(mConnected);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING:
+                }
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING -> {
                     stateLogI("processAudioEvent: audio being disconnected by remote");
                     transitionTo(mAudioDisconnecting);
-                    break;
-                default:
-                    stateLogE("processAudioEvent: bad state: " + state);
-                    break;
+                }
+                default -> stateLogE("processAudioEvent: bad state: " + state);
             }
         }
     }
@@ -1976,36 +1867,30 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
-                case CONNECT:
-                case DISCONNECT:
-                case CONNECT_AUDIO:
-                case DISCONNECT_AUDIO:
-                    deferMessage(message);
-                    break;
-                case CONNECT_TIMEOUT:
-                    {
-                        BluetoothDevice device = (BluetoothDevice) message.obj;
-                        if (!mDevice.equals(device)) {
-                            stateLogW("CONNECT_TIMEOUT for unknown device " + device);
-                            break;
-                        }
-                        if (mAudioDisconnectRetry == MAX_RETRY_DISCONNECT_AUDIO) {
-                            stateLogW("CONNECT_TIMEOUT: Disconnecting device");
-                            // Restoring state to Connected with message DISCONNECT
-                            deferMessage(obtainMessage(DISCONNECT, mDevice));
-                            transitionTo(mConnected);
-                        } else {
-                            mAudioDisconnectRetry += 1;
-                            stateLogW(
-                                    "CONNECT_TIMEOUT: retrying "
-                                            + (MAX_RETRY_DISCONNECT_AUDIO - mAudioDisconnectRetry)
-                                            + " more time(s)");
-                            transitionTo(mAudioOn);
-                        }
-                        break;
+                case CONNECT, DISCONNECT, CONNECT_AUDIO, DISCONNECT_AUDIO -> deferMessage(message);
+                case CONNECT_TIMEOUT -> {
+                    BluetoothDevice device = (BluetoothDevice) message.obj;
+                    if (!mDevice.equals(device)) {
+                        stateLogW("CONNECT_TIMEOUT for unknown device " + device);
+			break;
                     }
-                default:
+                    if (mAudioDisconnectRetry == MAX_RETRY_DISCONNECT_AUDIO) {
+                        stateLogW("CONNECT_TIMEOUT: Disconnecting device");
+                        // Restoring state to Connected with message DISCONNECT
+                        deferMessage(obtainMessage(DISCONNECT, mDevice));
+                        transitionTo(mConnected);
+                    } else {
+                        mAudioDisconnectRetry += 1;
+                        stateLogW(
+                                "CONNECT_TIMEOUT: retrying "
+                                        + (MAX_RETRY_DISCONNECT_AUDIO - mAudioDisconnectRetry)
+                                        + " more time(s)");
+                        transitionTo(mAudioOn);
+                    }
+                }
+                default -> {
                     return super.processMessage(message);
+                }
             }
             return HANDLED;
         }
@@ -2013,25 +1898,20 @@ class HeadsetStateMachine extends StateMachine {
         @Override
         public void processAudioEvent(int state) {
             switch (state) {
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED:
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED -> {
                     stateLogI("processAudioEvent: audio disconnected");
                     transitionTo(mConnected);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING:
-                    // ignore
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTED:
+                }
+                case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING -> {} // ignore
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTED -> {
                     stateLogW("processAudioEvent: audio disconnection failed");
                     // Audio connected, resetting disconnect retry.
                     mAudioDisconnectRetry = 0;
                     transitionTo(mAudioOn);
-                    break;
-                case HeadsetHalConstants.AUDIO_STATE_CONNECTING:
-                    // ignore, see if it goes into connected state, otherwise, timeout
-                    break;
-                default:
-                    stateLogE("processAudioEvent: bad state: " + state);
-                    break;
+                }
+                // ignore, see if it goes into connected state, otherwise, timeout
+                case HeadsetHalConstants.AUDIO_STATE_CONNECTING -> {}
+                default -> stateLogE("processAudioEvent: bad state: " + state);
             }
         }
 
@@ -2286,8 +2166,16 @@ class HeadsetStateMachine extends StateMachine {
                 mSystemInterface.getAudioManager().setStreamVolume(volStream, volume, flag);
             }
         } else if (volumeType == HeadsetHalConstants.VOLUME_TYPE_MIC) {
-            // Not used currently
-            mMicVolume = volume;
+            if (Flags.microphoneMuteStatusSync()) {
+                if (mMicVolume != volume) {
+                    mMicVolume = volume;
+                    Log.i(TAG, "Event: Mic status: " + mMicVolume);
+                    mSystemInterface.getAudioManager().setMicrophoneMute(mMicVolume == MIC_MUTE);
+                }
+            } else {
+                // Not used currently
+                mMicVolume = volume;
+            }
         } else {
             Log.e(TAG, "Bad volume type: " + volumeType);
         }
@@ -2539,19 +2427,18 @@ class HeadsetStateMachine extends StateMachine {
     private void processWBSEvent(int wbsConfig) {
         boolean prevWbs = mHasWbsEnabled;
         switch (wbsConfig) {
-            case HeadsetHalConstants.BTHF_WBS_YES:
+            case HeadsetHalConstants.BTHF_WBS_YES -> {
                 mHasWbsEnabled = true;
                 if (mHeadsetService.isAptXSwbEnabled()) {
                     mHasSwbAptXEnabled = false;
                 }
-                break;
-            case HeadsetHalConstants.BTHF_WBS_NO:
-            case HeadsetHalConstants.BTHF_WBS_NONE:
-                mHasWbsEnabled = false;
-                break;
-            default:
+            }
+            case HeadsetHalConstants.BTHF_WBS_NO, HeadsetHalConstants.BTHF_WBS_NONE ->
+                    mHasWbsEnabled = false;
+            default -> {
                 Log.e(TAG, "processWBSEvent: unknown wbsConfig " + wbsConfig);
                 return;
+            }
         }
         log("processWBSEvent: " + prevWbs + " -> " + mHasWbsEnabled);
     }
@@ -2562,30 +2449,26 @@ class HeadsetStateMachine extends StateMachine {
         boolean success = true;
 
         switch (swbConfig) {
-            case HeadsetHalConstants.BTHF_SWB_YES:
+            case HeadsetHalConstants.BTHF_SWB_YES -> {
                 switch (swbCodec) {
-                    case HeadsetHalConstants.BTHF_SWB_CODEC_LC3:
+                    case HeadsetHalConstants.BTHF_SWB_CODEC_LC3 -> {
                         mHasSwbLc3Enabled = true;
                         mHasWbsEnabled = false;
                         mHasSwbAptXEnabled = false;
-                        break;
-                    case HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX:
+                    }
+                    case HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX -> {
                         mHasSwbLc3Enabled = false;
                         mHasWbsEnabled = false;
                         mHasSwbAptXEnabled = true;
-                        break;
-                    default:
-                        success = false;
-                        break;
+                    }
+                    default -> success = false;
                 }
-                break;
-            case HeadsetHalConstants.BTHF_SWB_NO:
-            case HeadsetHalConstants.BTHF_SWB_NONE:
+            }
+            case HeadsetHalConstants.BTHF_SWB_NO, HeadsetHalConstants.BTHF_SWB_NONE -> {
                 mHasSwbLc3Enabled = false;
                 mHasSwbAptXEnabled = false;
-                break;
-            default:
-                success = false;
+            }
+            default -> success = false;
         }
 
         if (!success) {
@@ -2813,20 +2696,11 @@ class HeadsetStateMachine extends StateMachine {
         // responds to right away without any further processing.
         boolean isIopInfoRequestAt = true;
         switch (atString) {
-            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMI:
-                processAtCgmi(device);
-                break;
-            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMM:
-                processAtCgmm(device);
-                break;
-            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMR:
-                processAtCgmr(device);
-                break;
-            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGSN:
-                processAtCgsn(device);
-                break;
-            default:
-                isIopInfoRequestAt = false;
+            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMI -> processAtCgmi(device);
+            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMM -> processAtCgmm(device);
+            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGMR -> processAtCgmr(device);
+            case BluetoothHeadset.VENDOR_SPECIFIC_HEADSET_EVENT_CGSN -> processAtCgsn(device);
+            default -> isIopInfoRequestAt = false;
         }
         if (isIopInfoRequestAt) {
             mNativeInterface.atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_OK, 0);
@@ -3178,11 +3052,11 @@ class HeadsetStateMachine extends StateMachine {
             }
 
             switch (indId) {
-                case HeadsetHalConstants.HF_INDICATOR_ENHANCED_DRIVER_SAFETY:
+                case HeadsetHalConstants.HF_INDICATOR_ENHANCED_DRIVER_SAFETY -> {
                     log("Send Broadcast intent for the Enhanced Driver Safety indicator.");
                     sendIndicatorIntent(device, indId, -1);
-                    break;
-                case HeadsetHalConstants.HF_INDICATOR_BATTERY_LEVEL_STATUS:
+                }
+                case HeadsetHalConstants.HF_INDICATOR_BATTERY_LEVEL_STATUS -> {
                     if (Flags.enableBatteryLevelUpdateOnlyThroughHfIndicator()) {
                         mAdapterService
                                 .getRemoteDevices()
@@ -3190,10 +3064,8 @@ class HeadsetStateMachine extends StateMachine {
                     }
                     log("Send Broadcast intent for the Battery Level indicator.");
                     sendIndicatorIntent(device, indId, -1);
-                    break;
-                default:
-                    log("Invalid HF Indicator Received");
-                    break;
+                }
+                default -> log("Invalid HF Indicator Received");
             }
         }
     }
@@ -3209,7 +3081,7 @@ class HeadsetStateMachine extends StateMachine {
         if (!hasMessages(CLCC_RSP_TIMEOUT)) {
             return;
         }
-        if (!mHasRfcommConnectionCompleted) {
+        if (Flags.sendOkClccBeforeSlc() && !mHasRfcommConnectionCompleted) {
             log("rfcomm not completed, not sending clcc response");
             return;
         }
@@ -3408,6 +3280,7 @@ class HeadsetStateMachine extends StateMachine {
             case CLCC_RSP_TIMEOUT -> "CLCC_RSP_TIMEOUT";
             case CONNECT_TIMEOUT -> "CONNECT_TIMEOUT";
             case SCO_VOLUME_CHANGED -> "SCO_VOLUME_CHANGED";
+            case MICROPHONE_VOL_MUTE_CHANGED -> "MICROPHONE_VOL_MUTE_CHANGED";
             default -> "UNKNOWN(" + what + ")";
         };
     }

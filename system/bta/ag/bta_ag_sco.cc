@@ -696,10 +696,10 @@ void bta_ag_codec_negotiate(tBTA_AG_SCB* p_scb) {
     p_scb->sco_codec = BTM_SCO_CODEC_CVSD;
     p_scb->is_aptx_swb_codec = false;
   }
-  const bool aptx_voice = is_hfp_aptx_voice_enabled() &&
-                          (get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX,
-                                                &p_scb->peer_addr) ||
-                           p_scb->is_aptx_swb_codec);
+  const bool aptx_voice =
+          is_hfp_aptx_voice_enabled() &&
+          (get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX, p_scb->peer_addr) ||
+           p_scb->is_aptx_swb_codec);
   log::verbose("aptx_voice={}, is_aptx_swb_codec={}, Q0 codec supported={}", aptx_voice,
                p_scb->is_aptx_swb_codec,
                (p_scb->peer_codecs & BTA_AG_SCO_APTX_SWB_SETTINGS_Q0_MASK) != 0);
@@ -713,7 +713,7 @@ void bta_ag_codec_negotiate(tBTA_AG_SCB* p_scb) {
     /* Change the power mode to Active until SCO open is completed. */
     bta_sys_busy(BTA_ID_AG, p_scb->app_id, p_scb->peer_addr);
 
-    if (get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX, &p_scb->peer_addr) &&
+    if (get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX, p_scb->peer_addr) &&
         (p_scb->peer_codecs & BTA_AG_SCO_APTX_SWB_SETTINGS_Q0_MASK)) {
       if (p_scb->is_aptx_swb_codec == false) {
         p_scb->sco_codec = BTA_AG_SCO_APTX_SWB_SETTINGS_Q0;

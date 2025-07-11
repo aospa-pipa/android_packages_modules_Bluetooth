@@ -287,10 +287,6 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
 
     boolean isLeAudioOnlyGroup(BluetoothDevice device) {
         String log = "isLeAudioOnlyGroup(" + device + "): ";
-        if (!Flags.leaudioAllowLeaudioOnlyDevices()) {
-            Log.d(TAG, log + "missing flag leaudio_allow_leaudio_only_devices");
-            return false;
-        }
 
         final var csipSetCoordinator = getCsipSetCoordinatorService();
         if (csipSetCoordinator.isEmpty()) {
@@ -345,11 +341,6 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
          * Note, that we need to have all set bonded to take the decision.
          * If the set is not bonded, we cannot assume that.
          */
-
-        if (!Flags.leaudioAllowLeaudioOnlyDevices()) {
-            Log.d(TAG, log + "missing flag leaudio_allow_leaudio_only_devices");
-            return false;
-        }
 
         if (!Utils.arrayContains(uuids, BluetoothUuid.LE_AUDIO)) {
             Log.d(TAG, log + "Device does not supports LE_AUDIO");
@@ -612,8 +603,13 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 && (hapClient.get().getConnectionPolicy(device) == CONNECTION_POLICY_UNKNOWN)) {
             Log.d(TAG, log + "Setting HAP priority");
             if (isLeAudioProfileAllowed) {
-                if (mAutoConnectProfilesSupported) {
+                if (mAutoConnectProfilesSupported && !Flags.hapOnMainLooper()) {
                     hapClient.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
+                } else if (mAutoConnectProfilesSupported && Flags.hapOnMainLooper()) {
+                    hapClient
+                            .get()
+                            .syncPost(
+                                    h -> h.setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED));
                 } else {
                     mDatabaseManager.setProfileConnectionPolicy(
                             device, BluetoothProfile.HAP_CLIENT, CONNECTION_POLICY_ALLOWED);
@@ -899,29 +895,15 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             return;
         }
 
-        if (Flags.autoConnectOnMultipleHfpWhenNoA2dpDevice()) {
-            final List<BluetoothDevice> mostRecentlyConnectedHfpDevices =
-                    mDatabaseManager.getMostRecentlyActiveHfpDevices();
-            for (BluetoothDevice hfpDevice : mostRecentlyConnectedHfpDevices) {
-                Log.d(TAG, log + "Attempting HFP device" + hfpDevice);
-                autoConnectHeadset(hfpDevice);
-            }
-            if (mostRecentlyConnectedHfpDevices.size() == 0) {
-                Log.d(TAG, log + "No hfp device to connect");
-            }
-            return;
+        final List<BluetoothDevice> mostRecentlyConnectedHfpDevices =
+                mDatabaseManager.getMostRecentlyActiveHfpDevices();
+        for (BluetoothDevice hfpDevice : mostRecentlyConnectedHfpDevices) {
+            Log.d(TAG, log + "Attempting HFP device" + hfpDevice);
+            autoConnectHeadset(hfpDevice);
         }
-        Log.d(TAG, log + "Multi HFP is not enabled");
-
-        // Try to autoConnect with Hfp only if there was no a2dp valid device
-        final BluetoothDevice mostRecentlyConnectedHfpDevice =
-                mDatabaseManager.getMostRecentlyActiveHfpDevice();
-        if (mostRecentlyConnectedHfpDevice != null) {
-            Log.d(TAG, log + "Attempting most recent HFP device" + mostRecentlyConnectedHfpDevice);
-            autoConnectHeadset(mostRecentlyConnectedHfpDevice);
-            return;
+        if (mostRecentlyConnectedHfpDevices.size() == 0) {
+            Log.d(TAG, log + "No hfp device to connect");
         }
-        Log.i(TAG, log + "No device to reconnect to");
     }
 
     private void autoConnectA2dp(BluetoothDevice device) {
@@ -1136,7 +1118,19 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 bassClient.get().connect(device);
             }
         }
-        if (hapClient.isPresent()) {
+        if (Flags.hapOnMainLooper()) {
+            hapClient.ifPresent(
+                    hap -> {
+                        List<BluetoothDevice> connectedDevices = hap.getConnectedDevices();
+                        if (!connectedDevices.contains(device)
+                                && (hap.getConnectionPolicy(device) == CONNECTION_POLICY_ALLOWED)
+                                && (hap.getConnectionState(device) == STATE_DISCONNECTED)) {
+                            Log.d(TAG, log + "Retrying HAP connection");
+                            hap.connect(device);
+                        }
+                    });
+        }
+        if (!Flags.hapOnMainLooper() && hapClient.isPresent()) {
             List<BluetoothDevice> connectedDevices = hapClient.get().getConnectedDevices();
             if (!connectedDevices.contains(device)
                     && (hapClient.get().getConnectionPolicy(device) == CONNECTION_POLICY_ALLOWED)

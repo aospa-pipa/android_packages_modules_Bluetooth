@@ -626,19 +626,6 @@ public final class Utils {
      * false if the result is a soft denial. Throws SecurityException if the result is a hard
      * denial.
      *
-     * <p>Should be used in situations where the app op should not be noted.
-     */
-    @SuppressLint("AndroidFrameworkRequiresPermission") // This method enforce the permission
-    @RequiresPermission(BLUETOOTH_ADVERTISE)
-    public static boolean checkAdvertisePermissionForPreflight(Context context) {
-        return checkPermissionForPreflight(context, BLUETOOTH_ADVERTISE);
-    }
-
-    /**
-     * Returns true if the BLUETOOTH_ADVERTISE permission is granted for the calling app. Returns
-     * false if the result is a soft denial. Throws SecurityException if the result is a hard
-     * denial.
-     *
      * <p>Should be used in situations where data will be delivered and hence the app op should be
      * noted.
      */
@@ -1086,15 +1073,41 @@ public final class Utils {
         return "uid/pid=" + Binder.getCallingUid() + "/" + Binder.getCallingPid();
     }
 
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
+
     /**
-     * Get system local time
+     * Get the current system local time as a formatted string.
      *
-     * @return "MM-dd HH:mm:ss.SSS"
+     * @return A formatted string representing the current time ("MM-dd HH:mm:ss.SSS")
      */
     public static String getLocalTimeString() {
-        return DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS")
-                .withZone(ZoneId.systemDefault())
-                .format(Instant.now());
+        return formatInstant(Instant.now());
+    }
+
+    /**
+     * Converts a time value from {@link android.os.SystemClock#elapsedRealtime()} to a
+     * human-readable string.
+     *
+     * <p>To get a `long` time value, see {@link SystemClockTimeProvider#elapsedRealtime()}
+     *
+     * @param elapsedRealtimeMillis The timestamp from elapsedRealtime() to convert.
+     * @return A formatted string representing the given time ("MM-dd HH:mm:ss.SSS").
+     */
+    public static String formatElapsedRealtime(long elapsedRealtimeMillis) {
+        final long timeDeltaMillis = elapsedRealtimeMillis - sSystemClock.elapsedRealtime();
+        final long eventTimeEpochMillis = System.currentTimeMillis() + timeDeltaMillis;
+        return formatInstant(Instant.ofEpochMilli(eventTimeEpochMillis));
+    }
+
+    /**
+     * Formats a specific Instant into a system local time string.
+     *
+     * @param instant The Instant to format
+     * @return A formatted string representing the given Instant ("MM-dd HH:mm:ss.SSS")
+     */
+    public static String formatInstant(Instant instant) {
+        return DATE_TIME_FORMATTER.format(instant);
     }
 
     public static void skipCurrentTag(XmlPullParser parser)

@@ -141,7 +141,12 @@ A2dpCodecConfig* BtaAvCo::GetActivePeerCurrentCodec() {
   std::lock_guard<std::recursive_mutex> lock(peer_cache_->codec_lock_);
 
   BtaAvCoPeer* active_peer = bta_av_source_state_.getActivePeer();
-  if (active_peer == nullptr || active_peer->GetCodecs() == nullptr) {
+  if (active_peer == nullptr) {
+    log::error("active_peer is null");
+    return nullptr;
+  }
+  if (active_peer->GetCodecs() == nullptr) {
+    log::error("active_peer codecs are null");
     return nullptr;
   }
   return active_peer->GetCodecs()->getCurrentCodecConfig();
@@ -151,10 +156,23 @@ A2dpCodecConfig* BtaAvCo::GetPeerCurrentCodec(const RawAddress& peer_address) {
   std::lock_guard<std::recursive_mutex> lock(peer_cache_->codec_lock_);
 
   BtaAvCoPeer* peer = peer_cache_->FindPeer(peer_address);
-  if (peer == nullptr || peer->GetCodecs() == nullptr) {
+  if (peer == nullptr) {
+    log::error("peer {} not found", peer_address);
+    return nullptr;
+  }
+  if (peer->GetCodecs() == nullptr) {
+    log::error("peer {} codecs are null", peer_address);
     return nullptr;
   }
   return peer->GetCodecs()->getCurrentCodecConfig();
+}
+
+bool BtaAvCo::ProcessAudioInit(btav_a2dp_codec_index_t codec_index, AvdtpSepConfig* p_cfg) {
+  if (::bluetooth::audio::a2dp::provider::supports_codec(codec_index)) {
+    return ::bluetooth::audio::a2dp::provider::codec_info(codec_index, nullptr, p_cfg->codec_info,
+                                                          nullptr);
+  }
+  return A2DP_InitCodecConfig(codec_index, p_cfg);
 }
 
 void BtaAvCo::ProcessDiscoveryResult(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_address,
@@ -1511,7 +1529,7 @@ A2dpCodecConfig* bta_av_get_a2dp_peer_current_codec(const RawAddress& peer_addre
 }
 
 bool bta_av_co_audio_init(btav_a2dp_codec_index_t codec_index, AvdtpSepConfig* p_cfg) {
-  return A2DP_InitCodecConfig(codec_index, p_cfg);
+  return bta_av_co_cb.ProcessAudioInit(codec_index, p_cfg);
 }
 
 void bta_av_co_audio_disc_res(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_address,

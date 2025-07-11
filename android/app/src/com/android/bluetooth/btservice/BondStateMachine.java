@@ -18,6 +18,7 @@ package com.android.bluetooth.btservice;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_UNKNOWN;
+import static android.bluetooth.BluetoothProfile.HAP_CLIENT;
 import static android.bluetooth.BluetoothProfile.VOLUME_CONTROL;
 
 import static com.android.bluetooth.BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__BOND_RETRY;
@@ -278,7 +279,7 @@ final class BondStateMachine extends StateMachine {
             }
 
             switch (msg.what) {
-                case CREATE_BOND:
+                case CREATE_BOND -> {
                     OobData p192Data =
                             (msg.getData() != null)
                                     ? msg.getData().getParcelable(OOBDATAP192)
@@ -288,14 +289,10 @@ final class BondStateMachine extends StateMachine {
                                     ? msg.getData().getParcelable(OOBDATAP256)
                                     : null;
                     result = createBond(dev, msg.arg1, p192Data, p256Data, false);
-                    break;
-                case REMOVE_BOND:
-                    result = removeBond(dev, false);
-                    break;
-                case CANCEL_BOND:
-                    result = cancelBond(dev);
-                    break;
-                case BONDING_STATE_CHANGE:
+                }
+                case REMOVE_BOND -> result = removeBond(dev, false);
+                case CANCEL_BOND -> result = cancelBond(dev);
+                case BONDING_STATE_CHANGE -> {
                     int newState = msg.arg1;
                     int reason = getUnbondReasonFromHALCode(msg.arg2);
                     // Bond is explicitly removed if we are in pending command state
@@ -325,8 +322,8 @@ final class BondStateMachine extends StateMachine {
                     } else if (!mDevices.contains(dev)) {
                         result = true;
                     }
-                    break;
-                case SSP_REQUEST:
+                }
+                case SSP_REQUEST -> {
                     if (devProp == null) {
                         errorLog("devProp is null, maybe the device is disconnected");
                         break;
@@ -342,8 +339,8 @@ final class BondStateMachine extends StateMachine {
                             devProp.getDevice(),
                             displayPasskey ? Optional.of(passkey) : Optional.empty(),
                             variant);
-                    break;
-                case PIN_REQUEST:
+                }
+                case PIN_REQUEST -> {
                     if (devProp == null) {
                         errorLog("devProp is null, maybe the device is disconnected");
                         break;
@@ -383,22 +380,21 @@ final class BondStateMachine extends StateMachine {
                                 Optional.empty(),
                                 BluetoothDevice.PAIRING_VARIANT_PIN);
                     }
-                    break;
-                case ACL_DISCONNECTED:
+                }
+                case ACL_DISCONNECTED -> {
                     if (hasMessages(BONDED_INTENT_DELAY)) {
+                        Log.e(TAG,
+                            "ACL DISCONNECTED during Bonding: Remove the device "
+                                    + dev);
                         removeMessages(BONDED_INTENT_DELAY);
                         mPendingBondedDevices.remove(dev);
-                        if (devProp != null && devProp.getUuids() == null) {
-                            Log.e(TAG,
-                                    "ACL DISCONNECTED during Bonding: Remove the device "
-                                    + dev);
-                            removeBond(dev, true);
-                        }
+                        removeBond(dev, true);
                     }
-                    break;
-                default:
+                }
+                default -> {
                     Log.e(TAG, "Received unhandled event:" + msg.what);
                     return false;
+                }
             }
             if (result) {
                 mDevices.add(dev);
@@ -699,27 +695,26 @@ final class BondStateMachine extends StateMachine {
         int variant;
         boolean displayPasskey = false;
         switch (pairingVariant) {
-            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_CONFIRMATION:
+            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_CONFIRMATION -> {
                 variant = BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION;
                 displayPasskey = true;
-                break;
+            }
 
-            case AbstractionLayer.BT_SSP_VARIANT_CONSENT:
-                variant = BluetoothDevice.PAIRING_VARIANT_CONSENT;
-                break;
+            case AbstractionLayer.BT_SSP_VARIANT_CONSENT ->
+                    variant = BluetoothDevice.PAIRING_VARIANT_CONSENT;
 
-            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_ENTRY:
-                variant = BluetoothDevice.PAIRING_VARIANT_PASSKEY;
-                break;
+            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_ENTRY ->
+                    variant = BluetoothDevice.PAIRING_VARIANT_PASSKEY;
 
-            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_NOTIFICATION:
+            case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_NOTIFICATION -> {
                 variant = BluetoothDevice.PAIRING_VARIANT_DISPLAY_PASSKEY;
                 displayPasskey = true;
-                break;
+            }
 
-            default:
+            default -> {
                 errorLog("SSP Pairing variant not present");
                 return;
+            }
         }
         BluetoothDevice device = mRemoteDevices.getDevice(address);
         if (device == null) {
@@ -820,6 +815,15 @@ final class BondStateMachine extends StateMachine {
                                                             vcs.setConnectionPolicy(
                                                                     device,
                                                                     CONNECTION_POLICY_UNKNOWN));
+                                } else if (profile.getProfileId() == HAP_CLIENT
+                                        && Flags.hapOnMainLooper()
+                                        && !Flags.bondStateMachineLooper()) {
+                                    ((HapClientService) profile)
+                                            .syncPost(
+                                                    hap ->
+                                                            hap.setConnectionPolicy(
+                                                                    device,
+                                                                    CONNECTION_POLICY_UNKNOWN));
                                 } else {
                                     profile.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN);
                                 }
@@ -872,7 +876,12 @@ final class BondStateMachine extends StateMachine {
                 }
             }
             if (hapClientService != null) {
-                hapClientService.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN);
+                if (Flags.hapOnMainLooper() && !Flags.bondStateMachineLooper()) {
+                    hapClientService.syncPost(
+                            hap -> hap.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN));
+                } else {
+                    hapClientService.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN);
+                }
             }
         }
         Log.d(TAG, "Removing device " + device.getAddress() + " from Absolute Volume rejectlist");

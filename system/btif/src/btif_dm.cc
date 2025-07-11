@@ -1413,6 +1413,11 @@ static void btif_dm_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
   }
 }
 
+inline static bool ble_evt_type_is_connectable(uint16_t evt_type) {
+  constexpr uint8_t BLE_EVT_CONNECTABLE_BIT = 0;
+  return evt_type & (1 << BLE_EVT_CONNECTABLE_BIT);
+}
+
 /******************************************************************************
  *
  * Function         btif_dm_search_devices_evt
@@ -1446,7 +1451,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
         bool restrict_report =
                 osi_property_get_bool("bluetooth.restrict_discovered_device.enabled", false);
         if (restrict_report && p_search_data->inq_res.device_type == BT_DEVICE_TYPE_BLE &&
-            !(p_search_data->inq_res.ble_evt_type & BTM_BLE_CONNECTABLE_MASK)) {
+            !ble_evt_type_is_connectable(p_search_data->inq_res.ble_evt_type)) {
           log::debug("Ble device {}[{}] is not connectable", bdaddr, AddressTypeText(addr_type));
           break;
         }
@@ -1633,7 +1638,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
               }
 
               bt_property_type_t property_type =
-                      (p_search_data->inq_res.last_inq_result_from_type == BT_DEVICE_TYPE_BLE)
+                      (p_search_data->inq_res.last_inq_result_transport == BT_TRANSPORT_LE)
                               ? BT_PROPERTY_UUIDS_FROM_LE_ADVERTISING_DATA
                               : BT_PROPERTY_UUIDS_FROM_EXTENDED_INQUIRY_RESPONSE;
 
@@ -1660,7 +1665,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
         bool restrict_report =
                 osi_property_get_bool("bluetooth.restrict_discovered_device.enabled", false);
         if (restrict_report && p_search_data->inq_res.device_type == BT_DEVICE_TYPE_BLE &&
-            !(p_search_data->inq_res.ble_evt_type & BTM_BLE_CONNECTABLE_MASK)) {
+            !ble_evt_type_is_connectable(p_search_data->inq_res.ble_evt_type)) {
           log::debug("Ble device {}[{}] is not connectable", bdaddr, AddressTypeText(addr_type));
           break;
         }
@@ -2009,25 +2014,23 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
     bredr_prop = {BT_PROPERTY_UUIDS, static_cast<int>(Uuid::kNumBytes128 * uuids.size()),
                   (void*)bredr_property_value.data()};
 
-    if (com::android::bluetooth::flags::separate_service_storage()) {
-      bt_status_t ret = btif_storage_set_remote_device_property(&bd_addr, &bredr_prop);
-      ASSERTC(ret == BT_STATUS_SUCCESS, "storing remote classic services failed", ret);
+    bt_status_t ret = btif_storage_set_remote_device_property(&bd_addr, &bredr_prop);
+    ASSERTC(ret == BT_STATUS_SUCCESS, "storing remote classic services failed", ret);
 
-      std::set<Uuid> le_uuids;
-      if (results_for_bonding_device) {
-        btif_merge_existing_uuids(pairing_cb.static_bdaddr, &le_uuids, BT_TRANSPORT_LE);
-        btif_merge_existing_uuids(pairing_cb.bd_addr, &le_uuids, BT_TRANSPORT_LE);
-      } else {
-        btif_merge_existing_uuids(bd_addr, &le_uuids, BT_TRANSPORT_LE);
-      }
-
-      for (auto& uuid : le_uuids) {
-        auto uuid_128bit = uuid.To128BitBE();
-        le_property_value.insert(le_property_value.end(), uuid_128bit.begin(), uuid_128bit.end());
-      }
-      le_prop = {BT_PROPERTY_UUIDS_LE, static_cast<int>(Uuid::kNumBytes128 * le_uuids.size()),
-                 (void*)le_property_value.data()};
+    std::set<Uuid> le_uuids;
+    if (results_for_bonding_device) {
+      btif_merge_existing_uuids(pairing_cb.static_bdaddr, &le_uuids, BT_TRANSPORT_LE);
+      btif_merge_existing_uuids(pairing_cb.bd_addr, &le_uuids, BT_TRANSPORT_LE);
+    } else {
+      btif_merge_existing_uuids(bd_addr, &le_uuids, BT_TRANSPORT_LE);
     }
+
+    for (auto& uuid : le_uuids) {
+      auto uuid_128bit = uuid.To128BitBE();
+      le_property_value.insert(le_property_value.end(), uuid_128bit.begin(), uuid_128bit.end());
+    }
+    le_prop = {BT_PROPERTY_UUIDS_LE, static_cast<int>(Uuid::kNumBytes128 * le_uuids.size()),
+               (void*)le_property_value.data()};
   }
 
   bool skip_reporting_wait_for_le = false;
@@ -2110,11 +2113,6 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
                              uuids_param.size(), num_eir_uuids));
 
   if (!uuids_param.empty() || num_eir_uuids != 0) {
-    if (!com::android::bluetooth::flags::separate_service_storage()) {
-      bt_status_t ret = btif_storage_set_remote_device_property(&bd_addr, &bredr_prop);
-      ASSERTC(ret == BT_STATUS_SUCCESS, "storing remote services failed", ret);
-    }
-
     if (skip_reporting_wait_for_le) {
       log::info(
               "Bonding LE Audio sink - must wait for le services discovery to pass "
@@ -2204,15 +2202,6 @@ static void btif_on_gatt_results(RawAddress bd_addr, std::vector<bluetooth::Uuid
     log::info("Will return Classic SDP results, if done, to unblock bonding");
   }
 
-  if (!com::android::bluetooth::flags::separate_service_storage()) {
-    // Look up UUIDs using pseudo address (either RPA or static address)
-    btif_merge_existing_uuids(bd_addr, &uuids);
-    if (bd_addr != static_addr_copy) {
-      // Look up UUID using static address, if different than sudo address
-      btif_merge_existing_uuids(static_addr_copy, &uuids);
-    }
-  }
-
   std::vector<bt_property_t> prop;
   std::vector<uint8_t> property_value;
 
@@ -2221,11 +2210,9 @@ static void btif_on_gatt_results(RawAddress bd_addr, std::vector<bluetooth::Uuid
     property_value.insert(property_value.end(), uuid_128bit.begin(), uuid_128bit.end());
   }
 
-  prop.push_back(bt_property_t{
-          (com::android::bluetooth::flags::separate_service_storage() && is_transport_le)
-                  ? BT_PROPERTY_UUIDS_LE
-                  : BT_PROPERTY_UUIDS,
-          static_cast<int>(Uuid::kNumBytes128 * uuids.size()), (void*)property_value.data()});
+  prop.push_back(bt_property_t{(is_transport_le) ? BT_PROPERTY_UUIDS_LE : BT_PROPERTY_UUIDS,
+                               static_cast<int>(Uuid::kNumBytes128 * uuids.size()),
+                               (void*)property_value.data()});
 
   /* Also write this to the NVRAM */
   bt_status_t ret = btif_storage_set_remote_device_property(&bd_addr, &prop.back());
@@ -2247,13 +2234,6 @@ static void btif_on_gatt_results(RawAddress bd_addr, std::vector<bluetooth::Uuid
   tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
   bt_property_t addr_type_prop = {BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type), &addr_type};
   btif_storage_get_remote_device_property(&bd_addr, &addr_type_prop);
-
-  if (!com::android::bluetooth::flags::separate_service_storage()) {
-    /* Send the event to the BTIF */
-    GetInterfaceToProfiles()->events->invoke_remote_device_properties_cb(
-            BT_STATUS_SUCCESS, bd_addr, addr_type, prop.size(), prop.data());
-    return;
-  }
 
   std::set<Uuid> bredr_uuids;
   // Look up UUIDs using pseudo address (either RPA or static address)

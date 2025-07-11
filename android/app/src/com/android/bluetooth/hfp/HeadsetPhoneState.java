@@ -174,56 +174,57 @@ public class HeadsetPhoneState {
                int networkType = mTelephonyManager.getDataNetworkType();
                int dataNetworkType = BEARER_TECHNOLOGY_GSM;
                switch (networkType) {
-                  case TelephonyManager.NETWORK_TYPE_UNKNOWN:
-                  case TelephonyManager.NETWORK_TYPE_GSM:
-                      Log.d(TAG, "inside GSM case:");
-                      dataNetworkType = BEARER_TECHNOLOGY_GSM;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_GPRS:
+                  case TelephonyManager.NETWORK_TYPE_UNKNOWN,
+                       TelephonyManager.NETWORK_TYPE_GSM -> {
+                          Log.d(TAG, "inside GSM case:");
+                          dataNetworkType = BEARER_TECHNOLOGY_GSM;
+                  }
+                  case TelephonyManager.NETWORK_TYPE_GPRS -> {
                       Log.d(TAG, "inside 2G case:");
                       dataNetworkType = BEARER_TECHNOLOGY_2G;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_EDGE:
-                  case TelephonyManager.NETWORK_TYPE_EVDO_0:
-                  case TelephonyManager.NETWORK_TYPE_EVDO_A:
-                  case TelephonyManager.NETWORK_TYPE_HSDPA:
-                  case TelephonyManager.NETWORK_TYPE_HSUPA:
-                  case TelephonyManager.NETWORK_TYPE_HSPA:
-                  case TelephonyManager.NETWORK_TYPE_IDEN:
-                  case TelephonyManager.NETWORK_TYPE_EVDO_B:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_EDGE,
+                        TelephonyManager.NETWORK_TYPE_EVDO_0,
+                        TelephonyManager.NETWORK_TYPE_EVDO_A,
+                        TelephonyManager.NETWORK_TYPE_HSDPA,
+                        TelephonyManager.NETWORK_TYPE_HSUPA,
+                        TelephonyManager.NETWORK_TYPE_HSPA,
+                        TelephonyManager.NETWORK_TYPE_IDEN,
+                        TelephonyManager.NETWORK_TYPE_EVDO_B -> {
                       Log.d(TAG, "inside 3G case:");
                       dataNetworkType = BEARER_TECHNOLOGY_3G;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_UMTS:
-                  case TelephonyManager.NETWORK_TYPE_TD_SCDMA:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_UMTS,
+                      TelephonyManager.NETWORK_TYPE_TD_SCDMA -> {
                       Log.d(TAG, "inside WCDMA case:");
                       dataNetworkType = BEARER_TECHNOLOGY_WCDMA;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_LTE:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_LTE -> {
                       Log.d(TAG, "inside LTE case:");
                       dataNetworkType = BEARER_TECHNOLOGY_LTE;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_EHRPD:
-                  case TelephonyManager.NETWORK_TYPE_CDMA:
-                  case TelephonyManager.NETWORK_TYPE_1xRTT:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_EHRPD,
+                      TelephonyManager.NETWORK_TYPE_CDMA,
+                      TelephonyManager.NETWORK_TYPE_1xRTT -> {
                       Log.d(TAG, "inside CDMA case:");
                       dataNetworkType = BEARER_TECHNOLOGY_CDMA;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_HSPAP:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_HSPAP -> {
                       Log.d(TAG, "inside 4G case:");
                       dataNetworkType = BEARER_TECHNOLOGY_4G;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_IWLAN:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_IWLAN -> {
                       Log.d(TAG, "inside WIFI case:");
                       dataNetworkType = BEARER_TECHNOLOGY_WIFI;
-                  break;
-                  case TelephonyManager.NETWORK_TYPE_NR:
+                  }
+                  case TelephonyManager.NETWORK_TYPE_NR -> {
                       Log.d(TAG, "inside 5G case:");
                       dataNetworkType = BEARER_TECHNOLOGY_5G;
-                  break;
-                  default:
+                  }
+                  default -> {
                       Log.d(TAG, "inside default case:");
                       dataNetworkType = BEARER_TECHNOLOGY_GSM;
+                  }
                }
                //int networkType = mTelephonyManager.getNetworkType();
                Log.d(TAG, "Adv Audio enabled: updateBearerTech:" +  dataNetworkType);
@@ -401,56 +402,57 @@ public class HeadsetPhoneState {
                 int networkType = mTelephonyManager.getDataNetworkType();
                 int dataNetworkType = BEARER_TECHNOLOGY_GSM;
                 switch (networkType) {
-                   case TelephonyManager.NETWORK_TYPE_UNKNOWN:
-                   case TelephonyManager.NETWORK_TYPE_GSM:
+                   case TelephonyManager.NETWORK_TYPE_UNKNOWN,
+                        TelephonyManager.NETWORK_TYPE_GSM -> {
                        Log.d(TAG, "inside GSM case:");
                        dataNetworkType = BEARER_TECHNOLOGY_GSM;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_GPRS:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_GPRS -> {
                        Log.d(TAG, "inside 2G case:");
                        dataNetworkType = BEARER_TECHNOLOGY_2G;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_EDGE:
-                   case TelephonyManager.NETWORK_TYPE_EVDO_0:
-                   case TelephonyManager.NETWORK_TYPE_EVDO_A:
-                   case TelephonyManager.NETWORK_TYPE_HSDPA:
-                   case TelephonyManager.NETWORK_TYPE_HSUPA:
-                   case TelephonyManager.NETWORK_TYPE_HSPA:
-                   case TelephonyManager.NETWORK_TYPE_IDEN:
-                   case TelephonyManager.NETWORK_TYPE_EVDO_B:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_EDGE,
+                        TelephonyManager.NETWORK_TYPE_EVDO_0,
+                        TelephonyManager.NETWORK_TYPE_EVDO_A,
+                        TelephonyManager.NETWORK_TYPE_HSDPA,
+                        TelephonyManager.NETWORK_TYPE_HSUPA,
+                        TelephonyManager.NETWORK_TYPE_HSPA,
+                        TelephonyManager.NETWORK_TYPE_IDEN,
+                        TelephonyManager.NETWORK_TYPE_EVDO_B -> {
                        Log.d(TAG, "inside 3G case:");
                        dataNetworkType = BEARER_TECHNOLOGY_3G;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_UMTS:
-                   case TelephonyManager.NETWORK_TYPE_TD_SCDMA:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_UMTS,
+                        TelephonyManager.NETWORK_TYPE_TD_SCDMA -> {
                        Log.d(TAG, "inside WCDMA case:");
                        dataNetworkType = BEARER_TECHNOLOGY_WCDMA;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_LTE:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_LTE -> {
                        Log.d(TAG, "inside LTE case:");
                        dataNetworkType = BEARER_TECHNOLOGY_LTE;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_EHRPD:
-                   case TelephonyManager.NETWORK_TYPE_CDMA:
-                   case TelephonyManager.NETWORK_TYPE_1xRTT:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_EHRPD,
+                        TelephonyManager.NETWORK_TYPE_CDMA,
+                        TelephonyManager.NETWORK_TYPE_1xRTT -> {
                        Log.d(TAG, "inside CDMA case:");
                        dataNetworkType = BEARER_TECHNOLOGY_CDMA;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_HSPAP:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_HSPAP -> {
                        Log.d(TAG, "inside 4G case:");
                        dataNetworkType = BEARER_TECHNOLOGY_4G;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_IWLAN:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_IWLAN -> {
                        Log.d(TAG, "inside WIFI case:");
                        dataNetworkType = BEARER_TECHNOLOGY_WIFI;
-                   break;
-                   case TelephonyManager.NETWORK_TYPE_NR:
+                   }
+                   case TelephonyManager.NETWORK_TYPE_NR -> {
                        Log.d(TAG, "inside 5G case:");
                        dataNetworkType = BEARER_TECHNOLOGY_5G;
-                   break;
-                   default:
+                   }
+                   default -> {
                        Log.d(TAG, "inside default case:");
                        dataNetworkType = BEARER_TECHNOLOGY_GSM;
+                   }
                 }
                //int networkType = mTelephonyManager.getNetworkType();
                Log.d(TAG, "Adv Audio enabled: updateBearerTech:" + dataNetworkType);
@@ -525,14 +527,17 @@ public class HeadsetPhoneState {
 
         @Override
         public void onSignalStrengthsChanged(SignalStrength signalStrength) {
-            int prevSignal = mCindSignal;
             if (mCindService == HeadsetHalConstants.NETWORK_STATE_NOT_AVAILABLE) {
                 mCindSignal = 0;
-            } else {
-                mCindSignal = signalStrength.getLevel() + 1;
+                // sendDeviceStateChanged is sent in onServiceStateChanged for this case
+                return;
             }
+
+            int prevSignal = mCindSignal;
+
             // +CIND "signal" indicator is always between 0 to 5
-            mCindSignal = Integer.max(Integer.min(mCindSignal, 5), 0);
+            mCindSignal = Integer.max(Integer.min(signalStrength.getLevel() + 1, 5), 0);
+
             // This results in a lot of duplicate messages, hence this check
             if (prevSignal != mCindSignal) {
                 sendDeviceStateChanged();

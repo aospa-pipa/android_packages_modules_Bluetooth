@@ -560,6 +560,16 @@ public:
     DeviceGroups::Initialize(device_group_callbacks);
   }
 
+  /* Helper function for update sink local and in_call context metadata (if in call) */
+  void UpdateSinkLocalMetadataContextTypes(AudioContexts contexts) {
+    /* Update cached fallback contexts */
+    if (IsInCall()) {
+      in_call_metadata_context_types_.sink = contexts;
+    }
+
+    local_metadata_context_types_.sink = contexts;
+  }
+
   void setConfigurationContextType(LeAudioContextType context_type) {
     log::debug("{} -> {}", common::ToString(configuration_context_type_),
                common::ToString(context_type));
@@ -581,14 +591,47 @@ public:
     return group->IsGmapEnabled();
   }
 
-  void ReconfigureAfterVbcClose() {
-    log::debug("VBC close timeout");
+  void ReconfigureAfterVbcClose(bool audio_hal_check_in_progress = false) {
+    log::debug(
+            "VBC close timeout, configuration_context_type_:{}, audio_receiver_state_: {}, "
+            "audio_hal_check_in_progress: {}, audio_hal_is_capable_to_send_empty_metadata_: {}",
+            ToString(configuration_context_type_), ToString(audio_receiver_state_),
+            audio_hal_check_in_progress, audio_hal_is_capable_to_send_empty_metadata_);
+
+    auto group = aseGroups_.FindById(active_group_id_);
+
+    if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      /* Workaround warning.
+       * When Audio HAL is not capable to clear metadata when audio track is closed,
+       * stack needs to handle it by its own.
+       * We reuse voice back channel timeout to conclude that Local Sink direction will
+       * not be used.
+       */
+
+      if (audio_hal_check_in_progress) {
+        /* This is done only once in the very first sink metadata update.
+         * If the timeout fired, it means that Audio HAL did not start the stream and also
+         * did not clear metadata */
+        audio_hal_is_capable_to_send_empty_metadata_ = false;
+      }
+
+      if (!audio_hal_is_capable_to_send_empty_metadata_) {
+        std::vector<record_track_metadata_v7> empty_tracks = {};
+        audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
+
+        if (group) {
+          log::debug("Reconfigure after VBC close, group_id: {}", active_group_id_);
+          auto [_, remote_metadata] = audioContextTypeManager_->GetAudioContextsForTheGroup(group);
+          // Note in the config we are having remote directions, this is why it is oposite.
+          UpdateSinkLocalMetadataContextTypes(remote_metadata.source);
+        }
+      }
+    }
 
     if (IsInVoipCall()) {
       SetInVoipCall(false);
     }
 
-    auto group = aseGroups_.FindById(active_group_id_);
     if (!group) {
       log::error("Invalid group: {}", active_group_id_);
       return;
@@ -599,15 +642,17 @@ public:
       notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
     }
 
-    /* For sonification events we don't really need to reconfigure to HQ
-     * configuration, but if the previous configuration was for HQ Media,
-     * we might want to go back to that scenario.
-     */
+    if (!com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      /* For sonification events we don't really need to reconfigure to HQ
+       * configuration, but if the previous configuration was for HQ Media,
+       * we might want to go back to that scenario.
+       */
 
-    if ((configuration_context_type_ != LeAudioContextType::MEDIA) &&
-        (configuration_context_type_ != LeAudioContextType::GAME)) {
-      log::info("Keeping the old configuration as no HQ Media playback is needed right now.");
-      return;
+      if ((configuration_context_type_ != LeAudioContextType::MEDIA) &&
+          (configuration_context_type_ != LeAudioContextType::GAME)) {
+        log::info("Keeping the old configuration as no HQ Media playback is needed right now.");
+        return;
+      }
     }
 
     /* Test the existing metadata against the recent availability */
@@ -649,7 +694,7 @@ public:
     ReconfigureOrUpdateMetadata(group, new_configuration_context, remote_metadata);
   }
 
-  void StartVbcCloseTimeout() {
+  void StartVbcCloseTimeout(bool audio_hal_check_in_progress = false) {
     if (alarm_is_scheduled(close_vbc_timeout_)) {
       StopVbcCloseTimeout();
     }
@@ -659,13 +704,15 @@ public:
 
     alarm_set_on_mloop(
             close_vbc_timeout_, timeoutMs,
-            [](void*) {
+            [](void* data) {
               if (instance) {
-                log::debug("Reconfigure after VBC close");
-                instance->ReconfigureAfterVbcClose();
+                bool audio_hal_check_in_progress = (PTR_TO_INT(data) != 0);
+                log::debug("Reconfigure after VBC close: audio_hal_check_in_progress: {}",
+                           audio_hal_check_in_progress);
+                instance->ReconfigureAfterVbcClose(audio_hal_check_in_progress);
               }
             },
-            nullptr);
+            INT_TO_PTR(audio_hal_check_in_progress));
   }
 
   void StopVbcCloseTimeout() {
@@ -5017,6 +5064,9 @@ public:
       stream << "  Codec location: ADSP"
              << (CodecManager::GetInstance()->IsUsingCodecExtensibility() ? " (codec extensibility)"
                                                                           : "")
+             << (audio_hal_is_capable_to_send_empty_metadata_
+                         ? " "
+                         : ", note: cannot send empty metadata.")
              << "\n";
     } else {
       dprintf(fd, "  Codec location: UNKNOWN\n");
@@ -6178,10 +6228,12 @@ public:
       return;
     }
 
-    /* Stop the VBC close timeout timer, since we will reconfigure anyway if the
-     * VBC was suspended.
-     */
-    StopVbcCloseTimeout();
+    if (!com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      /* Stop the VBC close timeout timer, since we will reconfigure anyway if the
+       * VBC was suspended.
+       */
+      StopVbcCloseTimeout();
+    }
 
     group->dsa_.mode = dsa_mode;
 
@@ -6362,6 +6414,36 @@ public:
      */
     if (audio_receiver_state_ == AudioState::STARTED) {
       ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSource);
+    } else if (audio_receiver_state_ == AudioState::IDLE) {
+      if (com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+        /* Workaround warning.
+         * For Audio HAL which is not sending empty metadata when tracks are closed.
+         *
+         * Note: It has been observed that sinkMetadata update arrives with no associated
+         * Resume/Suspend call. This along with voice back channel timeout is used to detect if
+         * the Audio HAL can send empty metadata or not.
+         * Test is to see if after setting metadata there is a Resume call within 2 sec.
+         *
+         * Later, for Audio HAL  which is not supporting empty metadata update, the voice back
+         * channel timeout is used to clear the voice back channel metadata.
+         */
+
+        if (sink_metadata.empty()) {
+          audio_hal_check_completed_ = true;
+          audio_hal_is_capable_to_send_empty_metadata_ = true;
+          return;
+        }
+
+        if (!audio_hal_check_completed_) {
+          StartVbcCloseTimeout(true);
+          audio_hal_check_completed_ = true;
+          return;
+        }
+
+        if (!audio_hal_is_capable_to_send_empty_metadata_) {
+          StartVbcCloseTimeout();
+        }
+      }
     }
   }
 
@@ -7462,6 +7544,25 @@ public:
           return;
         }
 
+        if ((audio_sender_state_ != AudioState::READY_TO_START &&
+             audio_sender_state_ != AudioState::STARTED) &&
+            audio_receiver_state_ == AudioState::READY_TO_START &&
+            !audio_hal_is_capable_to_send_empty_metadata_) {
+          /*
+           * Warning - sending additional Local Source configuration for the Audio HAL which is
+           * not capable to send empty metadata, as it has another issue with being not able to
+           * start Recording scenarios when there is no configuration update on the Encoding
+           * session first.
+           */
+          log::info("Sending additional UpdateConfig signal on encoding session");
+          CodecManager::GetInstance()->UpdateActiveAudioConfig(
+                  group->stream_conf.stream_params,
+                  group->stream_conf.codec_id,
+                  std::bind(&LeAudioClientImpl::UpdateAudioConfigToHal, weak_factory_.GetWeakPtr(),
+                            std::placeholders::_1, std::placeholders::_2),
+                  ::bluetooth::le_audio::types::kLeAudioDirectionSink);
+        }
+
         if (audio_sender_state_ == AudioState::READY_TO_START) {
           startSendingAudioWrapper(group);
         } else if (audio_sender_state_ == AudioState::STARTED) {
@@ -7889,6 +7990,12 @@ private:
   std::map<int, GroupStreamStatus> lastNotifiedGroupStreamStatusMap_;
 
   std::vector<RawAddress> lexAvailableTransportDevices_;
+
+  /* This is used for the workaround with Pixel HIDL Audio HAL */
+  bool audio_hal_check_completed_ = false;
+
+  /* Assume that  Audio HAL can send empty metadata when tracks are closed */
+  bool audio_hal_is_capable_to_send_empty_metadata_ = true;
 
   void ClientAudioInterfaceRelease() {
     auto group = aseGroups_.FindById(active_group_id_);

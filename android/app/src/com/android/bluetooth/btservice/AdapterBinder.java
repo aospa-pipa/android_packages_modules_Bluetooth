@@ -54,7 +54,7 @@ class AdapterBinder extends IAdapter.Stub {
     public void killBluetoothProcess() {
         mService.enforceCallingPermission(BLUETOOTH_PRIVILEGED, null);
 
-        Runnable killAction =
+        final Runnable killAction =
                 () -> {
                     if (Flags.killInsteadOfExit()) {
                         Log.i(TAG, "killBluetoothProcess: Calling killProcess(myPid())");
@@ -78,7 +78,12 @@ class AdapterBinder extends IAdapter.Stub {
         // Bluetooth cannot be killed on the main thread; it is in a deadLock.
         // Trying to recover by killing the Bluetooth from the binder thread.
         // This is bad :(
-        Log.wtf(TAG, "Failed to kill Bluetooth using its main thread. Trying from binder");
+        final var killType = Flags.killInsteadOfExit() ? "Process.killProcess" : "System.exit";
+        Log.wtf(
+                TAG,
+                "Failed to kill Bluetooth via "
+                        + killType
+                        + " using its main thread. Trying from binder");
         killAction.run();
     }
 
@@ -102,17 +107,6 @@ class AdapterBinder extends IAdapter.Stub {
 
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.onToBleOn();
-    }
-
-    @Override
-    public void onewayFactoryReset() {
-        AdapterService service = getService();
-        if (service == null) {
-            return;
-        }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        service.factoryReset();
     }
 
     @Override

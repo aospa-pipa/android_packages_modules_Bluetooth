@@ -46,6 +46,7 @@
 #endif
 
 #include "btif/include/btif_config.h"
+#include "device/include/interop_config.h"
 #include "device/include/device_iot_config.h"
 #include "device/include/interop_config.h"
 #include "stack/include/bt_uuid16.h"

@@ -28,6 +28,7 @@
 
 #include <android_bluetooth_sysprop.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/hci_role.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -80,7 +81,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "storage/config_keys.h"
 #include "types/bt_transport.h"
-#include "types/hci_role.h"
 #include "types/raw_address.h"
 
 using namespace bluetooth;
@@ -666,7 +666,10 @@ void bta_av_role_res(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       p_scb->wait &= ~BTA_AV_WAIT_ROLE_SW_BITS;
       if (p_data->role_res.hci_status != HCI_SUCCESS) {
         p_scb->role &= ~BTA_AV_ROLE_START_INT;
-        bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+        bta_sys_idle(BTA_ID_AV,
+                     com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                      : p_scb->hdi,
+                     p_scb->PeerAddress());
         /* start failed because of role switch. */
         tBTA_AV bta_av_data = {
                 .start =
@@ -1868,11 +1871,11 @@ void bta_av_setconfig_rej(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   tBTA_AV bta_av_data;
 
   bta_av_data = {
-    .reject =
-    {
-      .bd_addr = p_scb->PeerAddress(),
-      .hndl = p_scb->hndl,
-    },
+          .reject =
+                  {
+                          .bd_addr = p_scb->PeerAddress(),
+                          .hndl = p_scb->hndl,
+                  },
   };
 
   (*bta_av_cb.p_cback)(BTA_AV_REJECT_EVT, &bta_av_data);
@@ -1961,7 +1964,10 @@ void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
 
   p_scb->role |= BTA_AV_ROLE_START_INT;
-  bta_sys_busy(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
   /* disallow role switch during streaming, only if we are the central role
    * i.e. allow role switch, if we are peripheral.
    * It would not hurt us, if the peer device wants us to be central
@@ -2013,7 +2019,10 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
   if(!is_delay_subrate) {
     log::info("Not delaying Sniff Subrating");
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                  : p_scb->hdi,
+                 p_scb->PeerAddress());
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
 
@@ -2041,7 +2050,9 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   if (com::android::bluetooth::flags::delay_sniff_subrating()) {
     log::info("Delayed Sniff Subrating");
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id : p_scb->hdi,
+                 p_scb->PeerAddress());
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
 
@@ -2386,7 +2397,10 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   if (p_data && (p_data->hdr.offset != BTA_AV_RS_NONE)) {
     p_scb->wait &= ~BTA_AV_WAIT_ROLE_SW_BITS;
     if (p_data->hdr.offset == BTA_AV_RS_FAIL) {
-      bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+      bta_sys_idle(BTA_ID_AV,
+                   com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                    : p_scb->hdi,
+                   p_scb->PeerAddress());
       tBTA_AV bta_av_data = {
               .start =
                       {
@@ -2435,7 +2449,10 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   /* tell role manager to check M/S role */
   bta_sys_conn_open(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
 
-  bta_sys_busy(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
 
   if (p_scb->media_type == AVDT_MEDIA_TYPE_AUDIO) {
     /* in normal logic, conns should be bta_av_cb.audio_count - 1,
@@ -2535,7 +2552,10 @@ void bta_av_start_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
       p_scb->started, p_scb->co_started);
 
   if (!p_scb->started && !p_scb->co_started) {
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                  : p_scb->hdi,
+                 p_scb->PeerAddress());
     notify_start_failed(p_scb);
   }
 
@@ -2666,7 +2686,10 @@ void bta_av_suspend_cfm(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->cong = false;
   }
 
-  bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+  bta_sys_idle(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
   BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
 
   /* in case that we received suspend_ind, we may need to call co_stop here */
