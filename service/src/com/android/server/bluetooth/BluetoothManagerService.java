@@ -344,18 +344,8 @@ class BluetoothManagerService {
             return false;
         }
 
-        if (Flags.factoryResetAtBluetoothStart()) {
-            Log.d(TAG, "factoryReset: Will perform service restart after setting reset property");
-            BluetoothProperties.factory_reset(true);
-        } else {
-            Log.d(TAG, "factoryReset: Now performing service reset & restart");
-            try {
-                mAdapter.factoryReset();
-            } catch (RemoteException e) {
-                mHandler.postDelayed(() -> factoryReset(count + 1), 1_000);
-                return false;
-            }
-        }
+        Log.d(TAG, "factoryReset: Will perform service restart after setting reset property");
+        BluetoothProperties.factory_reset(true);
 
         clearBleApps();
         ActiveLogs.add(ENABLE_DISABLE_REASON_FACTORY_RESET, false);
@@ -676,7 +666,7 @@ class BluetoothManagerService {
                         @Override
                         public void onReceive(Context context, Intent intent) {
                             switch (intent.getAction()) {
-                                case Intent.ACTION_USER_SWITCHED:
+                                case Intent.ACTION_USER_SWITCHED -> {
                                     if (Flags.limitUserSwitchPropagation()) {
                                         throw new IllegalStateException(
                                                 "limitUserSwitchPropagation is activated");
@@ -684,15 +674,16 @@ class BluetoothManagerService {
                                     int foregroundUserId =
                                             intent.getIntExtra(Intent.EXTRA_USER_HANDLE, 0);
                                     propagateForegroundUserId(foregroundUserId);
-                                    break;
-                                case UserManager.ACTION_USER_RESTRICTIONS_CHANGED:
+                                }
+                                case UserManager.ACTION_USER_RESTRICTIONS_CHANGED -> {
                                     onUserRestrictionsChanged(getSendingUser());
-                                    break;
-                                default:
+                                }
+                                default -> {
                                     Log.e(
                                             TAG,
                                             "Unknown broadcast received in BluetoothManagerService"
                                                     + " receiver registered across all users");
+                                }
                             }
                         }
                     },
@@ -826,9 +817,6 @@ class BluetoothManagerService {
         mCallbacks.unregister(callback);
     }
 
-    boolean isEnabled() {
-        return getState() == State.ON;
-    }
 
 //  @GuardedBy("mAdapterLock")
 //     private boolean synchronousDisable(AttributionSource attributionSource)
@@ -931,6 +919,10 @@ class BluetoothManagerService {
 //         return supportedProfiles;
 //     }
 
+    boolean isEnabled() {
+        return getState() == State.ON;
+    }
+
     /**
      * Sends the current foreground user id to the Bluetooth process. This user id is used to
      * determine if Binder calls are coming from the active user.
@@ -961,18 +953,8 @@ class BluetoothManagerService {
             mBinder = binder;
         }
 
-        ClientDeathRecipient(String packageName) {
-            if (Flags.bleDeathRecipientThread()) {
-                throw new IllegalStateException(
-                        "bleDeathRecipientThread flag is deprecating this constructor");
-            }
-            mPackageName = packageName;
-            mBinder = null;
-        }
-
         @Override
         public void binderDied() {
-            if (Flags.bleDeathRecipientThread()) {
                 Log.w(TAG, "Binder is dead - posting the unregister of " + mPackageName);
                 mHandler.post(
                         () ->
@@ -980,18 +962,6 @@ class BluetoothManagerService {
                                         ENABLE_DISABLE_REASON_APPLICATION_DIED,
                                         mBinder,
                                         mPackageName));
-                return;
-            }
-            Log.w(TAG, "Binder is dead - unregister " + mPackageName);
-
-            for (Map.Entry<IBinder, ClientDeathRecipient> entry : mBleApps.entrySet()) {
-                IBinder token = entry.getKey();
-                ClientDeathRecipient deathRec = entry.getValue();
-                if (deathRec.equals(this)) {
-                    updateBleAppCount(token, false, mPackageName);
-                    break;
-                }
-            }
 
             int appCount = mBleApps.size();
             Log.i(TAG, appCount + "Binder is dead,registered Ble Apps");
@@ -1085,31 +1055,6 @@ class BluetoothManagerService {
         bleOnToOffIfNeeded(reason, packageName);
     }
 
-    private int updateBleAppCount(IBinder token, boolean enable, String packageName) {
-        String header = "updateBleAppCount(" + token + ", " + enable + ", " + packageName + ")";
-        ClientDeathRecipient r = mBleApps.get(token);
-        int st = State.OFF;
-        if (r == null && enable) {
-            ClientDeathRecipient deathRec = new ClientDeathRecipient(packageName);
-            try {
-                token.linkToDeath(deathRec, 0);
-            } catch (RemoteException ex) {
-                throw new IllegalArgumentException("BLE app (" + packageName + ") already dead!");
-            }
-            mBleApps.put(token, deathRec);
-            Log.d(TAG, header + " linkToDeath");
-        } else if (!enable && r != null) {
-            // Unregister death recipient as the app goes away.
-            token.unlinkToDeath(r, 0);
-            mBleApps.remove(token);
-            Log.d(TAG, header + " unlinkToDeath");
-        }
-
-        int appCount = mBleApps.size();
-        Log.d(TAG, header + " Number of BLE app registered: appCount=" + appCount);
-        return appCount;
-    }
-
     boolean enableBleFromBinder(String packageName, IBinder token) {
         return postAndWait(() -> enableBle(packageName, token));
     }
@@ -1143,11 +1088,7 @@ class BluetoothManagerService {
             return false;
         }
 
-        if (Flags.bleDeathRecipientThread()) {
-            addBleApp(token, packageName);
-        } else {
-            updateBleAppCount(token, true, packageName);
-        }
+        addBleApp(token, packageName);
 
         if (mState.oneOf(
                 State.ON,
@@ -1174,22 +1115,13 @@ class BluetoothManagerService {
                         + (" mAdapter=" + mAdapter)
                         + (" isBinding=" + isBinding())
                         + (" mState=" + mState));
-        /* update app count even in bt off state, if quick enableBle and
-         * disableBle during BT turning off may leave app count non zero
-         */
-        updateBleAppCount(token, false, packageName);
 
         if (mState.oneOf(State.OFF)) {
             Log.i(TAG, "disableBle: Already disabled");
             return false;
         }
 
-        if (Flags.bleDeathRecipientThread()) {
-            removeBleApp(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, token, packageName);
-        } else {
-            updateBleAppCount(token, false, packageName);
-            bleOnToOffIfNeeded(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, packageName);
-        }
+        removeBleApp(ENABLE_DISABLE_REASON_APPLICATION_REQUEST, token, packageName);
         return true;
     }
 
@@ -1219,9 +1151,7 @@ class BluetoothManagerService {
 
     // Clear all apps using BLE scan only mode.
     private void clearBleApps() {
-        if (Flags.bleDeathRecipientThread()) {
-            mBleApps.entrySet().stream().forEach(e -> e.getKey().unlinkToDeath(e.getValue(), 0));
-        }
+        mBleApps.entrySet().stream().forEach(e -> e.getKey().unlinkToDeath(e.getValue(), 0));
         mBleApps.clear();
     }
 
@@ -1555,6 +1485,7 @@ class BluetoothManagerService {
 
     @VisibleForTesting
     class BluetoothServiceConnection implements ServiceConnection {
+        @Override
         public void onServiceConnected(ComponentName componentName, IBinder service) {
             String name = componentName.getClassName();
             Log.d(TAG, "ServiceConnection.onServiceConnected(" + name + ", " + service + ")");
@@ -1565,6 +1496,7 @@ class BluetoothManagerService {
             mHandler.obtainMessage(MESSAGE_BLUETOOTH_SERVICE_CONNECTED, service).sendToTarget();
         }
 
+        @Override
         public void onServiceDisconnected(ComponentName componentName) {
             // Called if we unexpectedly disconnect.
             String name = componentName.getClassName();
@@ -1582,6 +1514,18 @@ class BluetoothManagerService {
             } else {
                 mHandler.sendEmptyMessage(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED);
             }
+        }
+
+        @Override
+        public void onBindingDied(ComponentName componentName) {
+            String name = componentName.getClassName();
+            Log.wtf(TAG, "ServiceConnection.onBindingDied(" + name + ")");
+        }
+
+        @Override
+        public void onNullBinding(ComponentName componentName) {
+            String name = componentName.getClassName();
+            Log.wtf(TAG, "ServiceConnection.onNullBinding(" + name + ")");
         }
     }
 
@@ -1683,23 +1627,16 @@ class BluetoothManagerService {
                     // wait for the BT process to fully tear down and then force a restart
                     // here. This is a bit of a hack (b/29363429).
                     if (prevState == State.BLE_TURNING_OFF && newState == State.OFF) {
-                        if (Flags.enableBleWhileDisablingAirplane()) {
-                            if (mHandler.hasMessages(0, ON_AIRPLANE_MODE_CHANGED_TOKEN)) {
-                                mHandler.removeCallbacksAndMessages(ON_AIRPLANE_MODE_CHANGED_TOKEN);
-                                Log.d(TAG, "Handling delayed airplane mode event");
-                                handleAirplaneModeChanged(AirplaneModeListener.isOnOverrode());
-                            }
-                            // When performing FactoryReset, we currently depend on this to restart
-                            if (mEnable && !isBinding()) {
-                                Log.d(TAG, "Entering State.OFF but mEnabled is true; restarting.");
-                                handleRestartMessage();
-                            }
-                        } else {
-                            if (mEnable) {
-                                Log.d(TAG, "Entering State.OFF but mEnabled is true; restarting.");
-                                mHandler.removeMessages(MESSAGE_RESTART_BLUETOOTH_SERVICE);
-                                handleRestartMessage();
-                            }
+                        if (mHandler.hasMessages(0, ON_AIRPLANE_MODE_CHANGED_TOKEN)) {
+                            mHandler.removeCallbacksAndMessages(ON_AIRPLANE_MODE_CHANGED_TOKEN);
+                            Log.d(TAG, "Handling delayed airplane mode event");
+                            handleAirplaneModeChanged(AirplaneModeListener.isOnOverrode());
+                        }
+                        // When performing FactoryReset, we currently depend on this to restart
+                        if (mEnable && !isBinding()) {
+                            Log.d(TAG, "Entering State.OFF but mEnabled is true; restarting.");
+                            mHandler.removeMessages(MESSAGE_RESTART_BLUETOOTH_SERVICE);
+                            handleRestartMessage();
                         }
                     }
                     if (newState == State.ON || newState == State.BLE_ON) {
@@ -1984,7 +1921,7 @@ class BluetoothManagerService {
             return;
         }
 
-        if (mAdapter != null && isEnabled()) {
+        if (mAdapter != null && mState.oneOf(State.ON)) {
             mCurrentUser = userTo;
             mCurrentUserContext = mContext.createContextAsUser(userTo, 0);
 
@@ -2055,24 +1992,42 @@ class BluetoothManagerService {
         sendEnableMsg(false, ENABLE_DISABLE_REASON_USER_SWITCH);
     }
 
-    private void bindToAdapterForCurrentUser() {
-        requireNonNull(mCurrentUser, "There is no user to start for.");
-        int flags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
-        Intent intent = new Intent(IAdapter.class.getName());
-        intent.setComponent(resolveSystemService(intent));
+    private boolean resetAdapter() {
+        if (mAdapter == null) {
+            return false;
+        }
+        mAdapter = null;
+        mContext.unbindService(mConnection);
+        return true;
+    }
 
-        Log.d(TAG, "Start binding to the Bluetooth service with intent=" + intent);
-        if (!mContext.bindServiceAsUser(intent, mConnection, flags, mCurrentUser)) {
-            Log.e(TAG, "Fail to bind to intent=" + intent);
-            mContext.unbindService(mConnection);
-            if (Flags.userSwitchDuringBleOn()) {
-                bluetoothStateChangeHandler(State.BLE_TURNING_ON, State.OFF);
-                clearBleApps();
-                ActiveLogs.add(ENABLE_DISABLE_REASON_START_ERROR, false);
-            }
+    private void handleEnable() {
+        if (mAdapter != null) {
+            Log.w(TAG, "handleEnable: Adapter already created");
+            return;
+        } else if (isBinding()) {
+            Log.w(TAG, "handleEnable: Binding in progress");
             return;
         }
-        mHandler.sendEmptyMessageDelayed(MESSAGE_TIMEOUT_BIND, TIMEOUT_BIND_MS);
+
+        if (Flags.userSwitchDuringBleOn()) {
+            bluetoothStateChangeHandler(State.OFF, State.BLE_TURNING_ON);
+        }
+        RolePermissionListener.registerForUser(
+                mLooper, mCurrentUserContext, mCurrentUser, this::onRoleGranted);
+    }
+
+    private Unit onRoleGranted() {
+        if (!(mEnableExternal || isBleAppPresent())) {
+            Log.w(TAG, "onRoleGranted: external=" + mEnableExternal + " ble=" + isBleAppPresent());
+        } else if (mAdapter != null) {
+            Log.w(TAG, "onRoleGranted: Adapter already created");
+        } else if (isBinding()) {
+            Log.w(TAG, "onRoleGranted: Binding in progress");
+        } else {
+            bindToAdapter();
+        }
+        return Unit.INSTANCE;
     }
 
     private void bindToAdapter() {
@@ -2098,40 +2053,24 @@ class BluetoothManagerService {
         }
     }
 
-    private boolean resetAdapter() {
-        if (mAdapter == null) {
-            return false;
-        }
-        mAdapter = null;
-        mContext.unbindService(mConnection);
-        return true;
-    }
+    private void bindToAdapterForCurrentUser() {
+        requireNonNull(mCurrentUser, "There is no user to start for.");
+        int flags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
+        Intent intent = new Intent(IAdapter.class.getName());
+        intent.setComponent(resolveSystemService(intent));
 
-    private void handleEnable() {
-        if (mAdapter == null && !isBinding()) {
+        Log.d(TAG, "Start binding to the Bluetooth service with intent=" + intent);
+        if (!mContext.bindServiceAsUser(intent, mConnection, flags, mCurrentUser)) {
+            Log.e(TAG, "Fail to bind to intent=" + intent);
+            mContext.unbindService(mConnection);
             if (Flags.userSwitchDuringBleOn()) {
-                bluetoothStateChangeHandler(State.OFF, State.BLE_TURNING_ON);
+                bluetoothStateChangeHandler(State.BLE_TURNING_ON, State.OFF);
+                clearBleApps();
+                ActiveLogs.add(ENABLE_DISABLE_REASON_START_ERROR, false);
             }
-            if (Flags.waitStackRoleBeforeStarting()) {
-                RolePermissionListener.registerForUser(
-                        mLooper, mCurrentUserContext, mCurrentUser, this::onRoleGranted);
-                return;
-            }
-            bindToAdapter();
+            return;
         }
-    }
-
-    private Unit onRoleGranted() {
-        if (!(mEnableExternal || isBleAppPresent())) {
-            Log.w(TAG, "onRoleGranted: external=" + mEnableExternal + " ble=" + isBleAppPresent());
-        } else if (mAdapter != null) {
-            Log.w(TAG, "onRoleGranted: Adapter already created");
-        } else if (isBinding()) {
-            Log.w(TAG, "onRoleGranted: Binding in progress");
-        } else {
-            bindToAdapter();
-        }
-        return Unit.INSTANCE;
+        mHandler.sendEmptyMessageDelayed(MESSAGE_TIMEOUT_BIND, TIMEOUT_BIND_MS);
     }
 
     private void handleDisableDelayed() {

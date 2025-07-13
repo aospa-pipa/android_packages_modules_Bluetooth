@@ -843,18 +843,14 @@ public class BassClientService extends ConnectableProfile {
     }
 
     private static boolean isSuccess(int status) {
-        boolean ret = false;
-        switch (status) {
-            case BluetoothStatusCodes.REASON_LOCAL_APP_REQUEST:
-            case BluetoothStatusCodes.REASON_LOCAL_STACK_REQUEST:
-            case BluetoothStatusCodes.REASON_REMOTE_REQUEST:
-            case BluetoothStatusCodes.REASON_SYSTEM_POLICY:
-                ret = true;
-                break;
-            default:
-                break;
-        }
-        return ret;
+        return switch (status) {
+            case BluetoothStatusCodes.REASON_LOCAL_APP_REQUEST,
+                    BluetoothStatusCodes.REASON_LOCAL_STACK_REQUEST,
+                    BluetoothStatusCodes.REASON_REMOTE_REQUEST,
+                    BluetoothStatusCodes.REASON_SYSTEM_POLICY ->
+                    true;
+            default -> false;
+        };
     }
 
     private boolean isAnyPendingAddSourceOperation() {
@@ -897,7 +893,7 @@ public class BassClientService extends ConnectableProfile {
                     List<Pair<Integer, Object>> operations = new ArrayList<>(opsToModify);
 
                     switch (reqMsg) {
-                        case BassClientStateMachine.ADD_BCAST_SOURCE:
+                        case BassClientStateMachine.ADD_BCAST_SOURCE -> {
                             if (obj == null) {
                                 return operations;
                             }
@@ -912,15 +908,14 @@ public class BassClientService extends ConnectableProfile {
                                 removeMatchingOperation(operations, reqMsg, obj);
                                 shouldUpdateAssistantActive.set(true);
                             }
-                            break;
-                        case BassClientStateMachine.REMOVE_BCAST_SOURCE:
+                        }
+                        case BassClientStateMachine.REMOVE_BCAST_SOURCE -> {
                             // Identify the operation by operation type and sourceId
                             removeMatchingOperation(operations, reqMsg, obj);
                             Integer sourceId = (Integer) obj;
                             setSourceGroupManaged(sink, sourceId, false);
-                            break;
-                        default:
-                            break;
+                        }
+                        default -> {}
                     }
                     return operations;
                 });
@@ -1695,13 +1690,21 @@ public class BassClientService extends ConnectableProfile {
     @Override
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
-        if (device == null) {
-            Log.e(TAG, "connect: device is null");
-            return false;
-        }
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            Log.e(TAG, "connect: connection policy set to forbidden");
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            requireNonNull(device);
+
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (device == null) {
+                Log.e(TAG, "connect: device is null");
+                return false;
+            }
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                Log.e(TAG, "connect: connection policy set to forbidden");
+                return false;
+            }
         }
 
         final ParcelUuid[] featureUuids = mAdapterService.getRemoteUuids(device);
@@ -1758,6 +1761,9 @@ public class BassClientService extends ConnectableProfile {
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
     public boolean okToConnect(BluetoothDevice device) {
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            return super.okToConnect(device);
+        }
         // Check if this is an incoming connection in Quiet mode.
         if (mAdapterService.isQuietModeEnabled()) {
             Log.e(TAG, "okToConnect: cannot connect to " + device + " : quiet mode enabled");
@@ -4605,50 +4611,44 @@ public class BassClientService extends ConnectableProfile {
             BluetoothDevice sink;
 
             switch (msg.what) {
-                case MSG_SOURCE_ADDED:
-                case MSG_SOURCE_ADDED_FAILED:
+                case MSG_SOURCE_ADDED, MSG_SOURCE_ADDED_FAILED -> {
                     ObjParams param = (ObjParams) msg.obj;
                     sink = param.device;
                     sService.checkForPendingGroupOpRequest(
                             sink, reason, BassClientStateMachine.ADD_BCAST_SOURCE, param.obj2);
-                    break;
-                case MSG_SOURCE_REMOVED:
-                case MSG_SOURCE_REMOVED_FAILED:
+                }
+                case MSG_SOURCE_REMOVED, MSG_SOURCE_REMOVED_FAILED -> {
                     sink = (BluetoothDevice) msg.obj;
                     sService.checkForPendingGroupOpRequest(
                             sink,
                             reason,
                             BassClientStateMachine.REMOVE_BCAST_SOURCE,
                             Integer.valueOf(msg.arg2));
-                    break;
-                default:
-                    break;
+                }
+                default -> {}
             }
         }
 
         private static boolean handleServiceInternalMessage(Message msg) {
-            boolean isMsgHandled = false;
             if (sService == null) {
                 Log.e(TAG, "Service is null");
-                return isMsgHandled;
+                return false;
             }
             BluetoothDevice sink;
 
-            switch (msg.what) {
-                case MSG_BASS_STATE_READY:
+            return switch (msg.what) {
+                case MSG_BASS_STATE_READY -> {
                     sink = (BluetoothDevice) msg.obj;
                     sService.handleBassStateReady(sink);
-                    isMsgHandled = true;
-                    break;
-                case MSG_BASS_STATE_SETUP_FAILED:
+                    yield true;
+                }
+                case MSG_BASS_STATE_SETUP_FAILED -> {
                     sink = (BluetoothDevice) msg.obj;
                     sService.handleBassStateSetupFailed(sink);
-                    isMsgHandled = true;
-                    break;
-                default:
-                    break;
-            }
-            return isMsgHandled;
+                    yield true;
+                }
+                default -> false;
+            };
         }
 
         @Override
@@ -4686,60 +4686,45 @@ public class BassClientService extends ConnectableProfile {
             BluetoothDevice sink;
 
             switch (msg.what) {
-                case MSG_SEARCH_STARTED:
-                    callback.onSearchStarted(reason);
-                    break;
-                case MSG_SEARCH_STARTED_FAILED:
-                    callback.onSearchStartFailed(reason);
-                    break;
-                case MSG_SEARCH_STOPPED:
-                    callback.onSearchStopped(reason);
-                    break;
-                case MSG_SEARCH_STOPPED_FAILED:
-                    callback.onSearchStopFailed(reason);
-                    break;
-                case MSG_SOURCE_FOUND:
-                    callback.onSourceFound((BluetoothLeBroadcastMetadata) msg.obj);
-                    break;
-                case MSG_SOURCE_ADDED:
+                case MSG_SEARCH_STARTED -> callback.onSearchStarted(reason);
+                case MSG_SEARCH_STARTED_FAILED -> callback.onSearchStartFailed(reason);
+                case MSG_SEARCH_STOPPED -> callback.onSearchStopped(reason);
+                case MSG_SEARCH_STOPPED_FAILED -> callback.onSearchStopFailed(reason);
+                case MSG_SOURCE_FOUND ->
+                        callback.onSourceFound((BluetoothLeBroadcastMetadata) msg.obj);
+                case MSG_SOURCE_ADDED -> {
                     param = (ObjParams) msg.obj;
                     sink = param.device;
                     callback.onSourceAdded(sink, sourceId, reason);
-                    break;
-                case MSG_SOURCE_ADDED_FAILED:
+                }
+                case MSG_SOURCE_ADDED_FAILED -> {
                     param = (ObjParams) msg.obj;
                     sink = param.device;
                     BluetoothLeBroadcastMetadata metadata =
                             (BluetoothLeBroadcastMetadata) param.obj2;
                     callback.onSourceAddFailed(sink, metadata, reason);
-                    break;
-                case MSG_SOURCE_MODIFIED:
-                    callback.onSourceModified((BluetoothDevice) msg.obj, sourceId, reason);
-                    break;
-                case MSG_SOURCE_MODIFIED_FAILED:
-                    callback.onSourceModifyFailed((BluetoothDevice) msg.obj, sourceId, reason);
-                    break;
-                case MSG_SOURCE_REMOVED:
+                }
+                case MSG_SOURCE_MODIFIED ->
+                        callback.onSourceModified((BluetoothDevice) msg.obj, sourceId, reason);
+                case MSG_SOURCE_MODIFIED_FAILED ->
+                        callback.onSourceModifyFailed((BluetoothDevice) msg.obj, sourceId, reason);
+                case MSG_SOURCE_REMOVED -> {
                     sink = (BluetoothDevice) msg.obj;
                     callback.onSourceRemoved(sink, sourceId, reason);
-                    break;
-                case MSG_SOURCE_REMOVED_FAILED:
+                }
+                case MSG_SOURCE_REMOVED_FAILED -> {
                     sink = (BluetoothDevice) msg.obj;
                     callback.onSourceRemoveFailed(sink, sourceId, reason);
-                    break;
-                case MSG_RECEIVESTATE_CHANGED:
+                }
+                case MSG_RECEIVESTATE_CHANGED -> {
                     param = (ObjParams) msg.obj;
                     sink = param.device;
                     BluetoothLeBroadcastReceiveState state =
                             (BluetoothLeBroadcastReceiveState) param.obj2;
                     callback.onReceiveStateChanged(sink, sourceId, state);
-                    break;
-                case MSG_SOURCE_LOST:
-                    callback.onSourceLost(sourceId);
-                    break;
-                default:
-                    Log.e(TAG, "Invalid msg: " + msg.what);
-                    break;
+                }
+                case MSG_SOURCE_LOST -> callback.onSourceLost(sourceId);
+                default -> Log.e(TAG, "Invalid msg: " + msg.what);
             }
         }
 

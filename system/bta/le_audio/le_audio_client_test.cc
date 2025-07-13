@@ -11733,7 +11733,9 @@ TEST_F(UnicastTest, SwitchBetweenMicrophoneAndSoundEffectScenario) {
   UpdateLocalSinkMetadata(AUDIO_SOURCE_MIC);
   LocalAudioSinkResume();
 
-  ASSERT_EQ(1, get_func_call_count("alarm_set_on_mloop"));
+  /* 1: StartVbcTimeout for Sink Metadata
+   * 2: update_to_relaxed_conn_interval_timer after connect */
+  ASSERT_EQ(2, get_func_call_count("alarm_set_on_mloop"));
   SyncOnMainLoop();
 
   Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
@@ -11750,8 +11752,12 @@ TEST_F(UnicastTest, SwitchBetweenMicrophoneAndSoundEffectScenario) {
   SyncOnMainLoop();
 
   log::info("Expect VBC and Suspend timeouts to be started");
-  ASSERT_EQ(3, get_func_call_count("alarm_set_on_mloop"));
-  ASSERT_EQ(1, get_func_call_count("alarm_cancel"));
+  /*
+   * 3: Start Vbc Timeout
+   * 4: Start Suspend Timeout
+   */
+  ASSERT_EQ(4, get_func_call_count("alarm_set_on_mloop"));
+  ASSERT_EQ(2, get_func_call_count("alarm_cancel"));
 
   log::info("Resume local source with touch tone - expect suspend timeout to be canceled");
 
@@ -11759,8 +11765,8 @@ TEST_F(UnicastTest, SwitchBetweenMicrophoneAndSoundEffectScenario) {
   LocalAudioSourceResume();
   SyncOnMainLoop();
 
-  log::info("Expect VBC and Suspend timeouts to be started");
-  ASSERT_EQ(3, get_func_call_count("alarm_set_on_mloop"));
+  log::info("Expect VBC and Suspend timeouts to be NOT started");
+  ASSERT_EQ(4, get_func_call_count("alarm_set_on_mloop"));
 
   auto group = streaming_groups.at(group_id);
   group->PrintDebugState();
@@ -11839,8 +11845,8 @@ TEST_F(UnicastTest, SwitchBetweenSoundEffectAndMicrophoneScenario) {
   TestAudioDataTransfer(group_id, cis_count_out, cis_count_in, 1920, 60);
 
   /* We expect Reconfiguration timer to be started and canceled. */
-  ASSERT_EQ(2, get_func_call_count("alarm_set_on_mloop"));
-  ASSERT_EQ(2, get_func_call_count("alarm_cancel"));
+  ASSERT_EQ(3, get_func_call_count("alarm_set_on_mloop"));
+  ASSERT_EQ(3, get_func_call_count("alarm_cancel"));
 }
 
 TEST_F(UnicastTest, MicrophoneOnlyGameStreaming) {

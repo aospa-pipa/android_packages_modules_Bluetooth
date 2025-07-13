@@ -60,7 +60,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
 
         String brEdrAddress = Utils.getBrEdrAddress(device, mService);
 
-        if (type == BluetoothSocket.TYPE_L2CAP_LE) {
+        if (type == BluetoothSocket.TYPE_LE) {
           leDeviceAddr = mService.getIdentityAddress(device.getAddress());
           if (leDeviceAddr == null)
             leDeviceAddr = device.getAddress();
@@ -88,7 +88,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
                 mService.getNative()
                         .connectSocket(
                                 Utils.getBytesFromAddress(
-                                        type == BluetoothSocket.TYPE_L2CAP_LE
+                                        type == BluetoothSocket.TYPE_LE
                                                 ? leDeviceAddr
                                                 : brEdrAddress),
                                 type,
@@ -146,7 +146,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
                 mService.getNative()
                         .connectSocket(
                                 Utils.getBytesFromAddress(
-                                        type == BluetoothSocket.TYPE_L2CAP_LE
+                                        type == BluetoothSocket.TYPE_LE
                                                 ? device.getAddress()
                                                 : brEdrAddress),
                                 type,

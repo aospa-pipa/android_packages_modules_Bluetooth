@@ -1048,11 +1048,9 @@ bt_status_t btif_storage_load_bonded_devices(void) {
                                    sizeof(remote_uuids), &remote_properties[num_props]);
       num_props++;
 
-      if (com::android::bluetooth::flags::separate_service_storage()) {
-        btif_storage_get_remote_prop(p_remote_addr, BT_PROPERTY_UUIDS_LE, &remote_uuids_le,
-                                     sizeof(remote_uuids_le), &remote_properties[num_props]);
-        num_props++;
-      }
+      btif_storage_get_remote_prop(p_remote_addr, BT_PROPERTY_UUIDS_LE, &remote_uuids_le,
+                                   sizeof(remote_uuids_le), &remote_properties[num_props]);
+      num_props++;
 
       // Floss needs appearance for metrics purposes
       uint16_t appearance = 0;
@@ -1466,10 +1464,6 @@ void btif_storage_remove_gatt_cl_db_hash(const RawAddress& bd_addr) {
 
 std::vector<bluetooth::Uuid> btif_storage_get_services(const RawAddress& bd_addr,
                                                        tBT_TRANSPORT transport) {
-  if (!com::android::bluetooth::flags::separate_service_storage()) {
-    transport = BT_TRANSPORT_BR_EDR;
-  }
-
   // Get BR/EDR services if requested transport is BT_TRANSPORT_BR_EDR or BT_TRANSPORT_AUTO
   bool get_bredr_services = transport != BT_TRANSPORT_LE;
 

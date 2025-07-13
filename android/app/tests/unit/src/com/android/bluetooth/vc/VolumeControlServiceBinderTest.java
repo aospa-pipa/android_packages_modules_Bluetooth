@@ -23,7 +23,6 @@ import static com.android.bluetooth.TestUtils.getTestDevice;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -31,12 +30,12 @@ import static org.mockito.Mockito.verify;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.IAudioInputCallback;
 import android.content.AttributionSource;
-import android.platform.test.flag.junit.FlagsParameterization;
 import android.platform.test.flag.junit.SetFlagsRule;
 
 import androidx.test.filters.SmallTest;
 
 import com.android.bluetooth.flags.Flags;
+import com.android.tests.bluetooth.FlagsWrapper;
 import com.android.tests.bluetooth.MockitoRule;
 
 import org.junit.Before;
@@ -49,6 +48,7 @@ import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
 import platform.test.runner.parameterized.Parameters;
 
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** Test cases for {@link VolumeControlServiceBinder}. */
@@ -63,22 +63,27 @@ public class VolumeControlServiceBinderTest {
 
     private final BluetoothDevice mDevice = getTestDevice(25);
 
-    // private TestLooper mLooper;
     private VolumeControlServiceBinder mBinder;
 
     @Parameters(name = "{0}")
-    public static List<FlagsParameterization> getParams() {
-        return FlagsParameterization.progressionOf(Flags.FLAG_VCP_ON_MAIN_LOOPER);
+    public static List<FlagsWrapper> getParams() {
+        return FlagsWrapper.progressionOf(Flags.FLAG_VCP_ON_MAIN_LOOPER);
     }
 
-    public VolumeControlServiceBinderTest(FlagsParameterization flags) {
-        mSetFlagsRule = new SetFlagsRule(flags);
+    public VolumeControlServiceBinderTest(FlagsWrapper flags) {
+        mSetFlagsRule = new SetFlagsRule(flags.getFlags());
     }
 
     @Before
     public void setUp() throws Exception {
         doReturn(true).when(mService).isAvailable();
-        doCallRealMethod().when(mService).syncPost(any());
+        doAnswer(
+                        inv -> {
+                            ((Consumer) inv.getArgument(0)).accept(mService);
+                            return null;
+                        })
+                .when(mService)
+                .post(any());
         doAnswer(
                         inv -> {
                             return ((Function) inv.getArgument(0)).apply(mService);

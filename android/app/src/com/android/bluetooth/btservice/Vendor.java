@@ -261,10 +261,10 @@ final class Vendor {
             val = values[j];
             Log.d(TAG, "Property type: " + type);
             switch (type) {
-                case BT_VENDOR_PROPERTY_HOST_ADD_ON_FEATURES:
+                case BT_VENDOR_PROPERTY_HOST_ADD_ON_FEATURES -> {
                     updateHostFeatureSupport(val);
-                    break;
-                case BT_VENDOR_PROPERTY_SOC_ADD_ON_FEATURES:
+                }
+                case BT_VENDOR_PROPERTY_SOC_ADD_ON_FEATURES -> {
                     updateSocFeatureSupport(val);
                     if (isPowerBackoffSupported) {
                         IntentFilter wifiFilter = new IntentFilter();
@@ -277,9 +277,8 @@ final class Vendor {
                             setPowerBackoff(true);
                         }
                     }
-                    break;
-	        default:
-		    break;
+                }
+	        default -> {}
             }
         }
     }

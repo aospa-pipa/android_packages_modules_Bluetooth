@@ -228,6 +228,7 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
         return mService.onFactoryResetFromBinder();
     }
 
+    @Override
     public boolean isBleScanAvailable() {
         return mService.isBleScanAvailable();
     }

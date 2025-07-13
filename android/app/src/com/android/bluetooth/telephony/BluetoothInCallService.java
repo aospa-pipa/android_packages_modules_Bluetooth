@@ -175,15 +175,13 @@ public class BluetoothInCallService extends InCallService {
     // Add all held calls to a conference
     private static final int CHLD_TYPE_ADDHELDTOCONF = 3;
 
-    // Indicates that no BluetoothCall is ringing
-    private static final int DEFAULT_RINGING_ADDRESS_TYPE = 128;
-
     private int mNumActiveCalls = 0;
     private int mNumHeldCalls = 0;
     private int mNumChildrenOfActiveCall = 0;
     private int mBluetoothCallState = CallState.IDLE;
     private String mRingingAddress = "";
-    private int mRingingAddressType = DEFAULT_RINGING_ADDRESS_TYPE;
+    // Default is indicating no BluetoothCall is ringing
+    private int mRingingAddressType = PhoneNumberUtils.TOA_Unknown;
     private BluetoothCall mOldHeldCall = null;
     private boolean mHeadsetUpdatedRecently = false;
 
@@ -195,7 +193,7 @@ public class BluetoothInCallService extends InCallService {
     public int mDsDaOutgoingCalls = 0;
     public int mDsDaCallState = CallState.IDLE;
     public String mDsDaRingingAddress = null;
-    public int mDsDaRingingAddressType = DEFAULT_RINGING_ADDRESS_TYPE;
+    public int mDsDaRingingAddressType = PhoneNumberUtils.TOA_Unknown;
     public String mDsDaRingingName = null;
     private static final int DELAY_DSDA_CALL_INDICATORS = 60;
 
@@ -546,7 +544,7 @@ public class BluetoothInCallService extends InCallService {
 
             mDsDaEventsHadlingInProgress = true;
             switch (msg.what) {
-             case OUTGOING_INCOMING:
+             case OUTGOING_INCOMING -> {
                  Log.d(TAG, "OUTGOING_INCOMING event");
                  if (numOutgoingCalls != mDsDaOutgoingCalls) {
                    //Outgoing calls Changed
@@ -622,8 +620,8 @@ public class BluetoothInCallService extends InCallService {
                 //       mLastBtHeadsetState = CallState.IDLE;
                 //    }
                  }
-             break;
-             case MULTI_INCOMING:
+             }
+             case MULTI_INCOMING -> {
                  Log.d(TAG, "MULTI_INCOMING event");
                  if ((numRingingCalls == 1) && (mDsdaIncomingCalls == 2)) {
                    Log.d(TAG, "multiple ringing calls, 1 ringing moved to active");
@@ -740,8 +738,8 @@ public class BluetoothInCallService extends InCallService {
                      }
                    }
                  }
-             break;
-             case MULTI_HELD:
+             }
+             case MULTI_HELD -> {
                  Log.d(TAG, "MULTI_HELD event");
                  if (numHeldCalls > mDsDaHeldCalls) {
                    if (numHeldCalls >= 2) {
@@ -821,8 +819,8 @@ public class BluetoothInCallService extends InCallService {
                      }
                    }
                  }
-             break;
-             case OUTGOING_INCOMING_DISCONNECTION:
+             }
+             case OUTGOING_INCOMING_DISCONNECTION -> {
                  Log.d(TAG, "OUTGOING_INCOMING_DISCONNECTION event");
                  if (numOutgoingCalls == 1) {
                    //No need to update here.
@@ -836,8 +834,8 @@ public class BluetoothInCallService extends InCallService {
                      mFirstIncomingCallId = -1;
                    }
                  }
-             break;
-             case MULTI_RINGING_DISCONNECTION:
+             }
+             case MULTI_RINGING_DISCONNECTION -> {
                  Log.d(TAG, "MULTI_RINGING_DISCONNECTION event");
                  getDSDARingingAddress(null);
                 //  if (mBluetoothHeadset != null) {
@@ -863,8 +861,8 @@ public class BluetoothInCallService extends InCallService {
                 //       mDsDaRingingName);
                 //    mLastBtHeadsetState = CallState.INCOMING;
                 //  }
-             break;
-             case OUTGOING_DISCONNECTION:
+             }
+             case OUTGOING_DISCONNECTION -> {
                 Log.d(TAG, "OUTGOING_DISCONNECTION event");
                  if (numRingingCalls > 0) {
                    getDSDARingingAddress(getBluetoothCallById(null));
@@ -887,13 +885,12 @@ public class BluetoothInCallService extends InCallService {
                 //       mDsDaRingingName);
                    mLastBtHeadsetState = CallState.INCOMING;
                  }
-             break;
-             case DSDS_EVENT:
+             }
+             case DSDS_EVENT -> {
                 Log.d(TAG, "DSDS_EVENT event");
                 updateHeadsetWithCallState(getHeadsetService(), false);
-             break;
-             default:
-              break;
+             }
+             default -> {}
            }
            mDsDaEventsHadlingInProgress = false;
         }
@@ -1389,7 +1386,7 @@ public class BluetoothInCallService extends InCallService {
         mdsDaSelectPhoneAccountFlag = -1;
         mDsdaTotalcalls = 0;
         mDsDaRingingAddress = null;
-        mDsDaRingingAddressType = DEFAULT_RINGING_ADDRESS_TYPE;
+        mDsDaRingingAddressType = PhoneNumberUtils.TOA_Unknown;
         mDsDaRingingName = null;
         mDsDaTwoIncomingCallsFlag = 0;
     }
@@ -1834,17 +1831,16 @@ public class BluetoothInCallService extends InCallService {
                 // currently-held call.
                 heldCall.unhold();
                 return true;
-            } else if (!mCallInfo.isNullCall(activeCall)
-                    && activeCall.can(Connection.CAPABILITY_HOLD)) {
-                activeCall.hold();
-                return true;
             } else if (!mCallInfo.isNullCall(activeCall)) {
-                BluetoothCall conferenceCall = getBluetoothCallById(activeCall.getParentId());
-                if (!mCallInfo.isNullCall(conferenceCall)
-                    && (conferenceCall.can(Connection.CAPABILITY_HOLD) ||
-                        conferenceCall.can(Connection.CAPABILITY_SUPPORT_HOLD))) {
-                    Log.i(TAG, "Hold conference call");
-                    conferenceCall.hold();
+                if (Flags.holdConferenceCallFromRemote()) {
+                    BluetoothCall conferenceCall = getBluetoothCallById(activeCall.getParentId());
+                    if (!mCallInfo.isNullCall(conferenceCall)) {
+                        Log.i(TAG, "Hold conference call");
+                        activeCall = conferenceCall;
+                    }
+                }
+                if (activeCall.can(Connection.CAPABILITY_HOLD)) {
+                    activeCall.hold();
                     return true;
                 }
             }
@@ -1932,7 +1928,7 @@ public class BluetoothInCallService extends InCallService {
         int bluetoothCallState = getBluetoothCallStateForUpdate();
 
         String ringingAddress = null;
-        int ringingAddressType = DEFAULT_RINGING_ADDRESS_TYPE;
+        int ringingAddressType = PhoneNumberUtils.TOA_Unknown;
         String ringingName = null;
         if (!mCallInfo.isNullCall(ringingCall)
                 && ringingCall.getHandle() != null) {
@@ -2285,8 +2281,8 @@ public class BluetoothInCallService extends InCallService {
        Log.d(TAG, "ProcessOnStateChanged events");
 
        switch (bluetoothLastState) {
-          case CallState.ALERTING:
-          case CallState.INCOMING:
+          case CallState.ALERTING,
+               CallState.INCOMING -> {
             if ((btCallState == CallState.ALERTING) ||
                 (btCallState == CallState.INCOMING) ||
                 (btCallState == CallState.WAITING)) {
@@ -2354,8 +2350,8 @@ public class BluetoothInCallService extends InCallService {
                 }
               }
            }
-         break;
-         case CallState.IDLE:
+         }
+         case CallState.IDLE -> {
             //so it can have active or held or no calls.cannot have incoming/alerting call
             Log.d(TAG, "previous bt state is idle:" + bluetoothLastState);
 
@@ -2460,9 +2456,8 @@ public class BluetoothInCallService extends InCallService {
                    updateHeadsetWithDSDACallState(true /* force */, DSDS_EVENT);
                }
            }
-         break;
-         default:
-            break;
+         }
+         default -> {}
          }
       }
 
@@ -2492,7 +2487,7 @@ public class BluetoothInCallService extends InCallService {
        if (mCallInfo.isNullCall(ringingCall)) {
           Log.i(TAG, "NULL ringing call address");
           mDsDaRingingAddress = null;
-          mDsDaRingingAddressType = DEFAULT_RINGING_ADDRESS_TYPE;
+          mDsDaRingingAddressType = PhoneNumberUtils.TOA_Unknown;
           mDsDaRingingName = null;
           return;
        } else {

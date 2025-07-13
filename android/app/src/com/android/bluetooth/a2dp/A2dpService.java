@@ -159,7 +159,7 @@ public class A2dpService extends ConnectableProfile {
         mMaxConnectedAudioDevices = mAdapterService.getMaxConnectedAudioDevices();
         Log.i(TAG, "Max connected audio devices set to " + mMaxConnectedAudioDevices);
 
-        mA2dpCodecConfig = new A2dpCodecConfig(this, mNativeInterface);
+        mA2dpCodecConfig = new A2dpCodecConfig(this, mNativeInterface, mAudioManager);
 
         mNativeInterface.init(
                 mMaxConnectedAudioDevices,
@@ -266,10 +266,17 @@ public class A2dpService extends ConnectableProfile {
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
 
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            Log.e(TAG, "Cannot connect to " + device + " : CONNECTION_POLICY_FORBIDDEN");
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                Log.e(TAG, "Cannot connect to " + device + " : CONNECTION_POLICY_FORBIDDEN");
+                return false;
+            }
         }
+
         if (!Utils.arrayContains(mAdapterService.getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have A2DP Sink UUID");
             return false;
@@ -805,18 +812,19 @@ public class A2dpService extends ConnectableProfile {
                                 BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_ADAPTIVE) {
 
             switch ((int)(cs4 & APTX_MODE_MASK)) {
-                case APTX_HQ:
+                case APTX_HQ -> {
                     mIsScanEnabled = false;
-                    break;
-                case APTX_LL:
+                }
+                case APTX_LL -> {
                     if ((cs4 & APTX_SCAN_FILTER_MASK) == APTX_SCAN_FILTER_MASK) {
                         mIsScanEnabled = true;
                     } else {
                         mIsScanEnabled = false;
                     }
-                    break;
-                default:
+                }
+                default -> {
                     Log.e(TAG, cs4 + " is not a aptX profile mode feedback");
+                }
             }
             mAdapterService.getBluetoothScanController()
                            .setAptXLowLatencyMode(mIsScanEnabled);

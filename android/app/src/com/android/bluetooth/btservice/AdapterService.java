@@ -151,8 +151,10 @@ import com.android.bluetooth.hfpclient.HeadsetClientService;
 import com.android.bluetooth.hid.HidDeviceService;
 import com.android.bluetooth.hid.HidHostService;
 import com.android.bluetooth.le_audio.LeAudioService;
+import com.android.bluetooth.le_scan.PeriodicScanNativeInterface;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.le_scan.ScanManager;
+import com.android.bluetooth.le_scan.ScanNativeInterface;
 import com.android.bluetooth.map.BluetoothMapService;
 import com.android.bluetooth.mapclient.MapClientService;
 import com.android.bluetooth.mcp.McpService;
@@ -300,6 +302,8 @@ public class AdapterService extends Service {
     private final BluetoothQualityReportNativeInterface mBluetoothQualityReportNativeInterface;
     private final BluetoothHciVendorSpecificNativeInterface
             mBluetoothHciVendorSpecificNativeInterface;
+    private final ScanNativeInterface mScanNativeInterface;
+    private final PeriodicScanNativeInterface mPeriodicScanNativeInterface;
     private final GattNativeInterface mGattNativeInterface;
     private final AdvertiseManagerNativeInterface mAdvertiseManagerNativeInterface;
     private final DistanceMeasurementNativeInterface mDistanceMeasurementNativeInterface;
@@ -398,6 +402,8 @@ public class AdapterService extends Service {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -409,6 +415,8 @@ public class AdapterService extends Service {
             BluetoothKeystoreNativeInterface bluetoothKeystoreNativeInterface,
             BluetoothQualityReportNativeInterface bluetoothQualityReportNativeInterface,
             BluetoothHciVendorSpecificNativeInterface bluetoothHciVendorSpecificNativeInterface,
+            ScanNativeInterface scanNativeInterface,
+            PeriodicScanNativeInterface periodicScanNativeInterface,
             GattNativeInterface gattNativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
@@ -419,6 +427,8 @@ public class AdapterService extends Service {
                 bluetoothKeystoreNativeInterface,
                 bluetoothQualityReportNativeInterface,
                 bluetoothHciVendorSpecificNativeInterface,
+                scanNativeInterface,
+                periodicScanNativeInterface,
                 gattNativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
@@ -432,6 +442,8 @@ public class AdapterService extends Service {
             BluetoothKeystoreNativeInterface bluetoothKeystoreNativeInterface,
             BluetoothQualityReportNativeInterface bluetoothQualityReportNativeInterface,
             BluetoothHciVendorSpecificNativeInterface bluetoothHciVendorSpecificNativeInterface,
+            ScanNativeInterface scanNativeInterface,
+            PeriodicScanNativeInterface periodicScanNativeInterface,
             GattNativeInterface gattNativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
@@ -450,6 +462,8 @@ public class AdapterService extends Service {
                         () ->
                                 new BluetoothHciVendorSpecificNativeInterface(
                                         mBluetoothHciVendorSpecificDispatcher));
+        mScanNativeInterface = scanNativeInterface;
+        mPeriodicScanNativeInterface = periodicScanNativeInterface;
         mGattNativeInterface = gattNativeInterface;
         mAdvertiseManagerNativeInterface = advertiseManagerNativeInterface;
         mDistanceMeasurementNativeInterface = distanceMeasurementNativeInterface;
@@ -471,8 +485,7 @@ public class AdapterService extends Service {
                             return supplier.get();
                         });
         if (!mHandler.post(task)) {
-            Log.w(TAG, "Failed to post task to handler");
-            Log.d(TAG, Log.getStackTraceString(new Throwable()));
+            Log.w(TAG, "Failed to post task\n" + Log.getStackTraceString(new Throwable()));
             return defaultValue;
         }
         try {
@@ -594,9 +607,6 @@ public class AdapterService extends Service {
                                     && !Flags.onlyStartScanDuringBleOn())
                             && mRegisteredProfiles.size() == Config.getSupportedProfiles().length
                             && mRegisteredProfiles.size() == mRunningProfiles.size()) {
-                        if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                            mAdapterProperties.onBluetoothReady();
-                        }
                         setScanMode(SCAN_MODE_CONNECTABLE, "processProfileServiceStateChanged");
                         updateUuids();
                         mNativeInterface.getAdapterProperty(
@@ -930,19 +940,10 @@ public class AdapterService extends Service {
         Log.d(TAG, "init() instance = " + hciInstanceName);
 
         factoryResetIfNeeded();
-        if (Flags.factoryResetAtBluetoothStart()) {
-            try {
-                DataMigration.run(this);
-            } catch (Exception e) {
-                Log.e(TAG, "Migration failure: ", e);
-            }
-        }
-
-        if (!Flags.factoryResetAtBluetoothStart()) {
-            if (Flags.gattClearCacheOnFactoryReset()
-                    && BluetoothProperties.factory_reset().orElse(false)) {
-                clearStorage();
-            }
+        try {
+            DataMigration.run(this);
+        } catch (Exception e) {
+            Log.e(TAG, "Migration failure: ", e);
         }
 
         Config.init(this);
@@ -1067,9 +1068,6 @@ public class AdapterService extends Service {
     }
 
     private void factoryResetIfNeeded() {
-        if (!Flags.factoryResetAtBluetoothStart()) {
-            return;
-        }
         if (!BluetoothProperties.factory_reset().orElse(false)) {
             return;
         }
@@ -1161,7 +1159,8 @@ public class AdapterService extends Service {
 
     private void startScanController() {
         Log.i(TAG, "startScanController() called");
-        mScanController = new ScanController(this);
+        mScanController =
+                new ScanController(this, mScanNativeInterface, mPeriodicScanNativeInterface);
         mNativeInterface.enable();
     }
 
@@ -1176,17 +1175,12 @@ public class AdapterService extends Service {
 
     void startProfileServices() {
         Log.d(TAG, "startProfileServices()");
-        if (Flags.callBluetoothReadyBeforeProfilesStart()) {
-            mAdapterProperties.onBluetoothReady();
-        }
+        mAdapterProperties.onBluetoothReady();
         final int[] supportedProfiles = Config.getSupportedProfiles();
         if (Flags.onlyStartScanDuringBleOn()) {
             // Scanning is always supported, started separately, and is not a profile service.
             // This will check other profile services.
             if (supportedProfiles.length == 0) {
-                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                    mAdapterProperties.onBluetoothReady();
-                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
@@ -1198,9 +1192,6 @@ public class AdapterService extends Service {
             // just move on to BREDR_STARTED. Note that configuring GATT to NOT supported will cause
             // adapter initialization failures
             if (supportedProfiles.length == 1 && supportedProfiles[0] == BluetoothProfile.GATT) {
-                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                    mAdapterProperties.onBluetoothReady();
-                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
@@ -1526,7 +1517,7 @@ public class AdapterService extends Service {
             mBluetoothSocketManagerBinder = null;
         }
 
-        if (Flags.adapterSuspendMgmt()) {
+        if (Flags.adapterSuspendMgmt() && mAdapterSuspend != null) {
             mAdapterSuspend.cleanup();
         }
 
@@ -3947,23 +3938,6 @@ public class AdapterService extends Service {
         }
     }
 
-    boolean factoryReset() {
-        if (Flags.factoryResetAtBluetoothStart()) {
-            throw new IllegalStateException("flag factoryResetAtBluetoothStart is enabled");
-        }
-        mDatabaseManager.factoryReset();
-
-        if (mBluetoothKeystoreService != null) {
-            mBluetoothKeystoreService.factoryReset();
-        }
-
-        if (mBtCompanionManager != null) {
-            mBtCompanionManager.factoryReset();
-        }
-
-        return mNativeInterface.factoryReset();
-    }
-
     int getScanMode() {
         return mScanMode;
     }
@@ -4503,7 +4477,7 @@ public class AdapterService extends Service {
             return;
         }
 
-        if (Flags.adapterSuspendMgmt()) {
+        if (Flags.adapterSuspendMgmt() && mAdapterSuspend != null) {
             mAdapterSuspend.dump(fd, writer, args);
         }
 

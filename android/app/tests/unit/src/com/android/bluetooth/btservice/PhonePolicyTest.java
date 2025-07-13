@@ -47,8 +47,6 @@ import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothUuid;
 import android.os.ParcelUuid;
 import android.os.SystemProperties;
-import android.platform.test.annotations.DisableFlags;
-import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
 
 import androidx.room.Room;
@@ -286,7 +284,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ALLOW_LEAUDIO_ONLY_DEVICES)
     public void testConnectLeAudioOnlyDevices_BandedHeadphones() {
         // Single device, no CSIP
         processInitProfilePriorities_LeAudioOnlyHelper(
@@ -296,7 +293,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ALLOW_LEAUDIO_ONLY_DEVICES)
     public void testConnectLeAudioOnlyDevices_CsipSet() {
         // CSIP Le Audio only devices
         processInitProfilePriorities_LeAudioOnlyHelper(1, 2, false, false);
@@ -305,7 +301,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ALLOW_LEAUDIO_ONLY_DEVICES)
     public void testConnectLeAudioOnlyDevices_DualModeCsipSet() {
         // CSIP Dual mode devices
         processInitProfilePriorities_LeAudioOnlyHelper(1, 2, true, false);
@@ -314,7 +309,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ALLOW_LEAUDIO_ONLY_DEVICES)
     public void testConnectLeAudioOnlyDevices_AshaAndCsipSet() {
         // CSIP Dual mode devices
         processInitProfilePriorities_LeAudioOnlyHelper(1, 2, false, true);
@@ -891,7 +885,6 @@ public class PhonePolicyTest {
      * pairing process).
      */
     @Test
-    @DisableFlags(Flags.FLAG_AUTO_CONNECT_ON_MULTIPLE_HFP_WHEN_NO_A2DP_DEVICE)
     public void testAutoConnectHfpOnly() {
 
         // Return desired values from the mocked object(s)
@@ -924,7 +917,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_AUTO_CONNECT_ON_MULTIPLE_HFP_WHEN_NO_A2DP_DEVICE)
     public void autoConnect_whenMultiHfp_startConnection() {
         // Return desired values from the mocked object(s)
         doReturn(false).when(mAdapterService).isQuietModeEnabled();
@@ -961,7 +953,6 @@ public class PhonePolicyTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_AUTO_CONNECT_ON_MULTIPLE_HFP_WHEN_NO_A2DP_DEVICE)
     public void autoConnect_whenMultiHfpAndDisconnection_startConnection() {
         // Return desired values from the mocked object(s)
         doReturn(false).when(mAdapterService).isQuietModeEnabled();
