@@ -63,7 +63,6 @@ import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.NumberUtils;
 import com.android.internal.annotations.VisibleForTesting;
@@ -1201,7 +1200,7 @@ public class ScanController {
 
     void registerScanner(
             IScannerCallback callback, WorkSource workSource, AttributionSource source) {
-        AppScanStats app = mScannerMap.getAppScanStatsByUid(Binder.getCallingUid());
+        final AppScanStats app = mScannerMap.getAppScanStatsByUid(Binder.getCallingUid());
         if (app != null
                 && app.isScanningTooFrequently()
                 && !Utils.checkCallerHasPrivilegedPermission(mAdapterService)) {
@@ -1222,7 +1221,8 @@ public class ScanController {
         UUID uuid = UUID.randomUUID();
         Log.d(TAG, "registerScanner() - UUID=" + uuid);
 
-        mScannerMap.add(uuid, source, workSource, callback, mAdapterService, this);
+        final int uid = Binder.getCallingUid();
+        mScannerMap.add(uuid, source, workSource, uid, callback, mAdapterService, this);
         doOnScanThread(
                 () -> {
                     mScanManager.registerScanner(uuid);
@@ -1271,9 +1271,10 @@ public class ScanController {
         Log.d(TAG, "Start scan with filters");
         String callingPackage = source.getPackageName();
         settings = enforceReportDelayFloor(settings);
-        final ScanClient scanClient = new ScanClient(scannerId, settings, filters);
+        final int uid = Binder.getCallingUid();
+        final ScanClient scanClient = new ScanClient(scannerId, settings, filters, uid);
         scanClient.mUserHandle = Binder.getCallingUserHandle();
-        mAppOps.checkPackage(Binder.getCallingUid(), callingPackage);
+        mAppOps.checkPackage(uid, callingPackage);
         scanClient.mEligibleForSanitizedExposureNotification =
                 callingPackage.equals(mExposureNotificationPackage);
 
@@ -1306,7 +1307,9 @@ public class ScanController {
 
     /** Intended for internal use within the Bluetooth app. Bypass permission check */
     public void startScanInternal(int scannerId, ScanSettings settings, List<ScanFilter> filters) {
-        final ScanClient scanClient = new ScanClient(scannerId, settings, filters);
+        // This ScanClient will be billed to the Bluetooth app due to its internal usage
+        final ScanClient scanClient =
+                new ScanClient(scannerId, settings, filters, Binder.getCallingUid());
         scanClient.mIsInternalClient = true;
         scanClient.mUserHandle = Binder.getCallingUserHandle();
         scanClient.mEligibleForSanitizedExposureNotification = false;
@@ -1379,9 +1382,9 @@ public class ScanController {
         }
 
         ScannerMap.ScannerApp app = mScannerMap.add(uuid, source, piInfo, mAdapterService, this);
-
-        app.mUserHandle = UserHandle.getUserHandleForUid(Binder.getCallingUid());
-        mAppOps.checkPackage(Binder.getCallingUid(), callingPackage);
+        final int uid = Binder.getCallingUid();
+        app.mUserHandle = UserHandle.getUserHandleForUid(uid);
+        mAppOps.checkPackage(uid, callingPackage);
         app.mEligibleForSanitizedExposureNotification =
                 callingPackage.equals(mExposureNotificationPackage);
 
@@ -1726,31 +1729,19 @@ public class ScanController {
         return defaultValue;
     }
 
-    public void dumpRegisterId(StringBuilder sb) {
-        sb.append("  Scanner:\n");
-
-        Map<Integer, ScanSettings> settingsMap = new HashMap<>();
-        for (ScanClient client : mScanManager.getRegularScanQueue()) {
-            if (client.mSettings != null) {
-                settingsMap.put(client.mScannerId, client.mSettings);
-            }
-        }
-        for (ScanClient client : mScanManager.getBatchScanQueue()) {
-            if (client.mSettings != null) {
-                settingsMap.put(client.mScannerId, client.mSettings);
-            }
-        }
-        for (ScanClient client : mScanManager.getSuspendedScanQueue()) {
-            if (client.mSettings != null) {
-                settingsMap.put(client.mScannerId, client.mSettings);
-            }
-        }
-
-        mScannerMap.dumpApps(sb, ProfileService::println, settingsMap);
-    }
-
     public void dump(StringBuilder sb) {
-        sb.append("GATT Scanner Map\n");
-        mScannerMap.dump(sb);
+        final List<ScanClient> clients = new ArrayList<>();
+        clients.addAll(mScanManager.getRegularScanQueue());
+        clients.addAll(mScanManager.getBatchScanQueue());
+        clients.addAll(mScanManager.getSuspendedScanQueue());
+
+        final Map<Integer, ScanSettings> settingsMap = new HashMap<>();
+        for (ScanClient client : clients) {
+            if (client.mSettings != null) {
+                settingsMap.put(client.mScannerId, client.mSettings);
+            }
+        }
+
+        mScannerMap.dump(sb, settingsMap);
     }
 }

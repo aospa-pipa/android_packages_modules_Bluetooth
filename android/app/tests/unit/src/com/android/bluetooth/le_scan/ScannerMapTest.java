@@ -35,7 +35,6 @@ import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ProfileService;
 import com.android.tests.bluetooth.MockitoRule;
 
 import org.junit.After;
@@ -113,15 +112,16 @@ public class ScannerMapTest {
     public void getByMethodsWithoutPii() {
         ScannerMap scannerMap = new ScannerMap();
         UUID uuid = UUID.randomUUID();
+        final int appUid = Binder.getCallingUid();
         ScannerMap.ScannerApp app =
                 scannerMap.add(
                         uuid,
                         mAttributionSource,
                         null,
+                        appUid,
                         mMockScannerCallback,
                         mAdapterService,
                         mMockScanController);
-        int appUid = Binder.getCallingUid();
         app.mId = SCANNER_ID;
 
         ScannerMap.ScannerApp scannerMapById = scannerMap.getById(SCANNER_ID);
@@ -142,11 +142,13 @@ public class ScannerMapTest {
     public void removeById() {
         ScannerMap scannerMap = new ScannerMap();
         UUID uuid = UUID.randomUUID();
+        final int appUid = 1234;
         ScannerMap.ScannerApp app =
                 scannerMap.add(
                         uuid,
                         mAttributionSource,
                         null,
+                        appUid,
                         mMockScannerCallback,
                         mAdapterService,
                         mMockScanController);
@@ -163,14 +165,15 @@ public class ScannerMapTest {
     public void testDump_doesNotCrash() throws Exception {
         StringBuilder sb = new StringBuilder();
         ScannerMap scannerMap = new ScannerMap();
+        final int appUid = 1234;
         scannerMap.add(
                 UUID.randomUUID(),
                 mAttributionSource,
                 null,
+                appUid,
                 mMockScannerCallback,
                 mAdapterService,
                 mMockScanController);
-        scannerMap.dump(sb);
-        scannerMap.dumpApps(sb, ProfileService::println, Collections.emptyMap());
+        scannerMap.dump(sb, Collections.emptyMap());
     }
 }

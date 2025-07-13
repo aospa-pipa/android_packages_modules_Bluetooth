@@ -4519,9 +4519,9 @@ public class AdapterService extends Service {
         for (ProfileService profile : mRegisteredProfiles) {
             profile.dump(sb);
         }
+
         final var scanController = getBluetoothScanController();
         if (scanController != null) {
-            scanController.dumpRegisterId(sb);
             scanController.dump(sb);
         }
 
