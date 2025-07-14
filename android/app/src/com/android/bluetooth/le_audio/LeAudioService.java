@@ -6019,7 +6019,12 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
 
-        mUserPreferred = true;
+        if (outputCodecConfig.getCodecPriority() ==
+                                    BluetoothLeAudioCodecConfig.CODEC_PRIORITY_HIGHEST) {
+            mUserPreferred = true;
+        } else {
+            Log.w(TAG, "It doesn't set preferred codec directly, select codec passively");
+        }
         if (shouldUpdateCodecConfigPreference(outputCodecConfig)) {
             Log.d(TAG, "setCodecConfigPreference: Send codec preference to native.");
             mNativeInterface.setCodecConfigPreference(groupId, inputCodecConfig, outputCodecConfig);
