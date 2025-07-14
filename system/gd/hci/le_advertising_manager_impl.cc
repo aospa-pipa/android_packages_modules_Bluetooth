@@ -576,8 +576,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 
     switch (advertising_api_type_) {
       case (AdvertisingApiType::LEGACY): {
-        if (config.advertising_type == AdvertisingType::ADV_IND ||
-            config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+        if (config.scannable) {
           if (!kEncryptedAdvertisingDataSupported) {
             set_data(id, true, config.scan_response);
           } else {
@@ -596,8 +595,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         }
       } break;
       case (AdvertisingApiType::ANDROID_HCI): {
-        if (config.advertising_type == AdvertisingType::ADV_IND ||
-            config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+        if (config.scannable) {
           if (!kEncryptedAdvertisingDataSupported) {
             set_data(id, true, config.scan_response);
           } else {
@@ -759,8 +757,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       }
     }
     if (!kEncryptedAdvertisingDataSupported) {
-      if (config.advertising_type == AdvertisingType::ADV_IND ||
-          config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+      if (config.scannable) {
         set_data(id, true, config.scan_response);
       }
       set_data(id, false, config.advertisement);
@@ -782,8 +779,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         enabled_sets_[id] = curr_set;
       }
     } else {
-      if (config.advertising_type == AdvertisingType::ADV_IND ||
-          config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+      if (config.scannable) {
         set_enc_data(id, true, config.scan_response, config.scan_response_enc);
       }
       set_enc_data(id, false, config.advertisement, config.advertisement_enc);
@@ -1042,9 +1038,10 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       case (AdvertisingApiType::LEGACY): {
         le_advertising_interface_->EnqueueCommand(
                 hci::LeSetAdvertisingParametersBuilder::Create(
-                        config.interval_min, config.interval_max, config.advertising_type,
-                        own_address_type, config.peer_address_type, config.peer_address,
-                        config.channel_map, config.filter_policy),
+                        config.interval_min, config.interval_max,
+                        get_legacy_advertising_type(config), own_address_type,
+                        config.peer_address_type, config.peer_address, config.channel_map,
+                        config.filter_policy),
                 handler_->BindOnceOn(
                         this, &impl::check_status_with_id<LeSetAdvertisingParametersCompleteView>,
                         true, advertiser_id));
@@ -1052,8 +1049,8 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       case (AdvertisingApiType::ANDROID_HCI): {
         le_advertising_interface_->EnqueueCommand(
                 hci::LeMultiAdvtParamBuilder::Create(
-                        config.interval_min, config.interval_max, config.advertising_type,
-                        own_address_type,
+                        config.interval_min, config.interval_max,
+                        get_legacy_advertising_type(config), own_address_type,
                         advertising_sets_[advertiser_id].current_address.GetAddress(),
                         config.peer_address_type, config.peer_address, config.channel_map,
                         config.filter_policy, advertiser_id, config.tx_power),
@@ -1119,6 +1116,17 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         }
       } break;
     }
+  }
+
+  AdvertisingType get_legacy_advertising_type(AdvertisingConfig config) {
+    if (config.connectable && config.directed) {
+      return config.high_duty_cycle ? AdvertisingType::ADV_DIRECT_IND_HIGH
+                                    : AdvertisingType::ADV_DIRECT_IND_LOW;
+    }
+    if (!config.connectable) {
+      return config.scannable ? AdvertisingType::ADV_SCAN_IND : AdvertisingType::ADV_NONCONN_IND;
+    }
+    return AdvertisingType::ADV_IND;
   }
 
   bool data_has_flags(std::vector<GapData> data) {
@@ -2663,8 +2671,7 @@ void LeAdvertisingManagerImpl::ExtendedCreateAdvertiser(
   AdvertisingApiType advertising_api_type = pimpl_->get_advertising_api_type();
   if (advertising_api_type != AdvertisingApiType::EXTENDED) {
     if (config.peer_address == Address::kEmpty) {
-      if (config.advertising_type == hci::AdvertisingType::ADV_DIRECT_IND_HIGH ||
-          config.advertising_type == hci::AdvertisingType::ADV_DIRECT_IND_LOW) {
+      if (config.directed) {
         log::warn("Peer address can not be empty for directed advertising");
         pimpl_->handler_->CallOn(pimpl_.get(), &impl::start_advertising_fail, reg_id,
                                  AdvertisingCallback::AdvertisingStatus::INTERNAL_ERROR);

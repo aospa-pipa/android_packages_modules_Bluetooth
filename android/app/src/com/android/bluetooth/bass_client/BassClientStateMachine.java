@@ -55,7 +55,6 @@ import android.os.SystemClock;
 import android.provider.DeviceConfig;
 import android.util.Log;
 
-import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
@@ -171,13 +170,14 @@ class BassClientStateMachine extends StateMachine {
             BluetoothDevice device,
             BassClientService svc,
             AdapterService adapterService,
+            PeriodicAdvertisingManager periodicAdvertisingManager,
             Looper looper) {
         super(TAG + "(" + device + ")", looper);
         mDevice = device;
         mService = svc;
         mAdapterService = adapterService;
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
-        mPeriodicAdvertisingManager = mAdapter.getPeriodicAdvertisingManager();
+        mPeriodicAdvertisingManager = periodicAdvertisingManager;
         addState(mDisconnected);
         addState(mConnected);
         addState(mConnecting);
@@ -471,6 +471,7 @@ class BassClientStateMachine extends StateMachine {
         return IntStream.range(0, data.length).parallel().allMatch(i -> data[i] == 0);
     }
 
+    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     private void processPASyncState(BluetoothLeBroadcastReceiveState recvState) {
         int serviceData = 0;
         if (recvState == null) {
@@ -496,13 +497,8 @@ class BassClientStateMachine extends StateMachine {
                                 + advHandle
                                 + ", serviceData: "
                                 + serviceData);
-                BluetoothMethodProxy.getInstance()
-                        .periodicAdvertisingManagerTransferSetInfo(
-                                mPeriodicAdvertisingManager,
-                                mDevice,
-                                serviceData,
-                                advHandle,
-                                mLocalPeriodicAdvCallback);
+                mPeriodicAdvertisingManager.transferSetInfo(
+                        mDevice, serviceData, advHandle, mLocalPeriodicAdvCallback);
             } else {
                 int broadcastId = recvState.getBroadcastId();
                 PeriodicAdvertisementResult result =
@@ -521,6 +517,7 @@ class BassClientStateMachine extends StateMachine {
         }
     }
 
+    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     private void initiatePaSyncTransfer(int syncHandle, int sourceId) {
         if (syncHandle != BassConstants.INVALID_SYNC_HANDLE
                 && sourceId != BassConstants.INVALID_SOURCE_ID) {
@@ -539,9 +536,7 @@ class BassClientStateMachine extends StateMachine {
                             + syncHandle
                             + ", serviceData: "
                             + serviceData);
-            BluetoothMethodProxy.getInstance()
-                    .periodicAdvertisingManagerTransferSync(
-                            mPeriodicAdvertisingManager, mDevice, serviceData, syncHandle);
+            mPeriodicAdvertisingManager.transferSync(mDevice, serviceData, syncHandle);
         } else {
             Log.e(
                     TAG,

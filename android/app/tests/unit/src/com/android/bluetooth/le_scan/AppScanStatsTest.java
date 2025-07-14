@@ -66,9 +66,16 @@ public class AppScanStatsTest {
         String name = "appName";
         WorkSource source = null;
 
+        final int uid = 1234;
         AppScanStats appScanStats =
                 new AppScanStats(
-                        name, source, map, mAdapterService, mMockScanController, mTimeProvider);
+                        name,
+                        source,
+                        uid,
+                        map,
+                        mAdapterService,
+                        mMockScanController,
+                        mTimeProvider);
 
         assertThat(appScanStats.mScannerMap).isEqualTo(map);
         assertThat(appScanStats.mScanController).isEqualTo(mMockScanController);
@@ -80,9 +87,16 @@ public class AppScanStatsTest {
         String name = "appName";
         WorkSource source = null;
 
+        final int uid = 1234;
         AppScanStats appScanStats =
                 new AppScanStats(
-                        name, source, map, mAdapterService, mMockScanController, mTimeProvider);
+                        name,
+                        source,
+                        uid,
+                        map,
+                        mAdapterService,
+                        mMockScanController,
+                        mTimeProvider);
 
         ScanSettings settings = new ScanSettings.Builder().build();
         List<ScanFilter> filters = new ArrayList<>();
@@ -96,6 +110,6 @@ public class AppScanStatsTest {
         appScanStats.mIsRegistered = true;
 
         StringBuilder stringBuilder = new StringBuilder();
-        appScanStats.dumpToString(stringBuilder);
+        appScanStats.dump(stringBuilder);
     }
 }
