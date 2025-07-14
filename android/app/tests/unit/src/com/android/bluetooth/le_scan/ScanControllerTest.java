@@ -23,6 +23,7 @@ import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.TestUtils.mockGetBluetoothManager;
 import static com.android.bluetooth.TestUtils.mockGetRemoteDevice;
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
+import static com.android.bluetooth.le_scan.ScanUtil.DEFAULT_REPORT_DELAY_FLOOR_MS;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -189,17 +190,17 @@ public class ScanControllerTest {
                         .setLegacy(false)
                         .build();
         ScanClient scanClient = new ScanClient(TEST_SCANNER_ID, scanSettings, null, appUid);
-        scanClient.mHasNetworkSettingsPermission = true;
+        scanClient.setHasNetworkSettingsPermission(true);
         AppScanStats appScanStats = mock(AppScanStats.class);
-        IScannerCallback callback = mock(IScannerCallback.class);
-        mApp.mCallback = callback;
         mApp.mAppScanStats = appScanStats;
         scanClient.mStats = Optional.of(appScanStats);
+        IScannerCallback callback = mock(IScannerCallback.class);
+        mApp.mCallback = callback;
         Set<ScanClient> scanClientSet = Collections.singleton(scanClient);
         doReturn(TEST_ADDRESS).when(mAdapterService).getIdentityAddress(anyString());
         doReturn(scanClientSet).when(mScanManager).getRegularScanQueue();
-        doReturn(mApp).when(mScannerMap).getById(scanClient.mScannerId);
-        doReturn(appScanStats).when(mScannerMap).getAppScanStatsById(scanClient.mScannerId);
+        doReturn(mApp).when(mScannerMap).getById(scanClient.getScannerId());
+        doReturn(appScanStats).when(mScannerMap).getAppScanStatsById(scanClient.getScannerId());
 
         // Simulate remote client crash
         doThrow(new RemoteException()).when(callback).onScanResult(any());
@@ -217,7 +218,7 @@ public class ScanControllerTest {
                 advData,
                 TEST_ADDRESS);
 
-        assertThat(scanClient.mAppDied).isTrue();
+        assertThat(scanClient.getAppDied()).isTrue();
         verify(appScanStats).recordScanStop(TEST_SCANNER_ID);
     }
 
@@ -307,9 +308,7 @@ public class ScanControllerTest {
     private void verifyOnBatchScanReportsInternal(boolean expectResults, boolean isTruncated)
             throws RemoteException {
         final int reportType =
-                isTruncated
-                        ? ScanManager.SCAN_RESULT_TYPE_TRUNCATED
-                        : ScanManager.SCAN_RESULT_TYPE_FULL;
+                isTruncated ? ScanUtil.SCAN_RESULT_TYPE_TRUNCATED : ScanUtil.SCAN_RESULT_TYPE_FULL;
         final int numRecords = 1;
         final byte[] recordData;
         if (isTruncated) {
@@ -331,12 +330,12 @@ public class ScanControllerTest {
         final int appUid = 1234;
         ScanSettings scanSettings = new ScanSettings.Builder().build();
         ScanClient scanClient = new ScanClient(TEST_SCANNER_ID, scanSettings, null, appUid);
-        scanClient.mAssociatedDevices = new ArrayList<>();
+        scanClient.setAssociatedDevices(new ArrayList<>());
         if (expectResults) {
             if (isTruncated) {
-                scanClient.mAssociatedDevices.add("02:00:00:00:00:00");
+                scanClient.getAssociatedDevices().add("02:00:00:00:00:00");
             } else {
-                scanClient.mHasScanWithoutLocationPermission = true;
+                scanClient.setHasScanWithoutLocationPermission(true);
             }
         }
         scanClientSet.add(scanClient);
@@ -345,7 +344,8 @@ public class ScanControllerTest {
         } else {
             doReturn(scanClientSet).when(mScanManager).getFullBatchScanQueue();
         }
-        doReturn(mApp).when(mScannerMap).getById(scanClient.mScannerId);
+        doReturn(mApp).when(mScannerMap).getById(scanClient.getScannerId());
+        mApp.mAppScanStats = mock(AppScanStats.class);
         IScannerCallback callback = mock(IScannerCallback.class);
         mApp.mCallback = callback;
 
@@ -436,12 +436,12 @@ public class ScanControllerTest {
         final int appUid = 1234;
         ScanSettings scanSettings = new ScanSettings.Builder().build();
         ScanClient scanClient = new ScanClient(TEST_SCANNER_ID, scanSettings, null, appUid);
-        scanClient.mHasNetworkSettingsPermission = true;
-        scanClient.mSettings =
+        scanClient.setHasNetworkSettingsPermission(true);
+        scanClient.setSettings(
                 new ScanSettings.Builder()
                         .setCallbackType(ScanSettings.CALLBACK_TYPE_FIRST_MATCH)
                         .setLegacy(false)
-                        .build();
+                        .build());
         Set<ScanClient> scanClientSet = Collections.singleton(scanClient);
 
         ScannerMap.ScannerApp app = mock(ScannerMap.ScannerApp.class);
@@ -544,7 +544,7 @@ public class ScanControllerTest {
                                 new ArgumentMatcher<ScanClient>() {
                                     @Override
                                     public boolean matches(ScanClient client) {
-                                        return pii.callingUid() == client.mAppUid;
+                                        return pii.callingUid() == client.getAppUid();
                                     }
                                 }));
     }
@@ -608,7 +608,7 @@ public class ScanControllerTest {
 
     @Test
     public void enforceReportDelayFloor() {
-        long reportDelayFloorHigher = ScanController.DEFAULT_REPORT_DELAY_FLOOR_MS + 1;
+        long reportDelayFloorHigher = DEFAULT_REPORT_DELAY_FLOOR_MS + 1;
         ScanSettings scanSettings =
                 new ScanSettings.Builder().setReportDelay(reportDelayFloorHigher).build();
         ScanSettings newScanSettings = mScanController.enforceReportDelayFloor(scanSettings);
@@ -621,7 +621,7 @@ public class ScanControllerTest {
                 mScanController.enforceReportDelayFloor(scanSettingsFloor);
 
         assertThat(newScanSettingsFloor.getReportDelayMillis())
-                .isEqualTo(ScanController.DEFAULT_REPORT_DELAY_FLOOR_MS);
+                .isEqualTo(DEFAULT_REPORT_DELAY_FLOOR_MS);
     }
 
     @Test

@@ -25,6 +25,7 @@
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 #include <stdio.h>
 
@@ -42,7 +43,6 @@
 #include "a2dp_codec_api.h"
 #include "audio_hal_interface/a2dp_encoding.h"
 #include "avdt_api.h"
-#include "bt_transport.h"
 #include "bta_av_api.h"
 #include "bta_av_ci.h"
 #include "btif_av.h"
