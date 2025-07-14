@@ -58,6 +58,7 @@ struct EventCallbacks {
                                         int negative_acknowledgement_count);
   void (*invoke_key_missing_cb)(tBTA_DM_KEY_MISSING key_missing);
   void (*invoke_encryption_change_cb)(bt_encryption_change_evt encryption_change);
+  void (*invoke_ssr_event_cb)();
 
   EventCallbacks& operator=(const EventCallbacks&) = delete;
 };
