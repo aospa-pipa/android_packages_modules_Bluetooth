@@ -1428,9 +1428,12 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                                           req_it->second.remote_num_antennas_supported_);
     }
     auto res_it = cs_responder_trackers_.find(connection_handle);
-    if (res_it != cs_responder_trackers_.end() &&
-        res_it->second.state == CsTrackerState::WAIT_FOR_SECURITY_ENABLED) {
-      res_it->second.state = CsTrackerState::WAIT_FOR_PROCEDURE_ENABLED;
+    if (res_it != cs_responder_trackers_.end()) {
+      if (res_it->second.state == CsTrackerState::WAIT_FOR_SECURITY_ENABLED) {
+        res_it->second.state = CsTrackerState::WAIT_FOR_PROCEDURE_ENABLED;
+      } else {
+        res_it->second.state = CsTrackerState::WAIT_FOR_SECURITY_ENABLED;
+      }
       if (is_expected_by_requester) {
         log::warn("both requester and responder were expecting the security_enable_complete!");
       }
@@ -1527,7 +1530,11 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
       // send the cmd from the BLE central only.
       send_le_cs_security_enable(connection_handle, live_tracker->local_start);
     } else {
-      live_tracker->state = CsTrackerState::WAIT_FOR_SECURITY_ENABLED;
+      if (live_tracker->state == CsTrackerState::WAIT_FOR_SECURITY_ENABLED) {
+        live_tracker->state = CsTrackerState::WAIT_FOR_PROCEDURE_ENABLED;
+      } else {
+        live_tracker->state = CsTrackerState::WAIT_FOR_SECURITY_ENABLED;
+      }
       if (live_tracker->local_start) {
         if (live_tracker->enable_security_timeout_alarm == nullptr) {
           live_tracker->enable_security_timeout_alarm =

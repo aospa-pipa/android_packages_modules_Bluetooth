@@ -206,13 +206,19 @@ public class HeadsetService extends ConnectableProfile {
     }
 
     @VisibleForTesting
-    HeadsetService(AdapterService adapterService, HeadsetNativeInterface nativeInterface) {
-        this(adapterService, nativeInterface, null);
+    HeadsetService(
+            AdapterService adapterService,
+            HeadsetNativeInterface nativeInterface,
+            HeadsetSystemInterface systemInterface) {
+        this(adapterService, nativeInterface, systemInterface, null);
     }
 
     @VisibleForTesting
     HeadsetService(
-            AdapterService adapterService, HeadsetNativeInterface nativeInterface, Looper looper) {
+            AdapterService adapterService,
+            HeadsetNativeInterface nativeInterface,
+            HeadsetSystemInterface systemInterface,
+            Looper looper) {
         super(BluetoothProfile.HEADSET, requireNonNull(adapterService));
         mNativeInterface =
                 requireNonNullElseGet(
@@ -232,8 +238,12 @@ public class HeadsetService extends ConnectableProfile {
 
         // Step 3: Initialize system interface
         mSystemInterface =
-                HeadsetObjectsFactory.getInstance()
-                        .makeSystemInterface(mAdapterService, this, mStateMachinesLooper);
+                requireNonNullElseGet(
+                        systemInterface,
+                        () ->
+                                new HeadsetSystemInterface(
+                                        mAdapterService, this, mStateMachinesLooper));
+
         // Step 4: Initialize native interface
         mIsAptXSwbEnabled =
                 SystemProperties.getBoolean("bluetooth.hfp.codec_aptx_voice.enabled", false);
@@ -1446,6 +1456,9 @@ public class HeadsetService extends ConnectableProfile {
      */
     public BluetoothDevice getActiveDevice() {
         synchronized (mStateMachines) {
+            if (mSystemInterface.isScoManagedByAudioEnabled()) {
+                return mExposedActiveDevice;
+            }
             return mActiveDevice;
         }
     }
@@ -1792,8 +1805,12 @@ public class HeadsetService extends ConnectableProfile {
             if (!mSystemInterface.isScoManagedByAudioEnabled()) {
                 startDialingOutActivity(fromDevice, intent);
             } else {
-                mPendingDialingOutIntent = intent;
-                mPendingDialingOutDevice = fromDevice;
+                if (fromDevice.equals(mExposedActiveDevice)) {
+                    startDialingOutActivity(fromDevice, intent);
+                } else {
+                    mPendingDialingOutIntent = intent;
+                    mPendingDialingOutDevice = fromDevice;
+                }
             }
 
             return true;
