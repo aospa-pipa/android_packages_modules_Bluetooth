@@ -341,7 +341,10 @@ public class MediaPlayerList {
         if (!Util.areMultiplePlayersSupported()) {
             return BLUETOOTH_PLAYER_ID;
         }
-        if (mMediaPlayerIds.containsValue(playerId)) {
+        Log.d(TAG,"setAddressedPlayer with mAddressedPlayerId: " + mAddressedPlayerId 
+              + ", playerId: " + playerId + ", mActivePlayerId: " + mActivePlayerId);
+        if (mMediaPlayerIds.containsValue(playerId) && mAddressedPlayerId != playerId &&
+            mAddressedPlayerId != mActivePlayerId) {
             mAddressedPlayerId = playerId;
             sendFolderUpdate(false, true, false);
             Log.d(TAG, "setAddressedPlayer to: " + mAddressedPlayerId);
@@ -804,6 +807,9 @@ public class MediaPlayerList {
         int previousActivePlayerId = mActivePlayerId;
         MediaPlayerWrapper previousPlayer = getActivePlayer();
 
+        Log.d(TAG, "setActivePlayer: playerId: " + playerId + ", previousActivePlayerId:" +
+                previousActivePlayerId);
+
         if (playerId == previousActivePlayerId) {
             if (previousPlayer != null) {
                 Log.w(TAG, previousPlayer.getPackageName() + " is already the active player");
@@ -816,6 +822,9 @@ public class MediaPlayerList {
         }
 
         mActivePlayerId = playerId;
+
+        Log.d(TAG, "setActivePlayer: mActivePlayerId: " + mActivePlayerId +
+                   ", mAddressedPlayerId:" + mAddressedPlayerId);
 
         if (Utils.isPtsTestMode()) {
             sendFolderUpdate(true, true, false);
