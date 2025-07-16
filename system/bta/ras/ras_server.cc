@@ -21,6 +21,7 @@
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 
 #include <algorithm>
@@ -44,7 +45,6 @@
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/main_thread.h"
 #include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
 #include "types/raw_address.h"
 
 using namespace bluetooth;

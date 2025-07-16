@@ -34,6 +34,7 @@
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/metric_id_api.h>
+#include <bluetooth/types/bt_transport.h>
 
 #include <cstdint>
 #include <cstdlib>
@@ -132,8 +133,8 @@
 #include "stack/include/sdp_api.h"
 #include "storage/config_keys.h"
 #include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
 #include "types/raw_address.h"
+#include "com_android_bluetooth_flags.h"
 
 using namespace bluetooth;
 
@@ -881,6 +882,12 @@ static int set_event_filter_connection_setup_all_devices() {
 }
 
 static void dump(int fd, const char** /*arguments*/) {
+  if (com::android::bluetooth::flags::protect_dumpsys_during_stack_shutdown() &&
+      !stack_manager_get_interface()->get_stack_is_running()) {
+    log::error("Stack is not running, skipping dumpsys!!");
+    return;
+  }
+
   log::debug("Started bluetooth dumpsys");
   btif_debug_conn_dump(fd);
   btif_debug_bond_event_dump(fd);

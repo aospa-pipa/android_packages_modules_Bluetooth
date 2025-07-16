@@ -29,6 +29,7 @@
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -51,7 +52,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/sdp_api.h"
-#include "types/bt_transport.h"
 #include "types/raw_address.h"
 
 using namespace bluetooth::legacy::stack::sdp;
@@ -356,8 +356,7 @@ tGATT_STATUS GATTS_AddService(tGATT_IF gatt_if, btgatt_db_element_t* service, in
     Uuid* p_uuid = gatts_get_service_uuid(elem.p_db);
     if (*p_uuid != Uuid::From16Bit(UUID_SERVCLASS_GMCS_SERVER) &&
         *p_uuid != Uuid::From16Bit(UUID_SERVCLASS_GTBS_SERVER)) {
-      if ((com::android::bluetooth::flags::channel_sounding_in_stack() &&
-           *p_uuid == Uuid::From16Bit(UUID_SERVCLASS_RAS)) ||
+      if (*p_uuid == Uuid::From16Bit(UUID_SERVCLASS_RAS) ||
           *p_uuid == ANDROID_INFORMATION_SERVICE_UUID) {
         elem.sdp_handle = 0;
       } else {
@@ -1458,8 +1457,6 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE ad
     return true;
   }
 
-  bluetooth::metrics::LogMetricLeConnectionLifecycle(bd_addr, true /* is_connect */, is_direct);
-
   bool ret = false;
   if (is_direct) {
     log::debug("Starting direct connect gatt_if={} address={} transport={} prefer_relax_mode={}",
@@ -1472,10 +1469,12 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE ad
     } else {
       log::verbose("Connecting without tcb to: {}", bd_addr);
       ret = connection_manager::direct_connect_add(gatt_if, bd_addr, addr_type, prefer_relax_mode);
+      bluetooth::metrics::LogMetricLeConnectionLifecycle(bd_addr, true /* is_connect */, is_direct);
     }
 
   } else {
     log::debug("Starting background connect gatt_if={} address={}", gatt_if, bd_addr);
+    bluetooth::metrics::LogMetricLeConnectionLifecycle(bd_addr, true /* is_connect */, is_direct);
     if (!BTM_Sec_AddressKnown(bd_addr)) {
       //  RPA can rotate, causing address to "expire" in the background
       //  connection list. RPA is allowed for direct connect, as such request
@@ -1600,11 +1599,14 @@ tGATT_STATUS GATT_Disconnect(tCONN_ID conn_id) {
     return GATT_ILLEGAL_PARAMETER;
   }
 
-  bluetooth::metrics::LogMetricLeConnectionLifecycle(p_tcb->peer_bda, true /* is_connect */,
-                                                     false /* is_direct */);
-
   tGATT_IF gatt_if = gatt_get_gatt_if(conn_id);
   gatt_update_app_use_link_flag(gatt_if, p_tcb, false, true);
+
+  if (p_tcb->transport == BT_TRANSPORT_LE && p_tcb->app_hold_link.empty()) {
+    bluetooth::metrics::LogMetricLeConnectionLifecycle(p_tcb->peer_bda, false /* is_connect */,
+                                                       false /* is_direct */);
+  }
+
   return GATT_SUCCESS;
 }
 

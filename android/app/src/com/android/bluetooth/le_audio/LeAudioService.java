@@ -2690,7 +2690,8 @@ public class LeAudioService extends ConnectableProfile {
              * When adding new device, wait with notification until AudioManager is ready
              * with adding the device.
              */
-            if (!Flags.vcpOnMainLooper()) {
+            if (!Flags.vcpOnMainLooper() || Looper.getMainLooper().isCurrentThread()) {
+                // Remove thread check when LeAudio is moved on the main thread
                 notifyActiveDeviceChanged(null);
             } else {
                 Utils.enforceMainLooperIsNotUsed();
@@ -3591,9 +3592,6 @@ public class LeAudioService extends ConnectableProfile {
                     TAG,
                     "transitionFromBroadcastToUnicast: No valid unicast device for group ID: "
                             + mUnicastGroupIdDeactivatedForBroadcastTransition);
-            if (!Flags.leaudioBroadcastPrimaryGroupSelection()) {
-                updateFallbackUnicastGroupIdForBroadcast(LE_AUDIO_GROUP_ID_INVALID);
-            }
             updateBroadcastActiveDevice(null, mActiveBroadcastAudioDevice, false);
             return;
         }
@@ -3609,10 +3607,6 @@ public class LeAudioService extends ConnectableProfile {
          * potential ringtone streaming device.
          */
         updateInbandRingtoneForTheGroup(mUnicastGroupIdDeactivatedForBroadcastTransition);
-
-        if (!Flags.leaudioBroadcastPrimaryGroupSelection()) {
-            updateFallbackUnicastGroupIdForBroadcast(LE_AUDIO_GROUP_ID_INVALID);
-        }
         setActiveDevice(unicastDevice);
     }
 
@@ -4137,16 +4131,8 @@ public class LeAudioService extends ConnectableProfile {
                     if (isBroadcastAllowedToBeActivateInCurrentAudioMode()) {
                         /* Check if broadcast was deactivated due to unicast */
                         if (mBroadcastIdDeactivatedForUnicastTransition.isPresent()) {
-                            if (!Flags.leaudioBroadcastPrimaryGroupSelection()) {
-                                updateFallbackUnicastGroupIdForBroadcast(groupId);
-                            }
                             startBroadcast(mBroadcastIdDeactivatedForUnicastTransition.get());
                             mBroadcastIdDeactivatedForUnicastTransition = Optional.empty();
-                        }
-
-                        if (mAwaitingBroadcastCreateResponse
-                                && !Flags.leaudioBroadcastPrimaryGroupSelection()) {
-                            updateFallbackUnicastGroupIdForBroadcast(groupId);
                         }
                     }
                 }
@@ -4600,8 +4586,7 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         /* Set by default earliest connected device */
-        if (Flags.leaudioBroadcastPrimaryGroupSelection()
-                && mUnicastGroupIdDeactivatedForBroadcastTransition == LE_AUDIO_GROUP_ID_INVALID) {
+        if (mUnicastGroupIdDeactivatedForBroadcastTransition == LE_AUDIO_GROUP_ID_INVALID) {
             setDefaultBroadcastToUnicastFallbackGroup();
         }
     }
@@ -4679,16 +4664,14 @@ public class LeAudioService extends ConnectableProfile {
                     Log.d(TAG, "Device updated had been done, reset mHasFallback");
                     mHasFallback = true;
                     /* Set by default earliest connected device */
-                    if (Flags.leaudioBroadcastPrimaryGroupSelection()
-                            && mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
+                    if (mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
                         setDefaultBroadcastToUnicastFallbackGroup();
                     }
                     return;
                 }
 
                 /* Set by default earliest connected device */
-                if (Flags.leaudioBroadcastPrimaryGroupSelection()
-                        && mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
+                if (mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
                     setDefaultBroadcastToUnicastFallbackGroup();
                 }
             }
@@ -5479,8 +5462,7 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         /* Set by default earliest connected device */
-        if (Flags.leaudioBroadcastPrimaryGroupSelection()
-                && mUnicastGroupIdDeactivatedForBroadcastTransition == LE_AUDIO_GROUP_ID_INVALID) {
+        if (mUnicastGroupIdDeactivatedForBroadcastTransition == LE_AUDIO_GROUP_ID_INVALID) {
             setDefaultBroadcastToUnicastFallbackGroup();
         }
 
@@ -5553,11 +5535,7 @@ public class LeAudioService extends ConnectableProfile {
                 }
 
                 if (mUnicastGroupIdDeactivatedForBroadcastTransition == groupId) {
-                    if (Flags.leaudioBroadcastPrimaryGroupSelection()) {
-                        setDefaultBroadcastToUnicastFallbackGroup();
-                    } else {
-                        updateFallbackUnicastGroupIdForBroadcast(LE_AUDIO_GROUP_ID_INVALID);
-                    }
+                    setDefaultBroadcastToUnicastFallbackGroup();
                 }
             }
             mHandler.post(() -> notifyGroupNodeRemoved(device, groupId));
@@ -5834,12 +5812,9 @@ public class LeAudioService extends ConnectableProfile {
     private boolean shouldUpdateCodecConfigPreference(BluetoothLeAudioCodecConfig codecConfig) {
         // Note: Opus and Opus Hi-res are a different codecs at the API level, but still
         // the same codec at the Bluetooth specification level. If we have both flavors of the Opus
-        // codec
-        // configuration priorities set by the API, we should call to native only with the higher
-        // codec
-        // priority of the two, since the BT Audio HAL receives the same Bluetooth domain codec
-        // identifier
-        // when setting the priority for both.
+        // codec configuration priorities set by the API, we should call to native only with an
+        // equal or higher codec priority of the two, since the BT Audio HAL receives the same
+        // Bluetooth domain codec identifier when setting the priority for both.
         if (codecConfig.getCodecType() != BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS
                 && codecConfig.getCodecType()
                         != BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS_HI_RES) {
@@ -5853,7 +5828,7 @@ public class LeAudioService extends ConnectableProfile {
                         : BluetoothLeAudioCodecConfig.SOURCE_CODEC_TYPE_OPUS_HI_RES;
         if (mActiveGroupCodecPreferences.containsKey(checkAgainstCodecType)) {
             return mActiveGroupCodecPreferences.get(checkAgainstCodecType).second.getCodecPriority()
-                    < codecConfig.getCodecPriority();
+                    <= codecConfig.getCodecPriority();
         }
         return true;
     }

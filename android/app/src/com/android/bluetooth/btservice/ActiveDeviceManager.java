@@ -803,6 +803,18 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
                 updateLeAudioActiveDeviceIfDualMode(mHfpActiveDevice, device);
             } else {
+                /* mLeAudioActiveDevice may be updated due to next or previous device being
+                 * a dual mode one.
+                 */
+                if (Flags.admUnsetOthersOnHfpChanged()
+                        && mLeAudioActiveDevice != null
+                        && device != null
+                        && !mLeAudioActiveDevice.equals(device)) {
+                    /* HFP device becoming active is not dual mode and was not set as
+                     * active LE Audio device. Inactivate LE Audio device.
+                     */
+                    setLeAudioActiveDevice(null, true);
+                }
                 if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
                     Log.d(TAG, " set LE Audio in-active as new classic device become active ");

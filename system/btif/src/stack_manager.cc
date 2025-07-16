@@ -294,12 +294,9 @@ static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
     return;
   }
 
-  if (com::android::bluetooth::flags::channel_sounding_in_stack()) {
-    bluetooth::ras::GetRasServer()->Initialize();
-    bluetooth::ras::GetRasClient()->Initialize();
-    module_init(get_local_module(CS_CONFIG_MODULE));
-
-  }
+  bluetooth::ras::GetRasServer()->Initialize();
+  bluetooth::ras::GetRasClient()->Initialize();
+  module_init(get_local_module(CS_CONFIG_MODULE));
 
   stack_is_running = true;
   info("finished");
@@ -390,9 +387,7 @@ static void event_clean_up_stack(std::promise<void> promise, ProfileStopCallback
   info("Gd shim module disabled");
   module_shut_down(get_local_module(GD_SHIM_MODULE));
 
-  if (com::android::bluetooth::flags::channel_sounding_in_stack()) {
-    module_clean_up(get_local_module(CS_CONFIG_MODULE));
-  }
+  module_clean_up(get_local_module(CS_CONFIG_MODULE));
 
   module_management_stop();
   info("finished");
