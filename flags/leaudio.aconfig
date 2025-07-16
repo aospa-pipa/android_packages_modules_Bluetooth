@@ -69,28 +69,11 @@ flag {
 }
 
 flag {
-    name: "leaudio_add_aics_support"
-    namespace: "bluetooth"
-    description: "Add AICS support"
-    bug: "361263965"
-}
-
-flag {
     name: "metadata_api_microphone_for_call_enabled"
     is_exported: true
     namespace: "bluetooth"
     description: "API to get and set microphone for call enable status"
     bug: "372395197"
-}
-
-flag {
-    name: "leaudio_broadcast_primary_group_selection"
-    namespace: "bluetooth"
-    description: "Fix race condition in primary group selection"
-    bug: "375422795"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -175,30 +158,10 @@ flag {
 }
 
 flag {
-    name: "leaudio_sm_ignore_connect_events_in_connecting_state"
-    namespace: "bluetooth"
-    description: "When received CONNECT event in Connecting state, with no prior DISCONNECT - ignore the event"
-    bug: "384460395"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "leaudio_disable_broadcast_for_hap_device"
     namespace: "bluetooth"
     description: "Disable broadcast feature for HAP device"
     bug: "391702876"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_bass_scan_with_internal_scan_controller"
-    namespace: "bluetooth"
-    description: "Use internal scan controller for BASS service scan"
-    bug: "392953619"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

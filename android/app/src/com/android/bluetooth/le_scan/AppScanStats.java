@@ -149,6 +149,7 @@ class AppScanStats {
     private int mAmbientDiscoveryScan = 0;
     private long startTime = 0;
     private int results = 0;
+    private int mScheduledBatchAlarmCount = 0;
 
     AppScanStats(
             String name,
@@ -179,23 +180,40 @@ class AppScanStats {
     }
 
     synchronized void addResult(int scannerId) {
-        LastScan scan = getScanFromScannerId(scannerId);
-        if (scan != null) {
-            scan.results++;
-
-            // Only update battery stats after receiving 100 new results in order
-            // to lower the cost of the binder transaction
-            if (scan.results % 100 == 0) {
-                mBatteryStatsManager.reportBleScanResults(mWorkSource, 100);
-                BluetoothStatsLog.write(
-                        BluetoothStatsLog.BLE_SCAN_RESULT_RECEIVED,
-                        mWorkSourceUtil.getUids(),
-                        mWorkSourceUtil.getTags(),
-                        100);
-            }
-        }
-
         results++;
+
+        LastScan scan = getScanFromScannerId(scannerId);
+        if (scan == null) return;
+        scan.results++;
+
+        // Only update battery stats every 100 results to lower the high-cost of binder transactions
+        if (scan.results % 100 == 0) {
+            reportScanResults(100);
+        }
+    }
+
+    synchronized void addResults(int scannerId, int numberOfNewResults) {
+        results += numberOfNewResults;
+
+        LastScan scan = getScanFromScannerId(scannerId);
+        if (scan == null) return;
+
+        final int resultsBeforeUpdate = scan.results;
+        scan.results += numberOfNewResults;
+
+        // Only update battery stats every 100 results to lower the high-cost of binder transactions
+        if ((scan.results / 100) > (resultsBeforeUpdate / 100)) {
+            reportScanResults(100);
+        }
+    }
+
+    private void reportScanResults(int numberOfNewResults) {
+        mBatteryStatsManager.reportBleScanResults(mWorkSource, numberOfNewResults);
+        BluetoothStatsLog.write(
+                BluetoothStatsLog.BLE_SCAN_RESULT_RECEIVED,
+                mWorkSourceUtil.getUids(),
+                mWorkSourceUtil.getTags(),
+                numberOfNewResults);
     }
 
     synchronized boolean isScanning() {
@@ -576,6 +594,10 @@ class AppScanStats {
                 < LARGE_SCAN_TIME_GAP_MS);
     }
 
+    synchronized void recordBatchAlarmScheduled() {
+        mScheduledBatchAlarmCount++;
+    }
+
     String getAttributionTagFromScannerId(int scannerId) {
         LastScan scan = getScanFromScannerId(scannerId);
         return scan == null ? "" : scan.getAttributionTag();
@@ -702,12 +724,11 @@ class AppScanStats {
         }
 
         final long score =
-                (oppScanTime * ScanRadioStats.OPPORTUNISTIC_WEIGHT
-                                + lowPowerScanTime * ScanRadioStats.LOW_POWER_WEIGHT
-                                + balancedScanTime * ScanRadioStats.BALANCED_WEIGHT
-                                + lowLatencyScanTime * ScanRadioStats.LOW_LATENCY_WEIGHT
-                                + ambientDiscoveryScanTime
-                                        * ScanRadioStats.AMBIENT_DISCOVERY_WEIGHT)
+                (oppScanTime * ScanUtil.WEIGHT_OPPORTUNISTIC
+                                + lowPowerScanTime * ScanUtil.WEIGHT_LOW_POWER
+                                + balancedScanTime * ScanUtil.WEIGHT_BALANCED
+                                + lowLatencyScanTime * ScanUtil.WEIGHT_LOW_LATENCY
+                                + ambientDiscoveryScanTime * ScanUtil.WEIGHT_AMBIENT_DISCOVERY)
                         / 100;
 
         sb.append("  ").append(mAppName);
@@ -765,6 +786,11 @@ class AppScanStats {
         sb.append("\n    Total number of results")
                 .append("                                                      : ")
                 .append(results);
+        if (mScheduledBatchAlarmCount > 0) {
+            sb.append("\n    Number of batch alarms scheduled")
+                    .append("                                             : ")
+                    .append(mScheduledBatchAlarmCount);
+        }
 
         if (!mLastScans.isEmpty()) {
             sb.append("\n    Last ").append(mLastScans.size()).append(" scans:");

@@ -21,6 +21,7 @@
 #include <base/functional/callback.h>
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <algorithm>
@@ -55,7 +56,6 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/hcimsgs.h"
 #include "audio_hal_client/audio_hal_client.h"
-#include "types/bt_transport.h"
 #include "types/raw_address.h"
 
 #ifdef TARGET_FLOSS

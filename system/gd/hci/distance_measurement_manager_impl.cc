@@ -388,10 +388,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
     hci_layer_->RegisterLeEventHandler(hci::SubeventCode::TRANSMIT_POWER_REPORTING,
                                        handler_->BindOn(this, &impl::on_transmit_power_reporting));
-    if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
-      log::info("host is not supporting channel sounding: false");
-      return;
-    }
     if (!controller_->SupportsBleChannelSounding()) {
       log::info("The controller doesn't support Channel Sounding feature.");
       return;
@@ -423,7 +419,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   void register_distance_measurement_callbacks(DistanceMeasurementCallbacks* callbacks) {
     distance_measurement_callbacks_ = callbacks;
-    if (com::android::bluetooth::flags::channel_sounding_in_stack() && ranging_hal_->IsBound()) {
+    if (ranging_hal_->IsBound()) {
       auto vendor_specific_data = ranging_hal_->GetVendorSpecificCharacteristics();
       if (!vendor_specific_data.empty()) {
         distance_measurement_callbacks_->OnVendorSpecificCharacteristics(vendor_specific_data);
@@ -433,13 +429,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   void set_cs_params(const Address& cs_remote_address, uint16_t connection_handle,int mSightType,
 		     int mLocationType, int mCsSecurityLevel, int mFrequency, int mDuration) {
-
-   if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
-      log::error("Channel Sounding is not enabled");
-      distance_measurement_callbacks_->OnDistanceMeasurementStopped(
-		      cs_remote_address, REASON_INTERNAL_ERROR, METHOD_CS);
-      return;
-    }
 
     log::info("Address:{}, connection_handle:{}, CsSecurityLevel:{} frequency:{}",
                cs_remote_address, connection_handle, mCsSecurityLevel, mFrequency);
@@ -622,7 +611,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                                           uint16_t connection_handle,
                                           bool has_updated_procedure_params) {
     log::info("connection_handle: {}, address: {}", connection_handle, cs_remote_address);
-    if (!com::android::bluetooth::flags::channel_sounding_in_stack()) {
+    if (!is_local_cs_ready_) {
       log::error("Channel Sounding is not enabled");
       distance_measurement_callbacks_->OnDistanceMeasurementStopped(
               cs_remote_address, REASON_INTERNAL_ERROR, METHOD_CS);

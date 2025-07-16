@@ -154,10 +154,12 @@ public class HeadsetService extends ConnectableProfile {
     private final HeadsetSystemInterface mSystemInterface;
 
     private int mMaxHeadsetConnections = 1;
+    // Active device that is exposed to external modules
     BluetoothDevice mExposedActiveDevice;
+    // Active device known to Bluetooth
     private BluetoothDevice mActiveDevice;
     // Device waiting for audio framework to start SCO
-    BluetoothDevice mPendingScoConnection;
+    BluetoothDevice mPendingScoConnectionDevice;
     Intent mPendingDialingOutIntent = null;
     BluetoothDevice mPendingDialingOutDevice = null;
     private boolean mAudioRouteAllowed = true;
@@ -360,7 +362,7 @@ public class HeadsetService extends ConnectableProfile {
             if (mActiveDevice != null) {
                 mExposedActiveDevice = null;
                 mActiveDevice = null;
-                mPendingScoConnection = null;
+                mPendingScoConnectionDevice = null;
                 mPendingDialingOutIntent = null;
                 mPendingDialingOutDevice = null;
                 broadcastActiveDevice(null);
@@ -1334,6 +1336,12 @@ public class HeadsetService extends ConnectableProfile {
             }
             if (!mNativeInterface.setActiveDevice(device)) {
                 Log.e(TAG, "setActiveDevice: Cannot set " + device + " as active in native layer");
+                return false;
+            }
+            if (mSystemInterface.isScoManagedByAudioEnabled()
+                    && mActiveDevice != null
+                    && !mActiveDevice.equals(mExposedActiveDevice)) {
+                Log.e(TAG, "Already processing an active device change");
                 return false;
             }
             BluetoothDevice previousActiveDevice = mActiveDevice;
@@ -2700,11 +2708,20 @@ public class HeadsetService extends ConnectableProfile {
                     mExposedActiveDevice = device;
                     broadcastActiveDevice(device);
 
-                    if (mPendingScoConnection != null
-                            && mPendingScoConnection.equals(mExposedActiveDevice)) {
-                        Log.d(TAG, "Starting pending sco connection for " + mPendingScoConnection);
-                        startScoViaAudioManager(mPendingScoConnection);
-                        mPendingScoConnection = null;
+                    if (mPendingScoConnectionDevice != null) {
+                        if (mPendingScoConnectionDevice.equals(mExposedActiveDevice)) {
+                            Log.d(
+                                    TAG,
+                                    "Starting pending sco connection for "
+                                            + mPendingScoConnectionDevice);
+                            startScoViaAudioManager(mPendingScoConnectionDevice);
+                            mPendingScoConnectionDevice = null;
+                        } else {
+                            Log.d(
+                                    TAG,
+                                    "pending SCO connection device does not match exposed active"
+                                            + " device");
+                        }
                     }
 
                     if (mPendingDialingOutIntent != null
@@ -2744,10 +2761,16 @@ public class HeadsetService extends ConnectableProfile {
                         mExposedActiveDevice = null;
                     }
 
-                    if (mPendingScoConnection != null
-                            && address.equals(mPendingScoConnection.getAddress())) {
-                        mPendingScoConnection = null;
+                    if (mPendingScoConnectionDevice != null) {
+                        if (address.equals(mPendingScoConnectionDevice.getAddress())) {
+                            mPendingScoConnectionDevice = null;
+                        } else {
+                            Log.d(
+                                    TAG,
+                                    "pending SCO connection device does not match removed device");
+                        }
                     }
+
                     if (mPendingDialingOutIntent != null
                             && address.equals(mPendingDialingOutDevice.getAddress())) {
                         mPendingDialingOutIntent = null;
@@ -3015,7 +3038,7 @@ public class HeadsetService extends ConnectableProfile {
             }
             if (!device.equals(mExposedActiveDevice)) {
                 Log.i(TAG, "Active device doesn't match current device, defer SCO start");
-                mPendingScoConnection = device;
+                mPendingScoConnectionDevice = device;
             } else {
                 Log.i(TAG, "processAtBcc for device " + device);
                 startScoViaAudioManager(device);

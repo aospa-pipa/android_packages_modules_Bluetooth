@@ -20,6 +20,7 @@
 
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/bt_transport.h>
 #include <stdio.h>
 
 #include <algorithm>
@@ -59,7 +60,6 @@
 #include "metrics_collector.h"
 #include "osi/include/properties.h"
 #include "stack/include/btm_client_interface.h"
-#include "types/bt_transport.h"
 #include "osi/include/properties.h"
 
 namespace bluetooth::le_audio {
