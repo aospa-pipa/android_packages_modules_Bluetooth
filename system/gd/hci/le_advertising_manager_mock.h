@@ -85,7 +85,7 @@ public:
 
   MOCK_METHOD(void, RegisterAdvertisingCallback, (AdvertisingCallback * advertising_callback),
               (override));
-
+  MOCK_METHOD(void, Dump, (int fd), (override));
   MOCK_METHOD(void, SetData, (AdvertiserId advertiser_id, bool set_scan_rsp, std::vector<GapData> data,
                std::vector<GapData> data_encrypt), (override));
 
@@ -97,7 +97,6 @@ public:
   MOCK_METHOD(void, RegisterEncKeyMaterialCallback,(EncKeyMaterialCallback* enc_key_material_callback), (override));
 
   MOCK_METHOD(void, GetEncKeyMaterial, (), (override));
-
 };
 
 }  // namespace testing
