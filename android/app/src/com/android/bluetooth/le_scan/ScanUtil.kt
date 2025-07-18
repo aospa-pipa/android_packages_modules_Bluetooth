@@ -96,7 +96,20 @@ object ScanUtil {
         !client.hasDisavowedLocation && !isFilteredScan(client)
 
     // A valid filter need at least one field not empty
-    private fun isFilteredScan(client: ScanClient) = client.filters.any { !it.isAllFieldsEmpty() }
+    private fun isFilteredScan(client: ScanClient) = client.filters.any { !it.isAllFieldsEmpty }
+
+    @JvmStatic
+    fun isBackgroundScan(settings: ScanSettings) =
+        (settings.callbackType and ScanSettings.CALLBACK_TYPE_FIRST_MATCH) != 0
+
+    @JvmStatic
+    fun isBatchScan(settings: ScanSettings) =
+        settings.callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES &&
+            settings.reportDelayMillis != 0L
+
+    @JvmStatic
+    fun isOpportunisticScan(settings: ScanSettings) =
+        settings.scanMode == ScanSettings.SCAN_MODE_OPPORTUNISTIC
 
     @JvmStatic
     fun isExemptFromScanTimeout(client: ScanClient) =
@@ -107,8 +120,7 @@ object ScanUtil {
         isOpportunisticScanClient(client) || !isAllMatchesAutoBatchScanClient(client)
 
     @JvmStatic
-    fun isOpportunisticScanClient(client: ScanClient) =
-        client.settings.scanMode == ScanSettings.SCAN_MODE_OPPORTUNISTIC
+    fun isOpportunisticScanClient(client: ScanClient) = isOpportunisticScan(client.settings)
 
     private fun isFirstMatchScanClient(client: ScanClient) =
         (client.settings.callbackType and ScanSettings.CALLBACK_TYPE_FIRST_MATCH) != 0
@@ -118,25 +130,22 @@ object ScanUtil {
         client.settings.callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH
 
     @JvmStatic
-    fun isBatchClient(client: ScanClient?): Boolean =
-        client != null &&
-            client.settings.callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES &&
-            client.settings.reportDelayMillis != 0L
+    fun isBatchClient(client: ScanClient?) = client != null && isBatchScan(client.settings)
 
     @JvmStatic
     fun isForceDowngradedScanClient(client: ScanClient) =
         isTimeoutScanClient(client) || isDowngradedScanClient(client)
 
     private fun isTimeoutScanClient(client: ScanClient) =
-        client.mStats.map { it.isScanTimeout(client.scannerId) }.orElse(false)
+        client.appScanStats.map { it.isScanTimeout(client.scannerId) }.orElse(false)
 
     @JvmStatic
     fun isDowngradedScanClient(client: ScanClient) =
-        client.mStats.map { it.isScanDowngraded(client.scannerId) }.orElse(false)
+        client.appScanStats.map { it.isScanDowngraded(client.scannerId) }.orElse(false)
 
     @JvmStatic
     fun isAutoBatchScanClientEnabled(client: ScanClient) =
-        client.mStats.map { it.isAutoBatchScan(client.scannerId) }.orElse(false)
+        client.appScanStats.map { it.isAutoBatchScan(client.scannerId) }.orElse(false)
 
     @JvmStatic
     fun isPhyConfigured(client: ScanClient, use1mPhy: Boolean) =

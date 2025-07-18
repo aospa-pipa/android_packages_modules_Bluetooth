@@ -3613,6 +3613,21 @@ public:
 
     log::info("{}", leAudioDevice->address_);
 
+    /* Clear device audio directions, so group diretions will be updated using new values.
+     * Find group and clear directions, as changed service may mean that
+     * capabilities are changed.
+     */
+    if (leAudioDevice->group_id_ != bluetooth::groups::kGroupUnknown) {
+      leAudioDevice->audio_directions_ = 0;
+      LeAudioDeviceGroup* group = aseGroups_.FindById(leAudioDevice->group_id_);
+      if (group == nullptr) {
+        log::error("Unknown group for leAudioDevice {} ({})", leAudioDevice->address_,
+                   std::format_ptr(leAudioDevice));
+      } else {
+        group->audio_directions_ = 0;
+      }
+    }
+
     if (leAudioDevice->known_service_handles_ == false) {
       log::debug("Database already invalidated");
       return;
@@ -6750,7 +6765,8 @@ public:
     BidirectionalPair<AudioContexts> remote_metadata = config.second;
     if (!remote_metadata.sink.any() && !remote_metadata.source.any()) {
       log::warn("No valid metadata to update or reconfigure to");
-      if (group->IsStreaming() && new_config_context > LeAudioContextType::UNSPECIFIED) {
+      if (group->IsStreaming() && (new_config_context > LeAudioContextType::UNSPECIFIED) &&
+          (new_config_context != configuration_context_type_)) {
         log::warn(" Stop the stream to group_id: {} and reconfigure from {} ->  {}",
                   group->group_id_, ToString(configuration_context_type_),
                   ToString(new_config_context));

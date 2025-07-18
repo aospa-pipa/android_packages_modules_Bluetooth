@@ -21,6 +21,7 @@ import static android.Manifest.permission.DUMP;
 
 import static com.android.bluetooth.Utils.callerIsSystemOrActiveOrManagedUser;
 
+import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.bluetooth.IAdapter;
 import android.bluetooth.IBluetoothCallback;
@@ -43,11 +44,22 @@ class AdapterBinder extends IAdapter.Stub {
         mService = svc;
     }
 
-    public AdapterService getService() {
-        if (!mService.isAvailable()) {
+    @RequiresPermission(BLUETOOTH_PRIVILEGED)
+    private AdapterService getServiceAndEnforcePrivileged() {
+        AdapterService service = getService();
+        if (service == null) {
             return null;
         }
-        return mService;
+        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        return service;
+    }
+
+    private AdapterService getService() {
+        AdapterService service = mService;
+        if (!service.isAvailable()) {
+            return null;
+        }
+        return service;
     }
 
     @Override
@@ -89,70 +101,88 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void offToBleOn(boolean quietMode, String hciInstanceName) {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "offToBleOn")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.offToBleOn(quietMode, hciInstanceName);
     }
 
     @Override
     public void onToBleOn() {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "onToBleOn")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.onToBleOn();
     }
 
     @Override
     public void registerCallback(IBluetoothCallback callback) {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null
                 || !callerIsSystemOrActiveOrManagedUser(service, TAG, "registerCallback")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.registerRemoteCallback(callback);
     }
 
     @Override
     public void unregisterCallback(IBluetoothCallback callback) {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null
                 || !callerIsSystemOrActiveOrManagedUser(service, TAG, "unregisterCallback")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.unregisterRemoteCallback(callback);
     }
 
     @Override
     public void bleOnToOn() {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOn")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.bleOnToOn();
     }
 
     @Override
     public void bleOnToOff() {
-        AdapterService service = getService();
+        AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOff")) {
             return;
         }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         service.bleOnToOff();
+    }
+
+    @Override
+    public boolean isMediaProfileConnected() {
+        AdapterService service = getServiceAndEnforcePrivileged();
+        if (service == null) {
+            return false;
+        }
+        return service.isMediaProfileConnected();
+    }
+
+    @Override
+    public void setForegroundUserId(int userId) {
+        if (Flags.limitUserSwitchPropagation()) {
+            throw new IllegalStateException("limitUserSwitchPropagation is activated");
+        }
+        AdapterService service = getServiceAndEnforcePrivileged();
+        if (service == null) {
+            return;
+        }
+        Utils.setForegroundUserId(userId);
+    }
+
+    @Override
+    public void unregAllGattClient() {
+        AdapterService service = getServiceAndEnforcePrivileged();
+        if (service == null) {
+            return;
+        }
+        service.unregAllGattClient();
     }
 
     @Override
@@ -166,41 +196,6 @@ class AdapterBinder extends IAdapter.Stub {
         service.enforceCallingOrSelfPermission(DUMP, null);
         service.dump(fd, writer, args);
         writer.close();
-    }
-
-    @Override
-    public boolean isMediaProfileConnected() {
-        AdapterService service = getService();
-        if (service == null) {
-            return false;
-        }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        return service.isMediaProfileConnected();
-    }
-
-    @Override
-    public void setForegroundUserId(int userId) {
-        if (Flags.limitUserSwitchPropagation()) {
-            throw new IllegalStateException("limitUserSwitchPropagation is activated");
-        }
-        AdapterService service = getService();
-        if (service == null) {
-            return;
-        }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        Utils.setForegroundUserId(userId);
-    }
-
-    @Override
-    public void unregAllGattClient() {
-        AdapterService service = getService();
-        if (service == null) {
-            return;
-        }
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        service.unregAllGattClient();
     }
 
     @Override
