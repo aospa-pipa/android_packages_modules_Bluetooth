@@ -589,7 +589,7 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
      * @return related list of devices sorted from the lowest to the highest rank value.
      */
     public @NonNull List<BluetoothDevice> getGroupDevicesOrdered(int groupId) {
-        final Map<BluetoothDevice, Integer> deviceRankMap = new HashMap();
+        final Map<BluetoothDevice, Integer> deviceRankMap = new HashMap<>();
         for (Map.Entry<BluetoothDevice, ?> entry : mDeviceGroupIdRankMap.entrySet()) {
             Map<Integer, Integer> rankMap = (Map<Integer, Integer>) entry.getValue();
             BluetoothDevice device = entry.getKey();
@@ -901,10 +901,8 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
     @VisibleForTesting
     void bondStateChanged(BluetoothDevice device, int bondState) {
         Log.d(TAG, "Bond state changed for device: " + device + " state: " + bondState);
-        if (bondState == BluetoothDevice.BOND_BONDING
-                && mFoundSetMemberToGroupId.containsKey(device)) {
-            mFoundSetMemberToGroupId.remove(device);
-        }
+
+        mFoundSetMemberToGroupId.remove(device);
 
         // Remove state machine if the bonding for a device is removed
         if (bondState != BluetoothDevice.BOND_NONE) {

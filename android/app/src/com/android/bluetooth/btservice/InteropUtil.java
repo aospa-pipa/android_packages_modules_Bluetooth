@@ -112,6 +112,8 @@ public class InteropUtil {
         return matched;
     }
 
+    private InteropUtil() {}
+
     /**
      * Check if a given address or remote device name matches a known interoperability workaround
      * identified by the interop feature. remote device name will be fetched internally based on the

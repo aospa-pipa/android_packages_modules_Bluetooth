@@ -1334,14 +1334,14 @@ public class HeadsetService extends ConnectableProfile {
                                 + " as active, device is not connected");
                 return false;
             }
-            if (!mNativeInterface.setActiveDevice(device)) {
-                Log.e(TAG, "setActiveDevice: Cannot set " + device + " as active in native layer");
-                return false;
-            }
             if (mSystemInterface.isScoManagedByAudioEnabled()
                     && mActiveDevice != null
                     && !mActiveDevice.equals(mExposedActiveDevice)) {
                 Log.e(TAG, "Already processing an active device change");
+                return false;
+            }
+            if (!mNativeInterface.setActiveDevice(device)) {
+                Log.e(TAG, "setActiveDevice: Cannot set " + device + " as active in native layer");
                 return false;
             }
             BluetoothDevice previousActiveDevice = mActiveDevice;
@@ -1633,7 +1633,7 @@ public class HeadsetService extends ConnectableProfile {
                     logScoSessionMetric(
                             device,
                             BluetoothStatsLog
-                                    .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__SCO_VOICE_RECOGNITION_INITIATED_END,
+                                    .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__SCO_DISCONNECT_AUDIO_END,
                             Binder.getCallingUid());
                 });
     }

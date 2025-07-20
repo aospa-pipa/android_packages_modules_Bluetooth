@@ -97,6 +97,8 @@ public:
 
   void RegisterAdvertisingCallback(AdvertisingCallback* advertising_callback) override;
 
+  void Dump(int fd) override;
+
   void SetData(AdvertiserId advertiser_id, bool set_scan_rsp, std::vector<GapData> data,
                std::vector<GapData> data_encrypt) override;
 
@@ -108,7 +110,6 @@ public:
   void RegisterEncKeyMaterialCallback(EncKeyMaterialCallback* enc_key_material_callback) override;
 
   void GetEncKeyMaterial() override;
-
 private:
   struct impl;
   std::unique_ptr<impl> pimpl_;

@@ -513,6 +513,16 @@ protected:
             base::Unretained(this->gatt_callback), event_data));
   }
 
+  void InjectServiceDiscoveryDone(const RawAddress& address) {
+    tBTA_GATTC_SERVICE_DISCOVERY_DONE event_data = {.remote_bda = address};
+
+    do_in_main_thread(base::BindOnce(
+            [](tBTA_GATTC_CBACK* gatt_callback, tBTA_GATTC_SERVICE_DISCOVERY_DONE event_data) {
+              gatt_callback(BTA_GATTC_SRVC_DISC_DONE_EVT, (tBTA_GATTC*)&event_data);
+            },
+            base::Unretained(this->gatt_callback), event_data));
+  }
+
   void InjectConnectedEvent(const RawAddress& address, uint16_t conn_id,
                             tGATT_STATUS status = GATT_SUCCESS) {
     ASSERT_NE(conn_id, GATT_INVALID_CONN_ID);
@@ -817,6 +827,7 @@ protected:
                                                            (handle <= svc.end_handle);
                                                   });
                           if (svc == device.services.end()) {
+                            log::info("ReadMultiCharacteristic error, no svc");
                             return std::make_pair(GATT_ERROR, std::vector<uint8_t>());
                           }
 
@@ -1197,15 +1208,26 @@ protected:
                       bluetooth::common::ToString(metadata_context_types.source),
                       ccid_lists.sink.size(), ccid_lists.source.size());
 
+              auto enabled_directions =
+                      state_machine_callbacks_->OnGetEnabledDirections(group->group_id_);
+
               /* Do nothing if already streaming - the implementation would
                * probably update the metadata.
                */
               if (group_state == types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
+                // Set streaming metadata
+                for (LeAudioDevice* device = group->GetFirstActiveDevice(); device != nullptr;
+                     device = group->GetNextActiveDevice(device)) {
+                  for (auto& ase : device->ases_) {
+                    if (!ase.active || !(enabled_directions & ase.direction)) {
+                      continue;
+                    }
+                    group->SetStreamingMetadataContexts(metadata_context_types.get(ase.direction),
+                                                        ase.direction);
+                  }
+                }
                 return true;
               }
-
-              auto enabled_directions =
-                      state_machine_callbacks_->OnGetEnabledDirections(group->group_id_);
 
               // Inject the state
               group->SetTargetState(types::AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING);
@@ -5868,6 +5890,66 @@ TEST_F(UnicastTest, HandleRemoteDeviceWithoutSourceAses) {
 
   SyncOnMainLoop();
   Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+}
+
+TEST_F(UnicastTest, HandleDeviceReconfiguredToSinkOnlyAseRemoved) {
+  const RawAddress test_address0 = GetTestAddress(0);
+  int group_size = 1;
+  int group_id = 1;
+  default_channel_cnt = 1;
+
+  EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address0, true)).Times(1);
+
+  uint8_t expected_direction = bluetooth::le_audio::types::kLeAudioDirectionBoth;
+  EXPECT_CALL(mock_audio_hal_client_callbacks_, OnAudioConf(expected_direction, _, _, _, _));
+
+  ConnectCsisDevice(test_address0, 1 /*conn_id*/, codec_spec_conf::kLeAudioLocationStereo,
+                    codec_spec_conf::kLeAudioLocationStereo, group_size, group_id, 1 /* rank*/);
+
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+
+  /* Device will disconnect, and do not reconnect automatically */
+  ON_CALL(mock_gatt_interface_, Open(_, test_address0, BTM_BLE_DIRECT_CONNECTION, _))
+          .WillByDefault(Return());
+
+  /* Disconnect device */
+  InjectDisconnectedEvent(1, GATT_CONN_TERMINATE_PEER_USER);
+  SyncOnMainLoop();
+
+  /* For background connect, test needs to Inject Connected Event.
+   * Expect Audio Config to be invalidated first, then updated second.
+   */
+  /* Reconfigure device so it's missing Source ASE and Source PACS*/
+
+  EXPECT_CALL(mock_audio_hal_client_callbacks_, OnAudioConf(0, _, _, _, _));
+  EXPECT_CALL(mock_audio_hal_client_callbacks_, OnAudioConf(expected_direction, _, _, _, _));
+  InjectConnectedEvent(test_address0, 1);
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+
+  /* Simulate service change - remove old GATT database, and recreate it
+   * without Source ASE
+   */
+  no_source_ases_ = true;
+  peer_devices.clear();
+
+  SetSampleDatabaseEarbudsValid(
+          1, test_address0, codec_spec_conf::kLeAudioLocationStereo,
+          codec_spec_conf::kLeAudioLocationStereo, default_channel_cnt, default_channel_cnt, 0x0004,
+          /* source sample freq 16khz */ false /*add_csis*/, true /*add_cas*/, true /*add_pacs*/,
+          default_ase_cnt /*add_ascs_cnt*/, 1 /*set_size*/, 0 /*rank*/);
+  peer_devices.at(1)->connected = true;
+
+  EXPECT_CALL(mock_gatt_interface_, ServiceSearchRequest(_, _)).Times(1);
+  expected_direction = bluetooth::le_audio::types::kLeAudioDirectionSink;
+  std::optional<std::bitset<32>> expected_src_location = std::nullopt;
+  EXPECT_CALL(mock_audio_hal_client_callbacks_, OnAudioConf(0, _, _, _, _));
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnAudioConf(expected_direction, _, _, expected_src_location, _));
+  InjectServiceChangedEvent(test_address0, 1);
+  InjectServiceDiscoveryDone(test_address0);
+  SyncOnMainLoop();
 }
 
 TEST_F(UnicastTest, TestUpdateConfigurationCallbackWhileStreaming) {
@@ -12010,6 +12092,98 @@ TEST_F(UnicastTest, EmptyContextTypeDuringStreaming) {
   EXPECT_CALL(mock_state_machine_, StopStream(_)).Times(0);
   EXPECT_CALL(mock_state_machine_, StartStream(_, _, _, _)).Times(0);
   UpdateLocalSourceEmptyMetadata();
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+}
+
+TEST_F(UnicastTest, SonificationContextTypeDuringStreaming) {
+  const RawAddress test_address0 = GetTestAddress(0);
+  int group_id = bluetooth::groups::kGroupUnknown;
+  uint16_t conn_id = 1;
+
+  available_snk_context_types_ =
+          (types::LeAudioContextType::RINGTONE | types::LeAudioContextType::CONVERSATIONAL |
+           types::LeAudioContextType::UNSPECIFIED | types::LeAudioContextType::MEDIA)
+                  .value();
+  supported_snk_context_types_ = available_snk_context_types_;
+  available_src_context_types_ = available_snk_context_types_;
+  supported_src_context_types_ = available_src_context_types_;
+
+  /* Scenario:
+   * 0. Remote device does not support SFX, which means each SFX will be translated to UNSPECIFIED
+   * as per spec.
+   * 1. Start streaming MEDIA to remote device
+   * 2. Remove device makes MEDIA Unavailable when streaming is started. This is OK as per spec
+   * however bit problematic. Still, Android keeps track on MEDIA because it is accepted and
+   * Streaming context type.
+   * 3. Audio HAL sends only Sonification which is translated to SFX and later to UNSPECIFIED.
+   * Android sends Metadata Update to Remote device which end up with Android losing the Media as
+   * an Accepted Context type. Remote also does not send back MEDIA as available context type.
+   * 4. Audio HAL updates metadata to MEDIA
+   * 5. It is expected that stream will not be stopped due to reconfiguration as stream config
+   * allows to send Media
+   */
+  SetSampleDatabaseEarbudsValid(1, test_address0, codec_spec_conf::kLeAudioLocationStereo,
+                                codec_spec_conf::kLeAudioLocationStereo, default_channel_cnt,
+                                default_channel_cnt, 0x0004, false /*add_csis*/, true /*add_cas*/,
+                                true /*add_pacs*/, default_ase_cnt /*add_ascs_cnt*/, 1 /*set_size*/,
+                                0 /*rank*/);
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnConnectionState(ConnectionState::CONNECTED, test_address0))
+          .Times(1);
+  EXPECT_CALL(mock_audio_hal_client_callbacks_,
+              OnGroupNodeStatus(test_address0, _, GroupNodeStatus::ADDED))
+          .WillOnce(DoAll(SaveArg<1>(&group_id)));
+
+  ConnectLeAudio(test_address0);
+  ASSERT_NE(group_id, bluetooth::groups::kGroupUnknown);
+
+  // Start streaming
+  uint8_t cis_count_out = 1;
+  uint8_t cis_count_in = 0;
+
+  // Audio sessions are started only when device gets active
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, Start(_, _, _)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, Start(_, _, _)).Times(1);
+  LeAudioClient::Get()->GroupSetActive(group_id);
+  SyncOnMainLoop();
+
+  StartStreaming(AUDIO_USAGE_MEDIA, AUDIO_CONTENT_TYPE_UNKNOWN, group_id);
+  SyncOnMainLoop();
+
+  // Verify Data transfer on one audio source cis
+  TestAudioDataTransfer(group_id, cis_count_out, cis_count_in, 1920);
+  SyncOnMainLoop();
+
+  ASSERT_NE(0lu, streaming_groups.count(group_id));
+  auto group = streaming_groups.at(group_id);
+
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+
+  log::debug("Remove MEDIA from available contexts ");
+
+  types::BidirectionalPair<types::AudioContexts> metadata = {
+          .sink = types::AudioContexts(types::LeAudioContextType::UNSPECIFIED),
+          .source = types::AudioContexts()};
+
+  EXPECT_CALL(mock_state_machine_, StopStream(_)).Times(0);
+  EXPECT_CALL(mock_state_machine_, StartStream(_, types::LeAudioContextType::MEDIA, metadata, _))
+          .Times(1);
+
+  auto new_contexts = AudioContexts(available_snk_context_types_);
+  new_contexts.unset(types::LeAudioContextType::MEDIA);
+  InjectAvailableContextTypes(test_address0, conn_id, new_contexts, new_contexts);
+  SyncOnMainLoop();
+  UpdateLocalSourceMetadata(AUDIO_USAGE_ASSISTANCE_SONIFICATION, AUDIO_CONTENT_TYPE_UNKNOWN);
+  SyncOnMainLoop();
+
+  Mock::VerifyAndClearExpectations(&mock_state_machine_);
+
+  EXPECT_CALL(mock_state_machine_, StopStream(_)).Times(0);
+
+  UpdateLocalSourceMetadata(AUDIO_USAGE_MEDIA, AUDIO_CONTENT_TYPE_UNKNOWN);
+
   SyncOnMainLoop();
   Mock::VerifyAndClearExpectations(&mock_state_machine_);
 }

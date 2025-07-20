@@ -43,8 +43,9 @@ private constructor(
     var hasScanWithoutLocationPermission: Boolean = false,
     var hasDisavowedLocation: Boolean = false,
     var associatedDevices: List<String> = emptyList(),
-    // TODO(b/429793161) Convert to Kotlin native optional
-    @JvmField internal var mStats: Optional<AppScanStats> = Optional.empty(),
+    @get:JvmName("getAppScanStats")
+    @set:JvmName("setAppScanStats")
+    internal var appScanStats: Optional<AppScanStats> = Optional.empty(),
 ) {
     @JvmOverloads
     constructor(
@@ -83,7 +84,7 @@ private constructor(
         sb.append("scannerId=").append(scannerId)
         sb.append(", scanModeApp=").append(ScanSettings.getScanModeString(scanModeApp))
         sb.append(", scanModeUsed=").append(ScanSettings.getScanModeString(settings.scanMode))
-        mStats.getOrNull()?.let { stats ->
+        appScanStats.getOrNull()?.let { stats ->
             sb.append(", appScanStats.appName=").append(stats.mAppName)
         }
         return sb.append(")").toString()
@@ -95,20 +96,20 @@ private constructor(
      * @return true if scan settings are updated, false otherwise.
      */
     fun updateScanMode(newScanMode: Int): Boolean {
-        if (settings.getScanMode() == newScanMode) {
+        if (settings.scanMode == newScanMode) {
             return false
         }
 
         settings =
             ScanSettings.Builder()
                 .setScanMode(newScanMode)
-                .setCallbackType(settings.getCallbackType())
-                .setScanResultType(settings.getScanResultType())
-                .setReportDelay(settings.getReportDelayMillis())
-                .setNumOfMatches(settings.getNumOfMatches())
-                .setMatchMode(settings.getMatchMode())
-                .setLegacy(settings.getLegacy())
-                .setPhy(settings.getPhy())
+                .setCallbackType(settings.callbackType)
+                .setScanResultType(settings.scanResultType)
+                .setReportDelay(settings.reportDelayMillis)
+                .setNumOfMatches(settings.numOfMatches)
+                .setMatchMode(settings.matchMode)
+                .setLegacy(settings.legacy)
+                .setPhy(settings.phy)
                 .build()
         return true
     }

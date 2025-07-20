@@ -1153,6 +1153,7 @@ public class GattServiceTest {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_GATT_MULTI_BEARER_TRANSACTIONS)
     public void serverExecuteWrite_writePreparedWrite_writeSentAndAppResponds() throws Exception {
         ContextMap<IBluetoothGattServerCallback>.App serverApp =
                 addServerAppRecord(SERVER_IF, TRANSPORT_LE, mGattServerCallback);
@@ -1176,7 +1177,7 @@ public class GattServiceTest {
                 /* request ID */ 0,
                 /* status */ 0,
                 /* offset */ 0,
-                /* Data null for a preprared write response */ null);
+                /* Data null for a prepared write response */ null);
 
         verify(mNativeInterface)
                 .gattServerSendResponse(
@@ -1191,6 +1192,7 @@ public class GattServiceTest {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_GATT_MULTI_BEARER_TRANSACTIONS)
     public void serverExecuteWrite_cancelPreparedWrite_cancelSentAndAppResponds() throws Exception {
         ContextMap<IBluetoothGattServerCallback>.App serverApp =
                 addServerAppRecord(SERVER_IF, TRANSPORT_LE, mGattServerCallback);
@@ -1214,7 +1216,7 @@ public class GattServiceTest {
                 /* request ID */ 0,
                 /* status */ 0,
                 /* offset */ 0,
-                /* Data null for a preprared write cancel response */ null);
+                /* Data null for a prepared write cancel response */ null);
 
         verify(mNativeInterface)
                 .gattServerSendResponse(

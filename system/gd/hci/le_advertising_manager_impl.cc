@@ -426,13 +426,14 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   AdvertiserId allocate_advertiser() {
     // number of LE_MULTI_ADVT start from 1
     AdvertiserId id = advertising_api_type_ == AdvertisingApiType::ANDROID_HCI ? 1 : 0;
-    while (id < num_instances_ && advertising_sets_.count(id) != 0) {
+    while (id < num_instances_ && advertising_sets_.contains(id) && advertising_sets_[id].in_use) {
       id++;
     }
     if (id == num_instances_) {
       log::warn("Number of max instances {} reached", (uint16_t)num_instances_);
       return kInvalidId;
     }
+    advertising_sets_[id] = Advertiser();
     advertising_sets_[id].in_use = true;
     return id;
   }
@@ -461,7 +462,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 
   void remove_advertiser(AdvertiserId advertiser_id) {
     std::unique_lock lock(id_mutex_);
-    if (advertising_sets_.count(advertiser_id) == 0) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       return;
     }
 
@@ -991,7 +992,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   }
 
   void get_own_address(AdvertiserId advertiser_id) {
-    if (advertising_sets_.find(advertiser_id) == advertising_sets_.end()) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       log::info("Unknown advertising id {}", advertiser_id);
       return;
     }
@@ -1372,7 +1373,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     std::vector<EnabledSet> enabled_sets = {curr_set};
     Enable enable_value = enable ? Enable::ENABLED : Enable::DISABLED;
 
-    if (!advertising_sets_.count(advertiser_id)) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       log::warn("No advertising set with key: {}", advertiser_id);
       return;
     }
@@ -2602,6 +2603,26 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     advertising_callbacks_->OnAdvertisingSetStarted(reg_id, kInvalidId, 0, status);
   }
 
+  void dump(int fd) {
+    std::string output;
+    auto&& out = std::back_inserter(output);
+    auto& advertising_sets = advertising_sets_;
+
+    std::format_to(out, "\nLE Advertising Manager Dumpsys:\n");
+    for (AdvertiserId i = 0; i < num_instances_; i++) {
+      if (advertising_sets.contains(i)) {
+        auto& advertiser = advertising_sets[i];
+        std::format_to(out,
+                       "    id: {} address: {} duration: {} in_use: {} started: {} connectable: {} "
+                       "discoverable: {} directed: {} periodic: {}\n",
+                       i, advertiser.current_address, advertiser.duration, advertiser.in_use,
+                       advertiser.started, advertiser.connectable, advertiser.discoverable,
+                       advertiser.directed, advertiser.is_periodic);
+      }
+    }
+    dprintf(fd, "%s", output.c_str());
+  }
+
   void get_enc_key_material(storage::StorageModule* storage_module_, hci::HciLayer* hci_layer_,
                             os::Handler* handler) {
     std::optional<std::vector<uint8_t>> keyiv =
@@ -2807,10 +2828,11 @@ void LeAdvertisingManagerImpl::RegisterAdvertisingCallback(
                            advertising_callback);
 }
 
+void LeAdvertisingManagerImpl::Dump(int fd) { pimpl_->dump(fd); }
+
 void LeAdvertisingManagerImpl::RegisterEncKeyMaterialCallback(
         EncKeyMaterialCallback* enc_key_material_callback) {
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::register_enc_key_material_callback, enc_key_material_callback);
 }
-
 }  // namespace hci
 }  // namespace bluetooth
