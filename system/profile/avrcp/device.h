@@ -394,8 +394,6 @@ private:
 
   int8_t volume_ = -1;
   std::optional<int8_t> pending_volume_ = {};
-  int8_t last_request_volume_ = -1;
-  uint8_t volume_label_ = MAX_TRANSACTION_LABEL;
   bool fast_forwarding_ = false;
   bool fast_rewinding_  = false;
 };
