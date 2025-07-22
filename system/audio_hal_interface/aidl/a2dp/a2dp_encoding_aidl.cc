@@ -166,8 +166,12 @@ Status A2dpTransport::StartRequest(bool is_low_latency) {
 
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_START;
   auto status = stream_callbacks_->StartStream(is_low_latency);
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_START : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 
   return status;
 }
@@ -187,8 +191,12 @@ Status A2dpTransport::SuspendRequest() {
 
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_SUSPEND;
   auto status = stream_callbacks_->SuspendStream();
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_SUSPEND : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 
   return status;
 }
@@ -196,8 +204,12 @@ Status A2dpTransport::SuspendRequest() {
 void A2dpTransport::StopRequest() {
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_STOP;
   auto status = stream_callbacks_->StopStream();
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_STOP : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 }
 
 void A2dpTransport::SetLatencyMode(LatencyMode latency_mode) {
