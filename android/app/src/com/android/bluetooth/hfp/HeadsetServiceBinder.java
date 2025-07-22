@@ -90,9 +90,7 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
     boolean isAospLeaVoipWarEnabled() {
         boolean ret = false;
         CallAudio mCallAudio = CallAudio.get();
-        if (mCallAudio != null
-                && mCallAudio.isVoipLeaWarEnabled()
-                && mCallAudio.getActiveProfile() == mCallAudio.LE_AUDIO_VOICE) {
+        if (mCallAudio != null && mCallAudio.isVoipLeaWarEnabled()) {
             ret = true;
         }
         Log.i(TAG, "isAospLeaVoipWarEnabled: " + ret);

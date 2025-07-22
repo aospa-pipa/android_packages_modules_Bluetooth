@@ -579,9 +579,12 @@ public class CallAudio {
                     stopScoUsingVirtualVoiceCall();
                     broadcastActiveDevice(null);
                 }
-                if (mHandler != null) {
+                if (mHandler != null && mActiveDevice != null) {
+                    Log.d(TAG,"updateActiveDevice, delay 3s to broadcast hfp active device");
                     Message msg = mHandler.obtainMessage(MESSAGE_ACTIVE_HFP_DEVICE_CHANGE);
                     mHandler.sendMessageDelayed(msg, 3000);
+                } else {
+                    broadcastActiveDevice(device);
                 }
             }
             mActiveDevice = device;
