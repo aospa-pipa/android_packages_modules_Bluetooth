@@ -147,6 +147,13 @@ void LeAudioTransport::StopRequest() {
   }
 }
 
+void LeAudioTransport::AudioServerRestart() {
+  log::info("");
+  if(stream_cb_.on_audio_server_restart_()) {
+    log::info("completed with a success");
+  }
+}
+
 void LeAudioTransport::SetLatencyMode(LatencyMode latency_mode) {
   log::debug("Latency mode: {}",
              ::aidl::android::hardware::bluetooth::audio::toString(latency_mode));
@@ -350,6 +357,8 @@ BluetoothAudioCtrlAck LeAudioSinkTransport::SuspendRequest() {
 
 void LeAudioSinkTransport::StopRequest() { transport_->StopRequest(); }
 
+void LeAudioSinkTransport::AudioServerRestart() { transport_->AudioServerRestart(); }
+
 void LeAudioSinkTransport::SetLatencyMode(LatencyMode latency_mode) {
   transport_->SetLatencyMode(latency_mode);
 }
@@ -437,6 +446,8 @@ BluetoothAudioCtrlAck LeAudioSourceTransport::SuspendRequest() {
 }
 
 void LeAudioSourceTransport::StopRequest() { transport_->StopRequest(); }
+
+void LeAudioSourceTransport::AudioServerRestart() { transport_->AudioServerRestart(); }
 
 void LeAudioSourceTransport::SetLatencyMode(LatencyMode latency_mode) {
   transport_->SetLatencyMode(latency_mode);
