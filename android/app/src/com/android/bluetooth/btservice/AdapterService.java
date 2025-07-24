@@ -45,6 +45,7 @@ import static com.android.bluetooth.Utils.isDualModeAudioEnabled;
 import static com.android.bluetooth.Utils.isPackageNameAccurate;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.NonNull;
@@ -180,12 +181,7 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -313,11 +309,25 @@ public class AdapterService extends Service {
     private final ServiceFactory mServiceFactory; // TODO(b/422543753) Delete on flag cleanup
 
     private boolean mIsMediaProfileConnected;
+
+    @GuardedBy("mEnergyInfoLock")
+    private Instant mLastActivityReport = Instant.now();
+
+    @GuardedBy("mEnergyInfoLock")
     private int mStackReportedState;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mTxTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mRxTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mIdleTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mEnergyUsedTotalVoltAmpSecMicro;
+
     private final HashSet<String> mLeAudioAllowDevices = new HashSet<>();
 
     /* List of pairs of gatt clients which controls AutoActiveMode on the device.*/
@@ -1083,12 +1093,6 @@ public class AdapterService extends Service {
         Log.i(TAG, "factoryResetIfNeeded(): Completed");
     }
 
-    /** Clear storage */
-    void clearStorage() {
-        deleteDirectoryContents("/data/misc/bluedroid/");
-        deleteDirectoryContents("/data/misc/bluetooth/");
-    }
-
     void clearDiscoveringPackages() {
         synchronized (mDiscoveringPackages) {
             mDiscoveringPackages.clear();
@@ -1504,7 +1508,7 @@ public class AdapterService extends Service {
             mBluetoothKeystoreService.cleanup();
         }
 
-        mPhonePolicy.ifPresent(policy -> policy.cleanup());
+        mPhonePolicy.ifPresent(PhonePolicy::cleanup);
 
         mSilenceDeviceManager.cleanup();
 
@@ -1529,7 +1533,7 @@ public class AdapterService extends Service {
 
         mSystemServerCallbacks.kill();
 
-        mMetadataListeners.values().forEach(v -> v.kill());
+        mMetadataListeners.values().forEach(RemoteCallbackList::kill);
     }
 
     private void stopRfcommServerSockets() {
@@ -3039,7 +3043,7 @@ public class AdapterService extends Service {
                         + groupId);
 
         synchronized (mLeGattClientsControllingAutoActiveMode) {
-            Pair newPair = new Pair<>(clientIf, device);
+            Pair<Integer, BluetoothDevice> newPair = new Pair<>(clientIf, device);
             if (mLeGattClientsControllingAutoActiveMode.contains(newPair)) {
                 return;
             }
@@ -3073,9 +3077,7 @@ public class AdapterService extends Service {
     public void notifyDirectLeGattClientConnect(int clientIf, BluetoothDevice device) {
         getLeAudioService()
                 .ifPresent(
-                        leAudio -> {
-                            addGattClientToControlAutoActiveMode(leAudio, clientIf, device);
-                        });
+                        leAudio -> addGattClientToControlAutoActiveMode(leAudio, clientIf, device));
     }
 
     private void removeGattClientFromControlAutoActiveMode(
@@ -3101,12 +3103,10 @@ public class AdapterService extends Service {
         synchronized (mLeGattClientsControllingAutoActiveMode) {
             Log.d(
                     TAG,
-                    "removeGattClientFromControlAutoActiveMode: removing clientIf:"
-                            + clientIf
-                            + ", "
-                            + device
-                            + ", groupId: "
-                            + groupId);
+                    "removeGattClientFromControlAutoActiveMode: removing "
+                            + ("clientIf:" + clientIf)
+                            + ("device:" + device)
+                            + ("groupId:" + groupId));
 
             mLeGattClientsControllingAutoActiveMode.remove(new Pair<>(clientIf, device));
 
@@ -3464,9 +3464,7 @@ public class AdapterService extends Service {
         }
 
         if (Flags.identityToPseudoAddr()) {
-            device =
-                    Objects.requireNonNullElse(
-                            mRemoteDevices.getDevice(device.getAddress()), device);
+            device = requireNonNullElse(mRemoteDevices.getDevice(device.getAddress()), device);
         }
 
         // Checks if any profiles are enabled or disabled and if so, only connect enabled profiles
@@ -3769,12 +3767,10 @@ public class AdapterService extends Service {
     public void setPhonebookAccessPermission(BluetoothDevice device, int value) {
         Log.d(
                 TAG,
-                "setPhonebookAccessPermission device="
-                        + ((device == null) ? "null" : device.getAnonymizedAddress())
-                        + ", value="
-                        + value
-                        + ", callingUid="
-                        + Binder.getCallingUid());
+                "setPhonebookAccessPermission "
+                        + ("(device=" + ((device == null) ? "null" : device.getAnonymizedAddress()))
+                        + (", value=" + value)
+                        + (", callingUid=" + Binder.getCallingUid()));
         setDeviceAccessFromPrefs(device, value, PHONEBOOK_ACCESS_PERMISSION_PREFERENCE_FILE);
     }
 
@@ -3784,14 +3780,6 @@ public class AdapterService extends Service {
 
     public void setSimAccessPermission(BluetoothDevice device, int value) {
         setDeviceAccessFromPrefs(device, value, SIM_ACCESS_PERMISSION_PREFERENCE_FILE);
-    }
-
-    public boolean isRpaOffloadSupported() {
-        return mAdapterProperties.isRpaOffloadSupported();
-    }
-
-    public int getNumOfOffloadedIrkSupported() {
-        return mAdapterProperties.getNumOfOffloadedIrkSupported();
     }
 
     public int getNumOfOffloadedScanFilterSupported() {
@@ -3984,48 +3972,57 @@ public class AdapterService extends Service {
         return mVendor.isSplitA2DPSourceAPTXADAPTIVE();
     }
 
+    @GuardedBy("mEnergyInfoLock")
+    private BluetoothActivityEnergyInfo returnCurrentActivityInfo() {
+        final BluetoothActivityEnergyInfo info =
+                new BluetoothActivityEnergyInfo(
+                        SystemClock.elapsedRealtime(),
+                        mStackReportedState,
+                        mTxTimeTotalMs,
+                        mRxTimeTotalMs,
+                        mIdleTimeTotalMs,
+                        mEnergyUsedTotalVoltAmpSecMicro);
+
+        // Copy the traffic objects whose byte counts are > 0
+        final List<UidTraffic> result = new ArrayList<>();
+        for (int i = 0; i < mUidTraffic.size(); i++) {
+            final UidTraffic traffic = mUidTraffic.valueAt(i);
+            if (traffic.getTxBytes() != 0 || traffic.getRxBytes() != 0) {
+                result.add(traffic.clone());
+            }
+        }
+
+        info.setUidTraffic(result);
+
+        return info;
+    }
+
     BluetoothActivityEnergyInfo requestActivityInfo() {
         if (mAdapterProperties.getState() != BluetoothAdapter.STATE_ON
                 || !mAdapterProperties.isActivityAndEnergyReportingSupported()) {
             return null;
         }
 
-        // Pull the data. The callback will notify mEnergyInfoLock.
-        mNativeInterface.readEnergyInfo();
+        var now = Instant.now();
+        var staleThreshold = now.minusMillis(CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS);
+        var waitDeadline = now.plusMillis(CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS);
 
         synchronized (mEnergyInfoLock) {
-            long now = System.currentTimeMillis();
-            final long deadline = now + CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS;
-            while (now < deadline) {
+            // If activity info has just been requested, return the already saved data directly
+            if (mLastActivityReport.isAfter(staleThreshold)) {
+                return returnCurrentActivityInfo();
+            }
+            // Pull the live data. The callback will notify mEnergyInfoLock.
+            mNativeInterface.readEnergyInfo();
+            while (now.isBefore(waitDeadline)) {
                 try {
-                    mEnergyInfoLock.wait(deadline - now);
+                    mEnergyInfoLock.wait(Duration.between(now, waitDeadline).toMillis());
                     break;
                 } catch (InterruptedException e) {
-                    now = System.currentTimeMillis();
+                    now = Instant.now();
                 }
             }
-
-            final BluetoothActivityEnergyInfo info =
-                    new BluetoothActivityEnergyInfo(
-                            SystemClock.elapsedRealtime(),
-                            mStackReportedState,
-                            mTxTimeTotalMs,
-                            mRxTimeTotalMs,
-                            mIdleTimeTotalMs,
-                            mEnergyUsedTotalVoltAmpSecMicro);
-
-            // Copy the traffic objects whose byte counts are > 0
-            final List<UidTraffic> result = new ArrayList<>();
-            for (int i = 0; i < mUidTraffic.size(); i++) {
-                final UidTraffic traffic = mUidTraffic.valueAt(i);
-                if (traffic.getTxBytes() != 0 || traffic.getRxBytes() != 0) {
-                    result.add(traffic.clone());
-                }
-            }
-
-            info.setUidTraffic(result);
-
-            return info;
+            return returnCurrentActivityInfo();
         }
     }
 
@@ -4038,7 +4035,7 @@ public class AdapterService extends Service {
      *
      * @return {@code BluetoothStatusCodes.FEATURE_SUPPORTED} if supported
      */
-    public int getOffloadedTransportDiscoveryDataScanSupported() {
+    int getOffloadedTransportDiscoveryDataScanSupported() {
         if (mAdapterProperties.isOffloadedTransportDiscoveryDataScanSupported()) {
             return BluetoothStatusCodes.FEATURE_SUPPORTED;
         }
@@ -4173,9 +4170,11 @@ public class AdapterService extends Service {
      */
     public void notifyProfileConnectionStateChangeToScan(int profile, int fromState, int toState) {
         final var scanController = getBluetoothScanController();
-        if (scanController != null) {
-            scanController.notifyProfileConnectionStateChange(profile, fromState, toState);
-        }
+        if (scanController == null) return;
+        scanController.doOnScanThread(
+                () -> {
+                    scanController.notifyProfileConnectionStateChange(profile, fromState, toState);
+                });
     }
 
     /**
@@ -4259,16 +4258,6 @@ public class AdapterService extends Service {
             case SCAN_MODE_CONNECTABLE -> AbstractionLayer.BT_SCAN_MODE_CONNECTABLE;
             case SCAN_MODE_CONNECTABLE_DISCOVERABLE ->
                     AbstractionLayer.BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE;
-            default -> -1;
-        };
-    }
-
-    static int convertScanModeFromHal(int mode) {
-        return switch (mode) {
-            case AbstractionLayer.BT_SCAN_MODE_NONE -> SCAN_MODE_NONE;
-            case AbstractionLayer.BT_SCAN_MODE_CONNECTABLE -> SCAN_MODE_CONNECTABLE;
-            case AbstractionLayer.BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE ->
-                    SCAN_MODE_CONNECTABLE_DISCOVERABLE;
             default -> -1;
         };
     }
@@ -4372,6 +4361,7 @@ public class AdapterService extends Service {
                     existingTraffic.addTxBytes(traffic.getTxBytes());
                 }
             }
+            mLastActivityReport = Instant.now();
             mEnergyInfoLock.notifyAll();
         }
     }
@@ -4508,21 +4498,21 @@ public class AdapterService extends Service {
 
         mAdapterStateMachine.dump(fd, writer, args);
 
-        sb = new StringBuilder();
+        final var stringBuilder = new StringBuilder();
 
-        mSilenceDeviceManager.dump(sb);
-        mDatabaseManager.dump(sb);
+        mSilenceDeviceManager.dump(stringBuilder);
+        mDatabaseManager.dump(stringBuilder);
 
         for (ProfileService profile : mRegisteredProfiles) {
-            profile.dump(sb);
+            profile.dump(stringBuilder);
         }
 
         final var scanController = getBluetoothScanController();
         if (scanController != null) {
-            scanController.dump(sb);
+            scanController.forceRunSyncOnScanThread(() -> scanController.dump(stringBuilder));
         }
 
-        writer.write(sb.toString());
+        writer.write(stringBuilder.toString());
 
         final int currentState = mAdapterProperties.getState();
         if (currentState == BluetoothAdapter.STATE_OFF
@@ -4881,14 +4871,14 @@ public class AdapterService extends Service {
      * @param device Bluetooth device to be checked for audio policy support
      * @return int status of the remote support for audio policy feature
      */
-    public int isRequestAudioPolicyAsSinkSupported(BluetoothDevice device) {
-        return getHeadsetClientService()
-                .map(headsetClient -> headsetClient.getAudioPolicyRemoteSupported(device))
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "No audio transport connected");
-                            return BluetoothStatusCodes.FEATURE_NOT_CONFIGURED;
-                        });
+    int isRequestAudioPolicyAsSinkSupported(BluetoothDevice device) {
+        var headsetClient = getHeadsetClientService();
+        if (headsetClient.isEmpty()) {
+            Log.e(TAG, "No audio transport connected");
+            return BluetoothStatusCodes.FEATURE_NOT_CONFIGURED;
+        } else {
+            return headsetClient.get().getAudioPolicyRemoteSupported(device);
+        }
     }
 
     /**
@@ -4897,29 +4887,26 @@ public class AdapterService extends Service {
      * @param device Bluetooth device to be set policy for
      * @return int result status for requestAudioPolicyAsSink API
      */
-    public int requestAudioPolicyAsSink(BluetoothDevice device, BluetoothSinkAudioPolicy policies) {
+    int requestAudioPolicyAsSink(BluetoothDevice device, BluetoothSinkAudioPolicy policies) {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp == null) {
             return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
         }
 
-        return getHeadsetClientService()
-                .map(
-                        headsetClient -> {
-                            if (isRequestAudioPolicyAsSinkSupported(device)
-                                    != BluetoothStatusCodes.FEATURE_SUPPORTED) {
-                                throw new UnsupportedOperationException(
-                                        "Request Audio Policy As Sink not supported");
-                            }
-                            deviceProp.setHfAudioPolicyForRemoteAg(policies);
-                            headsetClient.setAudioPolicy(device, policies);
-                            return BluetoothStatusCodes.SUCCESS;
-                        })
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "HeadsetClient not connected");
-                            return BluetoothStatusCodes.ERROR_PROFILE_NOT_CONNECTED;
-                        });
+        var headsetClient = getHeadsetClientService();
+        if (headsetClient.isEmpty()) {
+            Log.e(TAG, "HeadsetClient not connected");
+            return BluetoothStatusCodes.ERROR_PROFILE_NOT_CONNECTED;
+        } else {
+            if (isRequestAudioPolicyAsSinkSupported(device)
+                    != BluetoothStatusCodes.FEATURE_SUPPORTED) {
+                throw new UnsupportedOperationException(
+                        "Request Audio Policy As Sink not supported");
+            }
+            deviceProp.setHfAudioPolicyForRemoteAg(policies);
+            headsetClient.get().setAudioPolicy(device, policies);
+            return BluetoothStatusCodes.SUCCESS;
+        }
     }
 
     /**
@@ -4934,13 +4921,12 @@ public class AdapterService extends Service {
             return null;
         }
 
-        return getHeadsetClientService()
-                .map(headsetClient -> deviceProp.getHfAudioPolicyForRemoteAg())
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "HeadsetClient not connected");
-                            return null;
-                        });
+        if (getHeadsetClientService().isEmpty()) {
+            Log.e(TAG, "HeadsetClient not connected");
+            return null;
+        } else {
+            return deviceProp.getHfAudioPolicyForRemoteAg();
+        }
     }
 
     /**
@@ -5072,43 +5058,6 @@ public class AdapterService extends Service {
        Log.d(TAG, "isDelayA2dpDiscDevice: matched: " + matched);
        return matched;
     }
-
-    private static void deleteDirectoryContents(String dirPath) {
-        Path directoryPath = Paths.get(dirPath);
-        try {
-            Files.walkFileTree(
-                    directoryPath,
-                    new SimpleFileVisitor<Path>() {
-                        @Override
-                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                throws IOException {
-                            Files.delete(file);
-                            return FileVisitResult.CONTINUE;
-                        }
-
-                        @Override
-                        public FileVisitResult postVisitDirectory(Path dir, IOException ex)
-                                throws IOException {
-                            if (ex != null) {
-                                Log.e(TAG, "Error happened while removing contents. ", ex);
-                            }
-
-                            if (!dir.equals(directoryPath)) {
-                                try {
-                                    Files.delete(dir);
-                                } catch (Exception e) {
-                                    Log.e(TAG, "Error happened while removing directory: ", e);
-                                }
-                            }
-                            return FileVisitResult.CONTINUE;
-                        }
-                    });
-            Log.i(TAG, "deleteDirectoryContents() completed. Path: " + dirPath);
-        } catch (Exception e) {
-            Log.e(TAG, "Error happened while removing contents: ", e);
-        }
-    }
-
     /** Get the number of the supported offloaded LE COC sockets. */
     public int getNumberOfSupportedOffloadedLeCocSockets() {
         return mAdapterProperties.getNumberOfSupportedOffloadedLeCocSockets();
