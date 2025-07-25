@@ -5357,10 +5357,7 @@ public:
           defer_source_suspend_ack_until_stop_ = true;
           OnAudioSuspend();
         } else {
-          if (le_audio_source_hal_client_) {
-            log::info("calling source ConfirmSuspendRequest in audio_sender_state_ idle");
-            le_audio_source_hal_client_->ConfirmSuspendRequest();
-          }
+          ackHalSuspendRequest(true);
         }
         return;
       case AudioState::READY_TO_RELEASE:
@@ -5380,16 +5377,13 @@ public:
         if (isDynamicDirectionsEnabled(group)) {
           groupStateMachine_->DisableStreamingDirection(
                   group, bluetooth::le_audio::types::kLeAudioDirectionSink);
+        } else {
+          ackHalSuspendRequest(true);
         }
         break;
       }
       default:
-        // In VBC and Call streaming cases, send immediate ack
-        // for the first initiate suspsend.
-        if (le_audio_source_hal_client_) {
-          log::info("calling source ConfirmSuspendRequest");
-          le_audio_source_hal_client_->ConfirmSuspendRequest();
-        }
+        ackHalSuspendRequest(true);
         break;
     };
 
@@ -5400,6 +5394,23 @@ public:
                                             kLogAfSuspendConfirm + "LocalSource",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     "s_state: " + ToString(audio_sender_state_));
+  }
+
+  void ackHalSuspendRequest(bool source) {
+    log::info("source: {}", source);
+    // In VBC and Call streaming cases, send immediate ack
+    // for the first initiate suspsend.
+    if (source) {
+      if (le_audio_source_hal_client_) {
+        log::info("calling source ConfirmSuspendRequest");
+        le_audio_source_hal_client_->ConfirmSuspendRequest();
+      }
+    } else {
+      if (le_audio_sink_hal_client_) {
+        log::info("calling sink ConfirmSuspendRequest");
+        le_audio_sink_hal_client_->ConfirmSuspendRequest();
+      }
+    }
   }
 
   void startSendingAudioWrapper(LeAudioDeviceGroup* group) {
@@ -5740,10 +5751,7 @@ public:
           defer_sink_suspend_ack_until_stop_ = true;
           OnAudioSuspend();
         } else {
-          if (le_audio_sink_hal_client_) {
-            log::info("calling sink ConfirmSuspendRequest in audio_receiver_state_ IDLE");
-            le_audio_sink_hal_client_->ConfirmSuspendRequest();
-          }
+          ackHalSuspendRequest(false);
         }
         return;
       case AudioState::READY_TO_RELEASE:
@@ -5762,18 +5770,13 @@ public:
         if (isDynamicDirectionsEnabled(group)) {
           groupStateMachine_->DisableStreamingDirection(
                   group, bluetooth::le_audio::types::kLeAudioDirectionSource);
+        } else {
+          ackHalSuspendRequest(false);
         }
         break;
       }
       default:
-        // In VBC and Call streaming cases, send immediate ack
-        // for the first initiate suspsend.
-        if (audio_sender_state_ != AudioState::IDLE &&
-            audio_sender_state_ != AudioState::READY_TO_RELEASE &&
-            le_audio_sink_hal_client_) {
-          log::info("calling sink ConfirmSuspendRequest");
-          le_audio_sink_hal_client_->ConfirmSuspendRequest();
-        }
+        ackHalSuspendRequest(false);
         break;
     }
 
@@ -7724,19 +7727,13 @@ public:
             }
 
             if (defer_source_suspend_ack_until_stop_) {
-              if (le_audio_source_hal_client_) {
-                defer_source_suspend_ack_until_stop_ = false;
-                log::info("calling source ConfirmSuspendRequest");
-                le_audio_source_hal_client_->ConfirmSuspendRequest();
-              }
+              defer_source_suspend_ack_until_stop_ = false;
+              ackHalSuspendRequest(true);
             }
 
             if (defer_sink_suspend_ack_until_stop_) {
-              if (le_audio_sink_hal_client_) {
-                defer_sink_suspend_ack_until_stop_ = false;
-                log::info("calling sink ConfirmSuspendRequest");
-                le_audio_sink_hal_client_->ConfirmSuspendRequest();
-              }
+              defer_sink_suspend_ack_until_stop_ = false;
+              ackHalSuspendRequest(false);
             }
 
             if (configuration_context_type_ == LeAudioContextType::GAME) {
