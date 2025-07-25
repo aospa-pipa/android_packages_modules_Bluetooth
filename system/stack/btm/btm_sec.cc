@@ -3477,6 +3477,13 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, tHCI_STATUS statu
                        tHCI_ROLE assigned_role) {
   uint8_t bit_shift = 0;
 
+  if (com::android::bluetooth::flags::concurrent_incoming_outgoing_pairing()) {
+    if (status == HCI_ERR_CONNECTION_EXISTS) {
+      log::warn("Connection already exists, ignore");
+      return;
+    }
+  }
+
   tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(bda);
 
   if (status == HCI_ERR_CONNECTION_EXISTS || status == HCI_ERR_CONTROLLER_BUSY) {

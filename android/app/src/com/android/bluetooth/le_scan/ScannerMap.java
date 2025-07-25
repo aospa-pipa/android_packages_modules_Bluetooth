@@ -24,8 +24,6 @@ import android.app.PendingIntent;
 import android.bluetooth.le.IScannerCallback;
 import android.bluetooth.le.ScanSettings;
 import android.content.AttributionSource;
-import android.os.IBinder;
-import android.os.IInterface;
 import android.os.RemoteException;
 import android.os.UserHandle;
 import android.os.WorkSource;
@@ -34,14 +32,12 @@ import android.util.Log;
 import com.android.bluetooth.btservice.AdapterService;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /** List of our registered scanners. */
 class ScannerMap {
@@ -111,7 +107,6 @@ class ScannerMap {
                             appName,
                             workSource,
                             appUid,
-                            this,
                             adapterService,
                             scanController,
                             getSystemClock());
@@ -132,27 +127,21 @@ class ScannerMap {
 
     /** Remove the context for a given application ID. */
     void remove(int id) {
-        Iterator<ScannerApp> i = mApps.iterator();
-        while (i.hasNext()) {
-            ScannerApp entry = i.next();
-            if (entry.mId == id) {
-                entry.cleanup();
-                i.remove();
-                break;
-            }
-        }
+        removeByPredicate(app -> app.mId == id);
     }
 
     /** Remove the context for a given UUID */
     void remove(UUID uuid) {
         Log.d(TAG, "remove() - uuid: " + uuid);
+        removeByPredicate(app -> app.mUuid.equals(uuid));
+    }
 
-        Iterator<ScannerApp> i = mApps.iterator();
-        while (i.hasNext()) {
-            ScannerApp entry = i.next();
-            if (entry.mUuid.equals(uuid)) {
-                entry.cleanup();
-                i.remove();
+    private void removeByPredicate(Predicate<ScannerApp> predicate) {
+        for (var iterator = mApps.iterator(); iterator.hasNext(); ) {
+            var scannerApp = iterator.next();
+            if (predicate.test(scannerApp)) {
+                scannerApp.cleanup();
+                iterator.remove();
                 break;
             }
         }
@@ -200,9 +189,7 @@ class ScannerMap {
 
     /** Get application contexts by the calling app's name. */
     List<ScannerApp> getByName(String name) {
-        return mApps.stream()
-                .filter(app -> app.mName.equals(name))
-                .collect(Collectors.toUnmodifiableList());
+        return mApps.stream().filter(app -> app.mName.equals(name)).toList();
     }
 
     /** Get an application context by the pending intent info object's intent. */
@@ -250,58 +237,30 @@ class ScannerMap {
         sb.append("\nLE Scanner Map:\n");
         sb.append("  Entries: ").append(mAppScanStatsMap.size()).append("\n\n");
         for (AppScanStats appScanStats : mAppScanStatsMap.values()) {
-            appScanStats.dump(sb);
+            var scannerApps = getByName(appScanStats.mAppName);
+            appScanStats.dump(sb, scannerApps);
         }
     }
 
     static class ScannerApp {
-        /** Context information */
-        @Nullable ScanController.PendingIntentInfo mInfo;
-
-        /** Statistics for this app */
-        AppScanStats mAppScanStats;
-
-        /** The UUID of the application */
         final UUID mUuid;
-
-        /** The package name of the application */
-        final String mName;
-
         /** The last attribution tag in the attribution source chain */
         @Nullable final String mAttributionTag;
-
-        /** Application callbacks */
         @Nullable IScannerCallback mCallback;
-
-        /** The id of the application */
+        final String mName; // The package name of the application
+        @Nullable ScanController.PendingIntentInfo mInfo; // Context information
+        AppScanStats mAppScanStats;
         int mId;
-
-        /** Whether the calling app has location permission */
         boolean mHasLocationPermission;
-
-        /** The user handle of the app that started the scan */
-        @Nullable UserHandle mUserHandle;
-
-        /** Whether the calling app has the network settings permission */
+        @Nullable UserHandle mUserHandle; // The user handle of the app that started the scan
         boolean mHasNetworkSettingsPermission;
-
-        /** Whether the calling app has the network setup wizard permission */
         boolean mHasNetworkSetupWizardPermission;
-
-        /** Whether the calling app has the network setup wizard permission */
         boolean mHasScanWithoutLocationPermission;
-
-        /** Whether the calling app has disavowed the use of bluetooth for location */
         boolean mHasDisavowedLocation;
-
         boolean mEligibleForSanitizedExposureNotification;
-
         @Nullable List<String> mAssociatedDevices;
+        @Nullable private ScanController.ScannerDeathRecipient mDeathRecipient;
 
-        /** Death recipient */
-        @Nullable private IBinder.DeathRecipient mDeathRecipient;
-
-        /** Creates a new app context. */
         ScannerApp(
                 UUID uuid,
                 @Nullable String attributionTag,
@@ -317,27 +276,25 @@ class ScannerMap {
             this.mAppScanStats = appScanStats;
         }
 
-        /** Link death recipient */
-        void linkToDeath(IBinder.DeathRecipient deathRecipient) {
+        void linkToDeath(ScanController.ScannerDeathRecipient deathRecipient) {
             // It might not be a binder object
             if (mCallback == null) {
                 return;
             }
             try {
-                IBinder binder = ((IInterface) mCallback).asBinder();
-                binder.linkToDeath(deathRecipient, 0);
+                mCallback.asBinder().linkToDeath(deathRecipient, 0);
                 mDeathRecipient = deathRecipient;
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to link deathRecipient for app id " + mId);
+                cleanup();
             }
         }
 
         /** Unlink death recipient */
         void cleanup() {
-            if (mDeathRecipient != null) {
+            if (mDeathRecipient != null && mCallback != null) {
                 try {
-                    IBinder binder = ((IInterface) mCallback).asBinder();
-                    binder.unlinkToDeath(mDeathRecipient, 0);
+                    mCallback.asBinder().unlinkToDeath(mDeathRecipient, 0);
                 } catch (NoSuchElementException e) {
                     Log.e(TAG, "Unable to unlink deathRecipient for app id " + mId);
                 }
