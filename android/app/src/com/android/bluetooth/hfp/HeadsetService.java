@@ -328,10 +328,19 @@ public class HeadsetService extends ConnectableProfile {
                                 audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL))
                         .setMinVolumeIndex(0)
                         .build();
+        VolumeInfo volumeInfoAssistant =
+                new VolumeInfo.Builder(AudioManager.STREAM_ASSISTANT)
+                        .setMaxVolumeIndex(
+                                audioManager.getStreamMaxVolume(AudioManager.STREAM_ASSISTANT))
+                        .setMinVolumeIndex(0)
+                        .build();
         mSystemInterface
                 .getAudioDeviceVolumeManager()
-                .setDeviceAbsoluteVolumeBehavior(
-                        attributes, volumeInfo, mHandler::post, mAudioManagerDeviceVolumeListener);
+                .setDeviceAbsoluteMultiVolumeBehavior(
+                        attributes,
+                        Arrays.asList(volumeInfo, volumeInfoAssistant),
+                        mHandler::post,
+                        mAudioManagerDeviceVolumeListener);
     }
 
     public static boolean isEnabled() {
@@ -1407,6 +1416,7 @@ public class HeadsetService extends ConnectableProfile {
                                     previousActiveDevice,
                                     BluetoothProfileConnectionInfo.createHfpInfo());
                     // Audio Framework will handle audio transition
+                    updateInbandRinging(device, true);
                     return true;
                 }
 
@@ -2631,17 +2641,19 @@ public class HeadsetService extends ConnectableProfile {
                 @NonNull AudioDeviceAttributes device, @NonNull VolumeInfo vol) {
             Log.i(TAG, "In onAudioDeviceVolumeChanged");
             int streamType = vol.getStreamType();
-            int volStream = AudioManager.STREAM_BLUETOOTH_SCO;
+            int vcVolStream = AudioManager.STREAM_BLUETOOTH_SCO;
             if (deprecateStreamBtSco()) {
-                volStream = AudioManager.STREAM_VOICE_CALL;
+                vcVolStream = AudioManager.STREAM_VOICE_CALL;
             }
-            if (streamType != volStream) {
+            if (streamType != vcVolStream && streamType != AudioManager.STREAM_ASSISTANT) {
                 Log.d(
                         TAG,
                         "onAudioDeviceVolumeChanged: skip for stream type "
                                 + streamType
                                 + ", expected "
-                                + volStream);
+                                + AudioManager.STREAM_ASSISTANT
+                                + " or "
+                                + vcVolStream);
                 return;
             }
             Log.i(TAG, "sending message to HSSM");

@@ -496,7 +496,7 @@ public class BluetoothInCallService extends InCallService {
         Log.i(TAG, "BluetoothInCallService is created");
         mAllowVideoAnswer =
                 SystemProperties.getBoolean("bluetooth.hfp.answer_call_with_video.enabled", false);
-        mCallInfo = requireNonNullElseGet(callInfo, () -> new CallInfo());
+        mCallInfo = requireNonNullElseGet(callInfo, CallInfo::new);
     }
 
     // TODO(b/422543753) Delete on flag cleanup
@@ -1791,6 +1791,11 @@ public class BluetoothInCallService extends InCallService {
                 return true;
             }
         } else if (chld == CHLD_TYPE_RELEASEACTIVE_ACCEPTHELD) {
+            if (Flags.endOutgoingCallOnChld()) {
+                if (activeCall == null) {
+                    activeCall = mCallInfo.getOutgoingCall();
+                }
+            }
             if (mCallInfo.isNullCall(activeCall)
                     && mCallInfo.isNullCall(ringingCall)
                     && mCallInfo.isNullCall(heldCall)) {
