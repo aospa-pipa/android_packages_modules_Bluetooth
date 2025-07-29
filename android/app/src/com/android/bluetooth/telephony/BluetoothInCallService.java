@@ -1323,8 +1323,6 @@ public class BluetoothInCallService extends InCallService {
               }
               Log.w(TAG, "InCall service exit");
             }
-            mTelephonyManager = getSystemService(TelephonyManager.class);
-            mTelecomManager = getSystemService(TelecomManager.class);
             sInstance = this;
         }
     }
