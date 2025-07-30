@@ -48,8 +48,7 @@ class ScannerMap {
 
     private final ConcurrentLinkedQueue<ScannerApp> mApps = new ConcurrentLinkedQueue<>();
 
-    /** Add an entry to the application context list with a callback. */
-    ScannerApp add(
+    ScannerApp addWithCallback(
             UUID uuid,
             AttributionSource source,
             WorkSource workSource,
@@ -57,18 +56,28 @@ class ScannerMap {
             IScannerCallback callback,
             AdapterService adapterService,
             ScanController scanController) {
-        return add(uuid, source, workSource, uid, callback, null, adapterService, scanController);
+        return add(
+                uuid,
+                null,
+                source,
+                workSource,
+                uid,
+                callback,
+                null,
+                adapterService,
+                scanController);
     }
 
-    /** Add an entry to the application context list with a pending intent. */
-    ScannerApp add(
+    ScannerApp addWithPendingIntent(
             UUID uuid,
+            UserHandle userHandle,
             AttributionSource source,
             ScanController.PendingIntentInfo pendingIntentInfo,
             AdapterService adapterService,
             ScanController scanController) {
         return add(
                 uuid,
+                userHandle,
                 source,
                 null,
                 0, // uid is not considered from here as the pendingIntentInfo is set
@@ -80,6 +89,7 @@ class ScannerMap {
 
     private ScannerApp add(
             UUID uuid,
+            @Nullable UserHandle userHandle,
             AttributionSource source,
             @Nullable WorkSource workSource,
             int uid,
@@ -88,7 +98,7 @@ class ScannerMap {
             AdapterService adapterService,
             ScanController scanController) {
         int appUid;
-        String appName = null;
+        String appName;
         if (piInfo != null) {
             appUid = piInfo.callingUid();
             appName = piInfo.callingPackage();
@@ -115,6 +125,7 @@ class ScannerMap {
         ScannerApp app =
                 new ScannerApp(
                         uuid,
+                        userHandle,
                         getLastAttributionTag(source),
                         callback,
                         piInfo,
@@ -244,15 +255,18 @@ class ScannerMap {
 
     static class ScannerApp {
         final UUID mUuid;
+        @Nullable final UserHandle mUserHandle; // The user handle of the app that started the scan
+
         /** The last attribution tag in the attribution source chain */
         @Nullable final String mAttributionTag;
+
         @Nullable IScannerCallback mCallback;
         final String mName; // The package name of the application
+
         @Nullable ScanController.PendingIntentInfo mInfo; // Context information
         AppScanStats mAppScanStats;
         int mId;
         boolean mHasLocationPermission;
-        @Nullable UserHandle mUserHandle; // The user handle of the app that started the scan
         boolean mHasNetworkSettingsPermission;
         boolean mHasNetworkSetupWizardPermission;
         boolean mHasScanWithoutLocationPermission;
@@ -263,17 +277,19 @@ class ScannerMap {
 
         ScannerApp(
                 UUID uuid,
+                @Nullable UserHandle userHandle,
                 @Nullable String attributionTag,
                 @Nullable IScannerCallback callback,
                 @Nullable ScanController.PendingIntentInfo info,
                 String name,
                 AppScanStats appScanStats) {
-            this.mUuid = uuid;
-            this.mAttributionTag = attributionTag;
-            this.mCallback = callback;
-            this.mName = name;
-            this.mInfo = info;
-            this.mAppScanStats = appScanStats;
+            mUuid = uuid;
+            mUserHandle = userHandle;
+            mAttributionTag = attributionTag;
+            mCallback = callback;
+            mName = name;
+            mInfo = info;
+            mAppScanStats = appScanStats;
         }
 
         void linkToDeath(ScanController.ScannerDeathRecipient deathRecipient) {

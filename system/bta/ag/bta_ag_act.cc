@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -59,6 +60,7 @@
 
 using namespace bluetooth;
 using namespace bluetooth::legacy::stack::sdp;
+using namespace metrics;
 
 /*****************************************************************************
  *  Constants
@@ -108,6 +110,7 @@ static void bta_ag_cback_open(tBTA_AG_SCB* p_scb, const RawAddress& bd_addr,
   open.hdr.handle = bta_ag_scb_to_idx(p_scb);
   open.hdr.app_id = p_scb->app_id;
   open.status = status;
+  LogMetricAgOpenStatus(bd_addr, open.status);
   open.service_id = bta_ag_svc_id[p_scb->conn_service];
   open.bd_addr = bd_addr;
 

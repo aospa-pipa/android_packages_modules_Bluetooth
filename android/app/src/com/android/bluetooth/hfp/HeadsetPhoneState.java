@@ -53,7 +53,6 @@ import java.util.concurrent.ExecutionException;
 public class HeadsetPhoneState {
     private static final String TAG = HeadsetPhoneState.class.getSimpleName();
 
-    private final AdapterService mAdapterService;
     private final HeadsetService mHeadsetService;
     private final TelephonyManager mTelephonyManager;
     private final SubscriptionManager mSubscriptionManager;
@@ -99,14 +98,12 @@ public class HeadsetPhoneState {
     private HeadsetPhoneStateListener mPhoneStateListener;
 
     HeadsetPhoneState(AdapterService adapterService, HeadsetService headsetService, Looper looper) {
-        mAdapterService = requireNonNull(adapterService);
         mHeadsetService = requireNonNull(headsetService);
-        mTelephonyManager =
-                requireNonNull(mAdapterService.getSystemService(TelephonyManager.class));
+        mTelephonyManager = requireNonNull(adapterService.getSystemService(TelephonyManager.class));
         // Register for SubscriptionInfo list changes which is guaranteed to invoke
         // onSubscriptionInfoChanged and which in turns calls loadInBackground.
         mSubscriptionManager =
-                requireNonNull(mAdapterService.getSystemService(SubscriptionManager.class));
+                requireNonNull(adapterService.getSystemService(SubscriptionManager.class));
 
         // Initialize subscription on the handler thread
         mHandler = new Handler(looper);
@@ -125,23 +122,15 @@ public class HeadsetPhoneState {
 
     @Override
     public String toString() {
-        return "HeadsetPhoneState [mTelephonyServiceAvailability="
-                + mCindService
-                + ", mNumActive="
-                + mNumActive
-                + ", mCallState="
-                + mCallState
-                + ", mNumHeld="
-                + mNumHeld
-                + ", mSignal="
-                + mCindSignal
-                + ", mRoam="
-                + mCindRoam
-                + ", mBatteryCharge="
-                + mCindBatteryCharge
-                + ", TelephonyEvents="
-                + getTelephonyEventsToListen()
-                + "]";
+        return "HeadsetPhoneState "
+                + ("[mTelephonyServiceAvailability=" + mCindService)
+                + (", mNumActive=" + mNumActive)
+                + (", mCallState=" + mCallState)
+                + (", mNumHeld=" + mNumHeld)
+                + (", mSignal=" + mCindSignal)
+                + (", mRoam=" + mCindRoam)
+                + (", mBatteryCharge=" + mCindBatteryCharge)
+                + (", TelephonyEvents=" + getTelephonyEventsToListen() + "]");
     }
 
     @GuardedBy("mDeviceEventMap")
@@ -373,14 +362,11 @@ public class HeadsetPhoneState {
     private synchronized void sendDeviceStateChanged() {
         Log.d(
                 TAG,
-                "sendDeviceStateChanged. mService="
-                        + mCindService
-                        + " mSignal="
-                        + mCindSignal
-                        + " mRoam="
-                        + mCindRoam
-                        + " mBatteryCharge="
-                        + mCindBatteryCharge);
+                "sendDeviceStateChanged. "
+                        + ("mService=" + mCindService)
+                        + (" mSignal=" + mCindSignal)
+                        + (" mRoam=" + mCindRoam)
+                        + (" mBatteryCharge=" + mCindBatteryCharge));
         mHeadsetService.onDeviceStateChanged(
                 new HeadsetDeviceState(mCindService, mCindRoam, mCindSignal, mCindBatteryCharge));
     }

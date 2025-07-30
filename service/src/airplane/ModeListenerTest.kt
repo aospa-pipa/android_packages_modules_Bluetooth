@@ -17,7 +17,7 @@
 package com.android.server.bluetooth.airplane.test
 
 import android.app.ActivityManager
-import android.bluetooth.BluetoothAdapter
+import android.bluetooth.State
 import android.content.ContentResolver
 import android.content.Context
 import android.content.pm.PackageManager
@@ -85,7 +85,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
     private val userContext =
         mContext.createContextAsUser(UserHandle.of(ActivityManager.getCurrentUser()), 0)
 
-    private var isMediaProfileConnected = false
     private lateinit var mode: ArrayList<Boolean>
     private lateinit var notification: ArrayList<String>
 
@@ -99,7 +98,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
 
         setWatchConnectionState(false)
         setIsMediaProfileConnected(false)
-        isMediaProfileConnected = false
         mode = ArrayList()
         notification = ArrayList()
     }
@@ -111,7 +109,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
             state,
             this::callback,
             this::notificationCallback,
-            this::mediaCallback,
             this::userCallback,
             TimeSource.Monotonic,
         )
@@ -136,8 +133,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
     private fun callback(newMode: Boolean) = mode.add(newMode)
 
     private fun notificationCallback(state: String) = notification.add(state)
-
-    private fun mediaCallback() = isMediaProfileConnected
 
     private fun userCallback() = userContext
 
@@ -275,7 +270,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
         initializeAirplane()
         enableMode()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         disableMode()
 
         assertThat(isOnOverrode).isFalse()
@@ -313,7 +308,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenNoOverride_turnOff() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
 
         enableMode()
 
@@ -329,9 +324,8 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenMedia_staysOnOld() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         setIsMediaProfileConnected(true)
-        isMediaProfileConnected = true
 
         enableMode()
 
@@ -353,9 +347,8 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenMedia_staysOn() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         setIsMediaProfileConnected(true)
-        isMediaProfileConnected = true
 
         enableMode()
 
@@ -368,7 +361,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenWatchDeviceIsConnected_staysOn() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         setWatchConnectionState(true)
 
         enableMode()
@@ -382,7 +375,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementNotTrigger_turnOff() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Global.putInt(resolver, APM_ENHANCEMENT, 0)
 
         enableMode()
@@ -396,10 +389,9 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementNotTriggerButMedia_staysOn() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Global.putInt(resolver, APM_ENHANCEMENT, 0)
         setIsMediaProfileConnected(true)
-        isMediaProfileConnected = true
 
         enableMode()
 
@@ -415,7 +407,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementNotTriggerButWatchDevice_staysOn() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Global.putInt(resolver, APM_ENHANCEMENT, 0)
         setWatchConnectionState(true)
 
@@ -432,7 +424,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
         shadowOf(userContext.packageManager).setSystemFeature(PackageManager.FEATURE_WATCH, true)
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Global.putInt(resolver, APM_ENHANCEMENT, 0)
         setWatchConnectionState(true)
 
@@ -448,7 +440,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementWasToggled_turnOff() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Secure.putInt(userContext.contentResolver, APM_USER_TOGGLED_BLUETOOTH, 1)
 
         enableMode()
@@ -462,7 +454,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementWasToggled_staysOnWithBtNotification() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Secure.putInt(userContext.contentResolver, APM_USER_TOGGLED_BLUETOOTH, 1)
         Settings.Secure.putInt(userContext.contentResolver, BLUETOOTH_APM_STATE, 1)
 
@@ -478,7 +470,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementWasToggledAndWifiOn_staysOnWithBtWifiNotification() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Secure.putInt(userContext.contentResolver, APM_USER_TOGGLED_BLUETOOTH, 1)
         Settings.Secure.putInt(userContext.contentResolver, BLUETOOTH_APM_STATE, 1)
 
@@ -496,7 +488,7 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun triggerOverride_whenApmEnhancementWasToggledAndWifiNotOn_staysOnWithBtNotification() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         Settings.Secure.putInt(userContext.contentResolver, APM_USER_TOGGLED_BLUETOOTH, 1)
         Settings.Secure.putInt(userContext.contentResolver, BLUETOOTH_APM_STATE, 1)
 
@@ -514,9 +506,8 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun showToast_inLoop_stopNotifyWhenMaxToastReached() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         setIsMediaProfileConnected(true)
-        isMediaProfileConnected = true
 
         repeat(30) {
             enableMode()
@@ -536,9 +527,8 @@ class ModeListenerTest(flags: FlagsWrapper) {
     fun showToast_afterFactoryReset_stopNotifyWhenMaxToastReached() {
         initializeAirplane()
 
-        state.set(BluetoothAdapter.STATE_ON)
+        state.set(State.ON)
         setIsMediaProfileConnected(true)
-        isMediaProfileConnected = true
 
         repeat(30) {
             enableMode()
@@ -665,7 +655,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
             state,
             this::callback,
             this::notificationCallback,
-            this::mediaCallback,
             this::userCallback,
             timeSource,
         )
@@ -735,7 +724,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
             enableMode(resolver, looper, Settings.Global.AIRPLANE_MODE_ON)
             val mode: (m: Boolean) -> Unit = { _: Boolean -> }
             val notif: (m: String) -> Unit = { _: String -> }
-            val media: () -> Boolean = { -> false }
             if (enableEnhancedMode) {
                 Settings.Secure.putInt(resolver, APM_USER_TOGGLED_BLUETOOTH, 1)
             }
@@ -746,7 +734,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
                 BluetoothAdapterState(),
                 mode,
                 notif,
-                media,
                 user,
                 TimeSource.Monotonic,
             )
@@ -773,11 +760,6 @@ class ModeListenerTest(flags: FlagsWrapper) {
 
         @JvmStatic
         @Parameters(name = "{0}")
-        fun getParams(): List<FlagsWrapper> {
-            return FlagsWrapper.progressionOf(
-                Flags.FLAG_ONEWAY_MEDIA_PROFILE,
-                Flags.FLAG_WATCH_DEVICE_OVERRIDE_AIRPLANE_MODE,
-            )
-        }
+        fun getParams() = FlagsWrapper.progressionOf(Flags.FLAG_WATCH_DEVICE_OVERRIDE_AIRPLANE_MODE)
     }
 }
