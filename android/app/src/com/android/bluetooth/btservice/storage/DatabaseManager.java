@@ -1359,7 +1359,7 @@ public class DatabaseManager {
 
             if (!mMetadataCache.containsKey(address)) {
                 Log.e(TAG, "device is not bonded");
-                return new ArrayList<BluetoothLeAudioCodecConfig>();
+                return new ArrayList<>();
             }
 
             Log.i(TAG, "getLeAudioUnicastInputCodecPreferenceList(" + device + ")");
@@ -1408,7 +1408,7 @@ public class DatabaseManager {
 
             if (!mMetadataCache.containsKey(address)) {
                 Log.e(TAG, "device is not bonded");
-                return new ArrayList<BluetoothLeAudioCodecConfig>();
+                return new ArrayList<>();
             }
 
             Log.i(TAG, "getLeAudioUnicastOutputCodecPreferenceList(" + device + ")");

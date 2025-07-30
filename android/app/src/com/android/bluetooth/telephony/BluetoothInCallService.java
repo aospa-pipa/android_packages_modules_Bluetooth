@@ -2556,7 +2556,7 @@ public class BluetoothInCallService extends InCallService {
     public class CallInfo {
 
         public BluetoothCall getForegroundCall() {
-            LinkedHashSet<Integer> states = new LinkedHashSet<Integer>();
+            LinkedHashSet<Integer> states = new LinkedHashSet<>();
             BluetoothCall foregroundCall;
 
             states.add(Call.STATE_CONNECTING);
@@ -2658,7 +2658,7 @@ public class BluetoothInCallService extends InCallService {
         }
 
         public BluetoothCall getOutgoingCall() {
-            LinkedHashSet<Integer> states = new LinkedHashSet<Integer>();
+            LinkedHashSet<Integer> states = new LinkedHashSet<>();
             states.add(Call.STATE_CONNECTING);
             states.add(Call.STATE_DIALING);
             states.add(Call.STATE_PULLING_CALL);
@@ -2666,7 +2666,7 @@ public class BluetoothInCallService extends InCallService {
         }
 
         public BluetoothCall getRingingOrSimulatedRingingCall() {
-            LinkedHashSet<Integer> states = new LinkedHashSet<Integer>();
+            LinkedHashSet<Integer> states = new LinkedHashSet<>();
             states.add(Call.STATE_RINGING);
             states.add(Call.STATE_SIMULATED_RINGING);
             return getCallByStates(states);

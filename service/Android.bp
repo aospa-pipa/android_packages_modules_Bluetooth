@@ -70,8 +70,10 @@ java_library {
         "src/BluetoothRestriction.kt",
         "src/BluetoothService.kt",
         "src/Log.kt",
+        "src/PermissionChecker.kt",
         "src/RadioModeListener.kt",
         "src/RolePermissionListener.kt",
+        "src/ServiceMessenger.kt",
         "src/SharingRestriction.kt",
         "src/airplane/ModeListener.kt",
         "src/satellite/ModeListener.kt",
@@ -82,7 +84,6 @@ java_library {
         "framework-configinfrastructure.stubs.module_lib",
         "framework-permission-s.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
-        "service-bluetooth-binder-aidl",
         "service-bluetooth.change-ids",
     ],
 
@@ -95,6 +96,7 @@ java_library {
         "bluetooth_flags_java_lib",
         "modules-utils-build_system",
         "modules-utils-shell-command-handler",
+        "service-bluetooth-binder-aidl",
     ],
 
     kotlincflags: [

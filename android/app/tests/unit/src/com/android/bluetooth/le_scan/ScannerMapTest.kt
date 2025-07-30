@@ -63,7 +63,15 @@ class ScannerMapTest {
         val intent = PendingIntent.getBroadcast(context, 0, Intent(), PendingIntent.FLAG_IMMUTABLE)
         val info = ScanController.PendingIntentInfo(intent, null, null, APP_NAME, UID)
         val uuid = UUID.randomUUID()
-        val app = scannerMap.add(uuid, attributionSource, info, adapterService, scanController)
+        val app =
+            scannerMap.addWithPendingIntent(
+                uuid,
+                null,
+                attributionSource,
+                info,
+                adapterService,
+                scanController,
+            )
         app.mId = SCANNER_ID
 
         assertThat(scannerMap.getById(SCANNER_ID).mName).isEqualTo(APP_NAME)
@@ -80,7 +88,7 @@ class ScannerMapTest {
         val uuid = UUID.randomUUID()
         val appUid = Binder.getCallingUid()
         val app =
-            scannerMap.add(
+            scannerMap.addWithCallback(
                 uuid,
                 attributionSource,
                 null,
@@ -106,7 +114,7 @@ class ScannerMapTest {
         val uuid = UUID.randomUUID()
         val appUid = 1234
         val app =
-            scannerMap.add(
+            scannerMap.addWithCallback(
                 uuid,
                 attributionSource,
                 null,
@@ -128,7 +136,7 @@ class ScannerMapTest {
         val sb = StringBuilder()
         val scannerMap = ScannerMap()
         val appUid = 1234
-        scannerMap.add(
+        scannerMap.addWithCallback(
             UUID.randomUUID(),
             attributionSource,
             null,

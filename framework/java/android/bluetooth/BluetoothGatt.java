@@ -333,9 +333,7 @@ public final class BluetoothGatt implements BluetoothProfile {
                 if (mConnState == CONN_STATE_CLOSED) {
                     Log.d(TAG, "Client registration completed after closed, unregistering");
                     unregisterApp();
-                    if (Flags.unregisterGattClientDisconnected()) {
-                        mCallback = null;
-                    }
+                    mCallback = null;
                     return;
                 }
                 if (VDBG) {
@@ -451,7 +449,7 @@ public final class BluetoothGatt implements BluetoothProfile {
             }
             int profileState = connected ? STATE_CONNECTED : STATE_DISCONNECTED;
 
-            if (Flags.unregisterGattClientDisconnected() && !connected && !mAutoConnect) {
+            if (!connected && !mAutoConnect) {
                 unregisterApp();
             }
 
@@ -1017,9 +1015,7 @@ public final class BluetoothGatt implements BluetoothProfile {
         Log.d(TAG, "close()");
 
         unregisterApp();
-        if (Flags.unregisterGattClientDisconnected()) {
-            mCallback = null;
-        }
+        mCallback = null;
 
         mConnState = CONN_STATE_CLOSED;
         mAuthRetryState = AUTH_RETRY_STATE_IDLE;
@@ -1125,9 +1121,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         Log.d(TAG, "unregisterApp()");
 
         try {
-            if (!Flags.unregisterGattClientDisconnected()) {
-                mCallback = null;
-            }
             mService.unregisterClient(mBluetoothGattCallback, mAttributionSource);
             mClientRegistered = false;
         } catch (RemoteException e) {
@@ -1248,9 +1241,6 @@ public final class BluetoothGatt implements BluetoothProfile {
     public boolean connect() {
         if (mService == null) return false;
         if (!mClientRegistered) {
-            if (!Flags.unregisterGattClientDisconnected()) {
-                return false;
-            }
             synchronized (mStateLock) {
                 if (mConnState != CONN_STATE_IDLE) {
                     return false;

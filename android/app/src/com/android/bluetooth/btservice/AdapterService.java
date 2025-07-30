@@ -1086,10 +1086,7 @@ public class AdapterService extends Service {
         recursivelyDeleteDirectory(getDataDir(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluedroid/").toFile(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluetooth/").toFile(), false);
-
-        if (Flags.factoryResetClearAdditionalData()) {
-            NotificationHelperService.factoryReset(getContentResolver());
-        }
+        NotificationHelperService.factoryReset(getContentResolver());
         Log.i(TAG, "factoryResetIfNeeded(): Completed");
     }
 
@@ -4190,9 +4187,6 @@ public class AdapterService extends Service {
                         policy.profileConnectionStateChanged(profile, device, fromState, toState));
         if (Flags.adapterSuspendMgmt()) {
             mAdapterSuspend.profileConnectionStateChanged(profile, device, fromState, toState);
-        }
-        if (!Flags.onewayMediaProfile()) {
-            return;
         }
         boolean mediaConnected = isMediaProfileConnected();
         if (mIsMediaProfileConnected != mediaConnected) {
