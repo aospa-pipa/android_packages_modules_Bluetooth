@@ -80,7 +80,6 @@ import androidx.core.graphics.Insets;
 
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ProfileService;
-import com.android.bluetooth.btservice.storage.DatabaseManager;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -174,8 +173,7 @@ public final class Utils {
         }
 
         // Check metadata
-        DatabaseManager mDbManager = service.getDatabaseManager();
-        byte[] deviceType = mDbManager.getCustomMeta(device, BluetoothDevice.METADATA_DEVICE_TYPE);
+        byte[] deviceType = service.getMetadata(device, BluetoothDevice.METADATA_DEVICE_TYPE);
         if (deviceType == null) {
             return false;
         }

@@ -1074,7 +1074,12 @@ public final class BluetoothAdapter {
         mContext = Optional.ofNullable(context);
         mAttributionSource = requireNonNull(source);
         if (Flags.systemServerMessenger()) {
-            mSystemServiceMessenger = new SystemServiceMessenger(mManagerService);
+            try {
+                mSystemServiceMessenger =
+                        new SystemServiceMessenger(mManagerService.getServiceMessenger());
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            }
         } else {
             mSystemServiceMessenger = null;
         }

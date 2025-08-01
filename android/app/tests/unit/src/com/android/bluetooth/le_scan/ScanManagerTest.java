@@ -35,9 +35,9 @@ import static android.bluetooth.le.ScanSettings.SCAN_MODE_SCREEN_OFF_BALANCED;
 
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
 import static com.android.bluetooth.TestUtils.mockSystemPropertyGet;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_TIMEOUT_MILLIS;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_UPGRADE_DURATION_MILLIS;
+import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING;
+import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_TIMEOUT;
+import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_UPGRADE_DURATION;
 import static com.android.bluetooth.le_scan.ScanManager.MSFT_HCI_EXT_ENABLED;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_INTERVAL_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_WINDOW_MS;
@@ -45,10 +45,10 @@ import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_LATENCY_INTER
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_LATENCY_WINDOW_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_POWER_INTERVAL_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_POWER_WINDOW_MS;
-import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL_MS;
-import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW_MS;
-import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL_MS;
-import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW_MS;
+import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL;
+import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW;
+import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL;
+import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -180,7 +180,7 @@ public class ScanManagerTest {
 
     @Before
     public void setUp() throws Exception {
-        doReturn(DEFAULT_SCAN_TIMEOUT_MILLIS).when(mAdapterService).getScanTimeoutMillis();
+        doReturn(DEFAULT_SCAN_TIMEOUT).when(mAdapterService).getScanTimeout();
         doReturn(DEFAULT_NUM_OFFLOAD_SCAN_FILTER)
                 .when(mAdapterService)
                 .getNumOfOffloadedScanFilterSupported();
@@ -188,18 +188,18 @@ public class ScanManagerTest {
                 .when(mAdapterService)
                 .getOffloadedScanResultStorage();
         doReturn(TEST_SCAN_QUOTA_COUNT).when(mAdapterService).getScanQuotaCount();
-        doReturn(SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW_MS)
+        doReturn(SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW)
                 .when(mAdapterService)
-                .getScreenOffLowPowerWindowMillis();
-        doReturn(SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW_MS)
+                .getScreenOffLowPowerWindow();
+        doReturn(SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW)
                 .when(mAdapterService)
-                .getScreenOffBalancedWindowMillis();
-        doReturn(SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL_MS)
+                .getScreenOffBalancedWindow();
+        doReturn(SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL)
                 .when(mAdapterService)
-                .getScreenOffLowPowerIntervalMillis();
-        doReturn(SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL_MS)
+                .getScreenOffLowPowerInterval();
+        doReturn(SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL)
                 .when(mAdapterService)
-                .getScreenOffBalancedIntervalMillis();
+                .getScreenOffBalancedInterval();
         doReturn(DEFAULT_TOTAL_NUM_OF_TRACKABLE_ADVERTISEMENTS)
                 .when(mAdapterService)
                 .getTotalNumOfTrackableAdvertisements();
@@ -706,7 +706,7 @@ public class ScanManagerTest {
                     startScan(client);
                     assertThat(client.getSettings().getScanMode()).isEqualTo(scanMode);
                     // Wait for scan timeout
-                    advanceTime(DEFAULT_SCAN_TIMEOUT_MILLIS);
+                    advanceTime(DEFAULT_SCAN_TIMEOUT);
                     mLooper.dispatchAll();
                     assertThat(client.getSettings().getScanMode()).isEqualTo(expectedScanMode);
                     assertThat(client.getAppScanStats().get().isScanTimeout(client.getScannerId()))
@@ -744,7 +744,7 @@ public class ScanManagerTest {
                     startScan(client);
                     assertThat(client.getSettings().getScanMode()).isEqualTo(scanMode);
                     // Move time forward so scan timeout message can be dispatched
-                    advanceTime(DEFAULT_SCAN_TIMEOUT_MILLIS);
+                    advanceTime(DEFAULT_SCAN_TIMEOUT);
                     // Since we are using a TestLooper, need to mock AppScanStats.isScanningTooLong
                     // to return true because no real time is elapsed
                     doReturn(true).when(mMockAppScanStats).isScanningTooLong();
@@ -780,7 +780,8 @@ public class ScanManagerTest {
             // Put a timeout runnable in the map to emulate the scan being started already
             Runnable fakeTimeoutRunnable = () -> {};
             mScanManager.mScanTimeoutRunnables.put(client, fakeTimeoutRunnable);
-            mScanManager.mHandler.postDelayed(fakeTimeoutRunnable, DEFAULT_SCAN_TIMEOUT_MILLIS / 2);
+            mScanManager.mHandler.postDelayed(
+                    fakeTimeoutRunnable, DEFAULT_SCAN_TIMEOUT.dividedBy(2).toMillis());
             // Start the scan. This should remove the fake runnable and post a new one.
             startScan(client);
         } else {
@@ -788,7 +789,7 @@ public class ScanManagerTest {
             Message timeoutMessage =
                     mScanManager.mClientHandler.obtainMessage(ScanManager.MSG_SCAN_TIMEOUT, client);
             mScanManager.mClientHandler.sendMessageDelayed(
-                    timeoutMessage, DEFAULT_SCAN_TIMEOUT_MILLIS / 2);
+                    timeoutMessage, DEFAULT_SCAN_TIMEOUT.dividedBy(2).toMillis());
             mScanManager.mClientHandler.sendMessage(createStartStopScanMessage(true, client));
         }
 
@@ -800,12 +801,12 @@ public class ScanManagerTest {
             assertThat(mLooper.dispatchAll()).isEqualTo(1);
         }
 
-        advanceTime(DEFAULT_SCAN_TIMEOUT_MILLIS / 2);
+        advanceTime(DEFAULT_SCAN_TIMEOUT.dividedBy(2));
         // After restarting the scan, we can check that the initial timeout message is not triggered
         assertThat(mLooper.dispatchAll()).isEqualTo(0);
 
         // After timeout, the next message that is run should be a timeout message
-        advanceTime(DEFAULT_SCAN_TIMEOUT_MILLIS / 2);
+        advanceTime(DEFAULT_SCAN_TIMEOUT.dividedBy(2));
 
         if (Flags.scanControllerThread()) {
             // Dispatching should now execute the real timeout.
@@ -895,9 +896,7 @@ public class ScanManagerTest {
         scanModeMap.put(SCAN_MODE_BALANCED, SCAN_MODE_LOW_LATENCY);
         scanModeMap.put(SCAN_MODE_LOW_LATENCY, SCAN_MODE_LOW_LATENCY);
         scanModeMap.put(SCAN_MODE_AMBIENT_DISCOVERY, SCAN_MODE_LOW_LATENCY);
-        doReturn(DEFAULT_SCAN_UPGRADE_DURATION_MILLIS)
-                .when(mAdapterService)
-                .getScanUpgradeDurationMillis();
+        doReturn(DEFAULT_SCAN_UPGRADE_DURATION).when(mAdapterService).getScanUpgradeDuration();
 
         for (int i = 0; i < scanModeMap.size(); i++) {
             int scanMode = scanModeMap.keyAt(i);
@@ -915,7 +914,7 @@ public class ScanManagerTest {
             assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
             assertThat(client.getSettings().getScanMode()).isEqualTo(expectedScanMode);
             // Wait for upgrade duration
-            advanceTime(DEFAULT_SCAN_UPGRADE_DURATION_MILLIS);
+            advanceTime(DEFAULT_SCAN_UPGRADE_DURATION);
             mLooper.dispatchAll();
             assertThat(client.getSettings().getScanMode()).isEqualTo(scanMode);
         }
@@ -923,12 +922,10 @@ public class ScanManagerTest {
 
     @Test
     public void testUpDowngradeStartScanForConcurrency() {
-        doReturn(DEFAULT_SCAN_UPGRADE_DURATION_MILLIS)
+        doReturn(DEFAULT_SCAN_UPGRADE_DURATION).when(mAdapterService).getScanUpgradeDuration();
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanUpgradeDurationMillis();
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
-                .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         // Set filtered scan flag
         final boolean isFiltered = true;
@@ -952,12 +949,13 @@ public class ScanManagerTest {
                     assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
                     assertThat(client.getSettings().getScanMode()).isEqualTo(expectedScanMode);
                     // Wait for upgrade and downgrade duration
-                    int max_duration =
-                            DEFAULT_SCAN_UPGRADE_DURATION_MILLIS
-                                            > DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS
-                                    ? DEFAULT_SCAN_UPGRADE_DURATION_MILLIS
-                                    : DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS;
-                    advanceTime(max_duration);
+                    var maxDuration =
+                            DEFAULT_SCAN_UPGRADE_DURATION.compareTo(
+                                                    DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
+                                            > 0
+                                    ? DEFAULT_SCAN_UPGRADE_DURATION
+                                    : DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING;
+                    advanceTime(maxDuration);
                     mLooper.dispatchAll();
                     assertThat(client.getSettings().getScanMode()).isEqualTo(scanMode);
                 });
@@ -974,9 +972,9 @@ public class ScanManagerTest {
         scanModeMap.put(SCAN_MODE_LOW_LATENCY, SCAN_MODE_BALANCED);
         scanModeMap.put(SCAN_MODE_AMBIENT_DISCOVERY, SCAN_MODE_AMBIENT_DISCOVERY);
 
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         for (int i = 0; i < scanModeMap.size(); i++) {
             int scanMode = scanModeMap.keyAt(i);
@@ -997,7 +995,7 @@ public class ScanManagerTest {
             setConnectingState(true);
             assertThat(client.getSettings().getScanMode()).isEqualTo(expectedScanMode);
             // Wait for downgrade duration
-            advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS);
+            advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING);
             mLooper.dispatchAll();
             assertThat(client.getSettings().getScanMode()).isEqualTo(scanMode);
         }
@@ -1014,9 +1012,9 @@ public class ScanManagerTest {
         scanModeMap.put(SCAN_MODE_LOW_LATENCY, SCAN_MODE_LOW_LATENCY);
         scanModeMap.put(SCAN_MODE_AMBIENT_DISCOVERY, SCAN_MODE_SCREEN_OFF_BALANCED);
 
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         for (int i = 0; i < scanModeMap.size(); i++) {
             int scanMode = scanModeMap.keyAt(i);
@@ -1038,7 +1036,7 @@ public class ScanManagerTest {
             // Turn off screen
             setScreenOn(false);
             // Move time forward so that stop connecting action can be dispatched
-            advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS);
+            advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING);
             mLooper.dispatchAll();
             assertThat(mScanManager.getRegularScanQueue()).contains(client);
             assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
@@ -1048,9 +1046,9 @@ public class ScanManagerTest {
 
     @Test
     public void testDowngradeDuringScanForConcurrencyBackground() {
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         // Set filtered scan flag
         final boolean isFiltered = true;
@@ -1076,7 +1074,7 @@ public class ScanManagerTest {
                     // Set as background app
                     setAppImportance(false, Binder.getCallingUid());
                     // Wait for downgrade duration
-                    advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS);
+                    advanceTime(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING);
                     mLooper.dispatchAll();
                     assertThat(mScanManager.getRegularScanQueue()).contains(client);
                     assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
@@ -1586,8 +1584,8 @@ public class ScanManagerTest {
                                 BluetoothStatsLog
                                         .LE_APP_SCAN_STATE_CHANGED__LE_SCAN_TYPE__SCAN_TYPE_REGULAR),
                         eq(AppScanStats.convertScanMode(mostAggressiveClient.getScanModeApp())),
-                        eq((long) SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL_MS),
-                        eq((long) SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW_MS),
+                        eq(SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL.toMillis()),
+                        eq(SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW.toMillis()),
                         eq(false),
                         eq(scanTestDuration),
                         eq(IMPORTANCE_FOREGROUND_SERVICE + 1),
@@ -1886,9 +1884,9 @@ public class ScanManagerTest {
         // Set filtered scan flag
         final boolean isFiltered = true;
 
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         // Turn off screen
         setScreenOn(false);
@@ -1910,9 +1908,9 @@ public class ScanManagerTest {
         // Set filtered scan flag
         final boolean isFiltered = true;
 
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
 
         // Turn off screen
         setScreenOn(false);
@@ -1933,9 +1931,9 @@ public class ScanManagerTest {
 
     @Test
     public void profileConnectionStateChanged_sendStartConnectionMessage() {
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
         assertThat(mScanManager.mIsConnecting).isFalse();
 
         mScanManager.handleBluetoothProfileConnectionStateChanged(
@@ -1947,9 +1945,9 @@ public class ScanManagerTest {
 
     @Test
     public void multipleProfileConnectionStateChanged_updateCountersCorrectly() {
-        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS)
+        doReturn(DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING)
                 .when(mAdapterService)
-                .getScanDowngradeDurationMillis();
+                .getScanDowngradeDuration();
         assertThat(mScanManager.mIsConnecting).isFalse();
 
         mScanManager.handleBluetoothProfileConnectionStateChanged(

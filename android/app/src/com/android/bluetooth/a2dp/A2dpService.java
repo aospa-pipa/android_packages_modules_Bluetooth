@@ -721,7 +721,7 @@ public class A2dpService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {

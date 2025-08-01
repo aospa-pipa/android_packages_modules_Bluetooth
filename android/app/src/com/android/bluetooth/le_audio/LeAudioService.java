@@ -4850,7 +4850,7 @@ public class LeAudioService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
 
@@ -5805,15 +5805,13 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             if (input_configs.size() > 0) {
-                mAdapterService
-                        .getDatabaseManager()
-                        .setLeAudioUnicastInputCodecPreferenceList(entry.getKey(), input_configs);
+                mDatabaseManager.setLeAudioUnicastInputCodecPreferenceList(
+                        entry.getKey(), input_configs);
             }
 
             if (output_configs.size() > 0) {
-                mAdapterService
-                        .getDatabaseManager()
-                        .setLeAudioUnicastOutputCodecPreferenceList(entry.getKey(), output_configs);
+                mDatabaseManager.setLeAudioUnicastOutputCodecPreferenceList(
+                        entry.getKey(), output_configs);
             }
         }
     }
@@ -5837,13 +5835,9 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             List<BluetoothLeAudioCodecConfig> output_configs =
-                    mAdapterService
-                            .getDatabaseManager()
-                            .getLeAudioUnicastOutputCodecPreferenceList(entry.getKey());
+                    mDatabaseManager.getLeAudioUnicastOutputCodecPreferenceList(entry.getKey());
             List<BluetoothLeAudioCodecConfig> input_configs =
-                    mAdapterService
-                            .getDatabaseManager()
-                            .getLeAudioUnicastInputCodecPreferenceList(entry.getKey());
+                    mDatabaseManager.getLeAudioUnicastInputCodecPreferenceList(entry.getKey());
 
             if (input_configs != null && output_configs != null) {
                 Log.d(

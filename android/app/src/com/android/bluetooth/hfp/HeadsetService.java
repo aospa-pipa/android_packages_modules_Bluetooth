@@ -75,7 +75,6 @@ import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.btservice.ServiceFactory;
-import com.android.bluetooth.btservice.storage.DatabaseManager;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfpclient.HeadsetClientService;
 import com.android.bluetooth.hfpclient.HeadsetClientStateMachine;
@@ -912,7 +911,7 @@ public class HeadsetService extends ConnectableProfile {
                         + connectionPolicy
                         + ", "
                         + Utils.getUidPidString());
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
@@ -1035,7 +1034,7 @@ public class HeadsetService extends ConnectableProfile {
         }
 
         if (mSystemInterface.isScoManagedByAudioEnabled()) {
-            if (startScoViaAudioManager(device)) {
+            if (mSystemInterface.requestBluetoothAudio(device)) {
                 logScoSessionMetric(
                         device,
                         BluetoothStatsLog
@@ -1046,34 +1045,6 @@ public class HeadsetService extends ConnectableProfile {
             }
         }
         enableSwbCodec(HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX, true, device);
-        return true;
-    }
-
-    boolean startScoViaAudioManager(BluetoothDevice device) {
-        // when isScoManagedByAudio is on, tell AudioManager to connect SCO
-        AudioManager am = mSystemInterface.getAudioManager();
-        Optional<AudioDeviceInfo> audioDeviceInfo =
-                am.getAvailableCommunicationDevices().stream()
-                        .filter(
-                                x ->
-                                        x.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                                                && x.getAddress().equals(device.getAddress()))
-                        .findFirst();
-        if (audioDeviceInfo.isEmpty()) {
-            Log.w(
-                    TAG,
-                    "Cannot find audioDeviceInfo that matches device="
-                            + device
-                            + " to create the SCO");
-            return false;
-        }
-
-        mHandler.post(
-                () -> {
-                    am.setCommunicationDevice(audioDeviceInfo.get());
-
-                    Log.i(TAG, "Audio Manager will initiate the SCO");
-                });
         return true;
     }
 
@@ -2056,7 +2027,7 @@ public class HeadsetService extends ConnectableProfile {
                 }
                 mVoiceRecognitionStarted = false;
             }
-            if (!mSystemInterface.deactivateVoiceRecognition()) {
+            if (!mSystemInterface.deactivateVoiceRecognition(fromDevice)) {
                 Log.w(TAG, "stopVoiceRecognitionByHeadset: failed request from " + fromDevice);
                 return false;
             }
@@ -2494,12 +2465,12 @@ public class HeadsetService extends ConnectableProfile {
      * @return true if it is a BluetoothDevice with only HFP profile connectable
      */
     private boolean isHFPAudioOnly(@NonNull BluetoothDevice device) {
-        int hfpPolicy = mDatabaseManager.getProfileConnectionPolicy(device, mProfileId);
-        int a2dpPolicy = mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.A2DP);
+        int hfpPolicy = mAdapterService.getProfileConnectionPolicy(device, mProfileId);
+        int a2dpPolicy = mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.A2DP);
         int leAudioPolicy =
-                mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.LE_AUDIO);
+                mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.LE_AUDIO);
         int ashaPolicy =
-                mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HEARING_AID);
+                mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.HEARING_AID);
         return hfpPolicy == CONNECTION_POLICY_ALLOWED
                 && a2dpPolicy != CONNECTION_POLICY_ALLOWED
                 && leAudioPolicy != CONNECTION_POLICY_ALLOWED
@@ -2726,7 +2697,7 @@ public class HeadsetService extends ConnectableProfile {
                                     TAG,
                                     "Starting pending sco connection for "
                                             + mPendingScoConnectionDevice);
-                            startScoViaAudioManager(mPendingScoConnectionDevice);
+                            mSystemInterface.requestBluetoothAudio(mPendingScoConnectionDevice);
                             mPendingScoConnectionDevice = null;
                         } else {
                             Log.d(
@@ -2930,7 +2901,7 @@ public class HeadsetService extends ConnectableProfile {
     public BluetoothDevice getFallbackDevice() {
         BluetoothDevice mostRecentDevice =
             mDatabaseManager
-                .getMostRecentlyConnectedDevicesInList(getFallbackCandidates(mDatabaseManager));
+                .getMostRecentlyConnectedDevicesInList(getFallbackCandidates());
         if (mostRecentDevice != null) {
             return mostRecentDevice.equals(getActiveDevice()) ? null : mostRecentDevice;
         }
@@ -2938,7 +2909,7 @@ public class HeadsetService extends ConnectableProfile {
     }
 
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
-    List<BluetoothDevice> getFallbackCandidates(DatabaseManager dbManager) {
+    List<BluetoothDevice> getFallbackCandidates() {
         List<BluetoothDevice> fallbackCandidates = getConnectedDevices();
         List<BluetoothDevice> uninterestedCandidates = new ArrayList<>();
         for (BluetoothDevice device : fallbackCandidates) {
@@ -3053,7 +3024,7 @@ public class HeadsetService extends ConnectableProfile {
                 mPendingScoConnectionDevice = device;
             } else {
                 Log.i(TAG, "processAtBcc for device " + device);
-                startScoViaAudioManager(device);
+                mSystemInterface.requestBluetoothAudio(device);
             }
         }
     }
