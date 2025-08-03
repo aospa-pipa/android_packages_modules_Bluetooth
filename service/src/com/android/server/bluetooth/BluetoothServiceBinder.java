@@ -32,6 +32,7 @@ import android.bluetooth.IBluetoothManager;
 import android.bluetooth.IBluetoothManagerCallback;
 import android.content.AttributionSource;
 import android.content.Context;
+import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -56,7 +57,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-class BluetoothServiceBinder extends IBluetoothManager.Stub {
+public class BluetoothServiceBinder extends IBluetoothManager.Stub {
     private static final String TAG = BluetoothServiceBinder.class.getSimpleName();
 
     private final BluetoothManagerService mService;
@@ -87,6 +88,28 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
                         mAppOpsManager,
                         mContext.getAttributionSource());
         mMessenger = new ServiceMessenger(looper, permissionChecker, mService).getMessenger();
+    }
+
+    private void checkForStartedUsed(AttributionSource source) {
+        if (mService.mUserContext != null) {
+            return;
+        }
+        var callingPid = Binder.getCallingPid();
+        var callingUid = Binder.getCallingUid();
+        String callingPackage = "Unknown";
+        String[] packages = mContext.getPackageManager().getPackagesForUid(callingUid);
+        if (packages != null && packages.length > 0) {
+            callingPackage = packages[0];
+        }
+        var msg =
+                "CRITICAL FAILURE: Bluetooth need a foreground user. Identifying caller:"
+                        + (" PID=" + callingPid)
+                        + (" UID=" + callingUid)
+                        + (" callingPackage=" + callingPackage)
+                        + (" source.Package=" + source.getPackageName())
+                        + (" user=" + UserHandle.getUserHandleForUid(callingUid));
+        Log.wtf(TAG, msg);
+        throw new IllegalStateException(msg);
     }
 
     private void postFromBinder(Runnable runnable) {
@@ -233,6 +256,7 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
         var packageName = source.getPackageName();
 
         Log.d(TAG, "enable(" + reason + ", " + packageName + ")");
+        checkForStartedUsed(source);
         return postFromBinder(() -> mService.enable(reason, packageName));
     }
 
@@ -261,6 +285,7 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
         var packageName = source.getPackageName();
 
         Log.d(TAG, "enableBle(" + packageName + ", " + token + ")");
+        checkForStartedUsed(source);
         return postFromBinder(() -> mService.enableBle(packageName, token));
     }
 
@@ -292,6 +317,7 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
         var packageName = source.getPackageName();
 
         Log.d(TAG, "enableNoAutoConnect(" + packageName + ")");
+        checkForStartedUsed(source);
         return postFromBinder(() -> mService.enableNoAutoConnect(packageName));
     }
 
@@ -428,7 +454,7 @@ class BluetoothServiceBinder extends IBluetoothManager.Stub {
             @NonNull ParcelFileDescriptor out,
             @NonNull ParcelFileDescriptor err,
             @NonNull String[] args) {
-        return new BluetoothShellCommand(mService, this)
+        return new ShellCommand(this, mMessenger, mService::waitForState)
                 .exec(
                         this,
                         in.getFileDescriptor(),

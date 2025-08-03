@@ -1254,9 +1254,7 @@ void SnoopLogger::Capture(const HciPacket& immutable_packet, Direction direction
     timestamp_us -= ((uint64_t)tmp_gmt_offset * 1000000LL);
   }
 #ifdef __ANDROID__
-  if (com::android::bluetooth::flags::snoop_logger_tracing()) {
-    LogTracePoint(packet, direction, type);
-  }
+  LogTracePoint(packet, direction, type);
 #endif  // __ANDROID__
 
   std::bitset<32> flags = 0;

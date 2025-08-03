@@ -1009,4 +1009,30 @@ public class MetricsLogger {
     public void logChannelSoundingTypesSupported(int[] channelSoundingTypes) {
         BluetoothStatsLog.write(CHANNEL_SOUNDING_TYPES_SUPPORTED, channelSoundingTypes);
     }
+
+    /** Log calling app uid and files count and size for OPP launcher activity. */
+    public void logBluetoothOppLauncherCreated(int uid, int fileCount, int totalFileSize) {
+        BluetoothStatsLog.write(BluetoothStatsLog.BLUETOOTH_OPP_LAUNCHER_CREATED,
+                uid, fileCount, totalFileSize);
+    }
+
+    /** Log the status of a Bluetooth share. */
+    public void logBluetoothOppShareStatusCompleteReported(
+            int status,
+            int direction,
+            int duration,
+            int fileSize,
+            int transferSpeed,
+            int mimeType,
+            BluetoothDevice device) {
+        BluetoothStatsLog.write(
+                BluetoothStatsLog.BLUETOOTH_OPP_SHARE_STATUS_COMPLETE_REPORTED,
+                status,
+                direction,
+                duration,
+                fileSize,
+                transferSpeed,
+                mimeType,
+                getRemoteDeviceInfoProto(device, false));
+    }
 }

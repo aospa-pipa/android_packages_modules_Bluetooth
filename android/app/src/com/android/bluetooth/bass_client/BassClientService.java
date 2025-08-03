@@ -1984,7 +1984,7 @@ public class BassClientService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
         boolean setSuccessfully =
-                mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
+                mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
         if (setSuccessfully && connectionPolicy == CONNECTION_POLICY_ALLOWED) {
             connect(device);
         } else if (setSuccessfully && connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {

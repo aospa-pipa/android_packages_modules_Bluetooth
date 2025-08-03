@@ -202,10 +202,11 @@ public class HeadsetServiceAndStateMachineTest {
         doReturn(mAudioManager).when(mSystemInterface).getAudioManager();
         doReturn(mAudioDeviceVolumeManager).when(mSystemInterface).getAudioDeviceVolumeManager();
         doReturn(true).when(mSystemInterface).activateVoiceRecognition(any(BluetoothDevice.class));
-        doReturn(true).when(mSystemInterface).deactivateVoiceRecognition();
+        doReturn(true).when(mSystemInterface).deactivateVoiceRecognition(any(BluetoothDevice.class));
         doReturn(mVoiceRecognitionWakeLock).when(mSystemInterface).getVoiceRecognitionWakeLock();
         doReturn(true).when(mSystemInterface).isCallIdle();
         doReturn(false).when(mSystemInterface).isScoManagedByAudioEnabled();
+        doReturn(true).when(mSystemInterface).requestBluetoothAudio(any(BluetoothDevice.class));
         if (android.media.audio.Flags.scoManagedByAudio()) {
             doReturn(true).when(mSystemInterface).isScoManagedByAudioEnabled();
         }
@@ -288,7 +289,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testConnectFromApi() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -329,7 +330,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testUnbondDevice_disconnectBeforeUnbond() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -373,7 +374,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testUnbondDevice_disconnectAfterUnbond() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -833,7 +834,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(stopVrEvent);
         mTestLooper.dispatchAll();
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).deactivateVoiceRecognition();
+        verify(mSystemInterface).deactivateVoiceRecognition(device);
         verify(mNativeInterface, times(2))
                 .atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_OK, 0);
         if (android.media.audio.Flags.scoManagedByAudio()) {
@@ -1834,16 +1835,16 @@ public class HeadsetServiceAndStateMachineTest {
 
         // this device is a HFP only device
         doReturn(CONNECTION_POLICY_ALLOWED)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.A2DP);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEARING_AID);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.LE_AUDIO);
 
         doReturn(true).when(mSystemInterface).isInCall();
@@ -2146,7 +2147,7 @@ public class HeadsetServiceAndStateMachineTest {
 
         verifyActiveDeviceChanged_scoManagement(device);
 
-        verify(mAudioManager).setCommunicationDevice(mAudioDeviceInfo);
+        verify(mSystemInterface).requestBluetoothAudio(device);
     }
 
     /*
@@ -2311,7 +2312,7 @@ public class HeadsetServiceAndStateMachineTest {
         doReturn(true).when(mSystemInterface).listCurrentCalls(mHeadsetService);
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded
@@ -2360,7 +2361,7 @@ public class HeadsetServiceAndStateMachineTest {
         doReturn(true).when(mSystemInterface).listCurrentCalls(mHeadsetService);
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded
@@ -2430,7 +2431,7 @@ public class HeadsetServiceAndStateMachineTest {
 
     private void connectTestDevice(BluetoothDevice device) {
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded

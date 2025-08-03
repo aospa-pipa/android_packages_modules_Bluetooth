@@ -23,6 +23,7 @@ import static com.android.bluetooth.le_scan.ScanUtil.callbackTypeToString;
 import static com.android.bluetooth.le_scan.ScanUtil.isBackgroundScan;
 import static com.android.bluetooth.le_scan.ScanUtil.isBatchScan;
 import static com.android.bluetooth.le_scan.ScanUtil.isOpportunisticScan;
+import static com.android.bluetooth.le_scan.ScanUtil.scanFilterToStringWithoutNullParam;
 import static com.android.bluetooth.le_scan.ScanUtil.scanModeToString;
 
 import static java.util.Objects.requireNonNull;
@@ -43,14 +44,13 @@ import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.util.WorkSourceUtil;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** ScanStats class helps keep track of information about scans on a per application basis. */
@@ -287,7 +287,7 @@ class AppScanStats {
             for (ScanFilter filter : filters) {
                 scan.filterString
                         .append("\n      └ ")
-                        .append(filterToStringWithoutNullParam(filter));
+                        .append(scanFilterToStringWithoutNullParam(filter));
             }
         }
 
@@ -566,16 +566,20 @@ class AppScanStats {
             return false;
         }
 
-        return (mTimeProvider.elapsedRealtime() - mLastScans.get(0).mStartTimestamp)
-                < mAdapterService.getScanQuotaWindowMillis();
+        var oldestLastScanStartTimestamp = mLastScans.getFirst().mStartTimestamp;
+        return Duration.ofMillis(mTimeProvider.elapsedRealtime() - oldestLastScanStartTimestamp)
+                        .compareTo(mAdapterService.getScanQuotaWindow())
+                < 0;
     }
 
     synchronized boolean isScanningTooLong() {
         if (!isScanning()) {
             return false;
         }
-        return (mTimeProvider.elapsedRealtime() - mScanStartTimestamp)
-                >= mAdapterService.getScanTimeoutMillis();
+
+        return Duration.ofMillis(mTimeProvider.elapsedRealtime() - mScanStartTimestamp)
+                        .compareTo(mAdapterService.getScanTimeout())
+                >= 0;
     }
 
     synchronized boolean hasRecentScan() {
@@ -593,60 +597,6 @@ class AppScanStats {
     String getAttributionTagFromScannerId(int scannerId) {
         LastScan scan = getScanFromScannerId(scannerId);
         return scan == null ? "" : scan.getAttributionTag();
-    }
-
-    private static String filterToStringWithoutNullParam(ScanFilter filter) {
-        StringBuilder filterString = new StringBuilder("BluetoothLeScanFilter [");
-        if (filter.getDeviceName() != null) {
-            filterString.append(" DeviceName=").append(filter.getDeviceName());
-        }
-        if (filter.getDeviceAddress() != null) {
-            filterString.append(" DeviceAddress=").append(filter.getDeviceAddress());
-        }
-        if (filter.getServiceUuid() != null) {
-            filterString.append(" ServiceUuid=").append(filter.getServiceUuid());
-        }
-        if (filter.getServiceUuidMask() != null) {
-            filterString.append(" ServiceUuidMask=").append(filter.getServiceUuidMask());
-        }
-        if (filter.getServiceSolicitationUuid() != null) {
-            filterString
-                    .append(" ServiceSolicitationUuid=")
-                    .append(filter.getServiceSolicitationUuid());
-        }
-        if (filter.getServiceSolicitationUuidMask() != null) {
-            filterString
-                    .append(" ServiceSolicitationUuidMask=")
-                    .append(filter.getServiceSolicitationUuidMask());
-        }
-        if (filter.getServiceDataUuid() != null) {
-            filterString
-                    .append(" ServiceDataUuid=")
-                    .append(Objects.toString(filter.getServiceDataUuid()));
-        }
-        if (filter.getServiceData() != null) {
-            filterString.append(" ServiceData=").append(Arrays.toString(filter.getServiceData()));
-        }
-        if (filter.getServiceDataMask() != null) {
-            filterString
-                    .append(" ServiceDataMask=")
-                    .append(Arrays.toString(filter.getServiceDataMask()));
-        }
-        if (filter.getManufacturerId() >= 0) {
-            filterString.append(" ManufacturerId=").append(filter.getManufacturerId());
-        }
-        if (filter.getManufacturerData() != null) {
-            filterString
-                    .append(" ManufacturerData=")
-                    .append(Arrays.toString(filter.getManufacturerData()));
-        }
-        if (filter.getManufacturerDataMask() != null) {
-            filterString
-                    .append(" ManufacturerDataMask=")
-                    .append(Arrays.toString(filter.getManufacturerDataMask()));
-        }
-        filterString.append(" ]");
-        return filterString.toString();
     }
 
     synchronized void dump(StringBuilder sb, List<ScannerMap.ScannerApp> scannerApps) {
