@@ -5080,7 +5080,7 @@ TEST_F(StateMachineTest, testStateTransitionTimeout) {
   EXPECT_CALL(mock_callbacks_, OnStateTransitionTimeout(leaudio_group_id));
 
   // simulate timeout seconds passed, alarm executing
-  fake_osi_alarm_set_on_mloop_.cb(fake_osi_alarm_set_on_mloop_.data);
+  fake_osi_alarm_expired(fake_osi_alarm_set_on_mloop_);
   ASSERT_EQ(1, get_func_call_count("alarm_set_on_mloop"));
 }
 
@@ -5114,7 +5114,7 @@ TEST_F(StateMachineTest, testStateTransitionTimeoutAndDisconnectWhenConfigured) 
   EXPECT_CALL(mock_callbacks_, OnStateTransitionTimeout(leaudio_group_id));
 
   // simulate timeout seconds passed, alarm executing
-  fake_osi_alarm_set_on_mloop_.cb(fake_osi_alarm_set_on_mloop_.data);
+  fake_osi_alarm_expired(fake_osi_alarm_set_on_mloop_);
   ASSERT_EQ(1, get_func_call_count("alarm_set_on_mloop"));
 
   log::info("OnStateTransitionTimeout");
@@ -5166,7 +5166,7 @@ TEST_F(StateMachineTest, testStateTransitionTimeoutAndDisconnectWhenQoSConfigure
   EXPECT_CALL(mock_callbacks_, OnStateTransitionTimeout(leaudio_group_id));
 
   // simulate timeout seconds passed, alarm executing
-  fake_osi_alarm_set_on_mloop_.cb(fake_osi_alarm_set_on_mloop_.data);
+  fake_osi_alarm_expired(fake_osi_alarm_set_on_mloop_);
   ASSERT_EQ(1, get_func_call_count("alarm_set_on_mloop"));
 
   log::info("OnStateTransitionTimeout");
@@ -5219,7 +5219,7 @@ TEST_F(StateMachineTest, testStateTransitionTimeoutAndDisconnectWhenEnabling) {
   EXPECT_CALL(mock_callbacks_, OnStateTransitionTimeout(leaudio_group_id));
 
   // simulate timeout seconds passed, alarm executing
-  fake_osi_alarm_set_on_mloop_.cb(fake_osi_alarm_set_on_mloop_.data);
+  fake_osi_alarm_expired(fake_osi_alarm_set_on_mloop_);
   ASSERT_EQ(1, get_func_call_count("alarm_set_on_mloop"));
 
   log::info("OnStateTransitionTimeout");

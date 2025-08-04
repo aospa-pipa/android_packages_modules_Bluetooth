@@ -81,36 +81,36 @@ public class SdpManager {
             mSearching = true;
         }
 
-        public BluetoothDevice getDevice() {
+        BluetoothDevice getDevice() {
             return mDevice;
         }
 
-        public ParcelUuid getUuid() {
+        ParcelUuid getUuid() {
             return mUuid;
         }
 
-        public int getStatus() {
+        int getStatus() {
             return mStatus;
         }
 
-        public void setStatus(int status) {
+        void setStatus(int status) {
             this.mStatus = status;
         }
 
-        public void startSearch() {
+        void startSearch() {
             mSearching = true;
             Message message = mHandler.obtainMessage(MESSAGE_SDP_INTENT, this);
             mHandler.sendMessageDelayed(message, SDP_INTENT_DELAY);
         }
 
-        public void stopSearch() {
+        void stopSearch() {
             if (mSearching) {
                 mHandler.removeMessages(MESSAGE_SDP_INTENT, this);
             }
             mSearching = false;
         }
 
-        public boolean isSearching() {
+        boolean isSearching() {
             return mSearching;
         }
     }
@@ -496,8 +496,7 @@ public class SdpManager {
          * Keep in mind that the MAP client needs to use this as well,
          * hence to make it call-backs, the MAP client profile needs to be
          * part of the Bluetooth APK. */
-        mAdapterService.sendBroadcast(
-                intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        mAdapterService.sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
 
         if (!moreResults) {
             // Remove the outstanding UUID request

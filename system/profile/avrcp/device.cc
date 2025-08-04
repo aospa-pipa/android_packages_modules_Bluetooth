@@ -188,7 +188,7 @@ void Device::HandlePendingPlay() {
         log::info("media_interface_ is NULL, return");
         return;
       }
-      d->media_interface_->SendKeyEvent(uint8_t(OperationID::PLAY), KeyState::PUSHED);
+      d->media_interface_->SendKeyEvent(d->address_, uint8_t(OperationID::PLAY), KeyState::PUSHED);
       d->IsPendingPlay_ = false;
     }
   },
@@ -1264,7 +1264,7 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
                       d->IsPendingPlay_ = true;
                     }
                   } else {
-                    d->media_interface_->SendKeyEvent(uint8_t(OperationID::PLAY), KeyState::PUSHED);
+                    d->media_interface_->SendKeyEvent(d->address_, uint8_t(OperationID::PLAY), KeyState::PUSHED);
                   }
                 },
                 weak_ptr_factory_.GetWeakPtr()));
@@ -1300,7 +1300,7 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
                 log::info("media_interface_ is NULL, return");
                 return;
               }
-              d->media_interface_->SendKeyEvent(packet->GetOperationId(),
+              d->media_interface_->SendKeyEvent(d->address_, packet->GetOperationId(),
                   packet->GetKeyState());
             }
           }, weak_ptr_factory_.GetWeakPtr(), pass_through_packet));
