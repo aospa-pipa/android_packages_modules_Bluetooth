@@ -311,9 +311,10 @@ class ContextMap<C extends IInterface> {
 
     /** Add a new connection for a given application ID. */
     void addConnection(int id, int connId, int transport, BluetoothDevice device) {
-        synchronized (mConnectionsLock) {
-            App entry = getById(id);
-            if (entry != null) {
+        App entry = getById(id);
+
+        if (entry != null) {
+            synchronized (mConnectionsLock) {
                 mConnections.add(new Connection(connId, device, transport, id));
             }
         }
