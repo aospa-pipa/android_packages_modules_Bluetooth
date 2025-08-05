@@ -566,11 +566,16 @@ class AdapterProperties {
                 MetricsLogger.getInstance()
                         .logProfileConnectionStateChange(device, profile, newState, prevState);
                 debugLog("updateOnProfileConnectionChanged: " + logInfo);
-                mService.sendBroadcastAsUser(
-                        intent,
-                        UserHandle.ALL,
-                        BLUETOOTH_CONNECT,
-                        Utils.getTempBroadcastOptions().toBundle());
+                if (Flags.onlyBroadcastToLocalUser()) {
+                    mService.sendBroadcast(
+                            intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+                } else {
+                    mService.sendBroadcastAsUser(
+                            intent,
+                            UserHandle.ALL,
+                            BLUETOOTH_CONNECT,
+                            Utils.getTempBroadcastBundle());
+                }
             }
         }
     }
@@ -942,8 +947,7 @@ class AdapterProperties {
                 mDiscovering = true;
                 mDiscoveryEndMs = System.currentTimeMillis() + DEFAULT_DISCOVERY_TIMEOUT_MS;
                 intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-                mService.sendBroadcast(
-                        intent, BLUETOOTH_SCAN, Utils.getTempBroadcastOptions().toBundle());
+                mService.sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());
             }
         }
     }

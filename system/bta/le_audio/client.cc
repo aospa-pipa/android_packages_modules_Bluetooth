@@ -1527,17 +1527,22 @@ public:
       log::error("Unknown group id: %d", group_id);
     }
 
+    bool lex_enablement_changed = false;
+    bool lex_enabled = group->IsLeXCodecEnabled();
+
     if (!CodecManager::GetInstance()->IsUsingCodecExtensibility()) {
       if (output_codec_config.codec_type ==
           bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX) {
         group->DisableLeXCodec(false);
-        log::debug("Enabling LeX Codec");
+        lex_enablement_changed = lex_enabled != group->IsLeXCodecEnabled() && group->IsLeXDevice();
+        log::debug("Enabling LeX Codec, enablement_changed={}", lex_enablement_changed);
         group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
         group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
       } else if (output_codec_config.codec_type ==
           bluetooth::le_audio::btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_DEFAULT) {
         group->DisableLeXCodec(true);
-        log::debug("Disabling LeX Codec");
+        lex_enablement_changed = lex_enabled != group->IsLeXCodecEnabled() && group->IsLeXDevice();
+        log::debug("Disabling LeX Codec, enablement_changed={}", lex_enablement_changed);
         group->UpdateAudioSetConfigurationCache(LeAudioContextType::MEDIA);
         group->UpdateAudioSetConfigurationCache(LeAudioContextType::CONVERSATIONAL);
       }
@@ -1559,7 +1564,8 @@ public:
         log::info("group id: {}, setting preferred codec is successful.", group_id);
       } else {
         log::warn("group id: {}, setting preferred codec is failed.", group_id);
-        return;
+        if (!lex_enablement_changed)
+          return;
       }
     }
 
@@ -5707,6 +5713,10 @@ public:
     }
   }
 
+  void OnSetSenderStateRelease(void) {
+    audio_sender_state_ = AudioState::READY_TO_RELEASE;
+  }
+
   void OnLocalAudioSinkSuspend() {
     log::info("active group_id: {}, IN: audio_receiver_state_: {}, audio_sender_state_: {}",
               active_group_id_, ToString(audio_receiver_state_), ToString(audio_sender_state_));
@@ -7613,6 +7623,19 @@ public:
                   std::bind(&LeAudioClientImpl::UpdateAudioConfigToHal, weak_factory_.GetWeakPtr(),
                             std::placeholders::_1, std::placeholders::_2),
                   bluetooth::le_audio::types::kLeAudioDirectionSource);
+        } else if (!audio_hal_is_capable_to_send_empty_metadata_) {
+          log::info("Audio HAL which is not able to set empty metadata");
+          if (group->GetConfigurationContextType() != LeAudioContextType::CONVERSATIONAL &&
+              group->cig.GetConnectedCisDirections().source) {
+            /* If in some way, Bluetooth started bidirectional stream without Resume on the DECODING
+             * Session, and this is not a CONVERSATIONAL context type, let makes sure that fall
+             * back to unidirectional scenario.
+             * CONVERSATIONAL context type is used also during Ringtone, and in this case DECODING
+             * session might be not used, which is perfectly fine and fallback to unidirectional
+             * is not expected.
+             */
+            StartVbcCloseTimeout();
+          }
         }
 
         speed_stop_setup(group_id);
@@ -8332,6 +8355,10 @@ public:
     if (instance) {
       instance->UpdateMetadataCb(state, cig_id, cis_id, data);
     }
+  }
+
+  void OnSetSenderStateRelease() override {
+    if (instance) instance->OnSetSenderStateRelease();
   }
 };
 

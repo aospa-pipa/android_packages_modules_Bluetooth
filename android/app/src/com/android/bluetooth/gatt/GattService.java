@@ -453,7 +453,7 @@ public class GattService extends ProfileService {
         if (app == null) {
             return;
         }
-        if (status != 0) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
             mClientMap.remove(uuid, ContextMap.RemoveReason.REASON_REGISTER_FAILED);
         } else {
             app.id = clientIf;
@@ -473,7 +473,7 @@ public class GattService extends ProfileService {
                         + (" status=" + gattStatusToString(status))
                         + (" device=" + device));
         int connectionState = BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTED;
-        if (status != 0) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
             mAdapterService.notifyGattClientConnectFailed(clientIf, device);
         } else {
             mClientMap.addConnection(clientIf, connId, transport, device);
@@ -1049,7 +1049,6 @@ public class GattService extends ProfileService {
                         + (" name=" + name)
                         + (" transport=" + transportToString(transport)));
         mClientMap.add(uuid, callback, transport, this, source);
-
         mNativeInterface.gattClientRegisterApp(
                 uuid.getLeastSignificantBits(), uuid.getMostSignificantBits(), name, eattSupport);
     }
@@ -1674,7 +1673,7 @@ public class GattService extends ProfileService {
                         + (" serverIf=" + serverIf)
                         + (" status=" + gattStatusToString(status)));
 
-        if (status != 0) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
             return;
         }
 
@@ -1739,7 +1738,7 @@ public class GattService extends ProfileService {
                 "onServiceStopped() -"
                         + (" srvcHandle=" + srvcHandle)
                         + (", status=" + gattStatusToString(status)));
-        if (status == 0) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
             mHandleMap.setStarted(serverIf, srvcHandle, false);
         }
         stopNextService(serverIf, status);
@@ -2737,7 +2736,7 @@ public class GattService extends ProfileService {
                         + (" serverIf=" + serverIf)
                         + (", status=" + gattStatusToString(status)));
 
-        if (status != 0) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
             return;
         }
         final List<HandleMap.Entry> entries = mHandleMap.getEntries();
