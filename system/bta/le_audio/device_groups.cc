@@ -2488,6 +2488,9 @@ void LeAudioDeviceGroup::DisableLeXCodec(bool status) {
   lex_codec_disabled.second = true;
 }
 
+bool LeAudioDeviceGroup::IsLeXCodecEnabled() {
+  return !lex_codec_disabled.first;
+}
 std::shared_ptr<const types::AudioSetConfiguration>
 LeAudioDeviceGroup::GetConfiguration(LeAudioContextType context_type) const {
   log::info("context_type: {}", ToHexString(context_type));

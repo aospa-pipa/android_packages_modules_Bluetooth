@@ -194,6 +194,7 @@ public:
                                             uint8_t remote_direction) const;
   bool IsSeamlessSupported(void);
   void DisableLeXCodec(bool status);
+  bool IsLeXCodecEnabled();
   void PopulateVendorMetadatabyDirection(types::LeAudioContextType context_type, uint8_t direction,
                                          types::LeAudioLtvMap pacs_metadata,
                                          const types::AseConfiguration& conf) const;
