@@ -2165,11 +2165,10 @@ public class HeadsetService extends ConnectableProfile {
                      Log.i(TAG, "Not setting LE suspension. LE is the pref duplex profile");
                    }
                 } else {
-                  BluetoothDevice btDevice = mAdapterService.getActiveDeviceManager()
-                                                          .fetchLeAudioActiveDevice();
-                  if (btDevice == null) {
-                     mSystemInterface.getAudioManager().setLeAudioSuspended(true);
-                  }
+                   if (mActiveDevice != null) {
+                      Log.i(TAG, "HFP active device is present. Setting LeAudiosuspend params");
+                      mSystemInterface.getAudioManager().setLeAudioSuspended(true);
+                   }
                 }
                 //Adding the wait mechanism Logic.
                 lock.lock();
