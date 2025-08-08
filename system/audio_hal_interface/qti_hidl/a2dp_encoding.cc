@@ -55,6 +55,7 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #include "a2dp_encoding.h"
 
 #include <a2dp_vendor.h>
+#include <bluetooth/types/address.h>
 
 #include "a2dp_aac.h"
 #include "a2dp_encoding_qti.h"
@@ -71,7 +72,6 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE
 #include "osi/include/properties.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_vendor_types.h"
-#include "types/raw_address.h"
 
 extern void btif_a2dp_source_encoder_init(void);
 

@@ -16,6 +16,7 @@
 
 #include "service/low_energy_scanner.h"
 
+#include <bluetooth/types/address.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -25,7 +26,6 @@
 #include "service/hal/fake_bluetooth_gatt_interface.h"
 #include "stack/include/bt_types.h"
 #include "test/mock_adapter.h"
-#include "types/raw_address.h"
 
 using ::testing::_;
 using ::testing::DoAll;

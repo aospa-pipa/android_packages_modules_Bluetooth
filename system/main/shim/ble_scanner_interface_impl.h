@@ -23,6 +23,7 @@
  */
 #pragma once
 
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 
 #include <queue>
@@ -32,7 +33,6 @@
 #include "hci/le_scanning_callback.h"
 #include "include/hardware/ble_scanner.h"
 #include "types/ble_address_with_type.h"
-#include "types/raw_address.h"
 
 namespace bluetooth {
 namespace shim {

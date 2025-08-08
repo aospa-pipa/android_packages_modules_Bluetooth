@@ -22,6 +22,7 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 
 #include <cstdint>
 #include <memory>
@@ -34,7 +35,6 @@
 #include "stack/btm/neighbor_inquiry.h"
 #include "stack/include/btm_ble_api_types.h"
 #include "stack/rnr/remote_name_request.h"
-#include "types/raw_address.h"
 
 using TimestampedStringCircularBuffer = bluetooth::common::TimestampedStringCircularBuffer;
 

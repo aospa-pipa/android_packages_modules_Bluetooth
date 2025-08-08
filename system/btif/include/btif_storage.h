@@ -23,6 +23,7 @@
 #ifndef SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 #define SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <hardware/bluetooth.h>
@@ -34,7 +35,6 @@
 #include "stack/include/bt_octets.h"
 #include "stack/include/btm_sec_api_types.h"
 #include "types/ble_address_with_type.h"
-#include "types/raw_address.h"
 
 /*******************************************************************************
  *  Constants & Macros

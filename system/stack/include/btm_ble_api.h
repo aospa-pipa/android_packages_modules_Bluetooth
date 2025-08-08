@@ -30,6 +30,7 @@
 #define BTM_BLE_API_H
 
 #include <base/functional/callback_forward.h>
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_transport.h>
 #include <hardware/bt_common_types.h>
 
@@ -38,7 +39,6 @@
 
 #include "btm_ble_api_types.h"
 #include "stack/btm/neighbor_inquiry.h"
-#include "types/raw_address.h"
 
 void btm_ble_init();
 void btm_ble_free();
