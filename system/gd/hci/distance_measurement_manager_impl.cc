@@ -590,7 +590,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                                      procedure_setting.max_subevent_len[2]<<16) * 0.001);
         interval = (uint32_t) (procedure_setting.max_proc_duration *
 		               procedure_setting.max_proc_count);
-        it->second.interval_ms = interval_ms;
+        it->second.interval_ms = interval;
       }
     } else {
       it->second.interval_ms = interval_ms;

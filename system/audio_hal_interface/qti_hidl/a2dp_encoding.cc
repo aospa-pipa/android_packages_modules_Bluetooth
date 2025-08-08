@@ -842,8 +842,6 @@ bool a2dp_get_selected_hal_codec_config(CodecConfiguration* codec_config) {
       codec_config->encodedAudioBitrate = a2dp_config->getTrackBitRate();
     }
   } else if (A2DP_MEDIA_CT_AAC == codec_type) {
-    uint32_t codec_based_bit_rate = 0;
-    codec_based_bit_rate = a2dp_config->getTrackBitRate();
     codec_config->encodedAudioBitrate = a2dp_config->getTrackBitRate();
   }
   LOG(INFO) << __func__ << ": CodecConfiguration=" << toString(*codec_config);
@@ -1167,8 +1165,6 @@ bool a2dp_get_selected_hal_codec_config_2_1(CodecConfiguration_2_1* codec_config
       codec_config->encodedAudioBitrate = a2dp_config->getTrackBitRate();
     }
   } else if (A2DP_MEDIA_CT_AAC == codec_type) {
-    uint32_t codec_based_bit_rate = 0;
-    codec_based_bit_rate = a2dp_config->getTrackBitRate();
     codec_config->encodedAudioBitrate = a2dp_config->getTrackBitRate();
   }
   LOG(INFO) << __func__ << ": CodecConfiguration=" << toString(*codec_config);

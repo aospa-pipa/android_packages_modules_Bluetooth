@@ -397,13 +397,6 @@ public:
         log::warn("unexpected call, stream is empty for direction {}, ", direction);
         continue;
       }
-      uint16_t delay = 0;
-      if (stream_params.get(direction).stream_config.peer_delay_ms != 0xFFFF) {
-        delay = stream_params.get(direction).stream_config.peer_delay_ms;
-      } else {
-        //Todo
-        delay = stream_params.get(direction).stream_config.peer_delay_ms;
-      }
 
       auto unicast_cfg = stream_params.get(direction).stream_config;
       log::debug( ": coding_format = {}, vendor_codec_id = {}",
