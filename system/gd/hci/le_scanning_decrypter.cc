@@ -122,7 +122,6 @@ bool LeScanningDecrypter::ExtractEncryptedData(std::vector<uint8_t> const& adv_d
 bool LeScanningDecrypter::ContainsEncryptedData(const uint8_t* ad, size_t ad_len) {
   size_t position = 0;
   bool is_enc_adv = false;
-  int enc_data_part_length = 0;
 
   while (position < ad_len) {
     uint8_t len = ad[position];
@@ -137,7 +136,6 @@ bool LeScanningDecrypter::ContainsEncryptedData(const uint8_t* ad, size_t ad_len
     uint8_t adv_type = ad[position + 1];
 
     if (adv_type == (uint8_t)GapDataType::ENCRYPTED_ADVERTISING_DATA) {
-      enc_data_part_length = len + 1; /* Length(1 byte) + len */
       is_enc_adv = true;
     }
 

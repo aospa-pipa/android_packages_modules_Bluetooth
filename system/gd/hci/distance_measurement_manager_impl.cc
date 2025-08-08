@@ -590,7 +590,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                                      procedure_setting.max_subevent_len[2]<<16) * 0.001);
         interval = (uint32_t) (procedure_setting.max_proc_duration *
 		               procedure_setting.max_proc_count);
-        it->second.interval_ms = interval_ms;
+        it->second.interval_ms = interval;
       }
     } else {
       it->second.interval_ms = interval_ms;
@@ -3422,9 +3422,12 @@ DistanceMeasurementManagerImpl::DistanceMeasurementManagerImpl(os::Handler* hand
                                                                hci::AclManagerLe* acl_manager,
                                                                hal::RangingHal* ranging_hal) {
   pimpl_ = std::make_unique<impl>(handler, hci_layer, controller, acl_manager, ranging_hal);
+  log::verbose("DistanceMeasurementManager module started !!");
 }
 
-DistanceMeasurementManagerImpl::~DistanceMeasurementManagerImpl() = default;
+DistanceMeasurementManagerImpl::~DistanceMeasurementManagerImpl() {
+  log::verbose("DistanceMeasurementManager module stopped !!");
+};
 
 void DistanceMeasurementManagerImpl::RegisterDistanceMeasurementCallbacks(
         DistanceMeasurementCallbacks* callbacks) {

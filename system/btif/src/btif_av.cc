@@ -23,6 +23,7 @@
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/a2dp/enums.pb.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
@@ -78,7 +79,6 @@
 #include "stack/include/btm_log_history.h"
 #include "stack/include/main_thread.h"
 #include "stack/include/btm_client_interface.h"
-#include "types/raw_address.h"
 
 #ifdef __ANDROID__
 #include <android/sysprop/BluetoothProperties.sysprop.h>
@@ -2380,8 +2380,7 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event, void* p_data)
         // Invoke the started handler only when initiator.
         log::info("Peer should suspend: {}", should_suspend);
 
-        if ((!com::android::bluetooth::flags::a2dp_ignore_started_when_responder() ||
-             !should_suspend) &&
+        if (!should_suspend &&
             btif_a2dp_on_started(peer_.PeerAddress(), &p_av->start, A2dpType::kSource)) {
           // Only clear pending flag after acknowledgement
           peer_.ClearFlags(BtifAvPeer::kFlagPendingStart);

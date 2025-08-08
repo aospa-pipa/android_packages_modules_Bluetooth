@@ -62,9 +62,9 @@ import com.android.bluetooth.btservice.InteropUtil;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * This state machine handles Bluetooth Adapter State. States: {@link StableState} : No device is in
@@ -787,7 +787,7 @@ final class BondStateMachine extends StateMachine {
     void clearProfilePriority(BluetoothDevice device) {
         if (Flags.adapterServiceProfilesUseOptional()) {
             // Preserving existing order
-            List.of(
+            Stream.of(
                             mAdapterService.getHidHostService(),
                             mAdapterService.getA2dpService(),
                             mAdapterService.getHeadsetService(),
@@ -798,7 +798,6 @@ final class BondStateMachine extends StateMachine {
                             mAdapterService.getCsipSetCoordinatorService(),
                             mAdapterService.getVolumeControlService(),
                             mAdapterService.getHapClientService())
-                    .stream()
                     .flatMap(Optional::stream)
                     .forEach(
                             profile -> {

@@ -19,6 +19,7 @@
 #include "btif_iot_config.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 
 #include <cstdint>
 #include <cstring>
@@ -29,7 +30,6 @@
 #include "device/include/device_iot_conf_defs.h"
 #include "device/include/device_iot_config.h"
 #include "hardware/bluetooth.h"
-#include "types/raw_address.h"
 #include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
 

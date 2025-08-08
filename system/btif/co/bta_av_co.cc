@@ -28,6 +28,7 @@
 #include "btif/include/bta_av_co.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 #include <stdio.h>
 
@@ -61,8 +62,8 @@
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_vendor_types.h"
-#include "types/raw_address.h"
 #include "btif_config.h"
+
 using namespace bluetooth;
 
 // SCMS-T protect info

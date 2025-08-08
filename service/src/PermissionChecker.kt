@@ -17,7 +17,6 @@ package com.android.server.bluetooth
 
 import android.Manifest.permission.BLUETOOTH_PRIVILEGED
 import android.app.ActivityManager
-import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.app.compat.CompatChanges
 import android.content.AttributionSource
@@ -33,7 +32,6 @@ import android.os.UserHandle
 import android.os.UserManager
 import android.permission.PermissionManager
 import com.android.bluetooth.flags.Flags
-import com.android.modules.utils.build.SdkLevel.isAtLeastU
 import com.android.server.bluetooth.ChangeIds.RESTRICT_ENABLE_DISABLE
 
 private const val TAG = "PermissionChecker"
@@ -43,10 +41,10 @@ class PermissionChecker(
     private val userManager: UserManager,
     private val packageManager: PackageManager,
     private val permissionManager: PermissionManager,
-    private val appOpsManager: AppOpsManager,
     private val attributionSource: AttributionSource,
 ) {
 
+    // Throw an exception that will be catch prior to return to caller
     class BluetoothPermissionException(message: String? = null, cause: Throwable? = null) :
         Exception(message, cause)
 
@@ -92,7 +90,11 @@ class PermissionChecker(
             return
         }
 
-        source.packageName?.let { checkPackage(uid, it) } // null package belongs to any uid
+        val packageName = source.packageName
+        if (packageName == null) {
+            throw BluetoothPermissionException("Null package name from $uid")
+        }
+        checkPackageName(UserHandle.getAppId(uid), packageName)
 
         if (foregroundRequired) {
             enforceCallerIsForegroundUser(uid)
@@ -117,32 +119,19 @@ class PermissionChecker(
         }
     }
 
-    /** Check if the packageName belongs to uid */
-    private fun checkPackage(uid: Int, packageName: String) {
-        // getPackageUidAsUser is only available starting API level 34 == U
-        if (!isAtLeastU()) {
-            try {
-                @Suppress("DEPRECATION") // Suppress for compatibility with platform < 34
-                appOpsManager.checkPackage(uid, packageName)
-            } catch (e: SecurityException) {
-                throw SecurityException("$packageName does not belong to $uid: " + e.message)
-            }
-            return
-        }
-        try {
-            // TODO: b/280890575 - Make sure this behave like deprecated appOpsManager.checkPackage
-            val packageUid =
-                packageManager.getPackageUidAsUser(
-                    packageName,
-                    PackageManager.PackageInfoFlags.of(0),
-                    uid,
-                )
-            if (packageUid != uid) {
-                throw SecurityException("$packageName does not belong to $uid (vs $packageUid)")
-            }
-        } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "checkPackage($uid, $packageName)", e)
-            throw SecurityException(e.message)
+    /** Check if the packageName belongs to the calling app */
+    private fun checkPackageName(appId: Int, name: String) {
+        val trustedAppId =
+            UserHandle.getAppId(
+                try {
+                    packageManager.getPackageUid(name, PackageManager.MATCH_ANY_USER)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.w(TAG, "checkPackageName($appId, $name): Failed", e)
+                    throw SecurityException(e.message)
+                }
+            )
+        if (trustedAppId != appId) {
+            throw SecurityException("$name does not belong to $appId (expected $trustedAppId)")
         }
     }
 

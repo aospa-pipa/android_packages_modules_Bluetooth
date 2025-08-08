@@ -23,6 +23,7 @@
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/metric_id_api.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/address.h>
 #include <openssl/rand.h>
 #include <unistd.h>
 
@@ -37,7 +38,6 @@
 #include "common/address_obfuscator.h"
 #include "main/shim/config.h"
 #include "main/shim/shim.h"
-#include "types/raw_address.h"
 #include "storage/config_keys.h"
 
 #define TEMPORARY_SECTION_CAPACITY 10000

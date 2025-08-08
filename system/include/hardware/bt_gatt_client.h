@@ -52,7 +52,7 @@
 #ifndef ANDROID_INCLUDE_BT_GATT_CLIENT_H
 #define ANDROID_INCLUDE_BT_GATT_CLIENT_H
 
-#include "types/raw_address.h"
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 #include <stdint.h>
 
