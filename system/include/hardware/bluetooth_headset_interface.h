@@ -16,7 +16,8 @@
 
 #pragma once
 
-#include "types/raw_address.h"
+#include <bluetooth/types/address.h>
+
 
 #include "bluetooth.h"
 #include "bluetooth_headset_callbacks.h"

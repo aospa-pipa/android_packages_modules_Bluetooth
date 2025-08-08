@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 #include <gtest/gtest.h>
 
@@ -26,7 +27,6 @@
 #include "test/common/mock_functions.h"
 #include "test/fake/fake_osi.h"
 #include "test/mock/mock_stack_sdp_legacy_api.h"
-#include "types/raw_address.h"
 
 bool bta_ag_is_call_present(const RawAddress* peer_addr) { return true; }
 

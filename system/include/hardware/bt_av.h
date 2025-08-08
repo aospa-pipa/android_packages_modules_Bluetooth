@@ -18,8 +18,9 @@
 #define ANDROID_INCLUDE_BT_AV_H
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <hardware/bluetooth.h>
-#include "types/raw_address.h"
+#include <bluetooth/types/address.h>
 
 #include <optional>
 #include <sstream>

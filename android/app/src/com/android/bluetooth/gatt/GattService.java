@@ -61,6 +61,15 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.Utils.getSystemClock;
 import static com.android.bluetooth.Utils.transportToString;
+import static com.android.bluetooth.gatt.GattUtil.gattStatusToString;
+import static com.android.bluetooth.gatt.GattUtil.isAndroidHeadtrackerSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.isAndroidTvRemoteSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.isAppleNotificationCenterSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.isFidoSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.isHidCharUuid;
+import static com.android.bluetooth.gatt.GattUtil.isHidSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.isLeAudioSrvcUuid;
+import static com.android.bluetooth.gatt.GattUtil.translateHciCode;
 import static com.android.bluetooth.util.AttributionSourceUtil.getLastAttributionTag;
 
 import static java.util.Objects.requireNonNull;
@@ -100,7 +109,6 @@ import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
-import com.android.bluetooth.hid.HidHostService;
 import com.android.internal.annotations.VisibleForTesting;
 
 import com.google.protobuf.ByteString;
@@ -117,38 +125,7 @@ import java.util.stream.Collectors;
 
 /** Provides Bluetooth Gatt profile, as a service in the Bluetooth application. */
 public class GattService extends ProfileService {
-    private static final String TAG =
-            GattServiceConfig.TAG_PREFIX + GattService.class.getSimpleName();
-
-    private static final UUID HID_SERVICE_UUID =
-            UUID.fromString("00001812-0000-1000-8000-00805F9B34FB");
-
-    private static final UUID[] HID_UUIDS = {
-        UUID.fromString("00002A4A-0000-1000-8000-00805F9B34FB"),
-        UUID.fromString("00002A4B-0000-1000-8000-00805F9B34FB"),
-        UUID.fromString("00002A4C-0000-1000-8000-00805F9B34FB"),
-        UUID.fromString("00002A4D-0000-1000-8000-00805F9B34FB")
-    };
-
-    private static final UUID ANDROID_TV_REMOTE_SERVICE_UUID =
-            UUID.fromString("AB5E0001-5A21-4F05-BC7D-AF01F617B664");
-
-    private static final UUID FIDO_SERVICE_UUID =
-            UUID.fromString("0000FFFD-0000-1000-8000-00805F9B34FB"); // U2F
-
-    private static final UUID[] LE_AUDIO_SERVICE_UUIDS = {
-        UUID.fromString("00001844-0000-1000-8000-00805F9B34FB"), // VCS
-        UUID.fromString("00001845-0000-1000-8000-00805F9B34FB"), // VOCS
-        UUID.fromString("00001843-0000-1000-8000-00805F9B34FB"), // AICS
-        UUID.fromString("00001850-0000-1000-8000-00805F9B34FB"), // PACS
-        UUID.fromString("0000184E-0000-1000-8000-00805F9B34FB"), // ASCS
-        UUID.fromString("0000184F-0000-1000-8000-00805F9B34FB"), // BASS
-        UUID.fromString("00001854-0000-1000-8000-00805F9B34FB"), // HAP
-        UUID.fromString("00001846-0000-1000-8000-00805F9B34FB"), // CSIS
-    };
-
-    private static final UUID APPLE_NOTIFICATION_CENTER_SERVICE_UUID =
-            UUID.fromString("7905F431-B5CE-4E99-A40F-4B1E122D00D0");
+    private static final String TAG = GattUtil.TAG_PREFIX + GattService.class.getSimpleName();
 
     private final int[] mSubrateHighParameters;
     private final int[] mSubrateBalancedParameters;
@@ -457,7 +434,7 @@ public class GattService extends ProfileService {
             mClientMap.remove(uuid, ContextMap.RemoveReason.REASON_REGISTER_FAILED);
         } else {
             app.id = clientIf;
-            app.linkToDeath(new ClientDeathRecipient(app.getCallback(), app.packageName));
+            app.linkToDeath(new ClientDeathRecipient(app.getCallback(), app.getPackageName()));
         }
         callbackToApp(() -> app.getCallback().onClientRegistered(status));
     }
@@ -499,7 +476,7 @@ public class GattService extends ProfileService {
                         BluetoothStatsLog
                                 .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__GATT_CONNECT_JAVA,
                         connectionStatusToState(status),
-                        app.uid);
+                        app.mUid);
     }
 
     void onDisconnectedFromNative(
@@ -560,7 +537,7 @@ public class GattService extends ProfileService {
                         BluetoothStatsLog
                                 .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__GATT_DISCONNECT_JAVA,
                         BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__SUCCESS,
-                        app.uid);
+                        app.mUid);
     }
 
     void onClientPhyUpdateFromNative(int connId, int txPhy, int rxPhy, int status) {
@@ -1662,7 +1639,7 @@ public class GattService extends ProfileService {
             return;
         }
         app.id = serverIf;
-        app.linkToDeath(new ServerDeathRecipient(app.getCallback(), app.packageName));
+        app.linkToDeath(new ServerDeathRecipient(app.getCallback(), app.getPackageName()));
         callbackToApp(() -> app.getCallback().onServerRegistered(status));
     }
 
@@ -1833,9 +1810,9 @@ public class GattService extends ProfileService {
         int applicationUid = -1;
         try {
             applicationUid =
-                    this.getPackageManager().getPackageUid(app.packageName, PackageInfoFlags.of(0));
+                    getPackageManager().getPackageUid(app.getPackageName(), PackageInfoFlags.of(0));
         } catch (NameNotFoundException e) {
-            Log.d(TAG, "onClientConnected() - uid_not_found=" + app.packageName);
+            Log.d(TAG, "onClientConnected() - uid_not_found=" + app.getPackageName());
         }
 
         // Lambdas require an effectively final variable. This should be removed when the
@@ -2626,44 +2603,6 @@ public class GattService extends ProfileService {
      * Private functions
      *************************************************************************/
 
-    private static boolean isHidSrvcUuid(final UUID uuid) {
-        return HID_SERVICE_UUID.equals(uuid);
-    }
-
-    static boolean isHidCharUuid(final UUID uuid) {
-        for (UUID hidUuid : HID_UUIDS) {
-            if (hidUuid.equals(uuid)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isAndroidTvRemoteSrvcUuid(final UUID uuid) {
-        return ANDROID_TV_REMOTE_SERVICE_UUID.equals(uuid);
-    }
-
-    private static boolean isFidoSrvcUuid(final UUID uuid) {
-        return FIDO_SERVICE_UUID.equals(uuid);
-    }
-
-    private static boolean isLeAudioSrvcUuid(final UUID uuid) {
-        for (UUID leAudioUuid : LE_AUDIO_SERVICE_UUIDS) {
-            if (leAudioUuid.equals(uuid)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isAndroidHeadtrackerSrvcUuid(final UUID uuid) {
-        return HidHostService.ANDROID_HEADTRACKER_UUID.getUuid().equals(uuid);
-    }
-
-    private static boolean isAppleNotificationCenterSrvcUuid(final UUID uuid) {
-        return APPLE_NOTIFICATION_CENTER_SERVICE_UUID.equals(uuid);
-    }
-
     private boolean isRestrictedSrvcUuid(final UUID uuid, BluetoothDevice device) {
         return isFidoSrvcUuid(uuid)
                 || isAndroidTvRemoteSrvcUuid(uuid)
@@ -2831,33 +2770,16 @@ public class GattService extends ProfileService {
         };
     }
 
-    private static int translateHciCode(int code) {
-        return switch (code) {
-            case 0 -> BluetoothStatusCodes.SUCCESS;
-            // Hardware Failure
-            case 3 -> BluetoothStatusCodes.ERROR_HARDWARE_GENERIC;
-            // Unsupported Command Remote
-            case 26 -> BluetoothStatusCodes.ERROR_REMOTE_OPERATION_NOT_SUPPORTED;
-            // Insufficient Resources
-            case 12, 13, 58 -> BluetoothStatusCodes.ERROR_LOCAL_NOT_ENOUGH_RESOURCES;
-            // Invalid Parameters
-            case 17, 18, 30, 32, 48, 59 -> BluetoothStatusCodes.ERROR_BAD_PARAMETERS;
-            default -> BluetoothStatusCodes.ERROR_UNKNOWN;
-        };
-    }
-
     void dumpRegisterId(StringBuilder sb) {
         sb.append("  Client:\n");
         for (Integer appId : mClientMap.getAllAppsIds()) {
             final ContextMap.App app = mClientMap.getById(appId);
             println(
                     sb,
-                    "    app_if: "
-                            + appId
-                            + ", appName: "
-                            + app.packageName
+                    ("    app_if: " + appId)
+                            + (", appName: " + app.getPackageName())
                             + (", transport: " + transportToString(app.getTransport()))
-                            + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
+                            + (app.mAttributionTag == null ? "" : ", tag: " + app.mAttributionTag));
             final List<ContextMap.Connection> clientConnections =
                     mClientMap.getConnectionByApp(appId);
             for (ContextMap.Connection connection : clientConnections) {
@@ -2869,12 +2791,10 @@ public class GattService extends ProfileService {
             final ContextMap.App app = mServerMap.getById(appId);
             println(
                     sb,
-                    "    app_if: "
-                            + appId
-                            + ", appName: "
-                            + app.packageName
+                    ("    app_if: " + appId)
+                            + (", appName: " + app.getPackageName())
                             + (", transport: " + transportToString(app.getTransport()))
-                            + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
+                            + (app.mAttributionTag == null ? "" : ", tag: " + app.mAttributionTag));
             final List<ContextMap.Connection> serverConnections =
                     mServerMap.getConnectionByApp(appId);
             for (ContextMap.Connection connection : serverConnections) {
@@ -2950,71 +2870,6 @@ public class GattService extends ProfileService {
                             .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__CONNECTION_TIMEOUT;
             // For now all other errors are bucketed together.
             default -> BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__FAIL;
-        };
-    }
-
-    /*
-     * Print a readable version of the various status codes that can come from the stack or
-     * applications.
-     *
-     * Codes from applications _should_ be from the public constants in BluetoothGatt. These
-     * constants are a subset of the greater set of values available inside the stack at
-     * system/stack/gatt/gatt_api.h's GattStatus enum.
-     *
-     * Code from the stack can be any value from the GattStatus enum.
-     *
-     * This block should be kept in sync with system/stack/gatt/gatt_api.h
-     */
-    private static String gattStatusToString(int status) {
-        return switch (status) {
-            case BluetoothGatt.GATT_SUCCESS -> "GATT_SUCCESS (0x00)";
-            case 0x01 -> "GATT_INVALID_HANDLE (0x01)";
-            case BluetoothGatt.GATT_READ_NOT_PERMITTED -> "GATT_READ_NOT_PERMITTED (0x02)";
-            case BluetoothGatt.GATT_WRITE_NOT_PERMITTED -> "GATT_WRITE_NOT_PERMITTED (0x03)";
-            case 0x04 -> "GATT_INVALID_PDU (0x04)";
-            case BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION ->
-                    "GATT_INSUFFICIENT_AUTHENTICATION (0x05)";
-            case BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED -> "GATT_REQUEST_NOT_SUPPORTED (0x06)";
-            case BluetoothGatt.GATT_INVALID_OFFSET -> "GATT_INVALID_OFFSET (0x07)";
-            case BluetoothGatt.GATT_INSUFFICIENT_AUTHORIZATION ->
-                    "GATT_INSUFFICIENT_AUTHORIZATION (0x08)";
-            case 0x09 -> "GATT_PREPARE_Q_FULL (0x09)";
-            case 0x0a -> "GATT_NOT_FOUND (0x0a)";
-            case 0x0b -> "GATT_NOT_LONG (0x0b)";
-            case 0x0c -> "GATT_INSUF_KEY_SIZE (0x0c)";
-            case BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH ->
-                    "GATT_INVALID_ATTRIBUTE_LENGTH (0x0d)";
-            case 0x0e -> "GATT_ERR_UNLIKELY (0x0e)";
-            case BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION ->
-                    "GATT_INSUFFICIENT_ENCRYPTION (0x0f)";
-            case 0x10 -> "GATT_UNSUPPORT_GRP_TYPE (0x10)";
-            case 0x11 -> "GATT_INSUF_RESOURCE (0x11)";
-            case 0x12 -> "GATT_DATABASE_OUT_OF_SYNC (0x12)";
-            case 0x13 -> "GATT_VALUE_NOT_ALLOWED (0x13)";
-            case 0x87 -> "GATT_ILLEGAL_PARAMETER (0x87)";
-            case 0x80 -> "GATT_NO_RESOURCES (0x80)";
-            case 0x81 -> "GATT_INTERNAL_ERROR (0x81)";
-            case 0x82 -> "GATT_WRONG_STATE (0x82)";
-            case 0x83 -> "GATT_DB_FULL (0x83)";
-            case 0x84 -> "GATT_BUSY (0x84)";
-            case 0x85 -> "GATT_ERROR (0x85)";
-            case 0x86 -> "GATT_CMD_STARTED (0x86)";
-            case 0x88 -> "GATT_PENDING (0x88)";
-            case 0x89 -> "GATT_AUTH_FAIL (0x89)";
-            case 0x8b -> "GATT_INVALID_CFG (0x8b)";
-            case 0x8c -> "GATT_SERVICE_STARTED (0x8c)";
-            case 0x8d -> "GATT_ENCRYPED_NO_MITM (0x8d)";
-            case 0x8e -> "GATT_NOT_ENCRYPTED (0x8e)";
-            case BluetoothGatt.GATT_CONNECTION_CONGESTED -> "GATT_CONNECTION_CONGESTED (0x8f)";
-            case 0x90 -> "GATT_DUP_REG (0x90)";
-            case 0x91 -> "GATT_ALREADY_OPEN (0x91)";
-            case 0x92 -> "GATT_CANCEL (0x92)";
-            case BluetoothGatt.GATT_CONNECTION_TIMEOUT -> "GATT_CONNECTION_TIMEOUT (0x93)";
-            case 0xFD -> "GATT_CCC_CFG_ERR (0xFD)";
-            case 0xFE -> "GATT_PRC_IN_PROGRESS (0xFE)";
-            case 0xFF -> "GATT_OUT_OF_RANGE (0xFF)";
-            case BluetoothGatt.GATT_FAILURE -> "GATT_FAILURE (0x101)";
-            default -> "UNKNOWN STATUS (" + status + ")";
         };
     }
 

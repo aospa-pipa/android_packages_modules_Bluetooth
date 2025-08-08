@@ -21,6 +21,7 @@
 
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <memory>
@@ -40,7 +41,6 @@
 #include "os/system_properties.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/btm_sec_api.h"
-#include "types/ble_address_with_type.h"
 
 namespace bluetooth {
 namespace hci {
@@ -1725,9 +1725,12 @@ LeScanningManagerImpl::LeScanningManagerImpl(os::Handler* handler, hci::HciInter
                                              storage::StorageModule* storage_module) {
   pimpl_ = std::make_unique<impl>(handler, hci_layer, controller, le_address_manager,
                                   storage_module);
+  log::verbose("LeScanningManager module started !!");
 }
 
-LeScanningManagerImpl::~LeScanningManagerImpl() = default;
+LeScanningManagerImpl::~LeScanningManagerImpl() {
+  log::verbose("LeScanningManager module stopped !!");
+};
 
 void LeScanningManagerImpl::RegisterScanner(Uuid app_uuid) {
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::register_scanner, app_uuid);

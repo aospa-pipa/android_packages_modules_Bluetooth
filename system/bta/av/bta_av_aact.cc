@@ -28,6 +28,7 @@
 
 #include <android_bluetooth_sysprop.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/hci_role.h>
 #include <com_android_bluetooth_flags.h>
@@ -82,7 +83,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/acl/acl.h"
 #include "storage/config_keys.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 
@@ -1976,8 +1976,8 @@ void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
    * It would not hurt us, if the peer device wants us to be central
    * disable sniff mode unconditionally during streaming */
   tHCI_ROLE cur_role;
-  if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), &cur_role) ==
-       tBTM_STATUS::BTM_SUCCESS) &&
+  if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), BT_TRANSPORT_BR_EDR,
+                                                          &cur_role) == tBTM_STATUS::BTM_SUCCESS) &&
       (cur_role == HCI_ROLE_CENTRAL)) {
     BTM_block_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   } else {
@@ -2086,8 +2086,7 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   if (p_data && p_data->api_stop.suspend) {
     log::verbose("peer {} suspending: {}, sup:{}, suspending: {}", p_scb->PeerAddress(), start,
                  p_scb->suspend_sup, p_scb->suspending);
-    if ((start) && (p_scb->suspend_sup) && (!p_scb->suspend_local_sent) &&
-        ((!p_scb->suspending) || !com::android::bluetooth::flags::avdtp_prevent_double_suspend())) {
+    if ((start) && (p_scb->suspend_sup) && (!p_scb->suspend_local_sent) && !p_scb->suspending) {
       sus_evt = false;
       p_scb->suspend_local_sent = true;
       p_scb->suspending = true;
@@ -2489,7 +2488,8 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
        * Because it would not hurt source, if the peer device wants source to be
        * central.
        * do not disable sniff mode unconditionally during streaming */
-      if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), &cur_role) ==
+      if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(),
+                                                              BT_TRANSPORT_BR_EDR, &cur_role) ==
            tBTM_STATUS::BTM_SUCCESS) &&
           (cur_role == HCI_ROLE_CENTRAL)) {
          get_btm_client_interface().link_policy.BTM_block_role_switch_for(p_scb->PeerAddress());
@@ -2751,20 +2751,18 @@ void bta_av_rcfg_str_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->p_cos->update_mtu(p_scb->hndl, p_scb->PeerAddress(), p_scb->stream_mtu);
   }
 
-  if (com::android::bluetooth::flags::fix_avdt_rconfig_not_setting_l2cap()) {
-    /* Set the media channel as high priority */
-    if (!stack::l2cap::get_interface().L2CA_SetTxPriority(p_scb->l2c_cid,
-                                                          L2CAP_CHNL_PRIORITY_HIGH)) {
-      log::warn("Unable to set L2CAP Tx priority peer:{} cid:{}", p_scb->PeerAddress(),
-                p_scb->l2c_cid);
-    }
-
-    if (!stack::l2cap::get_interface().L2CA_SetChnlFlushability(p_scb->l2c_cid, true)) {
-      log::warn("Unable to set L2CAP flush peer:{} cid:{}", p_scb->PeerAddress(), p_scb->l2c_cid);
-    }
-
-    stack::l2cap::get_interface().L2CA_SetMediaStreamChannel(p_scb->l2c_cid, true);
+  /* Set the media channel as high priority */
+  if (!stack::l2cap::get_interface().L2CA_SetTxPriority(p_scb->l2c_cid,
+                                                        L2CAP_CHNL_PRIORITY_HIGH)) {
+    log::warn("Unable to set L2CAP Tx priority peer:{} cid:{}", p_scb->PeerAddress(),
+              p_scb->l2c_cid);
   }
+
+  if (!stack::l2cap::get_interface().L2CA_SetChnlFlushability(p_scb->l2c_cid, true)) {
+    log::warn("Unable to set L2CAP flush peer:{} cid:{}", p_scb->PeerAddress(), p_scb->l2c_cid);
+  }
+
+  stack::l2cap::get_interface().L2CA_SetMediaStreamChannel(p_scb->l2c_cid, true);
 
   /* rc listen */
   bta_av_st_rc_timer(p_scb, NULL);

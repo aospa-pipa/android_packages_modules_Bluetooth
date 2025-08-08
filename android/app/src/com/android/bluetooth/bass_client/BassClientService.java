@@ -28,6 +28,7 @@ import static com.android.bluetooth.flags.Flags.leaudioBroadcastAllowMonitoringO
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastApiGetLocalMetadata;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastFixAutonomousSourceAdding;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastRemoveSinkMetadataOnSwitchToLocal;
+import static com.android.bluetooth.flags.Flags.leaudioBroadcastSimplifySetBcastCode;
 
 import static java.util.Objects.requireNonNull;
 
@@ -98,6 +99,8 @@ import java.util.stream.Collectors;
 /** Broadcast Assistant Scan Service */
 public class BassClientService extends ConnectableProfile {
     static final String TAG = BassClientService.class.getSimpleName();
+
+    private static final int THREAD_JOIN_TIMEOUT_MS = 1000;
 
     private static final int MAX_ACTIVE_SYNCED_SOURCES_NUM = 4;
     private static final int MAX_BIS_DISCOVERY_TRIES_NUM = 5;
@@ -817,8 +820,19 @@ public class BassClientService extends ConnectableProfile {
             }
             mStateMachines.clear();
         }
-        mCallbackHandlerThread.quitSafely();
-        mStateMachinesThread.quitSafely();
+
+        try {
+            mStateMachinesThread.quitSafely();
+            mStateMachinesThread.join(THREAD_JOIN_TIMEOUT_MS);
+        } catch (InterruptedException e) {
+            // Do not rethrow as we are shutting down anyway
+        }
+        try {
+            mCallbackHandlerThread.quitSafely();
+            mCallbackHandlerThread.join(THREAD_JOIN_TIMEOUT_MS);
+        } catch (InterruptedException e) {
+            // Do not rethrow as we are shutting down anyway
+        }
 
         mHandler.removeCallbacksAndMessages(null);
         mTimeoutHandler.stopAll();
@@ -3311,12 +3325,16 @@ public class BassClientService extends ConnectableProfile {
                     mCallbacks.notifySourceAddFailed(
                             device,
                             sourceMetadata,
-                            BluetoothStatusCodes.ERROR_ALREADY_IN_TARGET_STATE);
+                            BluetoothStatusCodes.ERROR_ANOTHER_ACTIVE_REQUEST);
                 }
                 continue;
             }
             int sourceId = checkDuplicateSourceAdditionAndGetSourceId(device, sourceMetadata);
             if (sourceId != BassConstants.INVALID_SOURCE_ID) {
+                // Update metadata in case that it was changed
+                storeSinkMetadata(device, sourceMetadata.getBroadcastId(), sourceMetadata);
+
+                // sourceMetadata and pending operation were already checked a few lines above
                 updateSourceToResumeBroadcast(device, sourceId, sourceMetadata);
                 continue;
             }
@@ -3408,19 +3426,21 @@ public class BassClientService extends ConnectableProfile {
             message.obj = sourceMetadata;
             stateMachine.sendMessage(message);
 
-            byte[] code = sourceMetadata.getBroadcastCode();
-            if (code != null && code.length != 0) {
-                sEventLogger.logd(
-                        TAG,
-                        "Set Broadcast Code (Add Source context): "
-                                + ("device: " + device)
-                                + (", broadcastId: " + sourceMetadata.getBroadcastId())
-                                + (", broadcastName: " + sourceMetadata.getBroadcastName()));
+            if (!leaudioBroadcastSimplifySetBcastCode()) {
+                byte[] code = sourceMetadata.getBroadcastCode();
+                if (code != null && code.length != 0) {
+                    sEventLogger.logd(
+                            TAG,
+                            "Set Broadcast Code (Add Source context): "
+                                    + ("device: " + device)
+                                    + (", broadcastId: " + sourceMetadata.getBroadcastId())
+                                    + (", broadcastName: " + sourceMetadata.getBroadcastName()));
 
-                message = stateMachine.obtainMessage(BassClientStateMachine.SET_BCAST_CODE);
-                message.obj = sourceMetadata;
-                message.arg1 = BassClientStateMachine.ARGTYPE_METADATA;
-                stateMachine.sendMessage(message);
+                    message = stateMachine.obtainMessage(BassClientStateMachine.SET_BCAST_CODE);
+                    message.obj = sourceMetadata;
+                    message.arg1 = BassClientStateMachine.ARGTYPE_METADATA;
+                    stateMachine.sendMessage(message);
+                }
             }
         }
     }
@@ -3438,7 +3458,7 @@ public class BassClientService extends ConnectableProfile {
                 TAG,
                 "modifySource: "
                         + ("device: " + sink)
-                        + ("sourceId: " + sourceId)
+                        + (", sourceId: " + sourceId)
                         + (", updatedMetadata: " + updatedMetadata));
 
         Map<BluetoothDevice, Integer> devices = getGroupManagedDeviceSources(sink, sourceId).second;
@@ -3470,7 +3490,7 @@ public class BassClientService extends ConnectableProfile {
                                 + ", broadcastId: "
                                 + updatedMetadata.getBroadcastId());
                 mCallbacks.notifySourceModifyFailed(
-                        device, deviceSourceId, BluetoothStatusCodes.ERROR_ALREADY_IN_TARGET_STATE);
+                        device, deviceSourceId, BluetoothStatusCodes.ERROR_ANOTHER_ACTIVE_REQUEST);
                 continue;
             }
 
@@ -3481,7 +3501,7 @@ public class BassClientService extends ConnectableProfile {
                     TAG,
                     "Modify Broadcast Source: "
                             + ("device: " + device)
-                            + ("sourceId: " + deviceSourceId)
+                            + (", sourceId: " + deviceSourceId)
                             + (", updatedBroadcastId: " + updatedMetadata.getBroadcastId())
                             + (", updatedBroadcastName: " + updatedMetadata.getBroadcastName()));
 
@@ -3497,20 +3517,22 @@ public class BassClientService extends ConnectableProfile {
             message.obj = updatedMetadata;
             stateMachine.sendMessage(message);
 
-            byte[] code = updatedMetadata.getBroadcastCode();
-            if (code != null && code.length != 0) {
-                sEventLogger.logd(
-                        TAG,
-                        "Set Broadcast Code (Modify Source context): "
-                                + ("device: " + device)
-                                + ("sourceId: " + deviceSourceId)
-                                + (", updatedBroadcastId: " + updatedMetadata.getBroadcastId())
-                                + (", updatedBroadcastName: "
-                                        + updatedMetadata.getBroadcastName()));
-                message = stateMachine.obtainMessage(BassClientStateMachine.SET_BCAST_CODE);
-                message.obj = updatedMetadata;
-                message.arg1 = BassClientStateMachine.ARGTYPE_METADATA;
-                stateMachine.sendMessage(message);
+            if (!leaudioBroadcastSimplifySetBcastCode()) {
+                byte[] code = updatedMetadata.getBroadcastCode();
+                if (code != null && code.length != 0) {
+                    sEventLogger.logd(
+                            TAG,
+                            "Set Broadcast Code (Modify Source context): "
+                                    + ("device: " + device)
+                                    + ("sourceId: " + deviceSourceId)
+                                    + (", updatedBroadcastId: " + updatedMetadata.getBroadcastId())
+                                    + (", updatedBroadcastName: "
+                                            + updatedMetadata.getBroadcastName()));
+                    message = stateMachine.obtainMessage(BassClientStateMachine.SET_BCAST_CODE);
+                    message.obj = updatedMetadata;
+                    message.arg1 = BassClientStateMachine.ARGTYPE_METADATA;
+                    stateMachine.sendMessage(message);
+                }
             }
         }
     }

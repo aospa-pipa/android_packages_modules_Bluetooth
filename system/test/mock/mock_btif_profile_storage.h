@@ -32,14 +32,14 @@
 //       for this effort.  This compilation unit may compile as-is, or
 //       may need attention to prune from (or add to ) the inclusion set.
 #include <alloca.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 #include <stdlib.h>
 
 #include <vector>
 
 #include "bta/include/bta_hearing_aid_api.h"
-#include "types/ble_address_with_type.h"
-#include "types/raw_address.h"
 
 // Original usings
 using bluetooth::Uuid;

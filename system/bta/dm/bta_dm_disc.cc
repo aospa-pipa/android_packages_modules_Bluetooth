@@ -20,6 +20,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstddef>
@@ -48,7 +49,6 @@
 #include "stack/include/hidh_api.h"
 #include "stack/include/main_thread.h"
 #include "stack/include/sdp_status.h"
-#include "types/raw_address.h"
 
 #ifdef TARGET_FLOSS
 #include "stack/include/srvc_api.h"
