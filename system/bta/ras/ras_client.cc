@@ -17,6 +17,7 @@
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 
@@ -49,7 +50,6 @@
 #include "stack/include/gap_api.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
-#include "types/ble_address_with_type.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/security_device_record.h"
 #include "internal_include/stack_config.h"

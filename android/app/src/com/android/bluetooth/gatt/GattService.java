@@ -434,7 +434,7 @@ public class GattService extends ProfileService {
             mClientMap.remove(uuid, ContextMap.RemoveReason.REASON_REGISTER_FAILED);
         } else {
             app.id = clientIf;
-            app.linkToDeath(new ClientDeathRecipient(app.getCallback(), app.packageName));
+            app.linkToDeath(new ClientDeathRecipient(app.getCallback(), app.getPackageName()));
         }
         callbackToApp(() -> app.getCallback().onClientRegistered(status));
     }
@@ -476,7 +476,7 @@ public class GattService extends ProfileService {
                         BluetoothStatsLog
                                 .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__GATT_CONNECT_JAVA,
                         connectionStatusToState(status),
-                        app.uid);
+                        app.mUid);
     }
 
     void onDisconnectedFromNative(
@@ -537,7 +537,7 @@ public class GattService extends ProfileService {
                         BluetoothStatsLog
                                 .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__GATT_DISCONNECT_JAVA,
                         BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__SUCCESS,
-                        app.uid);
+                        app.mUid);
     }
 
     void onClientPhyUpdateFromNative(int connId, int txPhy, int rxPhy, int status) {
@@ -1639,7 +1639,7 @@ public class GattService extends ProfileService {
             return;
         }
         app.id = serverIf;
-        app.linkToDeath(new ServerDeathRecipient(app.getCallback(), app.packageName));
+        app.linkToDeath(new ServerDeathRecipient(app.getCallback(), app.getPackageName()));
         callbackToApp(() -> app.getCallback().onServerRegistered(status));
     }
 
@@ -1810,9 +1810,9 @@ public class GattService extends ProfileService {
         int applicationUid = -1;
         try {
             applicationUid =
-                    this.getPackageManager().getPackageUid(app.packageName, PackageInfoFlags.of(0));
+                    getPackageManager().getPackageUid(app.getPackageName(), PackageInfoFlags.of(0));
         } catch (NameNotFoundException e) {
-            Log.d(TAG, "onClientConnected() - uid_not_found=" + app.packageName);
+            Log.d(TAG, "onClientConnected() - uid_not_found=" + app.getPackageName());
         }
 
         // Lambdas require an effectively final variable. This should be removed when the
@@ -2776,12 +2776,10 @@ public class GattService extends ProfileService {
             final ContextMap.App app = mClientMap.getById(appId);
             println(
                     sb,
-                    "    app_if: "
-                            + appId
-                            + ", appName: "
-                            + app.packageName
+                    ("    app_if: " + appId)
+                            + (", appName: " + app.getPackageName())
                             + (", transport: " + transportToString(app.getTransport()))
-                            + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
+                            + (app.mAttributionTag == null ? "" : ", tag: " + app.mAttributionTag));
             final List<ContextMap.Connection> clientConnections =
                     mClientMap.getConnectionByApp(appId);
             for (ContextMap.Connection connection : clientConnections) {
@@ -2793,12 +2791,10 @@ public class GattService extends ProfileService {
             final ContextMap.App app = mServerMap.getById(appId);
             println(
                     sb,
-                    "    app_if: "
-                            + appId
-                            + ", appName: "
-                            + app.packageName
+                    ("    app_if: " + appId)
+                            + (", appName: " + app.getPackageName())
                             + (", transport: " + transportToString(app.getTransport()))
-                            + (app.attributionTag == null ? "" : ", tag: " + app.attributionTag));
+                            + (app.mAttributionTag == null ? "" : ", tag: " + app.mAttributionTag));
             final List<ContextMap.Connection> serverConnections =
                     mServerMap.getConnectionByApp(appId);
             for (ContextMap.Connection connection : serverConnections) {
