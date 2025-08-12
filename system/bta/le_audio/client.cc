@@ -1031,8 +1031,8 @@ public:
     }
 
     bluetooth::le_audio::send_vs_cmd(LTV_TYPE_BAP_TIMEOUT_INDICATION, 0,
-                     std::vector<uint8_t>(leAudioDevice->address_.address,
-                     leAudioDevice->address_.address+6));
+                   std::vector<uint8_t>(leAudioDevice->address_.address.data(),
+                                        leAudioDevice->address_.address.data() + 6));
 
     /* If Timeout happens on stream close and stream is closing just for the
      * purpose of device disconnection, do not bother with recovery mode
@@ -1960,11 +1960,11 @@ public:
   }
 
   bool isOutputPreferenceLeAudio(const RawAddress& address) {
-    log::info("address: {}, active_group_id_: {}", address.ToStringForLogging(), active_group_id_);
+    log::info("address: {}, active_group_id_: {}", address, active_group_id_);
     std::vector<RawAddress> active_leaudio_devices = GetGroupDevices(active_group_id_);
     if (std::find(active_leaudio_devices.begin(), active_leaudio_devices.end(), address) ==
         active_leaudio_devices.end()) {
-      log::info("Device {} is not active for LE Audio", address.ToStringForLogging());
+      log::info("Device {} is not active for LE Audio", address);
       return false;
     }
 
@@ -1975,11 +1975,11 @@ public:
   }
 
   bool isDuplexPreferenceLeAudio(const RawAddress& address) {
-    log::info("address: {}, active_group_id_: {}", address.ToStringForLogging(), active_group_id_);
+    log::info("address: {}, active_group_id_: {}", address, active_group_id_);
     std::vector<RawAddress> active_leaudio_devices = GetGroupDevices(active_group_id_);
     if (std::find(active_leaudio_devices.begin(), active_leaudio_devices.end(), address) ==
         active_leaudio_devices.end()) {
-      log::info("Device {} is not active for LE Audio", address.ToStringForLogging());
+      log::info("Device {} is not active for LE Audio", address);
       return false;
     }
 

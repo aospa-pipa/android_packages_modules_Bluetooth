@@ -778,7 +778,7 @@ AudioConfiguration stream_config_to_hal_audio_config(
       LeAudioConfiguration::StreamMap::BluetoothDeviceAddress aidl_device_address;
       // The address should be set only if stream is active
       if (info.is_stream_active) {
-        aidl_device_address.deviceAddress = info.address.ToArray();
+        aidl_device_address.deviceAddress = info.address.address;
         aidl_device_address.deviceAddressType =
                 (info.address_type == BLE_ADDR_PUBLIC || info.address_type == BLE_ADDR_PUBLIC_ID)
                         ? LeAudioConfiguration::StreamMap::BluetoothDeviceAddress::DeviceAddressType::
@@ -808,6 +808,7 @@ AudioConfiguration stream_config_to_hal_audio_config(
       auto id = offload_config.stream_map.at(0).codec_config.id;
       log::info("Non LC3 Codec config is used. Format: {}, Vendor: {}, Company: {}", id.coding_format,
                 id.vendor_codec_id, id.vendor_company_id);
+
     }
     log::debug( ": coding_format = {}, vendor_codec_id = {}",
                 offload_config.codec_id.coding_format,
