@@ -152,9 +152,13 @@ public final class BluetoothLeAdvertiser {
             AdvertiseData scanResponse,
             final AdvertiseCallback callback) {
         synchronized (mLegacyAdvertisers) {
-            BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter);
             if (callback == null) {
                 throw new IllegalArgumentException("callback cannot be null");
+            }
+            if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
+                Log.w(TAG, "BLE is not available");
+                postStartFailure(callback, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
+                return;
             }
             boolean isConnectable = settings.isConnectable();
             boolean isDiscoverable = settings.isDiscoverable();
@@ -559,9 +563,14 @@ public final class BluetoothLeAdvertiser {
             @Nullable BluetoothGattServer gattServer,
             @Nullable AdvertisingSetCallback callback,
             @SuppressLint("ListenerLast") @NonNull Handler handler) {
-        BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter);
         if (callback == null) {
             throw new IllegalArgumentException("callback cannot be null");
+        }
+        if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
+            Log.w(TAG, "BLE is not available");
+            postStartSetFailure(
+                    handler, callback, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
+            return;
         }
 
         boolean isConnectable = parameters.isConnectable();

@@ -1451,13 +1451,13 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
           !bta_ag_is_call_present(&p_scb->peer_addr)) {
         log::warn(
             "NOT opening SCO for EVT {} as {} does not have call, call setup",
-            "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr.ToStringForLogging());
+            "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
       if (!bta_ag_sco_is_active_device(p_scb->peer_addr)) {
         log::warn("NOT opening SCO for EVT {} as {} is not the active HFP device",
-                  "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr.ToStringForLogging());
+                  "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
@@ -1471,7 +1471,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         log::warn(
                 "Sending error for AT+BCC received when call is in ringing state"
                 " and in-band ringtone is disabled for {} device",
-                p_scb->peer_addr.ToStringForLogging());
+                p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
@@ -2117,15 +2117,13 @@ bool bta_ag_is_sco_open_allowed([[maybe_unused]] tBTA_AG_SCB* p_scb,
             LeAudioClient::IsLeAudioClientRunning() ? LeAudioClient::Get()->IsInCall() : false;
 
     log::info("Is Duplex preferred profile le audio for device {} is {} ",
-              p_scb->peer_addr.ToStringForLogging().c_str(), is_duplex_pref_leaudio);
+              p_scb->peer_addr, is_duplex_pref_leaudio);
     log::info("Is call in progress {}", is_in_call);
     if (is_duplex_pref_leaudio && is_in_call) {
-      log::info("NOT opening SCO for EVT {} on dual mode device {}", event.c_str(),
-                p_scb->peer_addr.ToStringForLogging().c_str());
+      log::info("NOT opening SCO for EVT {} on dual mode device {}", event, p_scb->peer_addr);
       return false;
     } else {
-      log::info("Opening SCO for EVT {} on dual mode device {}", event,
-                p_scb->peer_addr.ToStringForLogging());
+      log::info("Opening SCO for EVT {} on dual mode device {}", event, p_scb->peer_addr);
     }
   }
 #endif

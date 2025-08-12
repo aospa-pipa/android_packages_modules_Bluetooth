@@ -121,8 +121,12 @@ public:
   virtual LeAdvertisingInterface* GetLeAdvertisingInterface(
           common::ContextualCallback<void(LeMetaEventView)> event_handler);
 
+  virtual void ReleaseLeAdvertisingInterface();
+
   virtual LeScanningInterface* GetLeScanningInterface(
           common::ContextualCallback<void(LeMetaEventView)> event_handler);
+
+  virtual void ReleaseLeScanningInterface();
 
   virtual void RegisterForScoConnectionRequests(
           common::ContextualCallback<void(Address, ClassOfDevice, ConnectionRequestLinkType)>
@@ -133,6 +137,8 @@ public:
 
   virtual DistanceMeasurementInterface* GetDistanceMeasurementInterface(
           common::ContextualCallback<void(LeMetaEventView)> event_handler);
+
+  virtual void ReleaseDistanceMeasurementInterface();
 
   std::unique_ptr<InquiryInterface> GetInquiryInterface(
           common::ContextualCallback<void(EventView)> event_handler) override;
@@ -180,6 +186,7 @@ protected:
   };
 
   void StartWithNoHalDependencies(os::Handler* handler);
+  void StopWithNoHalDependencies();
 
   void LifeCycleStop();
 

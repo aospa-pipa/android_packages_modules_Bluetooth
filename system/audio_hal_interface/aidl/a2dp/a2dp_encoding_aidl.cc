@@ -683,7 +683,7 @@ provider::get_a2dp_configuration(
 
   // Convert the user preferences into a configuration hint.
   A2dpConfigurationHint hint;
-  hint.bdAddr = peer_address.ToArray();
+  hint.bdAddr = peer_address.address;
   auto& codecParameters = hint.codecParameters.emplace();
   switch (user_preferences.audio_context) {
     case BTAV_A2DP_CODEC_AUDIO_CONTEXT_MEDIA:
