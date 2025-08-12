@@ -370,7 +370,6 @@ namespace {
 
 using namespace bluetooth;
 
-constexpr int kAutonomousTransitionTimeoutMs = 5000;
 constexpr int kNumberOfCisRetries = 2;
 
 class LeAudioGroupStateMachineImpl;

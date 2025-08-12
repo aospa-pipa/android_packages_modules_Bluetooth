@@ -7963,8 +7963,6 @@ private:
   int active_group_id_;
   LeAudioContextType pre_configuration_context_type_;
   LeAudioContextType configuration_context_type_;
-  static constexpr char kAllowMultipleContextsInMetadata[] =
-          "persist.bluetooth.leaudio.allow.multiple.contexts";
   BidirectionalPair<AudioContexts> in_call_metadata_context_types_;
   BidirectionalPair<AudioContexts> local_metadata_context_types_;
   bool is_src_metadata_updated_before_resume_;
