@@ -858,7 +858,7 @@ BidirectionalPair<struct ase*> LeAudioDevice::GetAsesByCisId(uint8_t cis_id) {
 
 uint8_t LeAudioDevice::GetActiveEnabledDirections(void) {
   uint8_t enabled_directions = 0;
-  for (const auto ase : ases_) {
+  for (const auto& ase : ases_) {
     if (!ase.active) {
       continue;
     }
@@ -873,7 +873,7 @@ uint8_t LeAudioDevice::GetActiveEnabledDirections(void) {
 
 uint8_t LeAudioDevice::GetActiveQoSConfiguredDirections(void) {
   uint8_t qos_configured_directions = 0;
-  for (const auto ase : ases_) {
+  for (const auto& ase : ases_) {
     if (!ase.active) {
       continue;
     }
@@ -1108,7 +1108,7 @@ bool LeAudioDevice::HaveAllActiveAsesCisEst(void) const {
 
 bool LeAudioDevice::HaveAnyCisConnected(void) {
   /* Pending and Disconnecting is considered as connected in this function */
-  for (auto const ase : ases_) {
+  for (auto const& ase : ases_) {
     if (ase.cis_state == CisState::CONNECTED || ase.cis_state == CisState::CONNECTING ||
         ase.cis_state == CisState::DISCONNECTING) {
       return true;
@@ -1129,10 +1129,10 @@ uint8_t LeAudioDevice::GetSupportedAudioChannelCounts(uint8_t direction) const {
     /* Get PAC records from tuple as second element from tuple */
     auto& pac_recs = std::get<1>(pac_tuple);
 
-    for (const auto pac : pac_recs) {
-      if (!utils::IsCodecUsingLtvFormat(pac.codec_id) &&
-          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe &&
-          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX) {
+    for (const auto& pac : pac_recs) { // DEBUG TEST!!!
+      if (!utils::IsCodecUsingLtvFormat(pac.codec_id) && // DEBUG TEST!!!
+          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe && // DEBUG TEST!!!
+          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX) { // DEBUG TEST!!!
         log::warn(" {} Unknown codec PAC record for codec: {}", address_,
                   bluetooth::common::ToString(pac.codec_id));
         continue;
