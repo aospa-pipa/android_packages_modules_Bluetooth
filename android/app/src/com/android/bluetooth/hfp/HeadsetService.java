@@ -1786,6 +1786,14 @@ public class HeadsetService extends ConnectableProfile {
                 Log.e(TAG, "dialOutgoingCall failed to set active device to " + fromDevice);
                 return false;
             }
+
+            // The phone state still in idle, cache LE-A active device for fallback SHO.
+            LeAudioService leAudioService = mFactory.getLeAudioService();
+            if (leAudioService != null && !leAudioService.getConnectedDevices().isEmpty()) {
+                Log.i(TAG, "Make sure no le audio device active for HFP dialOutgoingCall.");
+                leAudioService.setInactiveForHfpHandover(mActiveDevice);
+            }
+
             Intent intent =
                     new Intent(
                             Intent.ACTION_CALL_PRIVILEGED,
