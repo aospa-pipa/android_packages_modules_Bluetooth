@@ -47,7 +47,6 @@ import android.annotation.Nullable;
 import android.app.BroadcastOptions;
 import android.bluetooth.IAdapter;
 import android.bluetooth.IBluetoothCallback;
-import android.bluetooth.IBluetoothManager;
 import android.bluetooth.IBluetoothManagerCallback;
 import android.bluetooth.State;
 import android.content.BroadcastReceiver;
@@ -161,7 +160,6 @@ class BluetoothManagerService {
     private final List<Long> mCrashTimestamps = new ArrayList<>();
     private final RemoteCallbackList<IBluetoothManagerCallback> mCallbacks =
             new RemoteCallbackList<>();
-    private final BluetoothServiceBinder mBinder;
     @VisibleForTesting final BluetoothHandler mHandler;
     private final ContentResolver mContentResolver;
     private final Context mContext;
@@ -609,7 +607,6 @@ class BluetoothManagerService {
                         mContext.getSystemService(UserManager.class),
                         "UserManager system service cannot be null");
 
-        mBinder = new BluetoothServiceBinder(mLooper, mApi, mContext, mUserManager);
         mHandler = new BluetoothHandler(mLooper);
         mBleAppManager = new BleAppManager(mLooper, this::bleOnToOffIfNeeded);
 
@@ -840,12 +837,6 @@ class BluetoothManagerService {
         }
 
         @Override
-        public Context getUserContext() {
-            // Allow getter from concurrent thread
-            return BluetoothManagerService.this.getUserContext();
-        }
-
-        @Override
         public void handleOnBootPhase(UserHandle userHandle) {
             enforceCorrectThread();
             BluetoothManagerService.this.handleOnBootPhase(userHandle);
@@ -907,10 +898,6 @@ class BluetoothManagerService {
             Log.i(TAG, "onBleScanDisabled: Bluetooth is not in BLE_ON, staying on");
         }
         return Unit.INSTANCE;
-    }
-
-    IBluetoothManager.Stub getBinder() {
-        return mBinder;
     }
 
     /** Returns true if satellite mode is turned on. */
@@ -1080,6 +1067,9 @@ class BluetoothManagerService {
     }
 
     boolean isBleScanAvailable() {
+        if (mUser == null) {
+            return false;
+        }
         if (AirplaneModeListener.isOn() && !mEnable) {
             return false;
         }
@@ -1120,6 +1110,11 @@ class BluetoothManagerService {
 
         if (isSatelliteModeOn()) {
             Log.d(TAG, "enableBle: not enabling - Satellite mode is on.");
+            return false;
+        }
+
+        if (mUser == null) {
+            Log.e(TAG, "enableBle: No user found to enable for");
             return false;
         }
 
@@ -1262,6 +1257,11 @@ class BluetoothManagerService {
             return false;
         }
 
+        if (mUser == null) {
+            Log.e(TAG, "enableNoAutoConnect: No user found to enable for");
+            return false;
+        }
+
         if (mNextUser != null) {
             Log.d(TAG, "enableNoAutoConnect: user switch in progress");
             return false;
@@ -1283,6 +1283,11 @@ class BluetoothManagerService {
 
         if (isSatelliteModeOn()) {
             Log.d(TAG, "enable: not enabling - satellite mode is on.");
+            return false;
+        }
+
+        if (mUser == null) {
+            Log.e(TAG, "enable: No user found to enable for");
             return false;
         }
 
@@ -2232,7 +2237,7 @@ class BluetoothManagerService {
                         .putExtra(EXTRA_PREVIOUS_STATE, prevState)
                         .putExtra(EXTRA_STATE, newState)
                         .addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-        if (!action.equals(IBluetoothManager.ACTION_STATE_CHANGED)) {
+        if (!action.equals(ACTION_STATE_CHANGED)) {
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         }
         if (Flags.onlyBroadcastToLocalUser()) {
