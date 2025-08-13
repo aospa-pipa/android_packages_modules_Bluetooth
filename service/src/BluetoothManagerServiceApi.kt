@@ -16,7 +16,6 @@
 package com.android.server.bluetooth
 
 import android.bluetooth.IBluetoothManagerCallback
-import android.content.Context
 import android.os.IBinder
 import android.os.UserHandle
 import java.io.FileDescriptor
@@ -75,11 +74,7 @@ interface BluetoothManagerServiceApi {
 
     fun onBleScanDisabled()
 
-    fun getUserContext(): Context?
-
     fun handleOnBootPhase(userHandle: UserHandle)
 
     fun onUserSwitching(userHandle: UserHandle)
-
-    fun handleOnUnlockUser(userHandle: UserHandle)
 }

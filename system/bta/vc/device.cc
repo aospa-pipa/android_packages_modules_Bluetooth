@@ -427,7 +427,7 @@ void VolumeControlDevice::EnqueueRemainingRequests(tGATT_IF /*gatt_if*/,
   const auto is_eatt_supported = gatt_profile_get_eatt_support_by_conn_id(connection_id);
 
   /* List of handles to the attributes having known and fixed-size values to read using the
-   * ATT_READ_MULTIPLE_REQ. The `.second` component contains 1 octet for the length + the actual
+   * ATT_READ_MULTIPLE_REQ. The `.second` component contains 2 octets for the length + the actual
    * attribute value length, exactly as in the received HCI packet for ATT_READ_MULTIPLE_RSP.
    * We use this to make sure the request response will fit the current MTU size.
    */
@@ -439,16 +439,16 @@ void VolumeControlDevice::EnqueueRemainingRequests(tGATT_IF /*gatt_if*/,
   std::vector<uint16_t> handles_to_read_variable_length;
 
   for (auto const& offset : audio_offsets.volume_offsets) {
-    handles_to_read.push_back(std::make_pair(offset.state_handle, 4));
-    handles_to_read.push_back(std::make_pair(offset.audio_location_handle, 5));
+    handles_to_read.push_back(std::make_pair(offset.state_handle, 5));
+    handles_to_read.push_back(std::make_pair(offset.audio_location_handle, 6));
     handles_to_read_variable_length.push_back(offset.audio_descr_handle);
   }
 
   for (auto const& input : audio_inputs.volume_audio_inputs) {
-    handles_to_read.push_back(std::make_pair(input.state_handle, 5));
-    handles_to_read.push_back(std::make_pair(input.gain_setting_handle, 4));
-    handles_to_read.push_back(std::make_pair(input.type_handle, 2));
-    handles_to_read.push_back(std::make_pair(input.status_handle, 2));
+    handles_to_read.push_back(std::make_pair(input.state_handle, 6));
+    handles_to_read.push_back(std::make_pair(input.gain_setting_handle, 5));
+    handles_to_read.push_back(std::make_pair(input.type_handle, 3));
+    handles_to_read.push_back(std::make_pair(input.status_handle, 3));
     handles_to_read_variable_length.push_back(input.description_handle);
   }
 
@@ -473,9 +473,16 @@ void VolumeControlDevice::EnqueueRemainingRequests(tGATT_IF /*gatt_if*/,
         ++pair_it;
       }
 
-      log::debug{"{}, calling multi-read with {} attributes, {} left", address, multi_read.num_attr,
-                 std::distance(pair_it, handles_to_read.end())};
-      BtaGattQueue::ReadMultiCharacteristic(connection_id, multi_read, chrc_multi_read_cb, nullptr);
+      if (multi_read.num_attr == 1) {
+        log::debug("{}, calling read with last, single attribute", address);
+        BtaGattQueue::ReadCharacteristic(connection_id, multi_read.handles[0], chrc_read_cb,
+                                         nullptr);
+      } else {
+        log::debug{"{}, calling multi-read with {} attributes, {} left", address,
+                   multi_read.num_attr, std::distance(pair_it, handles_to_read.end())};
+        BtaGattQueue::ReadMultiCharacteristic(connection_id, multi_read, chrc_multi_read_cb,
+                                              nullptr);
+      }
     }
   } else {
     for (auto const& [handle, _] : handles_to_read) {
