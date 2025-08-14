@@ -889,7 +889,6 @@ void avdt_scb_snd_delay_rpt_req(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
  *
  ******************************************************************************/
 void avdt_scb_hdl_delay_rpt_cmd(AvdtpScb* p_scb, tAVDT_SCB_EVT* p_data) {
-  alarm_cancel(p_scb->init_delay_report_timer);
   (*p_scb->stream_config.p_avdt_ctrl_cback)(
           avdt_scb_to_hdl(p_scb), p_scb->p_ccb ? p_scb->p_ccb->peer_addr : RawAddress::kEmpty,
           AVDT_DELAY_REPORT_EVT, (tAVDT_CTRL*)&p_data->msg.hdr, p_scb->stream_config.scb_index);
