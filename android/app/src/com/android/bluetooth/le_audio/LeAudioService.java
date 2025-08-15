@@ -6038,6 +6038,16 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
 
+        if (isBroadcastActive()
+                && (mUnicastGroupIdDeactivatedForBroadcastTransition
+                == LE_AUDIO_GROUP_ID_INVALID)) {
+            BluetoothDevice leadDevice = getConnectedGroupLeadDevice(groupId);
+            Log.d(TAG, "Unicast keep active while broadcast enabled, "
+                    + "set active unicast group as fallback group, groupId: " + groupId);
+            setActiveGroupWithDevice(leadDevice, false);
+            return;
+        }
+
         mGroupReadLock.lock();
         try {
             LeAudioGroupDescriptor oldFallbackGroupDescriptor =
@@ -6081,6 +6091,16 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         Log.v(TAG, "getBroadcastToUnicastFallbackGroup()");
+
+        if (isBroadcastActive()
+                && (mUnicastGroupIdDeactivatedForBroadcastTransition
+                == LE_AUDIO_GROUP_ID_INVALID)) {
+            int currentlyActiveGroupId = getActiveGroupId();
+            Log.d(TAG, "Unicast keep active while broadcast enabled, "
+                    + "return current active unicast group as fallback group, groupId: "
+                    + currentlyActiveGroupId);
+            return currentlyActiveGroupId;
+        }
 
         return mUnicastGroupIdDeactivatedForBroadcastTransition;
     }
