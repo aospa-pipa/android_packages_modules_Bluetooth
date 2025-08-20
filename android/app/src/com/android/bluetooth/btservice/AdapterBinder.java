@@ -64,6 +64,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void killBluetoothProcess() {
+        Log.v(TAG, "killBluetoothProcess");
         mService.enforceCallingPermission(BLUETOOTH_PRIVILEGED, null);
 
         final Runnable killAction =
@@ -101,6 +102,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void offToBleOn(boolean quietMode, String hciInstanceName) {
+        Log.v(TAG, "offToBleOn(" + quietMode + ", " + hciInstanceName + " )");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "offToBleOn")) {
             return;
@@ -110,6 +112,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void onToBleOn() {
+        Log.v(TAG, "onToBleOn");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "onToBleOn")) {
             return;
@@ -119,6 +122,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void registerCallback(IBluetoothCallback callback) {
+        Log.v(TAG, "registerCallback(" + callback + ")");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null
                 || !callerIsSystemOrActiveOrManagedUser(service, TAG, "registerCallback")) {
@@ -129,6 +133,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void unregisterCallback(IBluetoothCallback callback) {
+        Log.v(TAG, "unregisterCallback(" + callback + ")");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null
                 || !callerIsSystemOrActiveOrManagedUser(service, TAG, "unregisterCallback")) {
@@ -139,6 +144,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void bleOnToOn() {
+        Log.v(TAG, "bleOnToOn()");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOn")) {
             return;
@@ -148,6 +154,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void bleOnToOff() {
+        Log.v(TAG, "bleOnToOff()");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "bleOnToOff")) {
             return;
@@ -156,16 +163,8 @@ class AdapterBinder extends IAdapter.Stub {
     }
 
     @Override
-    public boolean isMediaProfileConnected() {
-        AdapterService service = getServiceAndEnforcePrivileged();
-        if (service == null) {
-            return false;
-        }
-        return service.isMediaProfileConnected();
-    }
-
-    @Override
     public void unregAllGattClient() {
+        Log.v(TAG, "unregAllGattClient()");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null) {
             return;
@@ -175,6 +174,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void dump(FileDescriptor fd, String[] args) {
+        Log.v(TAG, "dump()");
         PrintWriter writer = new PrintWriter(new FileOutputStream(fd));
         AdapterService service = getService();
         if (service == null) {

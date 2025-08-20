@@ -29,13 +29,13 @@
 
 #include <cstdint>
 
+#include "bta/ag/bta_ag_int.h"
 #include "btif/include/btif_storage.h"
 #include "device/include/interop.h"
 #include "device/include/interop_config.h"
 #include "internal_include/bt_target.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_sco_hfp_hal.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"

@@ -38,7 +38,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothLeAudio;
@@ -62,15 +61,15 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
-import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.Context;
+
 import android.content.Intent;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.AudioRecordingConfiguration;
 import android.media.BluetoothProfileConnectionInfo;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -82,7 +81,6 @@ import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.os.SystemClock;
 import android.os.UserHandle;
-import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 import android.util.Pair;
@@ -138,7 +136,7 @@ public class LeAudioService extends ConnectableProfile {
     private static final int SM_THREAD_JOIN_TIMEOUT_MS = 1000;
 
     /* 5 seconds timeout for Broadcast streaming state transition */
-    private static final int CREATE_BROADCAST_TIMEOUT_MS = 5000;
+    @VisibleForTesting static final int CREATE_BROADCAST_TIMEOUT_MS = 5000;
 
     @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static LeAudioService sLeAudioService;
@@ -164,15 +162,10 @@ public class LeAudioService extends ConnectableProfile {
     /** Filter for Targeted Announcements */
     static final byte[] CAP_TARGETED_ANNOUNCEMENT_PAYLOAD = new byte[] {0x01};
 
-    /** This is used by application read-only for checking the fallback active group id. */
-    public static final String BLUETOOTH_LE_BROADCAST_FALLBACK_ACTIVE_GROUP_ID =
-            "bluetooth_le_broadcast_fallback_active_group_id";
-
     /** All codecs were stored in bluetooth_leaudio_codec_map*/
     private static final String LEAUDIO_CODEC_MAP = "bluetooth_leaudio_codec_map";
 
     HashMap<BluetoothDevice, Boolean> mLeAudioCodecMap = new HashMap();
-
     /**
      * Per PBP 1.0 4.3. High Quality Public Broadcast Audio, Broadcast HIGH quality audio configs
      * are with sampling frequency 48khz
@@ -263,7 +256,7 @@ public class LeAudioService extends ConnectableProfile {
     BluetoothLeScanner mAudioServersScanner;
 
     public LeAudioService(AdapterService adapterService) {
-        this(adapterService, null, null);
+        this(adapterService, null, null, null);
     }
 
     private SharedPreferences getLeAudioCodecMap() {
@@ -273,6 +266,7 @@ public class LeAudioService extends ConnectableProfile {
     @VisibleForTesting
     LeAudioService(
             AdapterService adapterService,
+            Looper looper,
             LeAudioNativeInterface nativeInterface,
             LeAudioBroadcasterNativeInterface leAudioBroadcasterNativeInterface) {
         super(BluetoothProfile.LE_AUDIO, requireNonNull(adapterService));
@@ -280,6 +274,12 @@ public class LeAudioService extends ConnectableProfile {
                 requireNonNullElseGet(
                         nativeInterface, () -> new LeAudioNativeInterface(adapterService, this));
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
+
+        if (looper == null) {
+            mHandler = new Handler(Looper.getMainLooper());
+        } else {
+            mHandler = new Handler(looper);
+        }
 
         // Start handler thread for state machines
         mStateMachinesThread = new HandlerThread("LeAudioService.StateMachines");
@@ -723,7 +723,7 @@ public class LeAudioService extends ConnectableProfile {
     private final Map<Integer, LeAudioBroadcastSessionStats> mBroadcastSessionStats =
             new LinkedHashMap<>();
 
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final Handler mHandler;
     private final AudioManagerAudioDeviceCallback mAudioManagerAudioDeviceCallback =
             new AudioManagerAudioDeviceCallback();
     private final AudioModeChangeListener mAudioModeChangeListener = new AudioModeChangeListener();
@@ -1452,7 +1452,7 @@ public class LeAudioService extends ConnectableProfile {
      *
      * @param broadcastId broadcast instance identifier
      */
-    public void startBroadcast(int broadcastId) {
+    private void startBroadcast(int broadcastId) {
         if (!mLeAudioBroadcasterNativeInterface.isPresent()) {
             Log.w(TAG, "Native interface not available.");
             return;
@@ -1515,7 +1515,7 @@ public class LeAudioService extends ConnectableProfile {
      *
      * @param broadcastId broadcast instance identifier
      */
-    public void pauseBroadcast(Integer broadcastId) {
+    private void pauseBroadcast(Integer broadcastId) {
         if (!mLeAudioBroadcasterNativeInterface.isPresent()) {
             Log.w(TAG, "Native interface not available.");
             return;
@@ -1586,7 +1586,7 @@ public class LeAudioService extends ConnectableProfile {
      *
      * @param broadcastId broadcast instance identifier
      */
-    public void destroyBroadcast(int broadcastId) {
+    private void destroyBroadcast(int broadcastId) {
         if (!mLeAudioBroadcasterNativeInterface.isPresent()) {
             Log.w(TAG, "Native interface not available.");
             return;
@@ -1604,6 +1604,10 @@ public class LeAudioService extends ConnectableProfile {
 
         Log.d(TAG, "destroyBroadcast");
 
+        if (mBroadcastIdDeactivatedForUnicastTransition.isPresent()
+                && mBroadcastIdDeactivatedForUnicastTransition.get().equals(broadcastId)) {
+            mBroadcastIdDeactivatedForUnicastTransition = Optional.empty();
+        }
         mLeAudioBroadcasterNativeInterface.get().destroyBroadcast(broadcastId);
     }
 
@@ -2315,10 +2319,7 @@ public class LeAudioService extends ConnectableProfile {
                             .build();
 
             final var scanController = mAdapterService.getBluetoothScanController();
-            scanController.doOnScanThread(
-                    () -> {
-                        scanController.startScanInternal(scannerId, settings, List.of(filter));
-                    });
+            scanController.startScanInternal(scannerId, settings, List.of(filter));
         }
 
         @Override
@@ -3235,7 +3236,7 @@ public class LeAudioService extends ConnectableProfile {
     }
 
     private void handleSinkStreamStatusChange(int status) {
-        Log.d(TAG, "status: " + status);
+        Log.d(TAG, "handleSinkStreamStatusChange status: " + status);
 
         /* Streaming request of Unicast Sink stream should result in pausing broadcast and
          * activating Unicast group.
@@ -4232,8 +4233,8 @@ public class LeAudioService extends ConnectableProfile {
                  */
                 if ((mUnicastGroupIdDeactivatedForBroadcastTransition != LE_AUDIO_GROUP_ID_INVALID)
                         && mCreateBroadcastQueue.isEmpty()
-                        && (!Objects.equals(device, mActiveBroadcastAudioDevice))) {
-                    updateBroadcastActiveDevice(null, mActiveBroadcastAudioDevice, false);
+                        && (!Objects.equals(null, mActiveBroadcastAudioDevice))) {
+                    transitionFromBroadcastToUnicast();
                 }
 
                 mHandler.post(() -> notifyBroadcastStartFailed(BluetoothStatusCodes.ERROR_UNKNOWN));
@@ -5044,7 +5045,11 @@ public class LeAudioService extends ConnectableProfile {
 
         final var hapClient = getHapClientService();
         if (hapClient.isPresent() && Utils.arrayContains(featureUuids, BluetoothUuid.HAS)) {
-            hapClient.get().setConnectionPolicy(device, connectionPolicy);
+            if (Flags.hapOnMainLooper()) {
+                hapClient.get().post(h -> h.setConnectionPolicy(device, connectionPolicy));
+            } else {
+                hapClient.get().setConnectionPolicy(device, connectionPolicy);
+            }
         }
 
         final var csipSetCoordinator = getCsipSetCoordinatorService();

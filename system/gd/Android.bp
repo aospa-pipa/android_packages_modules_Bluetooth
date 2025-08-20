@@ -587,7 +587,10 @@ cc_test {
 
 cc_defaults {
     name: "gd_fuzz_defaults",
-    defaults: ["gd_defaults"],
+    defaults: [
+        "bluetooth_fuzz_config",
+        "gd_defaults",
+    ],
     srcs: [
         ":TestMockMainShimEntry",
         "fuzz/helpers.cc",
@@ -653,10 +656,6 @@ cc_fuzz {
         "fuzz_test.cc",
         "hci/hci_packets_fuzz_test.cc",
     ],
-    fuzz_config: {
-        cc: ["android-bluetooth-security@google.com"],
-        componentid: 27441,
-    },
 }
 
 cc_fuzz {
@@ -685,10 +684,6 @@ cc_fuzz {
         "packages/modules/Bluetooth/system/include",
         "packages/modules/Bluetooth/system/stack/include",
     ],
-    fuzz_config: {
-        cc: ["android-bluetooth-security@google.com"],
-        componentid: 27441,
-    },
 }
 
 cc_benchmark {
