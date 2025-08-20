@@ -158,6 +158,7 @@ using bluetooth::le_audio::types::LeAudioContextType;
 using bluetooth::le_audio::types::PublishedAudioCapabilities;
 using bluetooth::le_audio::utils::GetAudioContextsFromSinkMetadata;
 using bluetooth::le_audio::utils::GetAudioContextsFromSourceMetadata;
+using bluetooth::le_audio::utils::StreamSpeedTracker;
 
 using namespace bluetooth;
 
@@ -342,126 +343,6 @@ void UpdateEncoderParams(uint8_t cig_id, uint8_t cis_id,
     PrepareSetEncoderLimitsPayload(&encoder_params, &length, param);
     bluetooth::legacy::hci::GetInterface().SendVendorSpecificCmd(HCI_VS_QBCE_OCF, length, param, NULL);
 }
-
-class StreamSpeedTracker {
-public:
-  StreamSpeedTracker(void)
-      : is_started_(false),
-        group_id_(bluetooth::groups::kGroupUnknown),
-        num_of_devices_(0),
-        context_type_(LeAudioContextType::UNSPECIFIED),
-        reconfig_start_ts_(0),
-        setup_start_ts_(0),
-        total_time_(0),
-        reconfig_time_(0),
-        stream_setup_time_(0) {}
-
-  void Init(int group_id, LeAudioContextType context_type, int num_of_devices) {
-    Reset(bluetooth::groups::kGroupUnknown);
-    group_id_ = group_id;
-    context_type_ = context_type;
-    num_of_devices_ = num_of_devices;
-    log::verbose("StreamSpeedTracker group_id: {}, context: {} #{}", group_id_,
-                 ToString(context_type_), num_of_devices);
-  }
-
-  void Reset(int group_id) {
-    if (group_id != bluetooth::groups::kGroupUnknown && group_id != group_id_) {
-      log::verbose("StreamSpeedTracker Reset called for invalid group_id: {} != {}", group_id,
-                   group_id_);
-      return;
-    }
-
-    log::verbose("StreamSpeedTracker group_id: {}", group_id_);
-    is_started_ = false;
-    group_id_ = bluetooth::groups::kGroupUnknown;
-    reconfig_start_ts_ = setup_start_ts_ = total_time_ = reconfig_time_ = stream_setup_time_ =
-            num_of_devices_ = 0;
-    context_type_ = LeAudioContextType::UNSPECIFIED;
-  }
-
-  void ReconfigStarted(void) {
-    log::verbose("StreamSpeedTracker group_id: {}", group_id_);
-    reconfig_time_ = 0;
-    is_started_ = true;
-    reconfig_start_ts_ = bluetooth::common::time_get_os_boottime_us();
-  }
-
-  void StartStream(void) {
-    log::verbose("StreamSpeedTracker group_id: {}", group_id_);
-    setup_start_ts_ = bluetooth::common::time_get_os_boottime_us();
-    is_started_ = true;
-  }
-
-  void ReconfigurationComplete(void) {
-    reconfig_time_ = (bluetooth::common::time_get_os_boottime_us() - reconfig_start_ts_) / 1000;
-    log::verbose("StreamSpeedTracker group_id: {}, {} reconfig time {} ms", group_id_,
-                 ToString(context_type_), reconfig_time_);
-  }
-
-  void StreamCreated(void) {
-    stream_setup_time_ = (bluetooth::common::time_get_os_boottime_us() - setup_start_ts_) / 1000;
-    log::verbose("StreamSpeedTracker group_id: {}, {} stream create  time {} ms", group_id_,
-                 ToString(context_type_), stream_setup_time_);
-  }
-
-  void StopStreamSetup(void) {
-    is_started_ = false;
-    uint64_t start_ts = reconfig_time_ != 0 ? reconfig_start_ts_ : setup_start_ts_;
-    total_time_ = (bluetooth::common::time_get_os_boottime_us() - start_ts) / 1000;
-    clock_gettime(CLOCK_REALTIME, &end_ts_);
-    log::verbose("StreamSpeedTracker group_id: {}, {} setup time {} ms", group_id_,
-                 ToString(context_type_), total_time_);
-  }
-
-  bool IsStarted(int group_id) {
-    if (is_started_ && group_id_ == group_id) {
-      log::verbose("StreamSpeedTracker group_id: {}, {} is_started_: {} ", group_id_,
-                   ToString(context_type_), is_started_);
-      return true;
-    }
-    log::verbose("StreamSpeedTracker not started {} or group_id does not match ({} ! = {}) ",
-                 is_started_, group_id, group_id_);
-    return false;
-  }
-
-  void Dump(std::stringstream& stream) {
-    char ts[20];
-    std::strftime(ts, sizeof(ts), "%T", std::gmtime(&end_ts_.tv_sec));
-
-    if (total_time_ < 900) {
-      stream << "[ 🌕 ";
-    } else if (total_time_ < 1500) {
-      stream << "[ 🌔 ";
-    } else if (total_time_ < 2500) {
-      stream << "[ 🌓 ";
-    } else {
-      stream << "[ 🌒 ";
-    }
-
-    stream << ts << ", gID:" << group_id_ << ", #dev:" << num_of_devices_ << ", " << context_type_;
-    auto hal_idle = total_time_ - stream_setup_time_ - reconfig_time_;
-    if (reconfig_time_ != 0) {
-      stream << ", t:" << total_time_ << "ms (r:" << reconfig_time_ << "/s:" << stream_setup_time_
-             << "/hal:" << hal_idle << ")";
-    } else {
-      stream << ", t:" << total_time_ << "ms (hal:" << hal_idle << ")";
-    }
-    stream << "]";
-  }
-
-private:
-  bool is_started_;
-  int group_id_;
-  int num_of_devices_;
-  LeAudioContextType context_type_;
-  struct timespec end_ts_;
-  uint64_t reconfig_start_ts_;
-  uint64_t setup_start_ts_;
-  uint64_t total_time_;
-  uint64_t reconfig_time_;
-  uint64_t stream_setup_time_;
-};
 
 /*
  * Coordinatet Set Identification Profile (CSIP) based on CSIP 1.0
@@ -1236,6 +1117,9 @@ public:
     }
 
     new_group->AddNode(leAudioDevices_.GetByAddress(address));
+    if (group_id != bluetooth::groups::kGroupUnknown && group_id == active_group_id_) {
+      new_group->StartConnSubrateIfNeeded();
+    }
 
     callbacks_->OnGroupNodeStatus(address, new_group->group_id_, GroupNodeStatus::ADDED);
 
@@ -1278,6 +1162,12 @@ public:
   void group_remove_node(LeAudioDeviceGroup* group, const RawAddress& address,
                          bool update_group_module = false) {
     int group_id = group->group_id_;
+    LeAudioDevice* leAudioDevice = leAudioDevices_.FindByAddress(address);
+    if (com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only() &&
+        group_id == active_group_id_ && !leAudioDevice) {
+      leAudioDevice->StopConnSubrate();
+    }
+
     group->RemoveNode(leAudioDevices_.GetByAddress(address));
 
     if (update_group_module) {
@@ -1463,6 +1353,7 @@ public:
 
     SendAudioGroupSelectableCodecConfigChanged(group);
     SendAudioGroupCurrentCodecConfigChanged(group);
+    group->StartConnSubrateIfNeeded();
     callbacks_->OnGroupStatus(active_group_id_, GroupStatus::ACTIVE);
   }
 
@@ -2107,9 +1998,12 @@ public:
       }
 
       log::info("Active group_id changed {} -> {}", active_group_id_, group_id);
-      auto group_id_to_close = active_group_id_;
-
       LeAudioDeviceGroup* group = aseGroups_.FindById(active_group_id_);
+      if (group) {
+        group->StopConnSubrateIfNeeded();
+      }
+
+      auto group_id_to_close = active_group_id_;
 
       if (!group) {
         log::error("unknown group id: {}", active_group_id_);
@@ -2407,6 +2301,10 @@ public:
       if (!BTM_IsBonded(address, BT_TRANSPORT_LE)) {
         log::error("Connecting  {} when not bonded", address);
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
+        bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
+          0, address,
+          ConnectionState::CONNECTED,
+          bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_UNBONDED_DEV);
         return;
       }
       leAudioDevices_.Add(address, DeviceConnectState::CONNECTING_BY_USER);
@@ -2426,6 +2324,10 @@ public:
           log::warn("{}, trying to connect to disabled group id {}", address,
                     leAudioDevice->group_id_);
           callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
+          bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
+            leAudioDevice->group_id_, address,
+            ConnectionState::CONNECTED,
+            bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_DISABLING_GROUP);
           return;
         }
       }
@@ -3144,7 +3046,7 @@ public:
       callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
       bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
               leAudioDevice->group_id_, address, ConnectionState::CONNECTED,
-              bluetooth::le_audio::ConnectionStatus::FAILED);
+              bluetooth::le_audio::to_atom_gatt_status(status));
       return;
     }
 
@@ -3224,7 +3126,7 @@ public:
       log::error("Link key unknown for {}, disconnect profile", address);
       bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
               leAudioDevice->group_id_, address, ConnectionState::CONNECTED,
-              bluetooth::le_audio::ConnectionStatus::FAILED);
+              bluetooth::le_audio::ConnectionStatus::FAILED_BTM_ERR_KEY_MISSING);
 
       /* If link cannot be enctypted, disconnect profile */
       BTA_GATTC_Close(conn_id);
@@ -3337,7 +3239,7 @@ public:
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
         bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
                 leAudioDevice->group_id_, address, ConnectionState::CONNECTED,
-                bluetooth::le_audio::ConnectionStatus::FAILED);
+                bluetooth::le_audio::to_atom_btm_status(status));
       }
 
       leAudioDevice->SetConnectionState(DeviceConnectState::DISCONNECTING);
@@ -3346,7 +3248,9 @@ public:
       return;
     }
 
-    leAudioDevice->StartConnSubrate();
+    if (!com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only()) {
+      leAudioDevice->StartConnSubrate();
+    }
 
     if (leAudioDevice->encrypted_) {
       log::info("link already encrypted, nothing to do");
@@ -4426,6 +4330,9 @@ public:
 
     LeAudioDeviceGroup* group = aseGroups_.FindById(leAudioDevice->group_id_);
     if (group) {
+      if (leAudioDevice->group_id_ == active_group_id_) {
+        group->StartConnSubrateIfNeeded();
+      }
       UpdateLocationsAndContextsAvailability(group, true);
     }
 

@@ -21,18 +21,16 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 
 /** Bluetooth Address */
 class RawAddress final {
 public:
-  static constexpr unsigned int kLength = 6;
-
-  std::array<uint8_t, kLength> address;
+  std::array<uint8_t, 6> address;
 
   RawAddress() = default;
-  RawAddress(const uint8_t (&addr)[kLength]);
-  RawAddress(const std::array<uint8_t, kLength> array);
+  constexpr RawAddress(std::array<uint8_t, 6> const& address) : address(address) {}
 
   bool operator<(const RawAddress& rhs) const { return address < rhs.address; }
   bool operator==(const RawAddress& rhs) const { return address == rhs.address; }
@@ -56,7 +54,7 @@ public:
   // Converts |string| to RawAddress and places it in |to|. If |from| does
   // not represent a Bluetooth address, |to| is not modified and this function
   // returns false. Otherwise, it returns true.
-  static bool FromString(const std::string& from, RawAddress& to);
+  static std::optional<RawAddress> FromString(const std::string& from);
 
   // Copies |from| raw Bluetooth address octets to the local object.
   // Returns the number of copied octets - should be always RawAddress::kLength
@@ -64,6 +62,7 @@ public:
 
   static bool IsValidAddress(const std::string& address);
 
+  static constexpr unsigned int kLength = 6;
   static const RawAddress kEmpty;  // 00:00:00:00:00:00
   static const RawAddress kAny;    // FF:FF:FF:FF:FF:FF
 };

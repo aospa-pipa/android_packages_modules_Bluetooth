@@ -223,7 +223,9 @@ class BluetoothManagerService {
                     if (!ADDR_PATTERN.matcher(address).matches()) {
                         throw new IllegalArgumentException("Invalid address");
                     }
-                    Log.d(TAG, "IBluetoothCallback.onAdapterAddressChange: " + logAddress(address));
+                    Log.d(
+                            TAG,
+                            "IBluetoothCallback.onAdapterAddressChange: " + Log.address(address));
                     mHandler.post(() -> storeAddress(address));
                 }
 
@@ -284,13 +286,13 @@ class BluetoothManagerService {
             Log.e(
                     TAG,
                     "storeAddress("
-                            + logAddress(address)
+                            + Log.address(address)
                             + "): Failed. Address is still "
-                            + logAddress(mAddress));
+                            + Log.address(mAddress));
             return;
         }
         mAddress = address;
-        Log.v(TAG, "storeAddress(" + logAddress(mAddress) + "): Success");
+        Log.v(TAG, "storeAddress(" + Log.address(mAddress) + "): Success");
     }
 
     public void onUserRestrictionsChanged(UserHandle userHandle) {
@@ -669,7 +671,7 @@ class BluetoothManagerService {
                 "Local adapter: Name="
                         + mName
                         + ", Address="
-                        + logAddress(mAddress)
+                        + Log.address(mAddress)
                         + " HciInstanceName="
                         + mHciInstanceName);
 
@@ -818,27 +820,9 @@ class BluetoothManagerService {
         }
 
         @Override
-        public void onBluetoothDisallowed() {
-            enforceCorrectThread();
-            BluetoothManagerService.this.onBluetoothDisallowed();
-        }
-
-        @Override
         public void onBleScanDisabled() {
             enforceCorrectThread();
             BluetoothManagerService.this.onBleScanDisabled();
-        }
-
-        @Override
-        public void handleOnBootPhase(UserHandle userHandle) {
-            enforceCorrectThread();
-            BluetoothManagerService.this.handleOnBootPhase(userHandle);
-        }
-
-        @Override
-        public void onUserSwitching(UserHandle userHandle) {
-            enforceCorrectThread();
-            BluetoothManagerService.this.onUserSwitching(userHandle);
         }
     }
 
@@ -918,16 +902,6 @@ class BluetoothManagerService {
 
     private void setBluetoothPersistedState(int state) {
         BluetoothServerProxy.getInstance().setBluetoothPersistedState(mContentResolver, state);
-    }
-
-    private static String logAddress(String address) {
-        if (address == null) {
-            return "[address is null]";
-        }
-        if (address.length() != 17) {
-            return "[address invalid]";
-        }
-        return "XX:XX:XX:XX:" + address.substring(address.length() - 5);
     }
 
     IBinder registerAdapter(IBluetoothManagerCallback callback) {
@@ -1757,8 +1731,7 @@ class BluetoothManagerService {
     private void handleDisableMessage() {
         mHandler.removeMessages(MESSAGE_RESTART_BLUETOOTH_SERVICE);
 
-        if (Flags.gracefulDisableWithoutMessage()
-                && mState.oneOf(State.OFF)) {
+        if (Flags.gracefulDisableWithoutMessage() && mState.oneOf(State.OFF)) {
             Log.d(TAG, "Disable while already OFF. Nothing to do");
         } else if (isBinding()) {
             Log.d(TAG, "Disable while binding");
@@ -2394,7 +2367,7 @@ class BluetoothManagerService {
         writer.println("Bluetooth Status");
         writer.println("  enabled: " + isEnabled());
         writer.println("  state: " + mState);
-        writer.println("  address: " + logAddress(mAddress));
+        writer.println("  address: " + Log.address(mAddress));
         writer.println("  name: " + mName);
         if (mEnable) {
             Duration elapsed = Duration.between(mLastEnabledTime, Instant.now());
