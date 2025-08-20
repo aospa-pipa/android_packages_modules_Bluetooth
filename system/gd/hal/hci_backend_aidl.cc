@@ -73,6 +73,7 @@ private:
 class AidlHci : public HciBackend {
 public:
   AidlHci(const char* service_name) {
+    log::info("Waiting for service {}", service_name);
     ::ndk::SpAIBinder binder(AServiceManager_waitForService(service_name));
     hci_ = aidl::android::hardware::bluetooth::IBluetoothHci::fromBinder(binder);
     if (hci_ == nullptr) {
@@ -132,14 +133,7 @@ private:
 };
 
 std::shared_ptr<HciBackend> HciBackend::CreateAidl() {
-  static constexpr char kBluetoothAidlHalServiceName[] =
-          "android.hardware.bluetooth.IBluetoothHci/default";
-
-  if (AServiceManager_isDeclared(kBluetoothAidlHalServiceName)) {
-    return std::make_shared<AidlHci>(kBluetoothAidlHalServiceName);
-  }
-
-  return std::shared_ptr<HciBackend>();
+  return CreateAidl("");
 }
 
 std::shared_ptr<HciBackend> HciBackend::CreateAidl(const std::string& hci_instance_name) {
@@ -147,11 +141,13 @@ std::shared_ptr<HciBackend> HciBackend::CreateAidl(const std::string& hci_instan
           std::format("{}/{}", kBluetoothAidlHalInterfaceName,
                       hci_instance_name.empty() ? "default" : hci_instance_name);
 
-  log::info("Attempting to subscribe to hci instance:{}", bluetoothAidlHalServiceName);
+  log::info("Attempting to subscribe to hci instance: {}", bluetoothAidlHalServiceName);
 
   if (AServiceManager_isDeclared(bluetoothAidlHalServiceName.data())) {
     return std::make_shared<AidlHci>(bluetoothAidlHalServiceName.data());
   }
+
+  log::warn("Bluetooth AIDL HAL service not declared");
   return std::shared_ptr<HciBackend>();
 }
 

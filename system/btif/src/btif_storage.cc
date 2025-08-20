@@ -852,6 +852,17 @@ bt_status_t btif_storage_remove_bonded_device(const RawAddress* remote_bd_addr) 
 
   btif_config_remove_device(bdstr);
 
+  /* Check the length of the paired devices, and if 0 then reset IRK */
+  if (com::android::bluetooth::flags::btsec_cycle_irks()) {
+    auto paired_devices = btif_config_get_paired_devices();
+    if (paired_devices.empty()) {
+      btif_remove_local_irk_from_resolving_list();
+
+      log::info("Last paired device removed, resetting IRK");
+      BTA_DmBleResetId();
+    }
+  }
+
   return BT_STATUS_SUCCESS;
 }
 
@@ -890,7 +901,7 @@ static void remove_devices_with_sample_ltk() {
  * Function         btif_storage_load_le_devices
  *
  * Description      BTIF storage API - Loads all LE-only and Dual Mode devices
- *                  from NVRAM. This API invokes the adaper_properties_cb.
+ *                  from NVRAM. This API invokes the adapter_properties_cb.
  *                  It also invokes invoke_address_consolidate_cb
  *                  to consolidate each Dual Mode device and
  *                  invoke_le_address_associate_cb to associate each LE-only
@@ -960,7 +971,7 @@ void btif_storage_load_le_devices(void) {
  *
  * Description      BTIF storage API - Loads all the bonded devices from NVRAM
  *                  and adds to the BTA.
- *                  Additionally, this API also invokes the adaper_properties_cb
+ *                  Additionally, this API also invokes the adapter_properties_cb
  *                  and remote_device_properties_cb for each of the bonded
  *                  devices.
  *
@@ -975,7 +986,6 @@ bt_status_t btif_storage_load_bonded_devices(void) {
   bt_property_t remote_properties[11];
   RawAddress addr;
   bt_bdname_t name, alias, model_name;
-  bt_scan_mode_t mode;
   uint32_t disc_timeout;
   Uuid local_uuids[BT_MAX_NUM_UUIDS];
   Uuid remote_uuids[BT_MAX_NUM_UUIDS];
@@ -1229,9 +1239,8 @@ bt_status_t btif_in_fetch_bonded_ble_device(const std::string& remote_bd_addr, i
   tBLE_ADDR_TYPE addr_type;
   bool device_added = false;
   bool key_found = false;
-  RawAddress bd_addr;
 
-  RawAddress::FromString(remote_bd_addr, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(remote_bd_addr).value_or(RawAddress::kEmpty);
 
   if (!btif_config_get_int(remote_bd_addr, BTIF_STORAGE_KEY_DEV_TYPE, &device_type)) {
     return BT_STATUS_FAIL;

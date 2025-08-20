@@ -36,7 +36,6 @@ import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.os.SystemProperties;
 import android.util.ArraySet;
 import android.util.Log;
@@ -734,7 +733,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             } else {
                 if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
-                    Log.d(TAG, " set LE Audio in-active as new classic device become active ");
+                    Log.d(TAG, "Set LE Audio in-active as new classic device become active ");
                     setLeAudioActiveDevice(null, true);
                 }
             }
@@ -1080,19 +1079,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         resetState();
     }
 
-    /**
-     * Get the {@link Looper} for the handler thread. This is used in testing and helper objects
-     *
-     * @return {@link Looper} for the handler thread
-     */
-    @VisibleForTesting
-    public Looper getHandlerLooper() {
-        if (mHandler == null) {
-            return null;
-        }
-        return mHandler.getLooper();
-    }
-
     private void LoadDualModePoliciesfromLocalStorage() {
         Log.d(TAG, "LoadDualModePoliciesfromLocalStorage: ");
         Resources res = mAdapterService.getResources();
@@ -1152,7 +1138,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         Log.d(TAG,"Policy for context UNSEPCIFIED(default) Output Only Mode = "
             + profile_val_unspec[0] + ", Duplex Mode = " + profile_val_unspec[1]);
     }
-
     private boolean setA2dpActiveDevice(@NonNull BluetoothDevice device) {
         return setA2dpActiveDevice(device, false);
     }

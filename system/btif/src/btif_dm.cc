@@ -209,7 +209,7 @@ typedef struct {
   bool is_er_rcvd;
   Octet16 er;
   bool is_id_keys_rcvd;
-  btif_dm_local_key_id_t id_keys; /* ID kyes */
+  btif_dm_local_key_id_t id_keys; /* ID keys */
 } btif_dm_local_key_cb_t;
 
 /* this structure holds optional OOB data for remote device */
@@ -1069,7 +1069,7 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
     cod = COD_UNCLASSIFIED;
   }
 
-  /* check for auto pair possiblity only if bond was initiated by local device
+  /* check for auto pair possibility only if bond was initiated by local device
    */
   if (pairing_cb.is_local_initiated && !p_pin_req->min_16_digit) {
     if (btif_check_cod(&bd_addr, COD_AV_HEADSETS) ||
@@ -2444,6 +2444,20 @@ static void btif_add_local_irk_to_resolving_list() {
   }
 }
 
+void btif_remove_local_irk_from_resolving_list() {
+  if (!com::android::bluetooth::flags::btsec_cycle_irks()) {
+    // we should only be calling this from a block that's already checked, but
+    // let's make sure anyway
+    return;
+  }
+
+  if (bluetooth::shim::GetController()->IsRpaGenerationSupported()) {
+    log::info("Removing local IRK from resolving list before reset");
+    bluetooth::shim::GetAclManagerLe()->RemoveDeviceFromResolvingList(
+            {bluetooth::hci::Address::kEmpty, bluetooth::hci::AddressType::PUBLIC_DEVICE_ADDRESS});
+  }
+}
+
 void BTIF_dm_enable() {
   btif_storage_prune_devices();
 
@@ -3153,8 +3167,19 @@ void btif_dm_pin_reply(const RawAddress bd_addr, uint8_t accept, uint8_t pin_len
   if (pairing_cb.is_le_only) {
     int i;
     uint32_t passkey = 0;
+    int len = pin_len;
+    if (len > 6) {
+      // BLE specifies 6 digits for passkey.  However, it's possible for callers to
+      // pass in a longer or shorter PIN code.  In that case, we
+      // truncate the passkey to the first 6 digits.
+      log::warn("Received {} digit passkey, truncating to 6 digits", len);
+      len = 6;
+    }
+    if (len < 6) {
+      log::warn("Received {} digit passkey, BLE calls for 6 digits", len);
+    }
     int multi[] = {100000, 10000, 1000, 100, 10, 1};
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < len; i++) {
       passkey += (multi[i] * (pin_code.pin[i] - '0'));
     }
     BTA_DmBlePasskeyReply(bd_addr, accept, passkey);

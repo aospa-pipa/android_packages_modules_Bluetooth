@@ -268,6 +268,7 @@ cc_defaults {
     host_supported: true,
     defaults: [
         "bluetooth_cflags",
+        "bluetooth_fuzz_config",
         "bluetooth_tidy",
     ],
     cflags: [
@@ -318,19 +319,6 @@ cc_defaults {
             // detection needs to be turned off to unblock fuzzing.
             "detect_leaks=0",
         ],
-        cc: [
-            "android-bluetooth-security@google.com",
-            "android-security-assurance-redteam@google.com",
-        ],
-        componentid: 27441, // Android > Android OS & Apps > Systems > bluetooth
-        hotlists: [
-            "3705175", // ASA Red Team Discovered Issues
-            "4810445", // ASA Red Team: Bluetooth Engagement Issues
-        ],
-        acknowledgement: [
-            "Android Bluetooth Team of Google",
-            "Android Red Team of Google",
-        ],
     },
 }
 
@@ -340,18 +328,15 @@ cc_fuzz {
         "btstack_fuzzer_default",
         "fluoride_defaults",
     ],
-    include_dirs: [
-        "packages/modules/Bluetooth/system/stack/btm",
-    ],
     srcs: [
         ":LegacyStackSdp",
         ":TestCommonMockFunctions",
         ":TestFakeOsi",
+        ":TestMockBtaAg",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
         ":TestMockStackA2dp",
-        ":TestMockStackBtm",
         ":TestMockStackL2cap",
         "fuzzers/sdp_fuzzer.cc",
     ],
@@ -549,7 +534,6 @@ cc_defaults {
 
 cc_fuzz {
     name: "smp-fuzzer",
-    team: "trendy_team_bluetooth",
     defaults: [
         "smp_fuzzer_default",
     ],
@@ -602,7 +586,6 @@ cc_defaults {
 
 cc_fuzz {
     name: "bnep-fuzzer",
-    team: "trendy_team_bluetooth",
     defaults: [
         "bnep_fuzzer_default",
     ],
@@ -664,7 +647,6 @@ cc_defaults {
 
 cc_fuzz {
     name: "avrc-fuzzer",
-    team: "trendy_team_bluetooth",
     defaults: [
         "avrc_fuzzer_default",
     ],
@@ -733,7 +715,6 @@ cc_defaults {
 
 cc_fuzz {
     name: "l2cap-fuzzer",
-    team: "trendy_team_bluetooth",
     defaults: [
         "l2cap_fuzzer_default",
     ],
@@ -750,6 +731,7 @@ cc_test {
         "mts_defaults",
         "libbtconfigstore_qti_defaults",
     ],
+    host_supported: true,
     test_suites: ["general-tests"],
     local_include_dirs: [
         "include",
@@ -765,12 +747,10 @@ cc_test {
     ],
     shared_libs: [
         "libPlatformProperties",
-        "libaaudio",
         "libaconfig_storage_read_api_cc",
         "libbase",
         "libcrypto",
         "libcutils",
-        "libdl",
         "libevent",
         "libhidlbase",
         "liblog",
@@ -784,22 +764,24 @@ cc_test {
         "libxml2",
     ],
     static_libs: [
+        "aics",
         "android.hardware.audio.common@5.0",
         "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth.audio@2.1",
         "android.hardware.common-V2-ndk",
         "android.hardware.common.fmq-V1-ndk",
-        "android.system.suspend-V1-ndk",
-        "android.system.suspend.control-V1-ndk",
+        "avrcp-target-service",
         "bluetooth_flags_c_lib_for_test",
+        "lib-bt-packets-avrcp",
+        "lib-bt-packets-base",
         "libFraunhoferAAC",
-        "libbase",
         "libbluetooth_core_rs",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
         "libbluetooth_types",
+        "libbt-audio-asrc",
         "libbt-audio-hal-interface",
         "libbt-bta",
         "libbt-btu-main-thread",
@@ -816,6 +798,7 @@ cc_test {
         "libchrome",
         "libcom.android.sysprop.bluetooth.wrapped",
         "libflags_rust_cpp_bridge",
+        "libflatbuffers-cpp",
         "libfmq",
         "libg722codec",
         "libgmock",
@@ -829,11 +812,14 @@ cc_test {
     target: {
         android: {
             shared_libs: [
+                "libaaudio",
                 "libbinder_ndk",
             ],
             static_libs: [
                 "android.hardware.bluetooth@1.0",
                 "android.hardware.bluetooth@1.1",
+                "android.system.suspend-V1-ndk",
+                "android.system.suspend.control-V1-ndk",
                 "libperfetto_client_experimental",
             ],
         },
