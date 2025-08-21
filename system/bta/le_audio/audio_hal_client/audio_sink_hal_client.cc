@@ -62,6 +62,7 @@ public:
   void ReconfigurationComplete() override;
   void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
          int cig_id, int cis_id, const std::vector<uint8_t>& data) override;
+  void StreamSuspended() override;
 
   // Internal functionality
   SinkImpl() = default;
@@ -306,6 +307,16 @@ void SinkImpl::UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& sta
 
   log::info("");
   halSourceInterface_->UpdateMetadataChanged(state, cig_id, cis_id, data);
+}
+
+void SinkImpl::StreamSuspended() {
+  if ((halSourceInterface_ == nullptr) || (le_audio_source_hal_state != HAL_STARTED)) {
+    log::error("Audio HAL Audio source was not started!");
+    return;
+  }
+
+  log::info("");
+  halSourceInterface_->StreamSuspended();
 }
 
 void SinkImpl::CancelStreamingRequest() {

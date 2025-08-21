@@ -334,6 +334,7 @@ public:
   MOCK_METHOD((void), ConfirmSuspendRequest, (), (override));
   MOCK_METHOD((void), ConfirmStreamingRequest, (bool force), (override));
   MOCK_METHOD((void), CancelStreamingRequest, (), (override));
+  MOCK_METHOD((void), StreamSuspended, (), (override));
   MOCK_METHOD((void), SetCodecPriority,
               (const ::bluetooth::le_audio::types::LeAudioCodecId& codecId, int32_t priority),
               (override));
@@ -360,6 +361,7 @@ public:
   MOCK_METHOD((void), ConfirmSuspendRequest, (), (override));
   MOCK_METHOD((void), ConfirmStreamingRequest, (bool force), (override));
   MOCK_METHOD((void), CancelStreamingRequest, (), (override));
+  MOCK_METHOD((void), StreamSuspended, (), (override));
   MOCK_METHOD((void), SetCodecPriority,
               (const ::bluetooth::le_audio::types::LeAudioCodecId& codecId, int32_t priority),
               (override));
@@ -9272,12 +9274,12 @@ TEST_F(UnicastTest, UpdateActiveAudioConfigForLocalSinkSource) {
   EXPECT_CALL(*mock_codec_manager_, UpdateSelectedCodecConfig(_)).Times(1);
 
   /* Expect one update per direction - 2 in total for voice communication usage */
-  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _))
+  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _, _))
           .WillRepeatedly([&](const types::BidirectionalPair<stream_parameters>& stream_params,
                        types::LeAudioCodecId id,
                               std::function<void(const stream_config& config, uint8_t direction)>
                                       update_receiver,
-                              uint8_t directions_to_update) {
+                              uint8_t directions_to_update, bool /* force_update*/) {
             bluetooth::le_audio::stream_config unicast_cfg;
             if ((directions_to_update & bluetooth::le_audio::types::kLeAudioDirectionSink) &&
                 stream_params.sink.stream_config.peer_delay_ms != 0) {
@@ -9334,12 +9336,12 @@ TEST_F(UnicastTest, UpdateActiveAudioConfigForLocalSinkSourceLateJoin) {
   EXPECT_CALL(*mock_codec_manager_, UpdateSelectedCodecConfig(_)).Times(1);
 
   /* Expect one update per direction - 2 in total for voice communication usage */
-  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _))
+  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _, _))
           .WillRepeatedly([&](const types::BidirectionalPair<stream_parameters>& stream_params,
                               types::LeAudioCodecId id,
                               std::function<void(const stream_config& config, uint8_t direction)>
                                       update_receiver,
-                              uint8_t directions_to_update) {
+                              uint8_t directions_to_update, bool /* force_update */) {
             bluetooth::le_audio::stream_config unicast_cfg;
             if ((directions_to_update & bluetooth::le_audio::types::kLeAudioDirectionSink) &&
                 stream_params.sink.stream_config.peer_delay_ms != 0) {
@@ -9445,13 +9447,13 @@ TEST_F(UnicastTest, UpdateActiveAudioConfigForLocalSource) {
   EXPECT_CALL(*mock_le_audio_sink_hal_client_, UpdateAudioConfigToHal(_)).Times(0);
   EXPECT_CALL(*mock_codec_manager_, UpdateSelectedCodecConfig(_)).Times(1);
 
-  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _))
+  EXPECT_CALL(*mock_codec_manager_, UpdateActiveAudioConfig(_, _, _, _, _))
           .Times(1)
           .WillOnce([](const types::BidirectionalPair<stream_parameters>& stream_params,
                        types::LeAudioCodecId id,
                        std::function<void(const stream_config& config, uint8_t direction)>
                                update_receiver,
-                       uint8_t directions_to_update) {
+                       uint8_t directions_to_update, bool /*force_update*/) {
             bluetooth::le_audio::stream_config unicast_cfg;
             if ((directions_to_update & bluetooth::le_audio::types::kLeAudioDirectionSink) &&
                 stream_params.sink.stream_config.peer_delay_ms != 0) {
@@ -15048,7 +15050,7 @@ TEST_F(UnicastTest, CodecFrameBlocks2) {
                              types::LeAudioCodecId id,
                              std::function<void(const stream_config& config, uint8_t direction)>
                              /*updater*/,
-                             uint8_t /*directions_to_update*/) {
+                             uint8_t /*directions_to_update*/, bool /* force_update */) {
                     codec_manager_stream_params = stream_params;
                   }));
 
@@ -15954,7 +15956,8 @@ TEST_F(UnicastTestGmap,
   EXPECT_CALL(mock_state_machine_,
               EnableStreamingDirection(group, bluetooth::le_audio::types::kLeAudioDirectionSink))
           .Times(0);
-  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(0);
+
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, UpdateRemoteDelay(_)).Times(1);
 
   LocalAudioSourceResume();
   SyncOnMainLoop();

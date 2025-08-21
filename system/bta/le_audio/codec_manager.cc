@@ -372,7 +372,7 @@ public:
           const types::BidirectionalPair<stream_parameters>& stream_params,
           types::LeAudioCodecId id,
           std::function<void(const stream_config& config, uint8_t direction)> update_receiver,
-          uint8_t remote_directions_to_update) {
+          uint8_t remote_directions_to_update, bool force_update) {
     if (GetCodecLocation() != bluetooth::le_audio::types::CodecLocation::ADSP) {
       return;
     }
@@ -388,7 +388,7 @@ public:
       }
 
       auto& stream_map = offloader_stream_maps.get(direction);
-      if (!stream_map.has_changed && !stream_map.is_initial) {
+      if (!force_update && !stream_map.has_changed && !stream_map.is_initial) {
         log::warn("unexpected call for direction {}, stream_map.has_changed {}", direction,
                   stream_map.has_changed, stream_map.is_initial);
         continue;
@@ -1764,10 +1764,10 @@ void CodecManager::UpdateActiveAudioConfig(
         const types::BidirectionalPair<stream_parameters>& stream_params,
         types::LeAudioCodecId id,
         std::function<void(const stream_config& config, uint8_t direction)> update_receiver,
-        uint8_t remote_directions_to_update) {
+        uint8_t remote_directions_to_update, bool force_update) {
   if (pimpl_->IsRunning()) {
     pimpl_->codec_manager_impl_->UpdateActiveAudioConfig(stream_params, id, update_receiver,
-                                                         remote_directions_to_update);
+                                                         remote_directions_to_update, force_update);
   }
 }
 
