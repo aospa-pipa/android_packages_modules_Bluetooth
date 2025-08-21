@@ -244,7 +244,7 @@ final class Vendor {
 
     void ssr_cleanup_callback() {
         Log.e(TAG, "ssr_cleanup_callback");
-        android.os.Process.killProcess(android.os.Process.myPid());
+        mService.ssrCleanupCallback();
     }
 
     void adapterPropertyChangedCallback(int[] types, byte[][] values) {
