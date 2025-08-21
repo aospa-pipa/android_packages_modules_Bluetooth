@@ -98,6 +98,7 @@ public:
           const ::bluetooth::le_audio::broadcast_offload_config& config) override;
   void SuspendedForReconfiguration() override;
   void ReconfigurationComplete() override;
+  void StreamSuspended() override;
 
   void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
           int cig_id, int cis_id, const std::vector<uint8_t>& data) override;
@@ -467,6 +468,16 @@ void SourceImpl::ReconfigurationComplete() {
 
   log::info("");
   halSinkInterface_->ReconfigurationComplete();
+}
+
+void SourceImpl::StreamSuspended() {
+  if ((halSinkInterface_ == nullptr) || (le_audio_sink_hal_state_ != HAL_STARTED)) {
+    log::error("Audio HAL Audio sink was not started!");
+    return;
+  }
+
+  log::info("");
+  halSinkInterface_->StreamSuspended();
 }
 
 void SourceImpl::CancelStreamingRequest() {
