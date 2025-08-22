@@ -77,6 +77,7 @@ struct btm_ble_update_sec_key_size btm_ble_update_sec_key_size;
 struct btm_get_local_div btm_get_local_div;
 struct btm_proc_smp_cback btm_proc_smp_cback;
 struct btm_sec_save_le_key btm_sec_save_le_key;
+struct BTM_BleSetPhy BTM_BleSetPhy;
 
 }  // namespace stack_btm_ble
 }  // namespace mock
@@ -270,6 +271,11 @@ void btm_sec_save_le_key(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
   inc_func_call_count(__func__);
   test::mock::stack_btm_ble::btm_sec_save_le_key(bd_addr, key_type, p_keys, pass_to_application);
 }
+void BTM_BleSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
+                   uint16_t phy_options){
+  inc_func_call_count(__func__);
+  test::mock::stack_btm_ble::BTM_BleSetPhy(bd_addr, tx_phys, rx_phys, phy_options);
+ }
 // Mocked functions complete
 // END mockcify generation
 

@@ -66,9 +66,10 @@
 
 #include "bt_target.h"
 #include "bta_api.h"
-#include <bt_testapp.h>
 #include "stack/include/l2cdefs.h"
 #include "l2c_int.h"
+#include "stack/include/hcimsgs.h"
+#include <bt_testapp.h>
 
 using bluetooth::Uuid;
 #define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
@@ -203,6 +204,7 @@ const btgatt_interface_t* sGattIfaceScan = NULL;
 const btsmp_interface_t* sSmpIface = NULL;
 const btgap_interface_t* sGapInterface = NULL;
 const btl2cap_interface_t* sL2capInterface = NULL;
+const bthci_test_interface_t* sHciInterface = NULL; // New HCI interface
 const btvendor_interface_t* btvendorInterface = NULL;
 
 int Btif_gatt_layer = TRUE;
@@ -306,6 +308,7 @@ int exec_write_status = BT_STATUS_SUCCESS;
 int invalid_offset = 0x07;
 int invalid_attribute_value_len = 0x0D;
 int application_error = 0x80;
+RawAddress connection_addr;
 
 /* Default mtu */
 static int g_imtu = 672;
@@ -433,6 +436,7 @@ static void connect_cb(int conn_id, int status, int client_if, int transport,
   } else if (client_if == g_client_if_scan1) {
     g_conn_id1 = conn_id;
   }
+  connection_addr = remote_bd_addr;
   sGapInterface->Gap_BleAttrDBUpdate(remote_bd_addr.address, 50, 70, 0, 1000);
 }
 
@@ -1224,7 +1228,7 @@ void service_added_cb(int status, int server_if,
 static btgatt_server_callbacks_t sGattServer_cb = {
     register_server_cb,
     server_connection_cb,  // connection_callback             connection_cb;
-    service_added_cb,      // service_added_callback          service_added_cb;
+    NULL,      // service_added_callback          service_added_cb;
     NULL,  // included_service_added_callback included_service_added_cb;
     NULL,  // characteristic_added_callback   characteristic_added_cb;
     request_read_cb,   // request_read_callback request_read_characteristic_cb
@@ -1626,6 +1630,15 @@ void do_start_adv_set(char* p);
 // void do_register_adv(char *p);
 void do_unregister_adv_set(char* p);
 void do_remove_bond(char* p);
+void do_send_start_enc_v2(char* p);
+void do_send_le_set_hdt_default_parameters(char* p);
+void do_send_le_read_maximum_data_length_v2(char* p);
+void do_send_ble_set_phy(char* p);
+void do_send_ble_set_data_length(char* p);
+void do_send_ble_set_default_phy(char* p);
+void do_send_refresh_enc_key_v2(char* p);
+void do_send_ble_set_data_length_v2(char* p);
+
 
 /*******************************************************************
  *
@@ -1776,6 +1789,24 @@ const t_cmd console_cmd_list[] = {
      0},
     {"unregister_advertiser", do_unregister_adv_set, ":: UnregisterAdvertiser",
      0},
+
+    /* New command for btsnd_hcic_ble_start_enc_v2 */
+    {"btsnd_hcic_ble_start_enc_v2", do_send_start_enc_v2,
+     ":: handle(hex), rand (16 hex chars), ediv(hex), ltk (32 hex chars), hdt_mic_length(hex), enc_type(hex)", 0},
+    {"btsnd_hcic_le_set_hdt_default_parameters", do_send_le_set_hdt_default_parameters,
+     ":: preferred_MIC_Length(hex), preferred_Packet_Format(hex) preferred_acl_rates(hex)", 0},
+    {"btsnd_hcic_le_read_maximum_data_length_v2", do_send_le_read_maximum_data_length_v2,
+     ":: phy(hex)", 0},
+    {"btsnd_hcic_ble_set_phy", do_send_ble_set_phy,
+     ":: handle(hex), all_phys(hex), tx_phys(hex), rx_phys(hex), phy_options(hex)", 0},
+    {"btsnd_hcic_ble_set_data_length", do_send_ble_set_data_length,
+     ":: handle(hex) tx_pdu_length(hex) tx_time(hex)", 0},
+    {"btsnd_hcic_le_set_default_phy", do_send_ble_set_default_phy,
+     ":: all_phys(hex), tx_phys(hex), rx_phys(hex)", 0},
+    {"btsnd_hcic_refresh_enc_key_v2", do_send_refresh_enc_key_v2,
+     ":: handle(hex), hdt_mic_length(hex)", 0},
+     {"btsnd_hcic_ble_set_data_length_v2", do_send_ble_set_data_length,
+     ":: handle(hex) tx_pdu_length(hex) tx_time(hex) phys(hex)", 0},
 
     /* LE-L2CAP cmds */
     {" ", NULL, "\n\t\t\033[0m\033[34mLE L2CAP CoC Commands\033[0m", 0},
@@ -3588,6 +3619,8 @@ static void le_l2cap_listen(char* p) {
   printf("g_SecLevel = %d \n", le_coc_seclevel);
 
   tL2CAP_LE_CFG_INFO cfg;
+  cfg.mtu = le_conn_info->loc_conn_info.le_mtu;
+  cfg.mps = le_conn_info->loc_conn_info.le_mps;
   sL2capInterface->RegisterLePsm(le_conn_info->loc_conn_info.le_psm, FALSE,
                                  le_coc_seclevel, g_BleEncKeySize,
                                  l2test_l2c_appl, cfg);
@@ -3658,14 +3691,9 @@ static int Send_Data(char* p) {
 
   lcid = (uint16_t)get_int(&p, -1);
   send_mode = get_int(&p, -1);
+  int length = get_int(&p, -1);
+  int loop = get_int(&p, -1);
 
-  char tmpBuffer_1[] = {
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
-      0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F};
   char tmpBuffer_2[] = {0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
                         0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
                         0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F};
@@ -3673,13 +3701,26 @@ static int Send_Data(char* p) {
   if (send_mode == 1)  // segmented
   {
     printf("Sending Segmented data...\nData written len %d...\n",
+           sizeof(tmpBuffer_2));
+    int i=0;
+    while (i<loop) {
+      char* tmpBuffer_1;
+      tmpBuffer_1 = (char*)malloc(length);
+      memset(tmpBuffer_1, '\x7f', length);
+      printf("Sending Segmented data...\nData written len %d...\n",
            sizeof(tmpBuffer_1));
-    do_l2cap_DataWrite(lcid, tmpBuffer_1, sizeof(tmpBuffer_1));
+      while (cong_status) {
+        usleep(50*1000);
+
+      }
+      do_l2cap_DataWrite(lcid, tmpBuffer_1, length);
+      i++;
+    }
   } else if (send_mode == 0)  // unsegmented
   {
     printf("Sending Unsegmented data...\nData written len %d...\n",
            sizeof(tmpBuffer_2));
-    do_l2cap_DataWrite(lcid, tmpBuffer_2, sizeof(tmpBuffer_2));
+    do_l2cap_DataWrite(lcid, tmpBuffer_2, 1014);
   }
   return TRUE;
 }
@@ -3687,6 +3728,8 @@ static int Send_Data(char* p) {
 static void send_data_on_le_coc(char* svr) {
   printf("Sending data on LE L2CAP CoC...\n");
   Send_Data(svr);
+  
+
 }
 static void do_send_file(char* svr) {
   printf("Sending file on LE L2CAP CoC...\n");
@@ -3911,6 +3954,10 @@ int main(int argc, char* argv[]) {
   sL2capInterface =
       (btl2cap_interface_t*)btvendorInterface->get_testapp_interface(
           TEST_APP_L2CAP);
+  bdt_log("Get HCI IF");
+  sHciInterface =
+      (bthci_test_interface_t*)btvendorInterface->get_testapp_interface(
+          TEST_APP_HCI);
   printf("\n Before l2cap init\n");
   do_l2cap_init(NULL);
   printf("\n after l2cap init\n");
@@ -3998,5 +4045,116 @@ int GetBdAddr(char* p, RawAddress* pbd_addr) {
     pbd_addr->address[i] = (k1 << 4 | k2);
   }
   return TRUE;
+}
+
+void do_send_start_enc_v2(char* p) {
+  uint16_t handle = get_hex(&p, -1);
+  Octet8 rand;
+  for (int i = 0; i < 8; i++) {
+    rand[i] = get_hex_byte(&p, 0);
+  }
+  uint16_t ediv = get_hex(&p, -1);
+  Octet16 ltk; // Octet16 is an alias for std::array<uint8_t, 16>
+  for (int i = 0; i < 16; i++) {
+    ltk[i] = get_hex_byte(&p, 0);
+  }
+  uint8_t hdt_mic_length = get_hex_byte(&p, 0);
+  uint8_t enc_type = get_hex_byte(&p, 0);
+
+  if (sHciInterface) {
+    sHciInterface->ble_start_enc_v2(handle, rand, ediv, ltk, hdt_mic_length, enc_type);
+    printf("Sent btsnd_hcic_ble_start_enc_v2 command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+
+void do_send_le_set_hdt_default_parameters(char* p) {
+  uint8_t preferred_mic_length = get_hex_byte(&p, 0);
+  uint8_t preferred_packet_format = get_hex_byte(&p, 0);
+  uint8_t preferred_acl_rates = get_hex_byte(&p, 0);
+
+  if (sHciInterface) {
+    sHciInterface->le_set_hdt_default_parameters(preferred_mic_length, preferred_packet_format,
+                                                 preferred_acl_rates);
+    printf("Sent btsnd_hcic_le_set_hdt_default_parameters command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+
+void do_send_ble_set_phy(char* p) {
+  uint16_t handle = get_hex(&p, -1);
+  uint8_t all_phys = get_hex_byte(&p, 0); // This parameter is mostly for completeness with the API signature
+  uint8_t tx_phys = get_hex_byte(&p, 0);
+  uint8_t rx_phys = get_hex_byte(&p, 0);
+  uint16_t phy_options = get_hex(&p, -1);
+
+  if (sHciInterface) {
+    sHciInterface->ble_set_phy(remote_bd_address, handle, all_phys, tx_phys, rx_phys, phy_options);
+    printf("Sent btsnd_hcic_ble_set_phy command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+
+void do_send_le_read_maximum_data_length_v2(char* p) {
+  uint8_t phy = get_hex_byte(&p, 0);
+
+  if (sHciInterface) {
+    sHciInterface->le_read_maximum_data_length_v2(phy);
+    printf("Sent LeReadMaximumDataLengthV2 command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+
+void do_send_ble_set_data_length(char* p) {
+  uint16_t handle = get_hex(&p, -1);
+  uint16_t tx_pdu_length = get_hex(&p, -1);
+  uint16_t tx_time = get_hex(&p,-1);
+
+  if (sHciInterface) {
+    sHciInterface->ble_set_data_length(handle, tx_pdu_length, tx_time);
+    printf("Sent btsnd_hcic_ble_set_data_length command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+
+void do_send_ble_set_default_phy(char* p) {
+  uint8_t all_phys = get_hex_byte(&p, 0);
+  uint8_t tx_phys = get_hex_byte(&p, 1);
+  uint8_t rx_phys = get_hex_byte(&p, 2);
+
+  if (sHciInterface) {
+    sHciInterface->ble_set_default_phy(all_phys, tx_phys, rx_phys);
+    printf("Sent btsnd_hcic_ble_set_default_phy command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+void do_send_refresh_enc_key_v2(char* p) {
+  uint16_t conn_handle = get_hex(&p, 0);
+  uint8_t hdt_mic_length = get_hex_byte(&p, 0);
+  if (sHciInterface) {
+    sHciInterface->refresh_enc_key_v2(conn_handle, hdt_mic_length);
+    printf("Sent btsnd_hcic_ble_refresh_enc_key_v2 command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
+}
+void do_send_ble_set_data_length_v2(char* p) {
+  uint16_t handle = get_hex(&p, -1);
+  uint16_t tx_pdu_length = get_hex(&p, -1);
+  uint16_t tx_time = get_hex(&p,-1);
+  uint8_t phys = get_hex(&p, 0);
+
+  if (sHciInterface) {
+    sHciInterface->ble_set_data_length_v2(handle, tx_pdu_length, tx_time, phys);
+    printf("Sent btsnd_hcic_ble_set_data_length command via interface.\n");
+  } else {
+    printf("HCI Interface not available.\n");
+  }
 }
 #endif  // TEST_APP_INTERFACE
