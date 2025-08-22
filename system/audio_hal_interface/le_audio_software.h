@@ -108,6 +108,7 @@ private:
                                   int32_t priority) = 0;
     virtual void SuspendedForReconfiguration() = 0;
     virtual void ReconfigurationComplete() = 0;
+    virtual void StreamSuspended() = 0;
   };
 
 public:
@@ -131,6 +132,7 @@ public:
             const ::bluetooth::le_audio::broadcast_offload_config& config);
     void SuspendedForReconfiguration() override;
     void ReconfigurationComplete() override;
+    void StreamSuspended() override;
     // Read the stream of bytes sinked to us by the upper layers
     size_t Read(uint8_t* p_buf, uint32_t len);
     bool IsBroadcaster() { return is_broadcaster_; }
@@ -170,6 +172,7 @@ public:
                           int32_t priority) override;
     void SuspendedForReconfiguration() override;
     void ReconfigurationComplete() override;
+    void StreamSuspended() override;
     // Source the given stream of bytes to be sinked into the upper layers
     size_t Write(const uint8_t* p_buf, uint32_t len);
     void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
