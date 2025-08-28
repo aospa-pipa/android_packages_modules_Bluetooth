@@ -50,74 +50,11 @@ public class InteropUtil {
     }
 
     /**
-     * Check if a given address matches a known interoperability workaround identified by the
-     * interop feature.
+     * private InteropUtil() {}
      *
-     * @param feature a given interop feature defined in {@link InteropFeature}.
-     * @param address a given address to be matched.
-     * @return true if matched, false otherwise.
-     */
-    public static boolean interopMatchAddr(InteropFeature feature, String address) {
-        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
-        if (adapterService == null) {
-            Log.d(
-                    TAG,
-                    "interopMatchAddr: feature="
-                            + feature.name()
-                            + ", adapterService is null or vendor intf is not enabled");
-            return false;
-        }
-
-        Log.d(
-                TAG,
-                "interopMatchAddr: feature="
-                        + feature.name()
-                        + ", address="
-                        + BluetoothUtils.toAnonymizedAddress(address));
-        if (address == null) {
-            return false;
-        }
-
-        boolean matched = adapterService.interopMatchAddr(feature, address);
-        Log.d(TAG, "interopMatchAddr: matched=" + matched);
-        return matched;
-    }
-
-    /**
-     * Check if a given name matches a known interoperability workaround identified by the interop
-     * feature.
-     *
-     * @param feature a given interop feature defined in {@link InteropFeature}.
-     * @param name a given name to be matched.
-     * @return true if matched, false otherwise.
-     */
-    public static boolean interopMatchName(InteropFeature feature, String name) {
-        AdapterService adapterService = AdapterService.deprecatedGetAdapterService();
-        if (adapterService == null) {
-            Log.d(
-                    TAG,
-                    "interopMatchName: feature="
-                            + feature.name()
-                            + ", adapterService is null or vendor intf is not enabled");
-            return false;
-        }
-
-        Log.d(TAG, "interopMatchName: feature=" + feature.name() + ", name=" + name);
-        if (name == null) {
-            return false;
-        }
-
-        boolean matched = adapterService.interopMatchName(feature, name);
-        Log.d(TAG, "interopMatchName: matched=" + matched);
-        return matched;
-    }
-
-    private InteropUtil() {}
-
-    /**
-     * Check if a given address or remote device name matches a known interoperability workaround
-     * identified by the interop feature. remote device name will be fetched internally based on the
-     * given address at stack layer.
+     * <p>/** Check if a given address or remote device name matches a known interoperability
+     * workaround identified by the interop feature. remote device name will be fetched internally
+     * based on the given address at stack layer.
      *
      * @param feature a given interop feature defined in {@link InteropFeature}.
      * @param address a given address to be matched.
