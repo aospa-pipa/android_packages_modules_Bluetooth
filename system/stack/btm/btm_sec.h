@@ -719,9 +719,9 @@ bool btm_sec_is_a_bonded_dev_by_transport(const RawAddress& bda, tBT_TRANSPORT t
  * Returns          void
  *
  ******************************************************************************/
-void btm_sec_set_peer_sec_caps(uint16_t hci_handle, bool ssp_supported, bool host_sc_supported,
-                               bool controller_sc_supported, bool hci_role_switch_supported,
-                               bool br_edr_supported, bool le_supported);
+void btm_sec_set_peer_sec_caps(uint16_t hci_handle, bool ssp_supported, bool sc_supported,
+                               bool hci_role_switch_supported, bool br_edr_supported,
+                               bool le_supported);
 
 /*******************************************************************************
  *
