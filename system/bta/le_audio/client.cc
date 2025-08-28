@@ -156,6 +156,7 @@ using bluetooth::le_audio::types::kLeAudioContextAllRemoteSource;
 using bluetooth::le_audio::types::kLeAudioContextAllTypesArray;
 using bluetooth::le_audio::types::LeAudioContextType;
 using bluetooth::le_audio::types::PublishedAudioCapabilities;
+using bluetooth::le_audio::utils::AudioDeviceActiveSpeedTracker;
 using bluetooth::le_audio::utils::GetAudioContextsFromSinkMetadata;
 using bluetooth::le_audio::utils::GetAudioContextsFromSourceMetadata;
 using bluetooth::le_audio::utils::StreamSpeedTracker;
@@ -712,9 +713,12 @@ public:
     uint64_t timeoutMs = kAudioSuspentKeepIsoAliveTimeoutMs;
     timeoutMs = osi_property_get_int32(kAudioSuspentKeepIsoAliveTimeoutMsProp, timeoutMs);
 
+    auto group = aseGroups_.FindById(active_group_id_);
+
     if (com::android::bluetooth::flags::leaudio_improve_switching_le_audio_devices() &&
-        IsInVoipOrRegularCall()) {
-      /* Audio HAL might do additional Suspend/Resume calls - just keep CISes alive */
+        (IsInVoipOrRegularCall() || (group != nullptr && !group->IsActiveConfirmed()))) {
+      /* Audio HAL might do additional Suspend/Resume calls - just keep CISes alive in case of call
+       * and during the device switch use case.*/
       timeoutMs = kAudioSuspentKeepIsoAliveDuringCallTimeoutMs;
     }
 
@@ -1865,6 +1869,24 @@ public:
     group->SetAllowedContextMask(allowed_contexts);
   }
 
+  void GroupConfirmActive(int group_id) override {
+    log::debug("group_id: {}", group_id);
+    if (group_id == bluetooth::groups::kGroupUnknown) {
+      log::warn("Unknown group_id");
+      return;
+    }
+
+    LeAudioDeviceGroup* group = aseGroups_.FindById(group_id);
+    if (!group) {
+      log::warn("group_id {} does not exist", group_id);
+      return;
+    }
+    group->SetActiveConfirmed(true);
+    audio_dev_active_tracker_.Stop();
+    audio_dev_active_tracker_history_.emplace_front(audio_dev_active_tracker_);
+    audio_dev_active_tracker_.Reset();
+  }
+
   void StartAudioSession(LeAudioDeviceGroup* group) {
     /* This function is called when group is not yet set to active.
      * This is why we don't have to check if session is started already.
@@ -1949,6 +1971,11 @@ public:
     if (active_group_id_ == bluetooth::groups::kGroupUnknown) {
       return;
     }
+    auto group = aseGroups_.FindById(active_group_id_);
+    if (group) {
+      group->SetActiveConfirmed(false);
+    }
+
     auto group_id_to_close = active_group_id_;
     sink_monitor_notified_status_ = std::nullopt;
     source_monitor_notified_status_ = std::nullopt;
@@ -2042,9 +2069,9 @@ public:
     return true;
   }
 
-  void NotifySuspendedForGroupChange(void) {
-    log::info("audio_sender_state_ {}, audio_receiver_state_ {}", ToString(audio_sender_state_),
-              ToString(audio_receiver_state_));
+  void NotifySuspendedForGroupChange(int group_id) {
+    log::info("group_id: {} audio_sender_state_ {}, audio_receiver_state_ {}", group_id,
+              ToString(audio_sender_state_), ToString(audio_receiver_state_));
     if (audio_sender_state_ > AudioState::IDLE) {
       StreamSuspended(bluetooth::le_audio::types::kLeAudioDirectionSink);
       audio_sender_state_ = AudioState::IDLE;
@@ -2053,6 +2080,11 @@ public:
     if (audio_receiver_state_ > AudioState::IDLE) {
       StreamSuspended(bluetooth::le_audio::types::kLeAudioDirectionSource);
       audio_receiver_state_ = AudioState::IDLE;
+    }
+
+    auto group = aseGroups_.FindById(group_id);
+    if (group) {
+      group->SetActiveConfirmed(false);
     }
   }
 
@@ -2119,6 +2151,8 @@ public:
       callbacks_->OnGroupStatus(group_id, GroupStatus::INACTIVE);
       return;
     }
+
+    audio_dev_active_tracker_.Start(group_id);
 
     if (active_group_id_ != bluetooth::groups::kGroupUnknown) {
       if (active_group_id_ == group_id) {
@@ -2229,8 +2263,12 @@ public:
       /* In case there was an active group. Stop the stream, but before that, set
        * the new group so the group change is correctly handled in OnStateMachineStatusReportCb
        */
-      active_group_id_ = group_id;
       LeAudioDeviceGroup* prev_group = aseGroups_.FindById(previous_active_group);
+      if (prev_group) {
+        prev_group->StopConnSubrateIfNeeded();
+      }
+
+      active_group_id_ = group_id;
       log::info("switch group A to group B");
       if (prev_group && !prev_group->IsReleasingOrIdle()) {
         log::info("Previous group current state {}", ToString(prev_group->GetState()));
@@ -2248,7 +2286,7 @@ public:
       } else {
         log::info(" Previous group not streaming");
         if (com::android::bluetooth::flags::leaudio_improve_switching_le_audio_devices()) {
-          NotifySuspendedForGroupChange();
+          NotifySuspendedForGroupChange(previous_active_group);
         } else {
           SuspendedForReconfiguration();
         }
@@ -5173,6 +5211,13 @@ public:
     }
     stream << "\n";
 
+    stream << "  AudioDev active speed: ";
+    for (auto t : audio_dev_active_tracker_history_) {
+      t.Dump(stream);
+      stream << "\n\t\t\t ";
+    }
+    stream << "\n";
+
     aseGroups_.Dump(stream, active_group_id_);
     stream << "\n ";
     stream << "  Not grouped devices:\n";
@@ -5412,6 +5457,9 @@ public:
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
 
+    audio_dev_active_tracker_.LogAHALSuspendOperation(
+            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSource);
+
     /* Note: This callback is from audio hal driver.
      * Bluetooth peer is a Sink for Audio Framework.
      * e.g. Peer is a speaker
@@ -5543,6 +5591,8 @@ public:
                                             kLogAfResume + "LocalSource",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
+    audio_dev_active_tracker_.LogAHALResumeOperation(
+            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSource);
 
     /* Note: This callback is from audio hal driver.
      * Bluetooth peer is a Sink for Audio Framework.
@@ -5802,6 +5852,8 @@ public:
                                             kLogAfSuspend + "LocalSink",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
+    audio_dev_active_tracker_.LogAHALSuspendOperation(
+            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSink);
 
     if (IsInVoipCall()) {
       SetInVoipCall(false);
@@ -5902,6 +5954,8 @@ public:
                                             kLogAfResume + "LocalSink",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
+    audio_dev_active_tracker_.LogAHALResumeOperation(
+            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSink);
 
     /* Note: This callback is from audio hal driver.
      * Bluetooth peer is a Source for Audio Framework.
@@ -8005,6 +8059,8 @@ private:
   bool is_src_metadata_updated_before_resume_;
   StreamSpeedTracker speed_tracker_;
   std::deque<StreamSpeedTracker> stream_speed_history_;
+  AudioDeviceActiveSpeedTracker audio_dev_active_tracker_;
+  std::deque<AudioDeviceActiveSpeedTracker> audio_dev_active_tracker_history_;
 
   /* Microphone (s) */
   AudioState audio_receiver_state_;

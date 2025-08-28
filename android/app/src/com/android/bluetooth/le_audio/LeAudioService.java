@@ -2169,6 +2169,9 @@ public class LeAudioService extends ConnectableProfile {
         mAdapterService.handleActiveDeviceChange(mProfileId, device);
         notifyVolumeControlServiceAboutActiveGroup(device);
         sendActiveDeviceChangeIntent(device);
+        if (device != null) {
+            mNativeInterface.groupConfirmActive(getGroupId(device));
+        }
     }
 
     boolean isAnyGroupDisabledFromAutoActiveMode() {
