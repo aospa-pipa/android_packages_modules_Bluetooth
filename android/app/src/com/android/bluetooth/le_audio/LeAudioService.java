@@ -2169,6 +2169,9 @@ public class LeAudioService extends ConnectableProfile {
         mAdapterService.handleActiveDeviceChange(mProfileId, device);
         notifyVolumeControlServiceAboutActiveGroup(device);
         sendActiveDeviceChangeIntent(device);
+        if (device != null) {
+            mNativeInterface.groupConfirmActive(getGroupId(device));
+        }
     }
 
     boolean isAnyGroupDisabledFromAutoActiveMode() {
@@ -5236,7 +5239,8 @@ public class LeAudioService extends ConnectableProfile {
     public void setCcidInformation(ParcelUuid userUuid, int ccid, int contextType) {
         /* for the moment we care only for GMCS and GTBS */
         if (!BluetoothUuid.GENERIC_MEDIA_CONTROL.equals(userUuid)
-                && !TbsGatt.UUID_GTBS.equals(userUuid.getUuid())) {
+                && !TbsGatt.UUID_GTBS.equals(userUuid.getUuid())
+                && !BluetoothUuid.VAPS.equals(userUuid)) {
             return;
         }
         if (!mLeAudioNativeIsInitialized) {
