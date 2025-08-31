@@ -10,11 +10,13 @@ package {
 
 btifCommonIncludes = [
     "packages/modules/Bluetooth/system",
+    "packages/modules/Bluetooth/system/bta",
     "packages/modules/Bluetooth/system/bta/include",
     "packages/modules/Bluetooth/system/btif/include",
     "packages/modules/Bluetooth/system/gd",
     "packages/modules/Bluetooth/system/include",
     "packages/modules/Bluetooth/system/stack/include",
+    "packages/modules/Bluetooth/system/types/include",
 ]
 
 cc_library_static {
@@ -102,6 +104,7 @@ cc_library_static {
         "src/btif_uid.cc",
         "src/btif_util.cc",
         "src/btif_vendor.cc",
+        "src/btif_vaps_server.cc",
         "src/btif_vc.cc",
         "src/btif_gap.cc",
         "src/btif_gatt_qual.cc",
@@ -453,6 +456,7 @@ cc_test {
         ":TestMockBtaScn",
         ":TestMockBtaSdp",
         ":TestMockBtaSys",
+        ":TestMockBtaVaps",
         ":TestMockBtaVc",
         ":TestMockBtcore",
         ":TestMockBtu",
@@ -569,6 +573,7 @@ cc_test {
         ":TestMockBtaScn",
         ":TestMockBtaSdp",
         ":TestMockBtaSys",
+        ":TestMockBtaVaps",
         ":TestMockBtaVc",
         ":TestMockBtcore",
         ":TestMockBtu",

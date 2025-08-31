@@ -139,6 +139,8 @@ public class HeadsetService extends ConnectableProfile {
     private static final int[] CONNECTING_CONNECTED_STATES = {STATE_CONNECTING, STATE_CONNECTED};
     private static final int DIALING_OUT_TIMEOUT_MS = 10000;
     private static final int CLCC_END_MARK_INDEX = 0;
+    private static final int CLCC_RESPONSE_DELAY_MS = 300;
+    private static final int CLCC_RESPONSE_DELAY_AFTER_VOIP_CALL_MS = 1000;
 
     // Timeout for state machine thread join, to prevent potential ANR.
     private static final int SM_THREAD_JOIN_TIMEOUT_MS = 1000;
@@ -1109,12 +1111,11 @@ public class HeadsetService extends ConnectableProfile {
                         BluetoothStatsLog
                                 .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__SCO_DISCONNECT_AUDIO_END,
                         Binder.getCallingUid());
+            } else {
+                clearCommunicationDevice(device);
             }
         }
 
-        if (mSystemInterface.isScoManagedByAudioEnabled()) {
-            clearCommunicationDevice(device);
-        }
         enableSwbCodec(HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX, false, device);
         return true;
     }
@@ -1775,11 +1776,12 @@ public class HeadsetService extends ConnectableProfile {
                     return false;
                 }
                 HeadsetStateMachine stateMachine = mStateMachines.get(mActiveDevice);
-                if (stateMachine != null &&
-                    stateMachine.isDeviceBlacklistedForDelayingCLCCRespAfterVOIPCall()) {
-                    // send delayed message for active device if Blacklisted
+                if (stateMachine != null
+                        && stateMachine.isDeviceDenylistedForDelayingCLCCRespAfterVOIPCall()) {
+                    // send delayed message for active device if Denylisted
                     stateMachine.sendMessageDelayed(
-                    HeadsetStateMachine.SEND_CLCC_RESP_AFTER_VOIP_CALL, 1000);
+                            HeadsetStateMachine.CLCC_RSP_AFTER_VOIP_CALL_END,
+                            CLCC_RESPONSE_DELAY_AFTER_VOIP_CALL_MS);
                 }
             }
             if (!setActiveDevice(fromDevice)) {
@@ -2032,6 +2034,9 @@ public class HeadsetService extends ConnectableProfile {
                                     + fromDevice
                                     + " with status code "
                                     + disconnectStatus);
+                    if (mSystemInterface.isScoManagedByAudioEnabled()) {
+                        clearCommunicationDevice(fromDevice);
+                    }
                 }
                 mVoiceRecognitionStarted = false;
             }
@@ -2109,13 +2114,16 @@ public class HeadsetService extends ConnectableProfile {
              if ((numActive + numHeld) > 0 || callState != HeadsetHalConstants.CALL_STATE_IDLE) {
                 if (!isVirtualCall && mVirtualCallStarted) {
                     // stop virtual voice call if there is an incoming Telecom call update
-                    stopScoUsingVirtualVoiceCall();
-                    HeadsetStateMachine stateMachine = mStateMachines.get(mActiveDevice);
-                    if (stateMachine != null &&
-                        stateMachine.isDeviceBlacklistedForDelayingCLCCRespAfterVOIPCall()) {
-                        // send delayed message for active device if Blacklisted
-                        stateMachine.sendMessageDelayed(
-                        HeadsetStateMachine.SEND_CLCC_RESP_AFTER_VOIP_CALL, 300);
+                    if (stopScoUsingVirtualVoiceCall()) {
+                        HeadsetStateMachine stateMachine = mStateMachines.get(mActiveDevice);
+                        if (stateMachine != null
+                                && stateMachine
+                                        .isDeviceDenylistedForDelayingCLCCRespAfterVOIPCall()) {
+                            // send delayed message for active device if Denylisted
+                            stateMachine.sendMessageDelayed(
+                                    HeadsetStateMachine.CLCC_RSP_AFTER_VOIP_CALL_END,
+                                    CLCC_RESPONSE_DELAY_MS);
+                        }
                     }
                 }
                 if (mVoiceRecognitionStarted) {
