@@ -293,7 +293,7 @@ public class DistanceMeasurementManager {
 			params.getSightType(),
 			params.getLocationType(),
 			params.getCsSecurityLevel(),
-			tracker.mFrequency,tracker.mInterval);
+			tracker.mFrequency,tracker.mDuration);
         mNativeInterface.startDistanceMeasurement(
                 tracker.mAppUid,
                 tracker.mIdentityAddress,
