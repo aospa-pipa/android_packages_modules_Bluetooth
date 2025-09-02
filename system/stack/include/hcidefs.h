@@ -42,6 +42,7 @@
 #define HCI_GRP_STATUS_PARAMS (0x05 << 10)           /* 0x1400 */
 #define HCI_GRP_TESTING_CMDS (0x06 << 10)            /* 0x1800 */
 #define HCI_GRP_BLE_CMDS (0x08 << 10)                /* 0x2000 (LE Commands) */
+#define HCI_GRP_HDT_CMDS (0x3E << 10)
 
 #define HCI_GRP_VENDOR_SPECIFIC (0x3F << 10) /* 0xFC00 */
 
@@ -381,6 +382,7 @@
 #define HCI_BLE_READ_BUFFER_SIZE_V2 (0x0060 | HCI_GRP_BLE_CMDS)
 #define HCI_LE_SET_HOST_FEATURE (0x0074 | HCI_GRP_BLE_CMDS)
 
+#define HCI_LE_SET_CIG_PARAMS_V3 (0x03FE | HCI_GRP_HDT_CMDS)
 /* LE Get Vendor Capabilities Command opcode */
 #define HCI_BLE_VENDOR_CAP (0x0153 | HCI_GRP_VENDOR_SPECIFIC)
 #define HCI_LE_READ_ISO_TX_SYNC (0x0061 | HCI_GRP_BLE_CMDS)
@@ -1041,6 +1043,8 @@ typedef struct {
 
 #define HCI_LE_2M_PHY_SUPPORTED(x) ((x)[1] & 0x01)
 #define HCI_LE_CODED_PHY_SUPPORTED(x) ((x)[1] & 0x08)
+/* TODO: Decide and change bit number for HDT support */
+#define HCI_LE_HDT_PHY_SUPPORTED(x) ((x)[1] & 0x01)
 #define HCI_LE_EXTENDED_ADVERTISING_SUPPORTED(x) ((x)[1] & 0x10)
 #define HCI_LE_PERIODIC_ADVERTISING_SUPPORTED(x) ((x)[1] & 0x20)
 #define HCI_LE_PERIODIC_ADVERTISING_SYNC_TRANSFER_SENDER(x) ((x)[3] & 0x01)

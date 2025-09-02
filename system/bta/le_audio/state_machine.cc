@@ -57,6 +57,9 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/hcimsgs.h"
 #include "audio_hal_client/audio_hal_client.h"
+#include "le_audio/le_audio_types.h"
+#include "hci/controller.h"
+#include "main/shim/entry.h"
 
 #ifdef TARGET_FLOSS
 #include <audio_hal_interface/audio_linux.h>
@@ -132,6 +135,22 @@ constexpr uint8_t LTV_LEN_MAX_FT = 0X01;
 
 constexpr uint8_t ENCODER_LIMITS_SUB_OP = 0x24;
 constexpr uint8_t HCI_VS_SET_CIG_CONTEXT_TYPE = 0x3C;
+
+// Constants for HDT rates
+#define HDT_RATE_2 (1 << 0) // HDT rate 2
+#define HDT_RATE_3 (1 << 1) // HDT rate 3
+#define HDT_RATE_4 (1 << 2) // HDT rate 4
+#define HDT_RATE_6 (1 << 3) // HDT rate 6
+#define HDT_RATE_7_5 (1 << 4) // HDT rate 7.5
+
+// Constants for HDT MIC Length
+#define HDT_MIC_LENGTH_64_BITS 0x01
+#define HDT_MIC_LENGTH_128_BITS 0x02
+
+// Constants for HDT Packet Format
+#define HDT_PACKET_FORMAT_ANY_SUPPORTED 0x00
+#define HDT_PACKET_FORMAT_0 0x01
+#define HDT_PACKET_FORMAT_1 0x02
 
 typedef struct {
   uint8_t cig_id;
@@ -267,6 +286,7 @@ using bluetooth::le_audio::types::LeAudioCoreCodecConfig;
 using bluetooth::le_audio::types::VendorDataPathConfiguration;
 using bluetooth::le_audio::LeAudioSourceAudioHalClient;
 using bluetooth::le_audio::LeAudioSinkAudioHalClient;
+using bluetooth::le_audio::types::LeAudioContextType;
 
 void parseVSMetadata(uint8_t total_len, std::vector<uint8_t>& metadata,
                      uint8_t cig_id, uint8_t cis_id, struct ase* ase) {
@@ -2217,6 +2237,8 @@ private:
       phy_stom = bluetooth::hci::kIsoCigPhy1M;
     }
 
+    log::verbose(" phy_mtos: 0x{:02x}, phy_stom: 0x{:02x}",
+                    static_cast<int>(phy_mtos),  static_cast<int>(phy_stom));
     uint8_t rtn_mtos = 0;
     uint8_t rtn_stom = 0;
 
@@ -2251,6 +2273,23 @@ private:
       cis_cfg.cis_id = cis.id;
       cis_cfg.phy_mtos = phy_mtos;
       cis_cfg.phy_stom = phy_stom;
+      bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+      auto device = group->GetFirstActiveDevice();
+      auto controller = bluetooth::shim::GetController();
+      if(hdt_enabled &&
+           group->GetConfigurationContextType() == LeAudioContextType::MEDIA &&
+           device && (device->GetPhyBitmask() & bluetooth::hci::kIsoCigPhyHdt) &&
+           (controller && controller->SupportsBleHDTPhy())) {
+        log::info("Fill HDT parameters in CIS");
+        cis_cfg.coded_rates_c_to_p = 0x0003;
+        cis_cfg.coded_rates_p_to_c = 0x0003;
+        cis_cfg.hdt_rates_c_to_p =
+            (HDT_RATE_2 | HDT_RATE_3 | HDT_RATE_4 | HDT_RATE_6 | HDT_RATE_7_5); // 0x001F
+        cis_cfg.hdt_rates_p_to_c =
+            (HDT_RATE_2 | HDT_RATE_3 | HDT_RATE_4 | HDT_RATE_6 | HDT_RATE_7_5); // 0x001F
+        cis_cfg.hdt_mic_length = HDT_MIC_LENGTH_128_BITS; //0x02
+        cis_cfg.hdt_packet_format = HDT_PACKET_FORMAT_ANY_SUPPORTED; //0x00
+      }
       if (cis.type == bluetooth::le_audio::types::CisType::CIS_TYPE_BIDIRECTIONAL) {
         cis_cfg.max_sdu_size_mtos = max_sdu_size_mtos;
         cis_cfg.rtn_mtos = rtn_mtos;
@@ -2842,6 +2881,7 @@ private:
       conf.ase_id = ase->id;
       conf.target_latency = ase->target_latency;
       conf.target_phy = group->GetTargetPhy(ase->direction);
+      log::verbose("conf.target_phy:  0x{:02x}", static_cast<int>(conf.target_phy));
       conf.codec_id = ase->codec_config.id;
 
       if (!ase->codec_config.vendor_params.empty()) {

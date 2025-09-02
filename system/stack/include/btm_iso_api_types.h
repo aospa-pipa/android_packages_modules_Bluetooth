@@ -43,6 +43,7 @@ constexpr uint8_t kIsoCigFramingFramed = 0x01;
 constexpr uint8_t kIsoCigPhy1M = 0x01;
 constexpr uint8_t kIsoCigPhy2M = 0x02;
 constexpr uint8_t kIsoCigPhyC = 0x04;
+constexpr uint8_t kIsoCigPhyHdt = 0x10;
 
 namespace iso_manager {
 
@@ -129,6 +130,18 @@ struct cis_establish_cmpl_evt {
   uint16_t max_pdu_mtos;
   uint16_t max_pdu_stom;
   uint16_t iso_itv;
+  uint16_t sub_itv;
+  uint16_t max_sdu_c_to_p;
+  uint16_t max_sdu_p_to_c;
+  uint32_t sdu_itv_c_to_p;
+  uint32_t sdu_itv_p_to_c;
+  uint8_t framing;
+  uint16_t rates_c_to_p;
+  uint16_t rates_p_to_c;
+  uint8_t config_id;
+  uint8_t tl_group_id;
+  uint8_t encryption_enabled;
+  uint8_t mic_length;
 };
 
 struct cis_disconnected_evt {

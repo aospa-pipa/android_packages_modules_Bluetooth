@@ -78,6 +78,7 @@ constexpr uint8_t PHY_LE_NO_PACKET = 0x00;
 constexpr uint8_t PHY_LE_1M = 0x01;
 constexpr uint8_t PHY_LE_2M = 0x02;
 constexpr uint8_t PHY_LE_CODED = 0x04;
+constexpr uint8_t PHY_HDT = 0x10;
 constexpr bool kEnableBlePrivacy = true;
 constexpr bool kEnableBleOnlyInit1mPhy = false;
 
@@ -1012,6 +1013,20 @@ public:
         scan_parameters_coded.max_ce_length_ = 0x00;
         parameters.push_back(scan_parameters_coded);
         initiating_phys |= PHY_LE_CODED;
+      }
+      /* Disabling this since as per current spec, we do not create connection on HDT PHY */
+      if (false && controller_.SupportsBleHDTPhy() && !only_init_1m_phy) {
+        LeCreateConnPhyScanParameters scan_parameters_hdt;
+        scan_parameters_hdt.scan_interval_ = le_scan_interval;
+        scan_parameters_hdt.scan_window_ = le_scan_window_2m; // Assuming HDT uses similar window as 2M
+        scan_parameters_hdt.conn_interval_min_ = conn_interval_min;
+        scan_parameters_hdt.conn_interval_max_ = conn_interval_max;
+        scan_parameters_hdt.conn_latency_ = conn_latency;
+        scan_parameters_hdt.supervision_timeout_ = supervision_timeout;
+        scan_parameters_hdt.min_ce_length_ = 0x00;
+        scan_parameters_hdt.max_ce_length_ = 0x00;
+        parameters.push_back(scan_parameters_hdt);
+        initiating_phys |= PHY_HDT;
       }
 
       le_acl_connection_interface_->EnqueueCommand(

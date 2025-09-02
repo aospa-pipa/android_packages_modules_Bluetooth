@@ -134,6 +134,14 @@ struct acl_peer_supports_ble_coded_phy {
   bool operator()(uint16_t hci_handle) { return body(hci_handle); }
 };
 extern struct acl_peer_supports_ble_coded_phy acl_peer_supports_ble_coded_phy;
+// Name: acl_peer_supports_ble_hdt_phy
+// Params: uint16_t hci_handle
+// Returns: bool
+struct acl_peer_supports_ble_hdt_phy {
+  std::function<bool(uint16_t hci_handle)> body{[](uint16_t /* hci_handle */) { return false; }};
+  bool operator()(uint16_t hci_handle) { return body(hci_handle); }
+};
+extern struct acl_peer_supports_ble_hdt_phy acl_peer_supports_ble_hdt_phy;
 // Name: acl_peer_supports_ble_connection_parameters_request
 // Params:  const RawAddress& remote_bda
 // Returns: bool

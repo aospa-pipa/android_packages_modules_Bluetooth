@@ -456,6 +456,17 @@ void BTM_EScoConnRsp(uint16_t sco_inx, tHCI_STATUS hci_status, enh_esco_params_t
 
 /*******************************************************************************
  *
+ * Function         BTM_IsPhyHDTSupported
+ *
+ * Description      This function is called to check PHY HDT support
+ *                  from peer device
+ * Returns          True when PHY HDT supported false otherwise
+ *
+ ******************************************************************************/
+[[nodiscard]] bool BTM_IsPhyHDTSupported(const RawAddress& remote_bda, tBT_TRANSPORT transport);
+
+/*******************************************************************************
+ *
  * Function         BTM_RequestPeerSCA
  *
  * Description      This function is called to request sleep clock accuracy
