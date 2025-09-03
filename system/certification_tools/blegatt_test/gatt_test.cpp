@@ -300,6 +300,7 @@ int curr_handle = 0;
 int long_char_max_len_for_sr_gar_bi_13 = 100;
 
 std::map<RawAddress, std::vector<uint8_t>> cccd_value_map;
+std::unordered_map<int, std::vector<uint8_t>> handle_value_map;
 
 int exec_write_status = BT_STATUS_SUCCESS;
 int invalid_offset = 0x07;
@@ -1018,6 +1019,7 @@ static void server_connection_cb(int conn_id, int server_if, int transport,
                                          int connected, const RawAddress& bda) {
   printf("%s:: conn_id=%d, server_if=%d \n", __FUNCTION__, conn_id, server_if);
   g_conn_id = conn_id;
+  handle_value_map.clear();
 }
 
 static void request_read_cb(int conn_id, int trans_id, const RawAddress& bda,
@@ -1038,6 +1040,19 @@ static void request_read_cb(int conn_id, int trans_id, const RawAddress& bda,
 
   printf("%s:: offset=%d, is_long =%d \n", __FUNCTION__, offset, is_long);
 
+  auto it = handle_value_map.find(attr_handle);
+  if (it != handle_value_map.end()) {
+    std::vector<uint8_t> stored_value = it->second;
+    size_t len = stored_value.size();
+
+    if (offset > len) {
+      printf("%s:: Invalid offset for handle %d\n", __FUNCTION__, attr_handle);
+      status = invalid_offset;
+    } else {
+      memcpy(gatt_resp.attr_value.value, &stored_value[offset], len - offset);
+     gatt_resp.attr_value.len = (len - offset);
+   }
+  }
   if (attr_handle == 66) {
     printf("%s:: Invalid transport access over LE \n", __FUNCTION__);
     status = application_error;
@@ -1121,6 +1136,14 @@ static void request_write_cb(int conn_id, int trans_id, const RawAddress& bda,
   for (int i = 0; i < value_count; i++) {
     attr_value[i + offset] = value[i];
   }
+
+   //store value in map only if the length is 2 bytes.
+  if (value_count == 2) {
+     std::vector<uint8_t> value_vec(value, value + value_count);
+     handle_value_map[attr_handle] = value_vec;
+     printf("%s:: Stored 2-byte value for handle %d: [%02x %02x]\n",
+            __FUNCTION__, attr_handle, value[0], value[1]);
+    }
 
   // Client char configuration descriptor
   if (attr_handle == 43) {
@@ -2261,6 +2284,7 @@ static btgatt_callbacks_t sGatt_cb = {
     sizeof(btgatt_callbacks_t), &sGattClient_cb, &sGattServer_cb};
 void bdt_init(void) {
   bdt_log("INIT BT ");
+  handle_value_map.clear(); // Clear handle_value_map during BT initialization
   status =
       sBtInterface->init(&bt_callbacks, false, false, 0, false, "default");
   if (status == BT_STATUS_SUCCESS) {
@@ -2367,7 +2391,7 @@ void do_le_cl_register(int idx, bool eatt_support) {
   switch (idx) {
     case 1:
       uuid =
-          Uuid::FromString("0000A00C-0000-0000-01234-56789ABCDEF",
+          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
                            &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
       bt_uuid =
           Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
