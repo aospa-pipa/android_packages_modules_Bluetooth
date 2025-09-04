@@ -359,6 +359,8 @@ public class BatteryService extends ConnectableProfile {
                 return;
             }
             if (sm.getConnectionState() != STATE_DISCONNECTED) {
+                Log.i(TAG, "Disconnecting device because it was unbonded.");
+                disconnect(device);
                 return;
             }
             removeStateMachine(device);
