@@ -761,8 +761,7 @@ void do_l2cap_init(char* p) {
 void do_l2cap_deregister(char* p) { sL2capInterface->Deregister(g_PSM); }
 
 uint16_t do_l2cap_connect(char* p) {
-  RawAddress bd_addr;
-  RawAddress::FromString(p, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
 
   if ((L2CAP_FCR_STREAM_MODE == g_Fcr_Mode) ||
       (L2CAP_FCR_ERTM_MODE == g_Fcr_Mode)) {
@@ -773,8 +772,7 @@ uint16_t do_l2cap_connect(char* p) {
 }
 
 bool do_l2cap_ping(char* p) {
-  RawAddress bd_addr;
-  RawAddress::FromString(p, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
   if (FALSE == sL2capInterface->Ping(bd_addr, l2c_echo_rsp_cb)) {
     printf("Failed to send Ping Request \n");
     return FALSE;
@@ -783,8 +781,7 @@ bool do_l2cap_ping(char* p) {
 }
 
 bool do_l2cap_echo(char* p) {
-  RawAddress bd_addr;
-  RawAddress::FromString(p, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
   BT_HDR* p_buf = nullptr;
   if (bd_addr != RawAddress::kAny) {
     p_buf = create_pbuf();
@@ -980,8 +977,7 @@ static void l2c_send(char* p) {
 }
 
 static int l2c_pair(char* p) {
-  RawAddress bd_addr;
-  RawAddress::FromString(p, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
   if (BT_STATUS_SUCCESS !=
       sBtInterface->create_bond(&bd_addr, TRANSPORT_BREDR)) {
     printf("Failed to Initiate Pairing \n");
