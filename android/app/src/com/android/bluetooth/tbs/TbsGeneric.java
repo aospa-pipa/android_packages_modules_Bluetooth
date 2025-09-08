@@ -39,11 +39,8 @@ import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ServiceFactory;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_audio.ContentControlIdKeeper;
-import com.android.bluetooth.le_audio.LeAudioService;
-import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +49,6 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -118,8 +114,6 @@ public class TbsGeneric {
     private final List<Bearer> mBearerList = new ArrayList<>();
     private final Map<Integer, TbsCall> mCurrentCallsList = new TreeMap<>();
     private final Receiver mReceiver = new Receiver();
-    // TODO(b/422543753) Delete on flag cleanup
-    @VisibleForTesting ServiceFactory mFactory = new ServiceFactory();
 
     private final AdapterService mAdapterService;
     private final TbsGatt mTbsGatt;
@@ -204,15 +198,6 @@ public class TbsGeneric {
         mAdapterService.registerReceiver(mReceiver, filter);
 
         mIsInitialized = true;
-    }
-
-    // TODO(b/422543753) Delete on flag cleanup
-    Optional<LeAudioService> getLeAudioService() {
-        if (Flags.adapterServiceProfilesUseOptional()) {
-            return mAdapterService.getLeAudioService();
-        } else {
-            return Optional.ofNullable(mFactory.getLeAudioService());
-        }
     }
 
     public synchronized void cleanup() {
@@ -782,7 +767,7 @@ public class TbsGeneric {
             return false;
         }
 
-        final var leAudio = getLeAudioService();
+        final var leAudio = mAdapterService.getLeAudioService();
         if (leAudio.isEmpty()) {
             Log.w(TAG, "LeAudio service not available");
             return false;
@@ -839,7 +824,7 @@ public class TbsGeneric {
         if (opcode == TbsGatt.CALL_CONTROL_POINT_OPCODE_ACCEPT) {
             bearer.callback.onAcceptCall(requestId, callId);
             opResult = TbsGatt.CALL_CONTROL_POINT_RESULT_SUCCESS;
-            final var leAudio = getLeAudioService();
+            final var leAudio = mAdapterService.getLeAudioService();
             if (leAudio.isEmpty()) {
                 Log.d(TAG, "processCallControlOp(): clear cached ccp ops");
                 leAudio.get().clearCachedRemoteCcpOps();
@@ -886,7 +871,7 @@ public class TbsGeneric {
 
                 @Override
                 public boolean isInbandRingtoneEnabled(BluetoothDevice device) {
-                    final var leAudio = getLeAudioService();
+                    final var leAudio = mAdapterService.getLeAudioService();
                     if (leAudio.isEmpty()) {
                         Log.i(TAG, "LeAudio service not available");
                         return false;
@@ -923,7 +908,7 @@ public class TbsGeneric {
                                 processCallControlOp(device, opcode, args);
                                 return;
                             } else {
-                                final var leAudio = getLeAudioService();
+                                final var leAudio = mAdapterService.getLeAudioService();
                                 if (leAudio.isEmpty()) {
                                     Log.d(TAG, "onCallControlPointRequest: caching ccp operation");
                                     leAudio.get().cacheRemoteCcpOps(opcode, args);
@@ -1099,7 +1084,8 @@ public class TbsGeneric {
     private synchronized void notifyCclc() {
         Log.d(TAG, "notifyCclc");
 
-        getLeAudioService()
+        mAdapterService
+                .getLeAudioService()
                 .ifPresent(
                         leAudio -> {
                             if (mCurrentCallsList.size() > 0) {
@@ -1140,7 +1126,8 @@ public class TbsGeneric {
             return;
         }
 
-        getLeAudioService()
+        mAdapterService
+                .getLeAudioService()
                 .ifPresentOrElse(
                         leAudio -> {
                             leAudio.setActiveDevice(device);
@@ -1179,7 +1166,7 @@ public class TbsGeneric {
             return false;
         }
 
-        final var leAudio = getLeAudioService();
+        final var leAudio = mAdapterService.getLeAudioService();
         if (leAudio.isEmpty()) {
             Log.w(TAG, "shouldBlockTbsForBroadcastReceiver: LeAudioService is not available");
             return false;
