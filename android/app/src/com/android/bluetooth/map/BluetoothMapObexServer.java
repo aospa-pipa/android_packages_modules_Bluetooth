@@ -32,7 +32,7 @@ import android.os.UserManager;
 import android.telephony.TelephonyManager;
 import android.text.format.DateUtils;
 import android.util.Log;
-import com.android.bluetooth.DeviceWorkArounds;
+//import com.android.bluetooth.DeviceWorkArounds;
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.SignedLongLong;
@@ -679,7 +679,8 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
                                 + folderName
                                 + " resulted in this element: "
                                 + folderElement.getName());
-            } else {
+            } /* removed because getBluetoothMapService doesn't exist anymore
+              else {
                 String remoteAddress = BluetoothMapService.getBluetoothMapService().
                         getRemoteDevice().getAddress();
                 if ((DeviceWorkArounds.addressStartsWith(remoteAddress,
@@ -691,7 +692,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
                                 + " folder only");
                     folderElement = mCurrentFolder;
                 }
-             }
+             } */
         }
         return folderElement;
     }

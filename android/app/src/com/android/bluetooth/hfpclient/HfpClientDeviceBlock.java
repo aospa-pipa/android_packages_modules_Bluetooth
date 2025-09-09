@@ -29,7 +29,6 @@ import android.util.Log;
 
 import java.util.ArrayList;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.flags.Flags;
 
 import java.util.HashMap;
 import java.util.List;
@@ -349,14 +348,9 @@ class HfpClientDeviceBlock {
     private static Bundle getScoStateFromDevice(BluetoothDevice device) {
         Bundle bundle = new Bundle();
 
-        final Optional<HeadsetClientService> headsetClient;
-        if (Flags.adapterServiceProfilesUseOptional()) {
-            headsetClient =
-                    Optional.ofNullable(AdapterService.deprecatedGetAdapterService())
-                            .flatMap(AdapterService::getHeadsetClientService);
-        } else {
-            headsetClient = Optional.ofNullable(HeadsetClientService.getHeadsetClientService());
-        }
+        final var headsetClient =
+                Optional.ofNullable(AdapterService.deprecatedGetAdapterService())
+                        .flatMap(AdapterService::getHeadsetClientService);
         if (headsetClient.isEmpty()) {
             return bundle;
         }

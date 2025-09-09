@@ -21,7 +21,7 @@ package android.bluetooth;
  *
  * {@hide}
  */
-interface IBluetoothCallback
+oneway interface IBluetoothCallback
 {
     void onBluetoothStateChange(int prevState, int newState);
     void onAdapterNameChange(String name);

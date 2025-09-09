@@ -49,7 +49,6 @@ import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ConnectableProfile;
-import com.android.bluetooth.btservice.ServiceFactory;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
@@ -69,16 +68,12 @@ public class HearingAidService extends ConnectableProfile {
     // Upper limit of all HearingAid devices: Bonded or Connected
     private static final int MAX_HEARING_AID_STATE_MACHINES = 10;
 
-    @Deprecated // TODO(b/422543753) Delete on flag cleanup
-    private static HearingAidService sHearingAidService;
-
     private final HearingAidNativeInterface mNativeInterface;
     private final AudioManager mAudioManager;
     private final HandlerThread mStateMachinesThread;
     private final Looper mStateMachinesLooper;
     private final Handler mHandler;
 
-    ServiceFactory mFactory = new ServiceFactory();
 
     private final Map<BluetoothDevice, HearingAidStateMachine> mStateMachines = new HashMap<>();
     private final Map<BluetoothDevice, Long> mDeviceHiSyncIdMap = new ConcurrentHashMap<>();
@@ -119,7 +114,6 @@ public class HearingAidService extends ConnectableProfile {
                         () -> new HearingAidNativeInterface(mAdapterService, this));
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
 
-        setHearingAidService(this);
         mNativeInterface.init();
     }
 
@@ -138,9 +132,6 @@ public class HearingAidService extends ConnectableProfile {
 
         // Cleanup native interface
         mNativeInterface.cleanup();
-
-        // Mark service as stopped
-        setHearingAidService(null);
 
         // Destroy state machines and stop handler thread
         synchronized (mStateMachines) {
@@ -168,32 +159,6 @@ public class HearingAidService extends ConnectableProfile {
 
         mAudioManager.unregisterAudioDeviceCallback(mAudioManagerOnAudioDevicesAddedCallback);
         mAudioManager.unregisterAudioDeviceCallback(mAudioManagerOnAudioDevicesRemovedCallback);
-    }
-
-    /**
-     * Get the HearingAidService instance
-     *
-     * @return HearingAidService instance
-     */
-    @Deprecated // TODO(b/422543753) Delete on flag cleanup
-    public static synchronized HearingAidService getHearingAidService() {
-        if (sHearingAidService == null) {
-            Log.w(TAG, "getHearingAidService(): service is NULL");
-            return null;
-        }
-
-        if (!sHearingAidService.isAvailable()) {
-            Log.w(TAG, "getHearingAidService(): service is not available");
-            return null;
-        }
-        return sHearingAidService;
-    }
-
-    @VisibleForTesting
-    @Deprecated // TODO(b/422543753) Delete on flag cleanup
-    static synchronized void setHearingAidService(HearingAidService instance) {
-        Log.d(TAG, "setHearingAidService(): set to: " + instance);
-        sHearingAidService = instance;
     }
 
     /**
@@ -535,7 +500,7 @@ public class HearingAidService extends ConnectableProfile {
                 return false;
             }
 
-            LeAudioService leAudioService = mFactory.getLeAudioService();
+            LeAudioService leAudioService = mAdapterService.getLeAudioService().orElse(null);
             if (leAudioService != null) {
                 Log.i(TAG, "Make sure there is no broadcast active.");
                 leAudioService.setInactiveForBroadcast();

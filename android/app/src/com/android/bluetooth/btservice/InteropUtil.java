@@ -49,12 +49,12 @@ public class InteropUtil {
         INTEROP_DISABLE_ABSOLUTE_VOLUME;
     }
 
+    private InteropUtil() {}
+
     /**
-     * private InteropUtil() {}
-     *
-     * <p>/** Check if a given address or remote device name matches a known interoperability
-     * workaround identified by the interop feature. remote device name will be fetched internally
-     * based on the given address at stack layer.
+     * Check if a given address or remote device name matches a known interoperability workaround
+     * identified by the interop feature. remote device name will be fetched internally based on the
+     * given address at stack layer.
      *
      * @param feature a given interop feature defined in {@link InteropFeature}.
      * @param address a given address to be matched.

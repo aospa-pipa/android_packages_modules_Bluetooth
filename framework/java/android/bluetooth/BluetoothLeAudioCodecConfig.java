@@ -62,7 +62,6 @@ public final class BluetoothLeAudioCodecConfig implements Parcelable {
     public static final int SOURCE_CODEC_TYPE_LC3 = 0;
 
     /** Source codec type for Opus. */
-    @FlaggedApi(Flags.FLAG_LEAUDIO_ADD_OPUS_CODEC_TYPE)
     public static final int SOURCE_CODEC_TYPE_OPUS = 1;
 
     /** Source codec type for Opus High Resolution. */
@@ -450,16 +449,12 @@ public final class BluetoothLeAudioCodecConfig implements Parcelable {
     public @NonNull String getCodecName() {
         return switch (mCodecType) {
             case SOURCE_CODEC_TYPE_LC3 -> "LC3";
+            case SOURCE_CODEC_TYPE_OPUS -> "Opus";
             case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_LE -> "APTX_ADAPTIVE_LEA";
             case SOURCE_CODEC_TYPE_INVALID -> "INVALID CODEC";
             case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_R4 -> "APTX_ADAPTIVE_R4";
             case SOURCE_CODEC_TYPE_DEFAULT -> "DEFAULT";
             default -> {
-                if (Flags.leaudioAddOpusCodecType()) {
-                    if (mCodecType == SOURCE_CODEC_TYPE_OPUS) {
-                        yield "Opus";
-                    }
-                }
                 if (Flags.leaudioAddOpusHiResCodecTypeApi()) {
                     if (mCodecType == SOURCE_CODEC_TYPE_OPUS_HI_RES) {
                         yield "Opus Hi-Res";
