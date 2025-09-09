@@ -31,6 +31,7 @@ import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.IBluetoothHeadset;
 import android.content.AttributionSource;
+import android.util.Log;
 
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.ProfileService.IProfileServiceBinder;
@@ -54,6 +55,10 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
 
     @RequiresPermission(BLUETOOTH_CONNECT)
     private HeadsetService getService(AttributionSource source) {
+        if (source == null) {
+            Log.w(TAG, "getService received a null source");
+            return null;
+        }
         HeadsetService service = mService;
 
         if (Utils.isInstrumentationTestMode()) {
