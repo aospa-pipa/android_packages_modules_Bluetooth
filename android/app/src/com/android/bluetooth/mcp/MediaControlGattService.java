@@ -50,10 +50,7 @@ import android.util.Pair;
 
 import com.android.bluetooth.BluetoothEventLogger;
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.flags.Flags;
-import com.android.bluetooth.hearingaid.HearingAidService;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -66,7 +63,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -1201,15 +1197,6 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                 SystemProperties.getBoolean("persist.vendor.service.bt.ignorePTforBrodacast", true);
     }
 
-    // TODO(b/422543753) Delete on flag cleanup
-    Optional<LeAudioService> getLeAudioService() {
-        if (Flags.adapterServiceProfilesUseOptional()) {
-            return mAdapterService.getLeAudioService();
-        } else {
-            return Optional.ofNullable(LeAudioService.getLeAudioService());
-        }
-    }
-
     protected boolean init(UUID scvUuid) {
         mFeatures = mCallbacks.onGetFeatureFlags();
 
@@ -1339,7 +1326,7 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
 
             // Get all CSIP members (if any) connected to same group
             List<BluetoothDevice> connectedPeerDevices =
-                getLeAudioService().get().getConnectedPeerDevices(getLeAudioService().get().getGroupId(device));
+                mAdapterService.getLeAudioService().get().getConnectedPeerDevices(mAdapterService.getLeAudioService().get().getGroupId(device));
             for (BluetoothDevice groupMember : connectedPeerDevices){
                 Log.w(TAG, "handleMediaControlPointRequest: notify success to " + groupMember);
                 notifyCharacteristic(groupMember, characteristic);
@@ -1371,7 +1358,9 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
         if (!isBroadcastActive() && req.opcode() == Request.Opcodes.PLAY) {
             Log.w(TAG, "handleMediaControlPointRequest: " +
                            "making active for leaudio device: " + device);
-            getLeAudioService().ifPresent(leAudio -> leAudio.setActiveDevice(device));
+            mAdapterService
+                    .getLeAudioService()
+                    .ifPresent(leAudio -> leAudio.setActiveDevice(device));
         }
         mCallbacks.onMediaControlRequest(req);
 
@@ -2149,7 +2138,10 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
      * @return {@code true} if is broadcasting audio, {@code false} otherwise
      */
     private boolean isBroadcastActive() {
-        return getLeAudioService().map(LeAudioService::isBroadcastActive).orElse(false);
+        return mAdapterService
+                .getLeAudioService()
+                .map(LeAudioService::isBroadcastActive)
+                .orElse(false);
     }
 
     @VisibleForTesting

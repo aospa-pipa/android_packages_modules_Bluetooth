@@ -56,14 +56,6 @@ flag {
 }
 
 flag {
-    name: "directed_advertising_api"
-    namespace: "bluetooth"
-    is_exported: true
-    description: "Add new API for directed advertising"
-    bug: "378230500"
-}
-
-flag {
     name: "distance_measurement_thread"
     namespace: "bluetooth"
     description: "Makes distance measurement operations run on one thread."
@@ -301,6 +293,26 @@ flag {
     namespace: "bluetooth"
     description: "Do not cancel timeout alarm if l2cap is connecting"
     bug: "436736160"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "reset_service_change_ind_counter"
+    namespace: "bluetooth"
+    description: "Resets service change indication counter when fail to start discover"
+    bug: "438099407"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "ensure_acl_connection_is_removed_from_pending_list"
+    namespace: "bluetooth"
+    description: "Fix that ACL connection is left in the pending list when advertiser is removed right before connection is established."
+    bug: "441211531"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
