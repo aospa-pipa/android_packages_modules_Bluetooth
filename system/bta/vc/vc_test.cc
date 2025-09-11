@@ -645,10 +645,7 @@ protected:
     TestConnect(address);
     GetConnectedEvent(address, conn_id);
 
-    tBTA_GATTC_MULTI received_to_read_1{};
-    tBTA_GATTC_MULTI received_to_read_2{};
-
-    if (!com::android::bluetooth::flags::le_ase_read_multiple_variable()) {
+    if (!com_android_bluetooth_flags_le_ase_read_multiple_variable()) {
       EXPECT_CALL(gatt_queue, ReadCharacteristic(conn_id, _, _, _)).WillRepeatedly(DoDefault());
       for (auto const& handle : handles) {
         EXPECT_CALL(gatt_queue, ReadCharacteristic(conn_id, handle, _, _)).WillOnce(DoDefault());
@@ -1341,7 +1338,7 @@ protected:
 
 TEST_F(VolumeControlCallbackTest, test_volume_state_changed_stress) {
   std::vector<uint8_t> value({0x03, 0x01, 0x02});
-  if (!com::android::bluetooth::flags::vcp_handle_group_id_internally()) {
+  if (!com_android_bluetooth_flags_vcp_handle_group_id_internally()) {
     EXPECT_CALL(callbacks, OnVolumeStateChanged(test_address, 0x03, true, _, true));
   } else {
     EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x03, true, true));
@@ -2112,9 +2109,6 @@ TEST_F(VolumeControlValueSetTest, test_set_volume_stress) {
 }
 
 TEST_F(VolumeControlValueSetTest, test_set_volume_stress_2) {
-  uint8_t change_cnt = 0;
-  uint8_t vol = 1;
-
   // In this test we simulate notification coming later and operations will be queued
   ON_CALL(gatt_queue, WriteCharacteristic(conn_id, 0x0024, _, GATT_WRITE, _, _))
           .WillByDefault([](uint16_t conn_id, uint16_t handle, std::vector<uint8_t> value,
@@ -2157,9 +2151,6 @@ TEST_F(VolumeControlValueSetTest, test_set_volume_stress_2) {
 }
 
 TEST_F(VolumeControlValueSetTest, test_set_volume_stress_3) {
-  uint8_t change_cnt = 0;
-  uint8_t vol = 1;
-
   // In this test we simulate notification coming later and operations will be queued but some will
   // be removed from the queue
   ON_CALL(gatt_queue, WriteCharacteristic(conn_id, 0x0024, _, GATT_WRITE, _, _))
@@ -2310,7 +2301,7 @@ protected:
   void SetUp(void) override {
     VolumeControlTest::SetUp();
 
-  if (!com::android::bluetooth::flags::vcp_handle_group_id_internally()) {
+    if (!com_android_bluetooth_flags_vcp_handle_group_id_internally()) {
       ON_CALL(mock_csis_client_module_, Get()).WillByDefault(Return(&mock_csis_client_module_));
 
       // Report working CSIS

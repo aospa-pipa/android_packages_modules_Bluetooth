@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** Bass Utility functions */
 class BassUtils {
@@ -38,7 +39,7 @@ class BassUtils {
 
     static boolean containUuid(List<ScanFilter> filters, ParcelUuid uuid) {
         for (ScanFilter filter : filters) {
-            if (filter.getServiceDataUuid().equals(uuid)) {
+            if (Objects.equals(filter.getServiceDataUuid(), uuid)) {
                 return true;
             }
         }

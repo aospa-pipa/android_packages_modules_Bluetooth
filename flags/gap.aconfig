@@ -317,3 +317,20 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "l2cap_improve_segmented_sdu"
+    namespace: "bluetooth"
+    description: "Improve sending segmented sdu"
+    bug: "437272601"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "delay_jv_pm_idle"
+    namespace: "bluetooth"
+    description: "Delay the transition to the idle state for JV PM connection"
+    bug: "440618134"
+}

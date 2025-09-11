@@ -413,10 +413,11 @@ private:
     }
 
     types::BidirectionalPair<std::vector<AseConfiguration>> subconfigs;
-    uint8_t packing_type = bluetooth::hci::kIsoCigPackingInterleaved;
-    if (osi_property_get_bool("persist.vendor.btstack.sequential_packing_enable", false)) {
-      packing_type = bluetooth::hci::kIsoCigPackingSequential;
-      log::warn("Switching to sequential packing type");
+    uint8_t packing_type = bluetooth::hci::kIsoCigPackingSequential;
+
+    if (android::sysprop::bluetooth::LeAudio::iso_interleaved_packing_enabled().value_or(false)) {
+      log::info("Switching to default interleaved packing for CIG.");
+      packing_type = bluetooth::hci::kIsoCigPackingInterleaved;
     }
 
     if (codec_cfg != nullptr && codec_cfg->subconfigurations()) {

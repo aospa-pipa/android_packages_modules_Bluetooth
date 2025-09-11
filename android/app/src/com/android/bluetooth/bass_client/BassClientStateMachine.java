@@ -25,6 +25,7 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.flags.Flags.leaudioBisSyncControl;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastSimplifySetBcastCode;
+import static com.android.bluetooth.flags.Flags.leaudioIntentBroadcastInStateMachineCleanup;
 
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
@@ -303,6 +304,14 @@ class BassClientStateMachine extends StateMachine {
 
     public void doQuit() {
         Log.d(TAG, "doQuit for device " + mDevice);
+        int currentState = getConnectionState();
+        if (leaudioIntentBroadcastInStateMachineCleanup()
+                && currentState != STATE_DISCONNECTED
+                && mLastConnectionState != -1) {
+            // Broadcast CONNECTION_STATE_CHANGED when state machine is turned off while
+            // the device is connected
+            broadcastConnectionState(mDevice, currentState, STATE_DISCONNECTED);
+        }
         quitNow();
     }
 
@@ -1179,8 +1188,7 @@ class BassClientStateMachine extends StateMachine {
 
     /** getAllSources */
     public List<BluetoothLeBroadcastReceiveState> getAllSources() {
-        List list = new ArrayList(mBluetoothLeBroadcastReceiveStates.values());
-        return list;
+        return new ArrayList<>(mBluetoothLeBroadcastReceiveStates.values());
     }
 
     void acquireAllBassChars() {
