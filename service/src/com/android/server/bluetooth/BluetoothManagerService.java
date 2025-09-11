@@ -2014,6 +2014,8 @@ class BluetoothManagerService {
                         .addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
         if (!action.equals(ACTION_STATE_CHANGED)) {
             intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        } else {
+            intent.setFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
         }
         if (Flags.onlyBroadcastToLocalUser()) {
             mContext.sendBroadcastAsUser(intent, mUser, null, getTempAllowlistBroadcastOptions());
