@@ -1427,7 +1427,6 @@ TEST_F(CodecManagerTestHost, test_dual_bidir_swb_supported) {
               } else {
                 num_of_dual_bidir_swb_configs +=
                         std::count_if(confs->begin(), confs->end(), [&](auto const& cfg) {
-                          bool is_bidir = codec_manager->CheckCodecConfigIsDualBiDirSwb(*cfg);
                           return codec_manager->CheckCodecConfigIsDualBiDirSwb(*cfg);
                         });
               }
@@ -1477,7 +1476,6 @@ TEST_F(CodecManagerTestAdsp, test_dual_bidir_swb_supported) {
               } else {
                 num_of_dual_bidir_swb_configs +=
                         std::count_if(confs->begin(), confs->end(), [&](auto const& cfg) {
-                          bool is_bidir = codec_manager->CheckCodecConfigIsDualBiDirSwb(*cfg);
                           return codec_manager->CheckCodecConfigIsDualBiDirSwb(*cfg);
                         });
               }

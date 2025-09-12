@@ -100,8 +100,8 @@ public class AvrcpTargetService extends ProfileService {
     // Only used to see if the metadata has changed from its previous value
     private MediaData mCurrentData;
 
-    public AvrcpTargetService(AdapterService adapterService) {
-        this(requireNonNull(adapterService), null, null, null, Looper.myLooper());
+    public AvrcpTargetService(AdapterService adapterService, UserManager userManager) {
+        this(requireNonNull(adapterService), null, null, null, userManager, Looper.myLooper());
     }
 
     @VisibleForTesting
@@ -110,6 +110,7 @@ public class AvrcpTargetService extends ProfileService {
             AudioManager audioManager,
             AvrcpNativeInterface nativeInterface,
             AvrcpVolumeManager volumeManager,
+            UserManager userManager,
             Looper looper) {
         super(BluetoothProfile.AVRCP, requireNonNull(adapterService));
         mAudioManager =
@@ -139,7 +140,6 @@ public class AvrcpTargetService extends ProfileService {
                                 new AvrcpVolumeManager(
                                         requireNonNull(adapterService), mNativeInterface));
 
-        UserManager userManager = obtainSystemService(UserManager.class);
         if (userManager.isUserUnlocked()) {
             mMediaPlayerList.init(new ListCallback());
         }
