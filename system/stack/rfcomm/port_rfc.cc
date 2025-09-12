@@ -220,7 +220,6 @@ void PORT_StartCnf(tRFC_MCB* p_mcb, uint16_t result) {
         RFCOMM_ParameterNegotiationRequest(p_mcb, p_port->dlci, p_port->mtu);
       } else {
         log::warn("Unable start configuration dlci:{} result:{}", p_port->dlci, result);
-
         release_mcb = true;
 
         /* Send event to the application */
@@ -237,7 +236,7 @@ void PORT_StartCnf(tRFC_MCB* p_mcb, uint16_t result) {
     }
   }
 
-  if (com::android::bluetooth::flags::fix_socket_connection_failed_no_callback()) {
+  if (com_android_bluetooth_flags_fix_socket_connection_failed_no_callback()) {
     /* There can be a situation when after starting connection, user closes the */
     /* port, we can catch it here to close multiplexor channel */
     if (no_ports_up) {
@@ -460,7 +459,7 @@ void PORT_DlcEstablishInd(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
     (p_port->p_callback)(PORT_EV_CONNECTED, p_port->handle);
   }
 
-  if (com::android::bluetooth::flags::indicate_rfcomm_connection_complete_after_msc()) {
+  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
     if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
         p_port->p_mgmt_callback) {
       p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
@@ -515,7 +514,7 @@ void PORT_DlcEstablishCnf(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint16_t 
     (p_port->p_callback)(PORT_EV_CONNECTED, p_port->handle);
   }
 
-  if (com::android::bluetooth::flags::indicate_rfcomm_connection_complete_after_msc()) {
+  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
     if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
         p_port->p_mgmt_callback) {
       p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
@@ -662,7 +661,7 @@ void PORT_ControlInd(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* p_pars) {
                (p_port->peer_ctrl.modem_signal & MODEM_SIGNAL_RI) ? 1 : 0,
                (p_port->peer_ctrl.modem_signal & MODEM_SIGNAL_DCD) ? 1 : 0);
 
-  if (com::android::bluetooth::flags::indicate_rfcomm_connection_complete_after_msc()) {
+  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
     if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
       if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
         p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
@@ -709,7 +708,7 @@ void PORT_ControlCnf(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* /* p_pars */) {
     (p_port->p_callback)(event, p_port->handle);
   }
 
-  if (com::android::bluetooth::flags::indicate_rfcomm_connection_complete_after_msc()) {
+  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
     if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
       if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
         p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);

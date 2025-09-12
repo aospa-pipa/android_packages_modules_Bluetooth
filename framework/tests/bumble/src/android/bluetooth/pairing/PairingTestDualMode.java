@@ -42,9 +42,8 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.compatibility.common.util.AdoptShellPermissionsRule;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Empty;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
-
-import io.grpc.stub.StreamObserver;
 
 import org.junit.After;
 import org.junit.Before;
@@ -55,11 +54,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import pandora.HostProto;
+import pandora.HostProto.AdvertiseRequest;
+import pandora.HostProto.AdvertiseResponse;
 import pandora.SecurityProto;
-
-import java.time.Duration;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 @RunWith(TestParameterInjector.class)
 public class PairingTestDualMode {
@@ -70,25 +67,27 @@ public class PairingTestDualMode {
     public final PandoraDevice mBumble = new PandoraDevice();
 
     @Rule(order = 2)
+    public final PandoraDevice mSecondBumble = PandoraDevice.createSecondPandoraDevice();
+
+    @Rule(order = 3)
     public final EnableBluetoothRule mEnableBluetoothRule =
             new EnableBluetoothRule(false /* enableTestMode */, true /* toggleBluetooth */);
 
     @Mock private BluetoothProfile.ServiceListener mProfileServiceListener;
 
     private static final String TAG = PairingTestDualMode.class.getSimpleName();
-    private static final Duration INTENT_TIMEOUT = Duration.ofSeconds(10);
     private static final String BUMBLE_ALIAS = "Bumble";
+    private static boolean sToggleDevice = true;
 
     private final Context mTargetContext =
             InstrumentationRegistry.getInstrumentation().getTargetContext();
     private final BluetoothAdapter mAdapter =
             mTargetContext.getSystemService(BluetoothManager.class).getAdapter();
 
-    private final StreamObserverSpliterator<Void, SecurityProto.PairingEvent>
-            mPairingEventStreamObserver = new StreamObserverSpliterator<>();
     private TestUtil mUtil;
     private BluetoothDevice mBumbleDevice;
     private BluetoothDevice mRemoteLeDevice;
+    private PandoraDevice mCurrentDevice;
 
     @Before
     public void setUp() throws Exception {
@@ -98,22 +97,35 @@ public class PairingTestDualMode {
                         .setProfileServiceListener(mProfileServiceListener)
                         .setBluetoothAdapter(mAdapter)
                         .build();
-
-        mBumbleDevice = mBumble.getRemoteDevice();
-        mRemoteLeDevice =
-                mAdapter.getRemoteLeDevice(
-                        Utils.BUMBLE_RANDOM_ADDRESS, BluetoothDevice.ADDRESS_TYPE_RANDOM);
+        // switch the bumble devices to avoid profile connection interference
+        // caused by settings and system UI
+        if (sToggleDevice) {
+            mCurrentDevice = mBumble;
+            mRemoteLeDevice =
+                    mAdapter.getRemoteLeDevice(
+                            Utils.BUMBLE_RANDOM_ADDRESS, BluetoothDevice.ADDRESS_TYPE_RANDOM);
+        } else {
+            mCurrentDevice = mSecondBumble;
+            mRemoteLeDevice =
+                    mAdapter.getRemoteLeDevice(
+                            Utils.BUMBLE_RANDOM_ADDRESS_2, BluetoothDevice.ADDRESS_TYPE_RANDOM);
+        }
+        sToggleDevice = !sToggleDevice;
+        // Always read fresh address
+        HostProto.ReadLocalAddressResponse readLocalAddressResponse =
+                mCurrentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance());
+        mBumbleDevice =
+                mAdapter.getRemoteDevice(
+                        Utils.addressStringFromByteString(readLocalAddressResponse.getAddress()));
+        Log.d(TAG, "Bumble Device: " + mBumbleDevice);
+        Log.d(TAG, "Bumble LE Device: " + mRemoteLeDevice);
     }
 
     @After
     public void tearDown() throws Exception {
         Log.i(TAG, "Tearing Down");
-        Set<BluetoothDevice> bondedDevices = mAdapter.getBondedDevices();
-        if (bondedDevices.contains(mBumbleDevice)) {
-            mUtil.removeBond(null, mBumbleDevice);
-        }
-        if (bondedDevices.contains(mRemoteLeDevice)) {
-            mUtil.removeBond(null, mRemoteLeDevice);
+        for (BluetoothDevice device : mAdapter.getBondedDevices()) {
+            mUtil.removeBond(null, device);
         }
     }
 
@@ -160,36 +172,27 @@ public class PairingTestDualMode {
                                 BluetoothDevice.ACTION_ACL_CONNECTED,
                                 BluetoothDevice.ACTION_PAIRING_REQUEST)
                         .build();
-        // Pairing Event Observer
-        StreamObserver<SecurityProto.PairingEventAnswer> pairingEventAnswerObserver =
-                mBumble.security()
-                        .withDeadlineAfter(INTENT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
-                        .onPairing(mPairingEventStreamObserver);
-
+        StreamObserverSpliterator<AdvertiseRequest, AdvertiseResponse> responseObserver =
+                new StreamObserverSpliterator<>();
         // Start advertising for LE
-        mBumble.hostBlocking()
+        mCurrentDevice
+                .host()
                 .advertise(
                         HostProto.AdvertiseRequest.newBuilder()
                                 .setLegacy(true)
                                 .setConnectable(true)
                                 .setOwnAddressType(HostProto.OwnAddressType.RANDOM)
-                                .build());
+                                .build(),
+                        responseObserver);
         // Create bond over LE transport
         assertThat(mRemoteLeDevice.createBond(BluetoothDevice.TRANSPORT_LE)).isTrue();
 
         // Verify bonding intents
         testStep_VerifyBondIntents(intentReceiver, mRemoteLeDevice, BluetoothDevice.TRANSPORT_LE);
+        responseObserver.cancel("Canceling advertise request");
 
         // Approve pairing from Android
         assertThat(mRemoteLeDevice.setPairingConfirmation(true)).isTrue();
-
-        SecurityProto.PairingEvent pairingEvent = mPairingEventStreamObserver.iterator().next();
-        assertThat(pairingEvent.hasJustWorks()).isTrue();
-        pairingEventAnswerObserver.onNext(
-                SecurityProto.PairingEventAnswer.newBuilder()
-                        .setEvent(pairingEvent)
-                        .setConfirm(true)
-                        .build());
 
         // Ensure that pairing succeeds
         intentReceiver.verifyReceivedOrdered(
@@ -209,14 +212,6 @@ public class PairingTestDualMode {
         // Approve pairing from Android
         assertThat(mBumbleDevice.setPairingConfirmation(true)).isTrue();
 
-        pairingEvent = mPairingEventStreamObserver.iterator().next();
-        assertThat(pairingEvent.hasJustWorks()).isTrue();
-        pairingEventAnswerObserver.onNext(
-                SecurityProto.PairingEventAnswer.newBuilder()
-                        .setEvent(pairingEvent)
-                        .setConfirm(true)
-                        .build());
-
         // Ensure that pairing succeeds
         intentReceiver.verifyReceivedOrdered(
                 hasAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
@@ -225,10 +220,8 @@ public class PairingTestDualMode {
 
         // Check if bonded device's list contains REF device
         assertThat(mAdapter.getBondedDevices()).contains(mBumbleDevice);
-
         intentReceiver.close();
     }
-
     /**
      * Test the scenario where DUT is bonded with Bumble REF over LE, Pairing initiated by REF
      * device over BR/EDR.
@@ -271,37 +264,28 @@ public class PairingTestDualMode {
                                 BluetoothDevice.ACTION_ACL_CONNECTED,
                                 BluetoothDevice.ACTION_PAIRING_REQUEST)
                         .build();
-
-        StreamObserver<SecurityProto.PairingEventAnswer> pairingEventAnswerObserver =
-                mBumble.security()
-                        .withDeadlineAfter(INTENT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
-                        .onPairing(mPairingEventStreamObserver);
-
+        StreamObserverSpliterator<AdvertiseRequest, AdvertiseResponse> responseObserver =
+                new StreamObserverSpliterator<>();
         // Start advertising for LE
-        mBumble.hostBlocking()
+        mCurrentDevice
+                .host()
                 .advertise(
                         HostProto.AdvertiseRequest.newBuilder()
                                 .setLegacy(true)
                                 .setConnectable(true)
                                 .setOwnAddressType(HostProto.OwnAddressType.RANDOM)
-                                .build());
+                                .build(),
+                        responseObserver);
 
         // Create bond over LE transport
         assertThat(mRemoteLeDevice.createBond(BluetoothDevice.TRANSPORT_LE)).isTrue();
 
         // Verify bonding intents
         testStep_VerifyBondIntents(intentReceiver, mRemoteLeDevice, BluetoothDevice.TRANSPORT_LE);
+        responseObserver.cancel("Canceling advertise request");
 
         // Approve pairing from Android
         assertThat(mRemoteLeDevice.setPairingConfirmation(true)).isTrue();
-
-        SecurityProto.PairingEvent pairingEvent = mPairingEventStreamObserver.iterator().next();
-        assertThat(pairingEvent.hasJustWorks()).isTrue();
-        pairingEventAnswerObserver.onNext(
-                SecurityProto.PairingEventAnswer.newBuilder()
-                        .setEvent(pairingEvent)
-                        .setConfirm(true)
-                        .build());
 
         // Ensure that pairing succeeds
         intentReceiver.verifyReceivedOrdered(
@@ -314,14 +298,6 @@ public class PairingTestDualMode {
 
         // Start bonding from remote side
         testStep_BondBredrFromRemote(intentReceiver);
-
-        pairingEvent = mPairingEventStreamObserver.iterator().next();
-        assertThat(pairingEvent.hasJustWorks()).isTrue();
-        pairingEventAnswerObserver.onNext(
-                SecurityProto.PairingEventAnswer.newBuilder()
-                        .setEvent(pairingEvent)
-                        .setConfirm(true)
-                        .build());
 
         // Ensure that pairing succeeds
         intentReceiver.verifyReceivedOrdered(
@@ -393,7 +369,8 @@ public class PairingTestDualMode {
                 ByteString.copyFrom(Utils.addressBytesFromString(mAdapter.getAddress()));
         HostProto.ConnectRequest connectionRequest =
                 HostProto.ConnectRequest.newBuilder().setAddress(address).build();
-        HostProto.ConnectResponse response = mBumble.hostBlocking().connect(connectionRequest);
+        HostProto.ConnectResponse response =
+                mCurrentDevice.hostBlocking().connect(connectionRequest);
 
         assertThat(response.hasConnection()).isTrue();
 
@@ -549,7 +526,8 @@ public class PairingTestDualMode {
                                 BluetoothDevice.ACTION_BOND_STATE_CHANGED,
                                 BluetoothDevice.ACTION_PAIRING_REQUEST));
         HostProto.ConnectResponse response =
-                mBumble.hostBlocking()
+                mCurrentDevice
+                        .hostBlocking()
                         .connect(
                                 HostProto.ConnectRequest.newBuilder()
                                         .setAddress(
@@ -560,7 +538,8 @@ public class PairingTestDualMode {
         // Start pairing from Bumble
         StreamObserverSpliterator<SecurityProto.SecureRequest, SecurityProto.SecureResponse>
                 responseObserver = new StreamObserverSpliterator<>();
-        mBumble.security()
+        mCurrentDevice
+                .security()
                 .secure(
                         SecurityProto.SecureRequest.newBuilder()
                                 .setConnection(response.getConnection())

@@ -18,6 +18,7 @@
 
 #include "device_groups.h"
 
+#include <android_bluetooth_sysprop.h>
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
 #include <bluetooth/types/bt_transport.h>
@@ -620,21 +621,26 @@ uint8_t LeAudioDeviceGroup::GetSCA(void) const {
 }
 
 uint8_t LeAudioDeviceGroup::GetPacking(void) const {
-  uint8_t packing_type = bluetooth::hci::kIsoCigPackingInterleaved;
-
   if (osi_property_get_bool("persist.vendor.btstack.sequential_packing_enable", false)) {
-    packing_type = bluetooth::hci::kIsoCigPackingSequential;
     log::warn("Switching to sequential packing type ");
-    return packing_type;
+    return bluetooth::hci::kIsoCigPackingSequential;
   }
 
-  if (!stream_conf.conf) {
-    log::warn("No stream configuration has been set, return interleaved");
-    return packing_type;
+  if (stream_conf.conf) {
+    log::info("packing type: {}",
+              stream_conf.conf->packing == bluetooth::hci::kIsoCigPackingSequential
+                      ? "Sequential"
+                      : "Interleaved");
+    return stream_conf.conf->packing;
   }
 
-  log::warn("No stream configuration has been set, return default interleaved");
-  return stream_conf.conf->packing;
+  if (android::sysprop::bluetooth::LeAudio::iso_interleaved_packing_enabled().value_or(false)) {
+    log::info("No stream configuration has been set, return Interleaved packing type");
+    return bluetooth::hci::kIsoCigPackingInterleaved;
+  }
+
+  log::info("No stream configuration has been set, return Sequential packing type");
+  return bluetooth::hci::kIsoCigPackingSequential;
 }
 
 uint8_t LeAudioDeviceGroup::GetFraming(void) const {
@@ -898,7 +904,7 @@ uint16_t LeAudioDeviceGroup::GetRemoteDelay(uint8_t direction) const {
 
 BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
         types::LeAudioContextType ctx_type) const {
-  if (!com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+  if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
     BidirectionalPair<bool> remote_directions = {true, true};
     // Remove the Source support if Sink only scenario is used
     // Note: With the RINGTONE we should already prepare for a call.
@@ -995,7 +1001,7 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         continue;
       }
 
-      if (!com::android::bluetooth::flags::leaudio_use_context_type_manager()) {
+      if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
         if (ctx_type == types::LeAudioContextType::VOICEASSISTANTS ||
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
@@ -1111,7 +1117,7 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
       }
       break;
     case ::bluetooth::le_audio::types::LeAudioContextType::MEDIA:
-      if (com::android::bluetooth::flags::dsa_use_codec_extensibility() &&
+      if (com_android_bluetooth_flags_dsa_use_codec_extensibility() &&
           (dsa_.mode == DsaMode::ISO_SW || dsa_.mode == DsaMode::ISO_HW)) {
         log::debug("Setting the DSA flag for mode: {}", common::ToString(dsa_.mode));
         // Set the DSA flags
@@ -1151,8 +1157,8 @@ bool LeAudioDeviceGroup::UpdateAudioSetConfigurationCache(LeAudioContextType ctx
                                                           bool use_preference) const {
   log::info("ctx_type: {}", ToHexString(ctx_type));
   auto requirements = GetAudioSetConfigurationRequirements(ctx_type);
-  if (com::android::bluetooth::flags::leaudio_use_context_type_manager() &&
-      !requirements.sink_pacs && !requirements.source_pacs) {
+  if (com_android_bluetooth_flags_leaudio_use_context_type_manager() && !requirements.sink_pacs &&
+      !requirements.source_pacs) {
     log::debug("No requirements for context type: {}", common::ToString(ctx_type));
     return false;
   }
@@ -1646,9 +1652,8 @@ void LeAudioDeviceGroup::CigConfiguration::GetCisCount(LeAudioContextType contex
 
   // For non-LC3 codecs like Opus, we should base the strategy calcualation based on the config
   const bool derive_strategy_from_config =
-          current_config && true/*com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()*/;
+          current_config && true/*com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()*/;
   log::info("derive_strategy_from_config {}", derive_strategy_from_config);
-
   auto strategy = derive_strategy_from_config
                           ? group_->FindGroupStrategyForConfig(current_config.get())
                           : group_->GetGroupSinkStrategy();
@@ -2863,7 +2868,7 @@ std::unique_ptr<types::AudioSetConfiguration> LeAudioDeviceGroup::FindFirstSuppo
 }
 
 void LeAudioDeviceGroup::StartConnSubrateIfNeeded() {
-  if (!com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only()) {
+  if (!com_android_bluetooth_flags_start_leaudio_subrate_for_active_set_only()) {
     return;
   }
 
@@ -2874,7 +2879,7 @@ void LeAudioDeviceGroup::StartConnSubrateIfNeeded() {
 }
 
 void LeAudioDeviceGroup::StopConnSubrateIfNeeded() {
-  if (!com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only()) {
+  if (!com_android_bluetooth_flags_start_leaudio_subrate_for_active_set_only()) {
     return;
   }
 
@@ -3019,7 +3024,7 @@ void LeAudioDeviceGroup::Dump(std::stringstream& stream, int active_group_id) co
 
   stream << std::format("      DSA mode: {}{}, is_active: {}\n", common::ToString(dsa_.mode),
                         (dsa_.mode == DsaMode::DISABLED) ? ""
-                        : com::android::bluetooth::flags::dsa_use_codec_extensibility()
+                        : com_android_bluetooth_flags_dsa_use_codec_extensibility()
                                 ? " (codec extensibility)"
                                 : " (static)",
                         dsa_.active);

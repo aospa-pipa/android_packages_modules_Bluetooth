@@ -89,7 +89,7 @@ LeAudioContextType AudioContentToLeAudioContext(audio_content_type_t content_typ
       return LeAudioContextType::SOUNDEFFECTS;
     case AUDIO_USAGE_GAME:
       if (content_type == AUDIO_CONTENT_TYPE_SONIFICATION &&
-          com::android::bluetooth::flags::leaudio_use_game_sonification_as_regular_sonification()) {
+          com_android_bluetooth_flags_leaudio_use_game_sonification_as_regular_sonification()) {
         return LeAudioContextType::SOUNDEFFECTS;
       }
       return LeAudioContextType::GAME;
@@ -188,7 +188,7 @@ bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType
   } else if (codecId == types::LeAudioCodecIdAptxLeX) {
     return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX;
   } else if (codecId == types::LeAudioCodecIdOpus) {
-    if (!com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()) {
+    if (!com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()) {
       return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS;
     }
     if (sampling_frequency_hz.has_value() &&
@@ -228,7 +228,7 @@ types::LeAudioCodecId translateCodecTypeToLeAudioCodecId(btle_audio_codec_index_
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS:
       return types::LeAudioCodecIdOpus;
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES:
-      if (com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()) {
+      if (com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()) {
         return types::LeAudioCodecIdOpus;
       }
       [[fallthrough]];
