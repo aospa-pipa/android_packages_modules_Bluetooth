@@ -1429,8 +1429,9 @@ public:
       return;
     }
 
-    log::debug("device: {}, group connected: {}, all active ase disconnected:: {}",
-               leAudioDevice->address_, group->IsAnyDeviceConnected(),
+    log::debug("device: {}, group connected: {}, group disconnecting: {}, "
+               "all active ase disconnected:: {}",leAudioDevice->address_,
+               group->IsAnyDeviceConnected(), group->IsAnyDeviceDisconnecting(),
                group->HaveAllCisesDisconnected());
 
     if (group->IsAnyDeviceConnected()) {
@@ -1447,6 +1448,15 @@ public:
 
       if (!group->IsInTransitionTo(AseState::BTA_LE_AUDIO_ASE_STATE_IDLE)) {
         /* do nothing if not transitioning to IDLE */
+        return;
+      }
+    } else if (group->IsAnyDeviceDisconnecting()) {
+      /* ACL of one of the device has been dropped
+       * and other devie is disconnecting.
+       */
+      if (!group->HaveAllCisesDisconnected()) {
+        /* some CISes are connected */
+        SendStreamingStatusCbIfNeeded(group);
         return;
       }
     }
