@@ -1429,8 +1429,9 @@ public:
       return;
     }
 
-    log::debug("device: {}, group connected: {}, all active ase disconnected:: {}",
-               leAudioDevice->address_, group->IsAnyDeviceConnected(),
+    log::debug("device: {}, group connected: {}, group disconnecting: {}, "
+               "all active ase disconnected:: {}",leAudioDevice->address_,
+               group->IsAnyDeviceConnected(), group->IsAnyDeviceDisconnecting(),
                group->HaveAllCisesDisconnected());
 
     if (group->IsAnyDeviceConnected()) {
@@ -1447,6 +1448,15 @@ public:
 
       if (!group->IsInTransitionTo(AseState::BTA_LE_AUDIO_ASE_STATE_IDLE)) {
         /* do nothing if not transitioning to IDLE */
+        return;
+      }
+    } else if (group->IsAnyDeviceDisconnecting()) {
+      /* ACL of one of the device has been dropped
+       * and other devie is disconnecting.
+       */
+      if (!group->HaveAllCisesDisconnected()) {
+        /* some CISes are connected */
+        SendStreamingStatusCbIfNeeded(group);
         return;
       }
     }
@@ -2712,6 +2722,7 @@ private:
       case AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING: {
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_IDLE);
         ase->active = false;
+        ase->reconfigure = false;
         ase->configured_for_context_type =
                 bluetooth::le_audio::types::LeAudioContextType::UNINITIALIZED;
 
@@ -3161,6 +3172,7 @@ private:
       case AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING:
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED);
         ase->active = false;
+        ase->reconfigure = false;
 
         if (!leAudioDevice->HaveAllActiveAsesSameState(
                     AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED)) {
@@ -3620,6 +3632,7 @@ private:
       } else {
         log::info("{}, ase: {} already in idle. Deactivate it", leAudioDevice->address_, ase->id);
         ase->active = false;
+        ase->reconfigure = false;
       }
     } while ((ase = leAudioDevice->GetNextActiveAse(ase)));
 
