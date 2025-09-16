@@ -663,7 +663,7 @@ public class VolumeControlService extends ConnectableProfile {
                             + isMute
                             + ", new volume: "
                             + volume);
-            if (isStreamMute) {
+            if (isStreamMute && (volume == 0)) {
                 Log.i(TAG, "Mute the device " + device);
                 mute(device);
             }
