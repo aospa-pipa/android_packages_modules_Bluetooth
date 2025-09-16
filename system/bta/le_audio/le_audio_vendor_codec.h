@@ -126,6 +126,88 @@ static bool IsKnownCodec(uint16_t vendor_codec_id) {
 }
 }  // namespace google
 
+namespace qualcomm {
+
+static const std::map<uint8_t, bluetooth::le_audio::btle_audio_frame_duration_index_t>
+        frame_duration_map = {
+                {codec_spec_conf::kLeAudioCodecFrameDur7500us,
+                 bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_7500US},
+                {codec_spec_conf::kLeAudioCodecFrameDur10000us,
+                 bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_10000US},
+};
+
+static void FillRemoteCapabilityToBtLeAudioCodecConfigs(
+        types::LeAudioCodecId codec_id, const std::vector<uint8_t>& capabilities,
+        std::vector<btle_audio_codec_config_t>& vec) {
+
+  types::LeAudioLtvMap ltv;
+  if (!ltv.Parse(capabilities.data(), capabilities.size())) {
+    log::error("Error parsing R3/R4 codec capabilities");
+    return;
+  }
+  auto caps = ltv.GetAsCoreCodecCapabilities();
+
+  for (uint8_t freq_bit = codec_spec_conf::kLeAudioSamplingFreq8000Hz;
+       freq_bit <= codec_spec_conf::kLeAudioSamplingFreq384000Hz; freq_bit++) {
+    if (!caps.IsSamplingFrequencyConfigSupported(freq_bit)) {
+      continue;
+    }
+    for (auto [fd_bit, fd_idx] : frame_duration_map) {
+      if (!caps.IsFrameDurationConfigSupported(fd_bit)) {
+        if ((codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe) &&
+          (codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX)) {
+          continue;
+        }
+      }
+      if (!caps.HasSupportedAudioChannelCounts()) {
+        btle_audio_codec_config_t config = {
+                .codec_type = utils::translateLeAudioCodecIdToCodecType(
+                        codec_id, types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
+                .sample_rate = utils::translateToBtLeAudioCodecConfigSampleRate(
+                        types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
+                .bits_per_sample =
+                        utils::translateToBtLeAudioCodecConfigBitPerSample(16),
+                .channel_count = utils::translateToBtLeAudioCodecConfigChannelCount(1),
+                .frame_duration = fd_idx,
+        };
+        vec.push_back(config);
+      } else {
+        for (int chan_bit = 1; chan_bit <= 2; chan_bit++) {
+          if (!caps.IsAudioChannelCountsSupported(chan_bit)) {
+            continue;
+          }
+          btle_audio_codec_config_t config = {
+                  .codec_type = utils::translateLeAudioCodecIdToCodecType(
+                          codec_id,
+                          types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
+                  .sample_rate = utils::translateToBtLeAudioCodecConfigSampleRate(
+                          types::LeAudioCoreCodecConfig::GetSamplingFrequencyHz(freq_bit)),
+                  .bits_per_sample =
+                          utils::translateToBtLeAudioCodecConfigBitPerSample(16),
+                  .channel_count = utils::translateToBtLeAudioCodecConfigChannelCount(chan_bit),
+                  .frame_duration = fd_idx,
+          };
+          vec.push_back(config);
+        }
+      }
+    }
+  }
+}
+
+static bool IsKnownCodec(uint16_t vendor_codec_id) {
+  switch (vendor_codec_id) {
+    case types::kLeAudioCodingFormatAptxLe:
+      return true;
+    case types::kLeAudioCodingFormatAptxLeX:
+      return true;
+    default:
+      log::error("Unknown vendor codec identifier: {}", +vendor_codec_id);
+      return false;
+  }
+  return false;
+}
+} // namespace qualcomm
+
 static bool IsKnownCodec(const types::LeAudioCodecId& codec_id) {
   if (codec_id.coding_format != types::kLeAudioCodingFormatVendorSpecific) {
     log::error("Codec: {} is not a vendor specific coding format.", common::ToString(codec_id));
@@ -135,6 +217,8 @@ static bool IsKnownCodec(const types::LeAudioCodecId& codec_id) {
   switch (codec_id.vendor_company_id) {
     case types::kLeAudioVendorCompanyIdGoogle:
       return google::IsKnownCodec(codec_id.vendor_codec_id);
+    case types::kLeAudioVendorCompanyIdQualcomm:
+      return qualcomm::IsKnownCodec(codec_id.vendor_codec_id);
     default:
       log::error("Unknown vendor codec: {}", common::ToString(codec_id));
       return false;
@@ -153,6 +237,9 @@ static void FillRemoteCapabilityToBtLeAudioCodecConfigs(
   switch (codec_id.vendor_company_id) {
     case types::kLeAudioVendorCompanyIdGoogle:
       google::FillRemoteCapabilityToBtLeAudioCodecConfigs(codec_id, capabilities, out_vec);
+      break;
+    case types::kLeAudioVendorCompanyIdQualcomm:
+      qualcomm::FillRemoteCapabilityToBtLeAudioCodecConfigs(codec_id, capabilities, out_vec);
       break;
     default:
       log::error("Unknown vendor codec: {}", common::ToString(codec_id));
