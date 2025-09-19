@@ -47,6 +47,7 @@ import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.EncryptionStatus;
+import android.bluetooth.GattOffloadCapabilities;
 import android.bluetooth.IBluetooth;
 import android.bluetooth.IBluetoothActivityEnergyInfoListener;
 import android.bluetooth.IBluetoothConnectionCallback;
@@ -2144,40 +2145,51 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         return service.isConnected(device, transport);
     }
 
+    @Override
+    public GattOffloadCapabilities.InnerParcel getSupportedGattOffloadCapabilities(
+            AttributionSource source) {
+        AdapterService service = getService();
+        if (service == null) {
+            return null;
+        }
+        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        return service.getSupportedGattOffloadCapabilities();
+    }
+
     // Either implement these custom methods, or remove them from IBluetooth.
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public void setBondingInitiatedLocally(BluetoothDevice device, boolean localInitiated,
-	    AttributionSource source) {}
+            AttributionSource source) {}
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public boolean isTwsPlusDevice(BluetoothDevice device,
-	    AttributionSource attributionSource) { return false; }
+            AttributionSource attributionSource) { return false; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public String getTwsPlusPeerAddress(BluetoothDevice device,
-	    AttributionSource attributionSource) { return null; }
+            AttributionSource attributionSource) { return null; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int setSocketOpt(int type, int port, int optionName, byte [] optionVal,
-	    int optionLen) { return -1; }
+            int optionLen) { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int getSocketOpt(int type, int port, int optionName,
-	    byte [] optionVal) { return -1; }
+            byte [] optionVal) { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int getDeviceType(BluetoothDevice device, AttributionSource source)
-	    { return -1; }
+            { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public boolean isBroadcastActive(AttributionSource attributionSource) {
-	return true;
+        return true;
     }
 }
