@@ -27,7 +27,6 @@ import com.android.tools.lint.detector.api.Scope
 import com.android.tools.lint.detector.api.Severity
 import com.android.tools.lint.detector.api.SourceCodeScanner
 import com.android.tools.lint.detector.api.getUMethod
-import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiMethod
@@ -36,7 +35,11 @@ import org.jetbrains.uast.UAnnotation
 import org.jetbrains.uast.UCallExpression
 import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UExpression
+import org.jetbrains.uast.UField
 import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.getContainingUMethod
+import org.jetbrains.uast.toUElementOfType
+import org.jetbrains.uast.tryResolve
 import org.jetbrains.uast.visitor.AbstractUastVisitor
 
 /**
@@ -103,14 +106,15 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
             }
 
             val declaredPermissions = getRequiredPermissionsFromMethod(context, node)
-            val nodeName = (node.uastParent as? PsiClass)?.name + "." + node.name
+            val nodeName = "${containingClass.name}.${node.name}"
             if (!superPermissions.isEmpty() && declaredPermissions != superPermissions) {
                 context.report(
                     ISSUE_MISSING_OR_MISMATCHED_REQUIRES_PERMISSION_ANNOTATION,
                     node,
                     context.getNameLocation(node),
-                    "Method `$nodeName` must have an equivalent @RequiresPermission annotation to the one in " +
-                        "the super method. Expected: $superPermissions but found: $declaredPermissions.",
+                    "Method `$nodeName` must have an equivalent @RequiresPermission annotation " +
+                        "to the one in the super method. Expected: $superPermissions but found: " +
+                        "$declaredPermissions.",
                 )
                 return
             }
@@ -127,16 +131,18 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                     ISSUE_INCORRECT_REQUIRES_PERMISSION_PROPAGATION,
                     node,
                     context.getNameLocation(node),
-                    "Method `$nodeName` is missing a @RequiresPermission annotation or it's too narrow. " +
-                        "It calls APIs that require $enforcedPermissions but is only annotated with $declaredPermissions.",
+                    "Method `$nodeName` is missing a @RequiresPermission annotation or it's too " +
+                        "narrow. It calls APIs that require $enforcedPermissions but is only " +
+                        "annotated with $declaredPermissions.",
                 )
             } else if (tooBroad) {
                 context.report(
                     ISSUE_INCORRECT_REQUIRES_PERMISSION_PROPAGATION,
                     node,
                     context.getNameLocation(node),
-                    "Method `$nodeName` has a broader @RequiresPermission annotation than necessary. " +
-                        "It is annotated with $declaredPermissions but only calls APIs requiring $enforcedPermissions.",
+                    "Method `$nodeName` has a broader @RequiresPermission annotation than " +
+                        "necessary. It is annotated with $declaredPermissions but only calls " +
+                        "APIs requiring $enforcedPermissions.",
                 )
             }
         }
@@ -168,15 +174,21 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                 return true
             }
 
-            // Enforcement of a method annotated `@RequiresPermission` is done by
-            // `RequiresPermissionVisitor`
+            if (context.evaluator.isMemberInSubClassOf(method, CLASS_CONTEXT, false)) {
+                val isSendBroadcast = method.name.matches(SEND_BROADCAST_REGEX)
+                val isSendBroadcastAsUser = method.name.matches(SEND_BROADCAST_AS_USER_REGEX)
+                if (isSendBroadcast || isSendBroadcastAsUser) {
+                    checkBroadcastPermission(node, isSendBroadcastAsUser)
+                }
+            }
+
+            // Enforcement of `@RequiresPermission` is done via `RequiresPermissionVisitor`
             context.evaluator.getAnnotation(method, ANNOTATION_REQUIRES_PERMISSION)?.let {
                 enforcedPermissions.addAll(parseAnnotation(context, it))
                 return true
             }
 
-            // Enforcement of a method annotated `@EnforcePermission` is done by
-            // `EnforcePermissionDetector`
+            // Enforcement of `@EnforcePermission` is done via `EnforcePermissionDetector`
             context.evaluator.getAnnotation(method, ANNOTATION_ENFORCE_PERMISSION)?.let {
                 enforcedPermissions.addAll(parseAnnotation(context, it))
                 return true
@@ -213,12 +225,89 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
             ) {
                 extractPermissionFromArgument(node, 0)
             } else if (isPermissionMethodCall(node)) {
-                node.resolve()?.getUMethod()?.uastParameters?.forEachIndexed { index, parameter ->
+                method.getUMethod()?.uastParameters?.forEachIndexed { index, parameter ->
                     if (hasPermissionNameAnnotation(parameter)) {
                         extractPermissionFromArgument(node, index)
                     }
                 }
             }
+        }
+
+        private fun checkBroadcastPermission(node: UCallExpression, isAsUser: Boolean) {
+            val sourcePerm = parseBroadcastSourcePermission(node) ?: return
+            val targetPerm = parseBroadcastTargetPermission(node, isAsUser)
+
+            if (sourcePerm != targetPerm) {
+                context.report(
+                    ISSUE_MISSING_OR_MISMATCHED_SEND_BROADCAST_REQUIRES_PERMISSION,
+                    node,
+                    context.getNameLocation(node),
+                    "Broadcast action requires $sourcePerm but call is protected with $targetPerm.",
+                )
+            }
+        }
+
+        private fun parseBroadcastSourcePermission(
+            broadcastCall: UCallExpression
+        ): PermissionHolder? {
+            val enclosingMethod = broadcastCall.getContainingUMethod() ?: return null
+
+            class IntentActionScanner : AbstractUastVisitor() {
+                var lastSeenActionField: PsiElement? = null
+                var foundBroadcastCall = false
+
+                override fun visitCallExpression(node: UCallExpression): Boolean {
+                    if (foundBroadcastCall) return true
+                    if (node.sourcePsi == broadcastCall.sourcePsi) {
+                        foundBroadcastCall = true
+                        return true
+                    }
+
+                    val call = node.resolve() ?: return true
+
+                    if (
+                        // Case 1: val intent = new Intent("ACTION_STRING")
+                        (call.isConstructor &&
+                            call.containingClass?.qualifiedName == CLASS_INTENT) ||
+                            // Case 2: intent.setAction("ACTION_STRING")
+                            (call.name == "setAction" &&
+                                context.evaluator.isMemberInSubClassOf(call, CLASS_INTENT, false))
+                    ) {
+                        lastSeenActionField = node.valueArguments.getOrNull(0)?.tryResolve()
+                    }
+
+                    return true
+                }
+            }
+
+            val scanner = IntentActionScanner().apply { enclosingMethod.accept(this) }
+
+            val actionField = scanner.lastSeenActionField
+
+            if (!scanner.foundBroadcastCall || actionField == null) {
+                // Couldn't find broadcast call or track Intent action. This can happen if the
+                // intent is passed as a parameter or if 'new Intent()' was called with no action.
+                return PermissionHolder()
+            }
+
+            return actionField.toUElementOfType<UField>()?.getRequiresPermissionAnnotation()?.let {
+                parseAnnotation(context, it)
+            } ?: PermissionHolder()
+        }
+
+        private fun parseBroadcastTargetPermission(
+            node: UCallExpression,
+            isAsUser: Boolean,
+        ): PermissionHolder {
+            val holder = PermissionHolder()
+            // sendBroadcast(Intent, String) -> index 1
+            // sendBroadcastAsUser(Intent, UserHandle, String) -> index 2
+            val permissionIndex = if (isAsUser) 2 else 1
+
+            node.valueArguments.getOrNull(permissionIndex)?.let { arg ->
+                ConstantEvaluator.evaluate(context, arg)?.toString()?.let { holder.allOf.add(it) }
+            }
+            return holder
         }
     }
 
@@ -325,10 +414,36 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
 
     companion object {
         private val BINDER_INTERNALS_REGEX = "^(Stub|Default|Proxy)$".toRegex()
+
         private val CONTEXT_ENFORCEMENT_METHOD_REGEX =
             "^(enforce|check)(Calling)?(OrSelf)?Permission$".toRegex()
+
         private val PERMISSION_CHECKER_ENFORCEMENT_METHOD_REGEX = "^check.*Permission$".toRegex()
         private val PERMISSION_MANAGER_ENFORCEMENT_METHOD_REGEX = "^checkPermission.*".toRegex()
+
+        private val SEND_BROADCAST_REGEX = "^send(Ordered|Sticky)?Broadcast$".toRegex()
+        private val SEND_BROADCAST_AS_USER_REGEX =
+            "^send(Ordered|Sticky)?BroadcastAsUser$".toRegex()
+
+        @JvmField
+        val ISSUE_MISSING_OR_MISMATCHED_SEND_BROADCAST_REQUIRES_PERMISSION =
+            Issue.create(
+                id = "MissingOrMismatchedSendBroadcastRequiresPermission",
+                briefDescription = "Missing or mismatched @RequiresPermission on sendBroadcast",
+                explanation =
+                    """
+                    The permission declared on the Intent action (via @RequiresPermission) must
+                    match the permission enforced by the sendBroadcast() call. This check only
+                    tracks variables initialized with 'new Intent(ACTION)' or assigned with
+                    'intent.setAction(ACTION)' within the same method.
+                        """
+                        .trimIndent(),
+                category = Category.SECURITY,
+                priority = 6,
+                severity = Severity.ERROR,
+                implementation =
+                    Implementation(RequiresPermissionDetector::class.java, Scope.JAVA_FILE_SCOPE),
+            )
 
         @JvmField
         val ISSUE_MISSING_OR_MISMATCHED_REQUIRES_PERMISSION_ANNOTATION =
@@ -337,9 +452,9 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                 briefDescription = "Missing or mismatched @RequiresPermission on implementation.",
                 explanation =
                     """
-                An overriding method must be annotated with @RequiresPermission and it must be
-                equivalent to the annotation on the super method.",
-            """
+                    An overriding method must be annotated with @RequiresPermission and it must be
+                    equivalent to the annotation on the super method.",
+                        """
                         .trimIndent(),
                 category = Category.SECURITY,
                 priority = 6,
@@ -355,12 +470,11 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                 briefDescription = "Incorrectly propagating @RequiresPermission",
                 explanation =
                     """
-                Methods that call other APIs requiring permissions must be annotated with their own
-                @RequiresPermission annotation.
-                This annotation must be specific enough to cover all permissions required by the
-                APIs it calls (not "too narrow"), but should not declare permissions that are
-                never used (not "too broad").
-            """
+                    Methods that call other APIs requiring permissions must be annotated with their
+                    own @RequiresPermission annotation. This annotation must be specific enough to
+                    cover all permissions required by the APIs it calls (not "too narrow"), but
+                    should not declare permissions that are never used (not "too broad").
+                        """
                         .trimIndent(),
                 category = Category.SECURITY,
                 priority = 6,
