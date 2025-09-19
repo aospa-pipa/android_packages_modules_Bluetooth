@@ -38,6 +38,7 @@ import static java.util.Objects.requireNonNull;
 
 import android.annotation.BroadcastBehavior;
 import android.annotation.CallbackExecutor;
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -104,7 +105,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.lang.reflect.Method;
@@ -904,6 +904,10 @@ public final class BluetoothAdapter {
 
         @GuardedBy("BluetoothAdapter.sProfileLock")
         void connect(BluetoothProfile proxy, IBinder binder) {
+            if (Flags.getProfileOneway() && mConnected) {
+                Log.v(TAG, getProfileName(mProfile) + " already connected");
+                return;
+            }
             Log.d(TAG, getProfileName(mProfile) + " connected");
             mConnected = true;
             proxy.onServiceConnected(binder);
@@ -912,6 +916,10 @@ public final class BluetoothAdapter {
 
         @GuardedBy("BluetoothAdapter.sProfileLock")
         void disconnect(BluetoothProfile proxy) {
+            if (Flags.getProfileOneway() && !mConnected) {
+                Log.v(TAG, getProfileName(mProfile) + " already disconnected");
+                return;
+            }
             Log.d(TAG, getProfileName(mProfile) + " disconnected");
             mConnected = false;
             proxy.onServiceDisconnected();
@@ -922,8 +930,7 @@ public final class BluetoothAdapter {
     private static final Object sProfileLock = new Object();
 
     @GuardedBy("sProfileLock")
-    private final Map<BluetoothProfile, ProfileConnection> mProfileConnections =
-            new ConcurrentHashMap<>();
+    private final Map<BluetoothProfile, ProfileConnection> mProfileConnections = new HashMap<>();
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
 
@@ -5734,5 +5741,32 @@ public final class BluetoothAdapter {
         }
         return callServiceIfEnabled(
                 s -> s.isRfcommSocketOffloadSupported(mAttributionSource), false);
+    }
+
+    /**
+     * Get the supported GATT offload capabilities.
+     *
+     * @return instance of {@link GattOffloadCapabilities} or null if an error has occurred
+     * @hide
+     */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_GATT_OFFLOAD_API)
+    @RequiresPermission(BLUETOOTH_PRIVILEGED)
+    public @Nullable GattOffloadCapabilities getSupportedGattOffloadCapabilities() {
+        if (!isEnabled()) {
+            return null;
+        }
+        mServiceLock.readLock().lock();
+        try {
+            if (mService != null) {
+                return mService.getSupportedGattOffloadCapabilities(mAttributionSource)
+                        .toGattOffloadCapabilities();
+            }
+        } catch (RemoteException e) {
+            Log.e(TAG, e.toString() + "\n" + Log.getStackTraceString(new Throwable()));
+        } finally {
+            mServiceLock.readLock().unlock();
+        }
+        return null;
     }
 }
