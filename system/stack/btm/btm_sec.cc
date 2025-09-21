@@ -3081,7 +3081,7 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
                                                            &role) != tBTM_STATUS::BTM_SUCCESS) {
       log::warn("Unable to get link role peer:{}", p_dev_rec->bd_addr);
     }
-    p_dev_rec->switch_role_after_encryption = false;
+    p_dev_rec->role_switch_pending = tBTM_SEC_DEV_REC::RoleSwitchPending::kNone;
     p_dev_rec->sec_rec.security_required &= ~BTM_SEC_OUT_AUTHENTICATE;
 
     if (status != HCI_SUCCESS) {
@@ -3113,8 +3113,10 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
     } else {
       BTM_LogHistory(kBtmLogTag, p_dev_rec->bd_addr, "Bonding completed",
                      hci_error_code_text(status));
-      p_dev_rec->switch_role_after_encryption =
-              p_dev_rec->IsLocallyInitiated() && role == HCI_ROLE_PERIPHERAL;
+      p_dev_rec->role_switch_pending =
+              (p_dev_rec->IsLocallyInitiated() && role == HCI_ROLE_PERIPHERAL)
+                      ? tBTM_SEC_DEV_REC::RoleSwitchPending::kAfterEnc
+                      : tBTM_SEC_DEV_REC::RoleSwitchPending::kNone;
       BTM_SetEncryption(p_dev_rec->bd_addr, BT_TRANSPORT_BR_EDR, NULL, NULL, BTM_BLE_SEC_NONE);
       l2cu_start_post_bond_timer(p_dev_rec->hci_handle);
     }
@@ -3384,15 +3386,19 @@ void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status, uint8_t encr_en
     }
 
     if (com_android_bluetooth_flags_role_switch_after_encryption() &&
-        p_dev_rec->switch_role_after_encryption) {
-      p_dev_rec->switch_role_after_encryption = false;
-      if (role == HCI_ROLE_PERIPHERAL) {
+        p_dev_rec->role_switch_pending != tBTM_SEC_DEV_REC::RoleSwitchPending::kNone &&
+        role == HCI_ROLE_PERIPHERAL) {
+      if (btm_sec_use_smp_br_chnl(p_dev_rec)) {
+        /* Role switch request might prevent remote central device from initiating CTKD */
+        p_dev_rec->role_switch_pending = tBTM_SEC_DEV_REC::RoleSwitchPending::kAfterCtkd;
+      } else {
         if (get_btm_client_interface().link_policy.BTM_SwitchRoleToCentral(
                     p_dev_rec->RemoteAddress()) == tBTM_STATUS::BTM_CMD_STARTED) {
           log::info("Trying to switch role to central peer: {}", p_dev_rec->RemoteAddress());
         } else {
           log::warn("Unable to switch role to central peer:{}", p_dev_rec->RemoteAddress());
         }
+        p_dev_rec->role_switch_pending = tBTM_SEC_DEV_REC::RoleSwitchPending::kNone;
       }
     }
   }
@@ -3678,6 +3684,7 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, tHCI_STATUS statu
     }
   }
 
+  p_dev_rec->role_switch_pending = tBTM_SEC_DEV_REC::RoleSwitchPending::kNone;
   alarm_set_on_mloop(btm_cb.devcb.conn_proc_timer, BTM_SEC_CONN_PROC_TIMEOUT_MS,
                      btm_conn_proc_timer_timeout, NULL);
 
@@ -4275,18 +4282,12 @@ void btm_sec_link_key_request(const RawAddress bda) {
  *
  ******************************************************************************/
 static void btm_sec_pairing_timeout(void* /* data */) {
-  tBTM_SEC_CB* p_cb = &btm_sec_cb;
-  tBTM_SEC_DEV_REC* p_dev_rec;
-  tBTM_AUTH_REQ auth_req =
-          (btm_sec_cb.devcb.loc_io_caps == BTM_IO_CAP_NONE) ? BTM_AUTH_AP_NO : BTM_AUTH_AP_YES;
-  BD_NAME name;
+  log::verbose("State: {} Flags: {} Device: {}", btm_pair_state_descr(btm_sec_cb.pairing_state),
+               btm_sec_cb.pairing_flags, btm_sec_cb.link_spec);
 
-  p_dev_rec = btm_find_dev(p_cb->link_spec.addrt.bda);
+  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(btm_sec_cb.link_spec.addrt.bda);
 
-  log::verbose("State: {}   Flags: {}", btm_pair_state_descr(p_cb->pairing_state),
-               p_cb->pairing_flags);
-
-  switch (p_cb->pairing_state) {
+  switch (btm_sec_cb.pairing_state) {
     case BTM_PAIR_STATE_WAIT_PIN_REQ:
       btm_sec_bond_cancel_complete();
       btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
@@ -4294,14 +4295,14 @@ static void btm_sec_pairing_timeout(void* /* data */) {
 
     case BTM_PAIR_STATE_WAIT_LOCAL_PIN:
       if ((btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_PRE_FETCH_PIN) == 0) {
-        btsnd_hcic_pin_code_neg_reply(p_cb->link_spec.addrt.bda);
+        btsnd_hcic_pin_code_neg_reply(btm_sec_cb.link_spec.addrt.bda);
       }
       btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
       /* We need to notify the UI that no longer need the PIN */
       if (btm_sec_cb.api.p_auth_complete_callback) {
         if (p_dev_rec == nullptr) {
-          name[0] = 0;
-          (*btm_sec_cb.api.p_auth_complete_callback)(p_cb->link_spec.addrt.bda, kDevClassEmpty,
+          BD_NAME name = {};
+          (*btm_sec_cb.api.p_auth_complete_callback)(btm_sec_cb.link_spec.addrt.bda, kDevClassEmpty,
                                                      name, HCI_ERR_CONNECTION_TOUT);
         } else {
           NotifyBondingChange(*p_dev_rec, HCI_ERR_CONNECTION_TOUT);
@@ -4310,27 +4311,30 @@ static void btm_sec_pairing_timeout(void* /* data */) {
       break;
 
     case BTM_PAIR_STATE_WAIT_NUMERIC_CONFIRM:
-      btsnd_hcic_user_conf_reply(p_cb->link_spec.addrt.bda, false);
+      btsnd_hcic_user_conf_reply(btm_sec_cb.link_spec.addrt.bda, false);
       /* btm_sec_cb.change_pairing_state (BTM_PAIR_STATE_IDLE); */
       break;
 
     case BTM_PAIR_STATE_KEY_ENTRY:
       if (btm_sec_cb.devcb.loc_io_caps != BTM_IO_CAP_NONE) {
-        btsnd_hcic_user_passkey_neg_reply(p_cb->link_spec.addrt.bda);
+        btsnd_hcic_user_passkey_neg_reply(btm_sec_cb.link_spec.addrt.bda);
       } else {
         btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
       }
       break;
 
-    case BTM_PAIR_STATE_WAIT_LOCAL_IOCAPS:
+    case BTM_PAIR_STATE_WAIT_LOCAL_IOCAPS: {
+      tBTM_AUTH_REQ auth_req =
+              (btm_sec_cb.devcb.loc_io_caps == BTM_IO_CAP_NONE) ? BTM_AUTH_AP_NO : BTM_AUTH_AP_YES;
       // TODO(optedoblivion): Inject OOB_DATA_PRESENT Flag
-      btsnd_hcic_io_cap_req_reply(p_cb->link_spec.addrt.bda, btm_sec_cb.devcb.loc_io_caps,
+      btsnd_hcic_io_cap_req_reply(btm_sec_cb.link_spec.addrt.bda, btm_sec_cb.devcb.loc_io_caps,
                                   BTM_OOB_NONE, auth_req);
       btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
       break;
+    }
 
     case BTM_PAIR_STATE_WAIT_LOCAL_OOB_RSP:
-      btsnd_hcic_rem_oob_neg_reply(p_cb->link_spec.addrt.bda);
+      btsnd_hcic_rem_oob_neg_reply(btm_sec_cb.link_spec.addrt.bda);
       btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
       break;
 
@@ -4339,7 +4343,7 @@ static void btm_sec_pairing_timeout(void* /* data */) {
        * complete.
        * now it's time to tear down the ACL link*/
       if (p_dev_rec == nullptr) {
-        log::error("BTM_PAIR_STATE_WAIT_DISCONNECT unknown device: {}", p_cb->link_spec);
+        log::error("BTM_PAIR_STATE_WAIT_DISCONNECT unknown device: {}", btm_sec_cb.link_spec);
         break;
       }
       btm_sec_send_hci_disconnect(p_dev_rec, HCI_ERR_AUTH_FAILURE, p_dev_rec->hci_handle,
@@ -4354,8 +4358,8 @@ static void btm_sec_pairing_timeout(void* /* data */) {
       btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
       if (btm_sec_cb.api.p_auth_complete_callback) {
         if (p_dev_rec == nullptr) {
-          name[0] = 0;
-          (*btm_sec_cb.api.p_auth_complete_callback)(p_cb->link_spec.addrt.bda, kDevClassEmpty,
+          BD_NAME name = {};
+          (*btm_sec_cb.api.p_auth_complete_callback)(btm_sec_cb.link_spec.addrt.bda, kDevClassEmpty,
                                                      name, HCI_ERR_CONNECTION_TOUT);
         } else {
           NotifyBondingChange(*p_dev_rec, HCI_ERR_CONNECTION_TOUT);
