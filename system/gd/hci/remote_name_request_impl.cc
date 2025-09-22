@@ -135,7 +135,15 @@ void RemoteNameRequestModuleImpl::actually_start_remote_name_request(
 
 void RemoteNameRequestModuleImpl::on_start_remote_name_request_status(
         Address address, CompletionCallback on_completion, CommandStatusView status) {
-  log::assert_that(pending_ == true, "assert failed: pending_ == true");
+    // unexpectedly sent a Remote Name Req Complete HCI event without the corresponding HCI command.
+#ifndef TARGET_FLOSS
+    log::assert_that(pending_ == true, "assert failed: pending_ == true");
+#else
+    if (pending_ != true) {
+      LOG_WARN("Unexpected remote name response with no request pending");
+      return;
+    }
+#endif
   log::assert_that(status.GetCommandOpCode() == OpCode::REMOTE_NAME_REQUEST,
                    "assert failed: status.GetCommandOpCode() == OpCode::REMOTE_NAME_REQUEST");
   log::info("Started remote name request peer:{} status:{}", address.ToRedactedStringForLogging(),
