@@ -1512,6 +1512,16 @@ public class ScanController {
      *************************************************************************/
 
     void registerSync(
+            BluetoothDevice device,
+            int sid,
+            int skip,
+            int timeout,
+            IPeriodicAdvertisingCallback callback) {
+        enforceScanThread();
+        mPeriodicScanManager.startSync(device, sid, skip, timeout, callback);
+    }
+
+    void registerSync(
             ScanResult scanResult, int skip, int timeout, IPeriodicAdvertisingCallback callback) {
         enforceScanThread();
         mPeriodicScanManager.startSync(scanResult, skip, timeout, callback);

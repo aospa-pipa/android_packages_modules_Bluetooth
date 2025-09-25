@@ -3084,8 +3084,7 @@ static void btif_report_audio_state(const RawAddress& peer_address, btav_audio_s
       do_in_jni_thread(
               base::BindOnce(btif_av_source.Callbacks()->audio_state_cb, peer_address, state));
     } else if (peer->IsSource()) {
-      do_in_jni_thread(
-              base::BindOnce(btif_av_sink.Callbacks()->audio_state_cb, peer_address, state));
+      do_in_jni_thread(base::BindOnce(btif_av_sink.Callbacks()->audio_state_cb, state));
     }
     return;
   }
@@ -3093,7 +3092,7 @@ static void btif_report_audio_state(const RawAddress& peer_address, btav_audio_s
     do_in_jni_thread(
             base::BindOnce(btif_av_source.Callbacks()->audio_state_cb, peer_address, state));
   } else if (btif_av_sink.Enabled()) {
-    do_in_jni_thread(base::BindOnce(btif_av_sink.Callbacks()->audio_state_cb, peer_address, state));
+    do_in_jni_thread(base::BindOnce(btif_av_sink.Callbacks()->audio_state_cb, state));
   }
 
   using android::bluetooth::a2dp::AudioCodingModeEnum;
