@@ -401,11 +401,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   ~impl() {
     stop();
-    if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
-      handler_->Clear();
-      handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
-      delete handler_;
-    }
   }
 
   void stop() {
@@ -611,7 +606,8 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
   void start_distance_measurement_with_cs(const Address& cs_remote_address,
                                           uint16_t connection_handle,
                                           bool has_updated_procedure_params) {
-    log::info("connection_handle: {}, address: {}", connection_handle, cs_remote_address);
+    log::info("connection_handle: {}, address: {}, is_hal_v2: {}", connection_handle,
+              cs_remote_address, is_hal_v2());
     if (!is_local_cs_ready_) {
       log::error("Channel Sounding is not enabled");
       distance_measurement_callbacks_->OnDistanceMeasurementStopped(
