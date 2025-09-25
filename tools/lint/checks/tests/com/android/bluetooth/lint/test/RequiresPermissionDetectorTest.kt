@@ -148,6 +148,9 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
                 override fun connect() {
                     getServiceAndEnforceConnect()
                 }
+                override fun connectSecond() {
+                    connect()
+                }
             }
             class Util(val context: Context) {
                 @android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
@@ -983,8 +986,19 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
                             @RequiresPermission(android.Manifest.permission.BLUETOOTH_SCAN)
                             const val ACTION_SCAN = "test.ACTION_SCAN"
                         }
-                        fun testMismatch(context: Context) {
+                        fun scanViaIntentDirectConstructor(context: Context) {
+                            context.sendBroadcast(Intent(ACTION_SCAN), android.Manifest.permission.BLUETOOTH_SCAN)
+                        }
+                        fun scanViaIntentConstructor(context: Context) {
                             val intent = Intent(ACTION_SCAN)
+                            context.sendBroadcast(intent, android.Manifest.permission.BLUETOOTH_SCAN)
+                        }
+                        fun scanViaIntentDirectConstructorSetAction(context: Context) {
+                            context.sendBroadcast(Intent().setAction(ACTION_SCAN), android.Manifest.permission.BLUETOOTH_SCAN)
+                        }
+                        fun scanViaIntentSetAction(context: Context) {
+                            val intent = Intent()
+                            intent.setAction(ACTION_SCAN)
                             context.sendBroadcast(intent, android.Manifest.permission.BLUETOOTH_SCAN)
                         }
                     }
@@ -1002,22 +1016,22 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
             .files(
                 kotlin(
                         """
-                        package test.pkg
-                        import android.content.Context
-                        import android.content.Intent
-                        import android.os.UserHandle
-                        import android.annotation.RequiresPermission
-                        class MyManager {
-                            companion object {
-                                @RequiresPermission(android.Manifest.permission.BLUETOOTH_SCAN)
-                                const val ACTION_SCAN = "test.ACTION_SCAN"
-                            }
-                            fun testMismatch(context: Context) {
-                                val intent = Intent(ACTION_SCAN)
-                                context.sendBroadcastAsUser(intent, null as UserHandle?)
-                            }
+                    package test.pkg
+                    import android.content.Context
+                    import android.content.Intent
+                    import android.os.UserHandle
+                    import android.annotation.RequiresPermission
+                    class MyManager {
+                        companion object {
+                            @RequiresPermission(android.Manifest.permission.BLUETOOTH_SCAN)
+                            const val ACTION_SCAN = "test.ACTION_SCAN"
                         }
-                        """
+                        fun testMismatch(context: Context) {
+                            val intent = Intent(ACTION_SCAN)
+                            context.sendBroadcastAsUser(intent, null as UserHandle?)
+                        }
+                    }
+                    """
                     )
                     .indented(),
                 *stubs,
@@ -1039,22 +1053,128 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
             .files(
                 kotlin(
                         """
-                        package test.pkg
-                        import android.content.Context
-                        import android.content.Intent
-                        import android.os.UserHandle
-                        import android.annotation.RequiresPermission
-                        class MyManager {
-                            companion object {
-                                @RequiresPermission(android.Manifest.permission.BLUETOOTH_SCAN)
-                                const val ACTION_SCAN = "test.ACTION_SCAN"
-                            }
-                            fun testMismatch(context: Context) {
-                                val intent = Intent(ACTION_SCAN)
-                                context.sendBroadcastAsUser(intent, null as UserHandle?, android.Manifest.permission.BLUETOOTH_SCAN)
-                            }
+                    package test.pkg
+                    import android.content.Context
+                    import android.content.Intent
+                    import android.os.UserHandle
+                    import android.annotation.RequiresPermission
+                    class MyManager {
+                        companion object {
+                            @RequiresPermission(android.Manifest.permission.BLUETOOTH_SCAN)
+                            const val ACTION_SCAN = "test.ACTION_SCAN"
                         }
+                        fun testMismatch(context: Context) {
+                            val intent = Intent(ACTION_SCAN)
+                            context.sendBroadcastAsUser(intent, null as UserHandle?, android.Manifest.permission.BLUETOOTH_SCAN)
+                        }
+                    }
+                    """
+                    )
+                    .indented(),
+                *stubs,
+            )
+            .run()
+            .expectClean()
+    }
+
+    fun testBroadcastMultiplePermissions_Mismatch_Fails() {
+        lint()
+            .files(
+                kotlin(
                         """
+                    package test.pkg
+                    import android.content.Context
+                    import android.content.Intent
+                    import android.annotation.RequiresPermission
+                    class MyManager {
+                        companion object {
+                            @android.annotation.RequiresPermission(allOf = [
+                                android.Manifest.permission.BLUETOOTH_SCAN,
+                                android.Manifest.permission.BLUETOOTH_ADVERTISE
+                            ])
+                            const val ACTION_MULTI = "test.ACTION_MULTI"
+                        }
+                        fun testMismatch(context: Context) {
+                            val intent = Intent(ACTION_MULTI)
+                            context.sendBroadcastMultiplePermissions(intent, arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT))
+                        }
+                    }
+                    """
+                    )
+                    .indented(),
+                *stubs,
+            )
+            .run()
+            .expect(
+                """
+                src/test/pkg/MyManager.kt:15: Error: Broadcast action requires {allOf=[android.permission.BLUETOOTH_SCAN, android.permission.BLUETOOTH_ADVERTISE]} but call is protected with {allOf=[android.permission.BLUETOOTH_SCAN, android.permission.BLUETOOTH_CONNECT]}. [MissingOrMismatchedSendBroadcastRequiresPermission]
+                        context.sendBroadcastMultiplePermissions(intent, arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT))
+                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                1 errors, 0 warnings
+                """
+                    .trimIndent()
+            )
+    }
+
+    fun testBroadcastMultiplePermissions_Match_Passes() {
+        lint()
+            .files(
+                kotlin(
+                        """
+                    package test.pkg
+                    import android.content.Context
+                    import android.content.Intent
+                    import android.annotation.RequiresPermission
+                    class MyManager {
+                        companion object {
+                            @android.annotation.RequiresPermission(allOf = [
+                                android.Manifest.permission.BLUETOOTH_SCAN,
+                                android.Manifest.permission.BLUETOOTH_ADVERTISE
+                            ])
+                            const val ACTION_MULTI = "test.ACTION_MULTI"
+                        }
+                        fun testMatchMultiplePermissions(context: Context) {
+                            val intent = Intent(ACTION_MULTI)
+                            context.sendBroadcastMultiplePermissions(intent, arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_ADVERTISE))
+                        }
+                        fun testMatchWithMultiplePermissions(context: Context) {
+                            val intent = Intent(ACTION_MULTI)
+                            context.sendBroadcastWithMultiplePermissions(intent, arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_ADVERTISE))
+                        }
+                    }
+                    """
+                    )
+                    .indented(),
+                *stubs,
+            )
+            .run()
+            .expectClean()
+    }
+
+    fun testBroadcastAsUserMultiplePermissions_Match_Passes() {
+        lint()
+            .files(
+                kotlin(
+                        """
+                    package test.pkg
+                    import android.content.Context
+                    import android.content.Intent
+                    import android.os.UserHandle
+                    import android.annotation.RequiresPermission
+                    class MyManager {
+                        companion object {
+                            @android.annotation.RequiresPermission(allOf = [
+                                android.Manifest.permission.BLUETOOTH_SCAN,
+                                android.Manifest.permission.BLUETOOTH_ADVERTISE
+                            ])
+                            const val ACTION_MULTI = "test.ACTION_MULTI"
+                        }
+                        fun testMatch(context: Context) {
+                            val intent = Intent(ACTION_MULTI)
+                            context.sendBroadcastAsUserMultiplePermissions(intent, null as UserHandle?, arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_ADVERTISE))
+                        }
+                    }
+                    """
                     )
                     .indented(),
                 *stubs,
@@ -1114,6 +1234,9 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
             public void sendBroadcast(Intent intent, String receiverPermission) {}
             public void sendBroadcastAsUser(Intent intent, UserHandle user) {}
             public void sendBroadcastAsUser(Intent intent, UserHandle user, String receiverPermission) {}
+            public void sendBroadcastMultiplePermissions(Intent intent, String[] receiverPermissions) {}
+            public void sendBroadcastWithMultiplePermissions(Intent intent, String[] receiverPermissions) {}
+            public void sendBroadcastAsUserMultiplePermissions(Intent intent, UserHandle user, String[] receiverPermissions) {}
         }
         """
             )
@@ -1220,6 +1343,7 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
         public interface IFoo extends android.os.IInterface {
             public static class Default extends android.os.Binder implements IFoo {
                 @Override public void connect() {}
+                @Override public void connectSecond() {}
                 @Override public void scanAndAdvertise() {}
                 @Override public void disable() {}
             }
@@ -1228,6 +1352,8 @@ class RequiresPermissionDetectorTest : LintDetectorTest() {
             public void foo();
             @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
             public void connect();
+            @RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
+            public void connectSecond();
             @RequiresPermission(allOf = {
                 android.Manifest.permission.BLUETOOTH_SCAN,
                 android.Manifest.permission.BLUETOOTH_ADVERTISE

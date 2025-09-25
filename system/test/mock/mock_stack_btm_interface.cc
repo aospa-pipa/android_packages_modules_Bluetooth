@@ -85,6 +85,8 @@ struct btm_client_interface_t default_btm_client_interface = {
                                      tBT_TRANSPORT /* transport */) -> uint8_t { return 0; },
                 .BTM_IsPhy2mSupported = [](const RawAddress& /* remote_bda */,
                                            tBT_TRANSPORT /* transport */) -> bool { return true; },
+                .BTM_IsPhyHDTSupported = [](const RawAddress& /* remote_bda */,
+                                            tBT_TRANSPORT /* transport */) -> bool { return false; },
                 .BTM_GetHCIConnHandle = [](const RawAddress& /* remote_bda */,
                                            tBT_TRANSPORT /* transport */) -> uint16_t { return 0; },
         },

@@ -47,6 +47,7 @@
 #include "stack/include/gatt_api.h"
 #include "stack/include/hcimsgs.h"
 #include "stack/l2cap/l2c_int.h"
+#include "osi/include/properties.h"
 
 using namespace bluetooth;
 
@@ -493,8 +494,10 @@ void BTM_BleReadPhy(const RawAddress& bd_addr,
   }
 
   // The connection PHY is always LE_1M when the controller supports
-  // neither LE_2M nor LE_CODED PHYs.
-  if (!bluetooth::shim::GetController()->SupportsBle2mPhy() &&
+  // neither LE_HDT, LE_2M nor LE_CODED PHYs.
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if ((!hdt_enabled || !bluetooth::shim::GetController()->SupportsBleHDTPhy()) &&
+      !bluetooth::shim::GetController()->SupportsBle2mPhy() &&
       !bluetooth::shim::GetController()->SupportsBleCodedPhy()) {
     cb.Run(1, 1, HCI_SUCCESS);
     return;
@@ -529,7 +532,9 @@ void BTM_BleSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
   uint16_t handle = get_btm_client_interface().peer.BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
 
   // checking if local controller supports it!
-  if (!bluetooth::shim::GetController()->SupportsBle2mPhy() &&
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if ((!hdt_enabled || !bluetooth::shim::GetController()->SupportsBleHDTPhy()) &&
+      !bluetooth::shim::GetController()->SupportsBle2mPhy() &&
       !bluetooth::shim::GetController()->SupportsBleCodedPhy()) {
     log::info("Local controller unable to support setting of le phy parameters");
     gatt_notify_phy_updated(static_cast<tHCI_STATUS>(GATT_REQ_NOT_SUPPORTED), handle, tx_phys,
@@ -537,7 +542,9 @@ void BTM_BleSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
     return;
   }
 
-  if (!acl_peer_supports_ble_2m_phy(handle) && !acl_peer_supports_ble_coded_phy(handle)) {
+  if ((!hdt_enabled || !acl_peer_supports_ble_hdt_phy(handle)) &&
+      !acl_peer_supports_ble_2m_phy(handle) &&
+      !acl_peer_supports_ble_coded_phy(handle)) {
     log::info("Remote device unable to support setting of le phy parameter");
     gatt_notify_phy_updated(static_cast<tHCI_STATUS>(GATT_REQ_NOT_SUPPORTED), handle, tx_phys,
                             rx_phys);

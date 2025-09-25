@@ -64,6 +64,8 @@ struct btm_client_interface_t {
     [[nodiscard]] uint8_t (*BTM_GetPeerSCA)(const RawAddress& remote_bda, tBT_TRANSPORT transport);
     [[nodiscard]] bool (*BTM_IsPhy2mSupported)(const RawAddress& remote_bda,
                                                tBT_TRANSPORT transport);
+    [[nodiscard]] bool (*BTM_IsPhyHDTSupported)(const RawAddress& remote_bda,
+                                                tBT_TRANSPORT transport);
     [[nodiscard]] uint16_t (*BTM_GetHCIConnHandle)(const RawAddress& bd_addr,
                                                    tBT_TRANSPORT transport);
     [[nodiscard]] bool (*BTM_IsAclConnectionUpAndHandleValid)(const RawAddress& remote_bda,
