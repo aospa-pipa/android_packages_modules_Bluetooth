@@ -3212,7 +3212,11 @@ public:
     BTA_GATTC_CancelOpen(gatt_if_, address, false);
     BTA_GATTC_Open(gatt_if_, address, reconnection_mode_, false);
 
-    if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
+    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+    if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
+      log::info("{} set preferred PHY to HDT", address);
+      get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_HDT, PHY_HDT, 0);
+    } else if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
       log::info("{} set preferred PHY to 2M", address);
       get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
     }
@@ -3389,10 +3393,15 @@ public:
      * when remote feature read was not that quick, lets try to change phy here
      * one more time
      */
-    if (!leAudioDevice->acl_phy_update_done_ &&
-        bluetooth::shim::GetController()->SupportsBle2mPhy()) {
-      log::info("{} set preferred PHY to 2M", leAudioDevice->address_);
-      get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
+    if (!leAudioDevice->acl_phy_update_done_) {
+      bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+      if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
+        log::info("{} set preferred PHY to HDT", address);
+        get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_HDT, PHY_HDT, 0);
+      } else if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
+        log::info("{} set preferred PHY to 2M", address);
+        get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
+      }
     }
 
     changeMtuIfPossible(leAudioDevice);
@@ -8331,8 +8340,15 @@ private:
       }
 
       log::info("SetAsymmetricBlePhy: {} for {}", asymmetric, tmpDevice->address_);
-      get_btm_client_interface().ble.BTM_BleSetPhy(tmpDevice->address_, PHY_LE_2M,
-                                                   asymmetric ? PHY_LE_1M : PHY_LE_2M, 0);
+      bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+      if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
+        log::info("{} set preferred PHY to HDT", tmpDevice->address_);
+        get_btm_client_interface().ble.BTM_BleSetPhy(tmpDevice->address_, PHY_HDT,
+                                                     asymmetric ? PHY_LE_1M : PHY_HDT, 0);
+      } else {
+        get_btm_client_interface().ble.BTM_BleSetPhy(tmpDevice->address_, PHY_LE_2M,
+                                                     asymmetric ? PHY_LE_1M : PHY_LE_2M, 0);
+      }
       tmpDevice->acl_asymmetric_ = asymmetric;
     }
   }

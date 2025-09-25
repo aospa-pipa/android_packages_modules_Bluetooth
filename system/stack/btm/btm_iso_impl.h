@@ -40,6 +40,7 @@
 #include "stack/include/hci_error_code.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/hcimsgs.h"
+#include "osi/include/properties.h"
 
 namespace bluetooth {
 namespace hci {
@@ -186,12 +187,22 @@ struct iso_impl {
   void create_cig(uint8_t cig_id, struct iso_manager::cig_create_params cig_params) {
     log::assert_that(!IsCigKnown(cig_id), "Invalid cig - already exists: {}", cig_id);
 
-    btsnd_hcic_set_cig_params(
-            cig_id, cig_params.sdu_itv_mtos, cig_params.sdu_itv_stom, cig_params.sca,
-            cig_params.packing, cig_params.framing, cig_params.max_trans_lat_stom,
-            cig_params.max_trans_lat_mtos, cig_params.cis_cfgs.size(), cig_params.cis_cfgs.data(),
-            base::BindOnce(&iso_impl::on_set_cig_params, weak_factory_.GetWeakPtr(), cig_id,
-                           cig_params.sdu_itv_mtos));
+    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+    if(hdt_enabled && shim::GetController()->SupportsBleHDTPhy()) {
+      btsnd_hcic_set_cig_params_v3(
+              cig_id, cig_params.sdu_itv_mtos, cig_params.sdu_itv_stom, cig_params.sca,
+              cig_params.packing, cig_params.framing, cig_params.max_trans_lat_stom,
+              cig_params.max_trans_lat_mtos, cig_params.cis_cfgs.size(), cig_params.cis_cfgs.data(),
+              base::BindOnce(&iso_impl::on_set_cig_params, weak_factory_.GetWeakPtr(), cig_id,
+                             cig_params.sdu_itv_mtos));
+    } else {
+      btsnd_hcic_set_cig_params(
+              cig_id, cig_params.sdu_itv_mtos, cig_params.sdu_itv_stom, cig_params.sca,
+              cig_params.packing, cig_params.framing, cig_params.max_trans_lat_stom,
+              cig_params.max_trans_lat_mtos, cig_params.cis_cfgs.size(), cig_params.cis_cfgs.data(),
+              base::BindOnce(&iso_impl::on_set_cig_params, weak_factory_.GetWeakPtr(), cig_id,
+                             cig_params.sdu_itv_mtos));
+    }
 
     BTM_LogHistory(kBtmLogTag, RawAddress::kEmpty, "CIG Create",
                    std::format("cig_id:0x{:02x}, size: {}", cig_id, cig_params.cis_cfgs.size()));
@@ -582,7 +593,14 @@ struct iso_impl {
   void process_cis_est_pkt(uint8_t len, uint8_t* data) {
     cis_establish_cmpl_evt evt;
 
-    log::assert_that(len == 28, "Invalid packet length: {}", len);
+    // The length of the LE CIS Established event v4 is 51 octets
+    // TODO: Remove this when corestack adds V4 function separately
+    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+    if(hdt_enabled && shim::GetController()->SupportsBleHDTPhy()) {
+      log::assert_that(len == 51, "Invalid packet length: {}", len);
+    } else {
+      log::assert_that(len == 28, "Invalid packet length: {}", len);
+    }
     log::assert_that(cig_callbacks_ != nullptr, "Invalid CIG callbacks");
 
     STREAM_TO_UINT8(evt.status, data);
@@ -609,6 +627,22 @@ struct iso_impl {
     STREAM_TO_UINT16(evt.max_pdu_mtos, data);
     STREAM_TO_UINT16(evt.max_pdu_stom, data);
     STREAM_TO_UINT16(evt.iso_itv, data);
+    // New parameters from v4 of LE CIS Established event
+    // TODO: Remove this when corestack adds V4 function separately
+    if(hdt_enabled && shim::GetController()->SupportsBleHDTPhy()) {
+      STREAM_TO_UINT16(evt.sub_itv, data); // 2 octets
+      STREAM_TO_UINT16(evt.max_sdu_c_to_p, data); // 2 octets
+      STREAM_TO_UINT16(evt.max_sdu_p_to_c, data); // 2 octets
+      STREAM_TO_UINT24(evt.sdu_itv_c_to_p, data); // 3 octets
+      STREAM_TO_UINT24(evt.sdu_itv_p_to_c, data); // 3 octets
+      STREAM_TO_UINT8(evt.framing, data); // 1 octet
+      STREAM_TO_UINT16(evt.rates_c_to_p, data); // 2 octets
+      STREAM_TO_UINT16(evt.rates_p_to_c, data); // 2 octets
+      STREAM_TO_UINT8(evt.config_id, data); // 1 octet
+      STREAM_TO_UINT8(evt.tl_group_id, data); // 1 octet
+      STREAM_TO_UINT8(evt.encryption_enabled, data); // 1 octet
+      STREAM_TO_UINT8(evt.mic_length, data); // 1 octet
+    }
 
     if (evt.status == HCI_SUCCESS) {
       cis->state_flags |= kStateFlagIsConnected;

@@ -322,6 +322,13 @@ struct EXT_CIS_CFG {
   uint8_t phy_stom;
   uint8_t rtn_mtos;
   uint8_t rtn_stom;
+  // New parameters from v2 and v3 of LE Set CIG Parameters command
+  uint16_t coded_rates_c_to_p;
+  uint16_t coded_rates_p_to_c;
+  uint16_t hdt_rates_c_to_p;
+  uint16_t hdt_rates_p_to_c;
+  uint8_t hdt_mic_length;
+  uint8_t hdt_packet_format;
 };
 
 void btsnd_hcic_set_cig_params(uint8_t cig_id, uint32_t sdu_itv_mtos, uint32_t sdu_itv_stom,
@@ -329,6 +336,12 @@ void btsnd_hcic_set_cig_params(uint8_t cig_id, uint32_t sdu_itv_mtos, uint32_t s
                                uint16_t max_trans_lat_stom, uint16_t max_trans_lat_mtos,
                                uint8_t cis_cnt, const EXT_CIS_CFG* cis_cfg,
                                base::OnceCallback<void(uint8_t*, uint16_t)> cb);
+
+void btsnd_hcic_set_cig_params_v3(uint8_t cig_id, uint32_t sdu_itv_mtos, uint32_t sdu_itv_stom,
+                                  uint8_t sca, uint8_t packing, uint8_t framing,
+                                  uint16_t max_trans_lat_stom, uint16_t max_trans_lat_mtos,
+                                  uint8_t cis_cnt, const EXT_CIS_CFG* cis_cfg,
+                                  base::OnceCallback<void(uint8_t*, uint16_t)> cb);
 
 struct EXT_CIS_TEST_CFG {
   uint8_t cis_id;

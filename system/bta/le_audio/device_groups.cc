@@ -802,6 +802,11 @@ uint8_t LeAudioDeviceGroup::GetPhyBitmask(uint8_t direction) const {
   if (controller && controller->SupportsBle2mPhy()) {
     phy_bitfield |= bluetooth::hci::kIsoCigPhy2M;
   }
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && controller && controller->SupportsBleHDTPhy()) {
+    log::info("LeAudioDeviceGroup::GetPhyBitmask: add HDT to local supp bitfield");
+    phy_bitfield |= bluetooth::hci::kIsoCigPhyHdt;
+  }
 
   if (!leAudioDevice) {
     log::error("No active leaudio device for direction?: {}", direction);
@@ -817,7 +822,9 @@ uint8_t LeAudioDeviceGroup::GetPhyBitmask(uint8_t direction) const {
     do {
       if (direction == ase->direction) {
         phy_bitfield &= leAudioDevice->GetPhyBitmask();
-
+        log::verbose(
+                "ASE server preferred Phy 0x{:02x} ",
+                static_cast<int>(ase->qos_preferences.preferred_phy));
         // A value of 0x00 denotes no preference
         if (ase->qos_preferences.preferred_phy &&
             (phy_bitfield & ase->qos_preferences.preferred_phy)) {
@@ -834,14 +841,20 @@ uint8_t LeAudioDeviceGroup::GetPhyBitmask(uint8_t direction) const {
     } while ((ase = leAudioDevice->GetNextActiveAseWithSameDirection(ase)));
   } while ((leAudioDevice = GetNextActiveDevice(leAudioDevice)));
 
+  log::debug("LeAudioDeviceGroup::GetPhyBitmask mask: 0x{:02x}",
+                  static_cast<int>(phy_bitfield));
   return phy_bitfield;
 }
 
 uint8_t LeAudioDeviceGroup::GetTargetPhy(uint8_t direction) const {
   uint8_t phy_bitfield = GetPhyBitmask(direction);
+  log::info("GetTargetPhy phy_bitfield: {}", phy_bitfield);
 
-  // prefer to use 2M if supported
-  if (phy_bitfield & bluetooth::hci::kIsoCigPhy2M) {
+  // prefer to use HDT if supported, and then 2M
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && (phy_bitfield & bluetooth::hci::kIsoCigPhyHdt)) {
+    return types::kTargetPhyHdt;
+  } else if (phy_bitfield & bluetooth::hci::kIsoCigPhy2M) {
     return types::kTargetPhy2M;
   } else if (phy_bitfield & bluetooth::hci::kIsoCigPhy1M) {
     return types::kTargetPhy1M;
@@ -1078,6 +1091,20 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         }
       }
       config_req.target_latency = utils::GetTargetLatencyForAudioContext(ctx_type);
+
+      // Setting Phy requirement
+      auto controller = bluetooth::shim::GetController();
+      bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+      if(hdt_enabled && ctx_type == types::LeAudioContextType::MEDIA &&
+            (device->GetPhyBitmask() & bluetooth::hci::kIsoCigPhyHdt) &&
+            (controller && controller->SupportsBleHDTPhy())) {
+        log::verbose(" set requirement Phy as HDT");
+        config_req.target_Phy = types::kTargetPhyHdt;
+      } else if(hdt_enabled){
+        log::verbose(" set requirement Phy as undefined");
+        config_req.target_Phy = types:: kTargetPhyUndefined;
+      }
+      log::verbose(" config_req.target_Phy: 0x{:02x}", config_req.target_Phy);
       log::warn("Device {} pushes requirement, location: {}, direction: {}", device->address_,
                 (int)locations, (int)remote_direction);
       direction_req->push_back(std::move(config_req));

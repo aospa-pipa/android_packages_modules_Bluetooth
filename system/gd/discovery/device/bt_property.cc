@@ -129,7 +129,7 @@ std::string bt_property_text(const bt_property_t& property) {
               " max_adv_filter_supported:%d activity_energy_info_supported:%d"
               " scan_result_storage_size:%d total_trackable_advertisers:%d"
               " extended_scan_support:%d debug_logging_supported:%d le_2m_phy_supported:%d"
-              " le_coded_phy_supported:%d le_extended_advertising_supported:%d"
+              " le_coded_phy_supported:%d le_hdt_phy_supported:%d le_extended_advertising_supported:%d"
               " le_periodic_advertising_supported:%d le_maximum_advertising_data_length:%d"
               " dynamic_audio_buffer_supported:%d "
               "le_periodic_advertising_sync_transfer_sender_supported:%d"
@@ -153,6 +153,7 @@ std::string bt_property_text(const bt_property_t& property) {
               ((bt_local_le_features_t*)property.val)->le_2m_phy_supported,
               ((bt_local_le_features_t*)property.val)->le_coded_phy_supported,
               ((bt_local_le_features_t*)property.val)->le_extended_advertising_supported,
+              ((bt_local_le_features_t*)property.val)->le_hdt_phy_supported,
               ((bt_local_le_features_t*)property.val)->le_periodic_advertising_supported,
               ((bt_local_le_features_t*)property.val)->le_maximum_advertising_data_length,
               ((bt_local_le_features_t*)property.val)->dynamic_audio_buffer_supported,

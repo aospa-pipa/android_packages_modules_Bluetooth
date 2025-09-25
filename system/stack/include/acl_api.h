@@ -188,6 +188,7 @@ void acl_ble_connection_parameters_request(uint16_t handle, uint16_t conn_int_mi
 bool acl_peer_supports_ble_packet_extension(uint16_t hci_handle);
 bool acl_peer_supports_ble_2m_phy(uint16_t hci_handle);
 bool acl_peer_supports_ble_coded_phy(uint16_t hci_handle);
+bool acl_peer_supports_ble_hdt_phy(uint16_t hci_handle);
 
 bool acl_is_switch_role_idle(const RawAddress& bd_addr, tBT_TRANSPORT transport);
 

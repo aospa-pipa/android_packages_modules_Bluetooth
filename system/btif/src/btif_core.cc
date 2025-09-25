@@ -472,6 +472,7 @@ void btif_get_adapter_property(bt_property_type_t type) {
     }
     local_le_features.le_2m_phy_supported = controller->SupportsBle2mPhy();
     local_le_features.le_coded_phy_supported = controller->SupportsBleCodedPhy();
+    local_le_features.le_hdt_phy_supported = controller->SupportsBleHDTPhy();
     local_le_features.le_extended_advertising_supported =
             controller->SupportsBleExtendedAdvertising();
     local_le_features.le_periodic_advertising_supported =

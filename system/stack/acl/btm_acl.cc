@@ -1200,6 +1200,30 @@ bool BTM_IsPhy2mSupported(const RawAddress& remote_bda, tBT_TRANSPORT transport)
 
 /*******************************************************************************
  *
+ * Function         BTM_IsPhyHDTSupported
+ *
+ * Description      This function is called to check PHY HDT support
+ *                  from peer device
+ * Returns          True when PHY HDT supported false otherwise
+ *
+ ******************************************************************************/
+bool BTM_IsPhyHDTSupported(const RawAddress& remote_bda, tBT_TRANSPORT transport) {
+  tACL_CONN* p;
+  log::verbose("BTM_IsPhyHDTSupported");
+  p = internal_.btm_bda_to_acl(remote_bda, transport);
+  if (p == (tACL_CONN*)NULL) {
+    log::verbose("BTM_IsPhyHDTSupported: no connection");
+    return false;
+  }
+
+  if (!p->peer_le_features_valid) {
+    log::warn("Checking remote features but remote feature read is incomplete");
+  }
+  return HCI_LE_HDT_PHY_SUPPORTED(p->peer_le_features);
+}
+
+/*******************************************************************************
+ *
  * Function         BTM_RequestPeerSCA
  *
  * Description      This function is called to request sleep clock accuracy
@@ -2039,6 +2063,21 @@ bool acl_peer_supports_ble_coded_phy(uint16_t hci_handle) {
     return false;
   }
   return HCI_LE_CODED_PHY_SUPPORTED(p_acl->peer_le_features);
+}
+
+bool acl_peer_supports_ble_hdt_phy(uint16_t hci_handle) {
+  log::debug("acl_peer_supports_ble_hdt_phy");
+  tACL_CONN* p_acl = internal_.acl_get_connection_from_handle(hci_handle);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  if (!p_acl->peer_le_features_valid) {
+    log::warn("Checking remote features but remote feature read is incomplete");
+    return false;
+  }
+  bool peer_hdt_support = HCI_LE_HDT_PHY_SUPPORTED(p_acl->peer_le_features);
+  log::debug("acl_peer_supports_ble_hdt_phy: peer's HDT support: {}", peer_hdt_support);
+  return peer_hdt_support;
 }
 
 void acl_set_disconnect_reason(tHCI_STATUS acl_disc_reason) {
