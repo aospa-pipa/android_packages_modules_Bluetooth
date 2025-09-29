@@ -57,6 +57,7 @@
 #include "os/system_properties.h"
 #include "os/wakelock_manager.h"
 #include "storage/storage_module.h"
+#include <signal.h>
 
 #if TARGET_FLOSS
 #include "sysprops/sysprops_module.h"
@@ -198,18 +199,8 @@ void Stack::StartEverything() {
   log::info("init_status == {}", int(init_status));
 
   if (init_status != std::future_status::ready) {
-    /* Crash stuck thread and print it's stack trace, so that we know why startup is taking too
-     * long */
-    management_thread_->Abort();
-
-    /* Crashed thread should take whole stack with it, but main thread is being executed
-     * simultaneously. This sleep ensures that main thread doesn't execute any logic below, and
-     * nicely dies with rest of stack.  */
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-
-    /* We should already be dead because of the Abort above, this is just in case the sleep above
-     * was somehow too short */
-    log::assert_that(init_status == std::future_status::ready, "Can't start stack");
+    log::warn("Can't start stack");
+    kill(getpid(), SIGKILL);
   }
 
   {
@@ -233,9 +224,11 @@ void Stack::Stop() {
   bluetooth::shim::hci_on_shutting_down();
 
   // Make sure gd acl flag is enabled and we started it up
-  pimpl_->acl_->FinalShutdown();
-  delete pimpl_->acl_;
-  pimpl_->acl_ = nullptr;
+  if (pimpl_->acl_ != nullptr) {
+    pimpl_->acl_->FinalShutdown();
+    delete pimpl_->acl_;
+    pimpl_->acl_ = nullptr;
+  }
 
   log::assert_that(is_running_, "Gd stack not running");
   is_running_ = false;
