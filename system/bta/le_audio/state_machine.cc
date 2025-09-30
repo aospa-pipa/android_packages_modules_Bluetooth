@@ -1542,6 +1542,8 @@ public:
       switch (group->dsa_.mode) {
         case DsaMode::ISO_HW:
           data_path_id = bluetooth::hci::iso_manager::kIsoDataPathPlatformDefault;
+          codec = bluetooth::le_audio::types::kLeAudioCodecHeadtracking;
+          log::info("set codec to kLeAudioCodecHeadtracking");
           break;
         case DsaMode::ISO_SW:
           data_path_id = bluetooth::hci::iso_manager::kIsoDataPathHci;
