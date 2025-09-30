@@ -355,6 +355,10 @@ public class GattService extends ProfileService {
         mHandlerThread.quit();
     }
 
+    public void setAdvertiseManagerAvailable(boolean available) {
+        mAdvertiseManager.setAvailable(available);
+    }
+
     ContextMap<IBluetoothGattServerCallback> getServerMap() {
         return mServerMap;
     }
