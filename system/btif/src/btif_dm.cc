@@ -175,7 +175,7 @@ struct btif_dm_pairing_cb_t {
   uint8_t pin_code_len;
   uint8_t is_ssp;
   uint8_t auth_req;
-  uint8_t io_cap;
+  BtIoCap io_cap;
   uint8_t autopair_attempts;
   uint8_t timeout_retries;
   uint8_t is_local_initiated;
@@ -2539,7 +2539,7 @@ void BTIF_dm_disable() {
 void btif_dm_sec_evt(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data) {
   RawAddress bd_addr;
   uint8_t auth_req = pairing_cb.auth_req;
-  uint8_t io_cap = pairing_cb.io_cap;
+  BtIoCap io_cap = pairing_cb.io_cap;
 
   log::verbose("ev:{}", dump_dm_event(event));
 
@@ -3433,7 +3433,7 @@ void btif_dm_proc_io_req(tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
 
     /* copy over the MITM bit as well. In addition if the peer has DisplayYesNo,
      * force MITM */
-    if ((yes_no_bit) || (pairing_cb.io_cap & BTM_IO_CAP_IO)) {
+    if (yes_no_bit || pairing_cb.io_cap == BtIoCap::DISPLAY_YES_NO) {
       *p_auth_req |= BTA_AUTH_SP_YES;
     }
   } else if (yes_no_bit) {
@@ -3443,7 +3443,7 @@ void btif_dm_proc_io_req(tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
   log::verbose("updated p_auth_req={}", *p_auth_req);
 }
 
-void btif_dm_proc_io_rsp(const RawAddress& /* bd_addr */, tBTM_IO_CAP io_cap,
+void btif_dm_proc_io_rsp(const RawAddress& /* bd_addr */, BtIoCap io_cap,
                          tBTM_OOB_DATA /* oob_data */, tBTM_AUTH_REQ auth_req) {
   if (auth_req & BTA_AUTH_BONDS) {
     log::debug("auth_req:{}", auth_req);
@@ -3801,6 +3801,12 @@ static void btif_dm_ble_passkey_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif)
 
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDING);
   pairing_cb.is_ssp = false;
+
+  if (com_android_bluetooth_flags_passkey_entry_pairing_approval()) {
+    pairing_cb.is_le_only = true;
+    pairing_cb.is_le_nc = false;
+  }
+
   if (com_android_bluetooth_flags_temporary_pairing_tracking()) {
     pairing_cb.bond_type = BOND_TYPE_PERSISTENT;
   }

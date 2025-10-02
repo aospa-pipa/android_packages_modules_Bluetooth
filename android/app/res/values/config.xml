@@ -149,7 +149,6 @@
     <integer name="a2dp_source_codec_priority_aptx">4001</integer>
     <integer name="a2dp_source_codec_priority_aptx_hd">5001</integer>
     <integer name="a2dp_source_codec_priority_ldac">6001</integer>
-    <integer name="a2dp_source_codec_priority_lc3">7001</integer>
 
     <!-- Dual Mode use case based Audio mode policies in terms of Audio device type selected in
          form of value pairs where first value is for OUTPUT_ONLY and second one is for DUPLEX

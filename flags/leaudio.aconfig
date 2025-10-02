@@ -2,6 +2,16 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
+    name: "leaudio_improve_state_machine_invalid_status"
+    namespace: "bluetooth"
+    description: "Improve handling state machine internal invalid status"
+    bug: "447120781"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_broadcast_monitor_source_sync_status"
     is_exported: true
     namespace: "bluetooth"
@@ -18,6 +28,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_support_confirm_suspend"
+    namespace: "bluetooth"
+    description: "Add support for confirm suspend"
+    bug: "446634001"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "metadata_api_inactive_audio_device_upon_connection"
     is_exported: true
     namespace: "bluetooth"
@@ -31,6 +51,16 @@ flag {
     namespace: "bluetooth"
     description: "Support multiple audio outputs for volume offset"
     bug: "323156655"
+}
+
+flag {
+    name: "leaudio_software_bt_request_lock_fix"
+    namespace: "bluetooth"
+    description: "Fix minor locking issue"
+    bug: "446619006"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
@@ -382,6 +412,16 @@ flag {
     namespace: "bluetooth"
     description: "Disable BIG monitoring when no BIS are selected to be synced to."
     bug: "441243548"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_fallback_group_selection"
+    namespace: "bluetooth"
+    description: "Allow only local broadcast receiver device to be select as fallback"
+    bug: "445133566"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

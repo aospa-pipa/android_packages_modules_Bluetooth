@@ -558,9 +558,7 @@ public:
     }
 
     /* Reconfiguration to non requiring source scenario */
-    if (sink_monitor_mode_) {
-      notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
-    }
+    notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
 
     if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
       /* For sonification events we don't really need to reconfigure to HQ
@@ -1346,11 +1344,13 @@ public:
       speed_start_setup(group->group_id_, configuration_context_type, group->NumOfConnected());
     }
 
-    /* If assistant have some connected delegators that needs to be informed
-     * when there would be request to stream unicast.
-     */
-    if (!sink_monitor_mode_ && source_monitor_mode_ && !group_is_streaming) {
-      notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+    if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      /* If assistant have some connected delegators that needs to be informed
+       * when there would be request to stream unicast.
+       */
+      if (!sink_monitor_mode_ && source_monitor_mode_ && !group_is_streaming) {
+        notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+      }
     }
 
     bool result = groupStateMachine_->StartStream(group, configuration_context_type,
@@ -1756,12 +1756,11 @@ public:
     return audio_sender_state_ == AudioState::STARTED ||
            audio_receiver_state_ == AudioState::STARTED;
   }
-
-  void SetUnicastMonitorMode(uint8_t direction, bool enable) override {
-    if (direction == bluetooth::le_audio::types::kLeAudioDirectionSink) {
+  void SetUnicastMonitorModeLegacy(uint8_t local_directions, bool enable) {
+    if (local_directions == bluetooth::le_audio::types::kLeAudioDirectionSink) {
       log::debug("sink_monitor_mode_ enable: {}", enable);
       sink_monitor_mode_ = enable;
-    } else if (direction == bluetooth::le_audio::types::kLeAudioDirectionSource) {
+    } else if (local_directions == bluetooth::le_audio::types::kLeAudioDirectionSource) {
       log::debug("source_monitor_mode_ enable: {}", enable);
       source_monitor_mode_ = enable;
 
@@ -1771,7 +1770,7 @@ public:
 
       LeAudioDeviceGroup* group = aseGroups_.FindById(active_group_id_);
       if (!group) {
-        notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
+        notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
 
         return;
       }
@@ -1779,10 +1778,71 @@ public:
       if (group->IsStreaming()) {
         notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING);
       } else {
-        notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
+        notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
       }
     } else {
-      log::error("invalid direction: 0x{:02x} monitor mode set", direction);
+      log::error("invalid direction: 0x{:02x} monitor mode set", local_directions);
+    }
+  }
+
+  void SetUnicastMonitorMode(uint8_t local_directions, bool enable) override {
+    if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      SetUnicastMonitorModeLegacy(local_directions, enable);
+      return;
+    }
+
+    if ((local_directions & bluetooth::le_audio::types::kLeAudioDirectionBoth) == 0) {
+      log::error("invalid direction: 0x{:02x} monitor mode set", local_directions);
+      return;
+    }
+
+    if (local_directions & bluetooth::le_audio::types::kLeAudioDirectionSink) {
+      log::debug("enable: {}", enable);
+      sink_monitor_mode_ = enable;
+    }
+
+    if (local_directions & bluetooth::le_audio::types::kLeAudioDirectionSource) {
+      log::debug("enable: {}", enable);
+      source_monitor_mode_ = enable;
+    }
+
+    if (!enable) {
+      return;
+    }
+
+    LeAudioDeviceGroup* group = aseGroups_.FindById(active_group_id_);
+    if (!group || !group->IsStreaming()) {
+      notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+      notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+      return;
+    }
+
+    switch (audio_receiver_state_) {
+      case AudioState::IDLE:
+        notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+        break;
+      case AudioState::STARTED:
+      case AudioState::RELEASING:
+      case AudioState::READY_TO_RELEASE:
+        notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING);
+        break;
+      case AudioState::READY_TO_START:
+        notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+        break;
+    }
+
+    switch (audio_sender_state_) {
+      case AudioState::IDLE:
+        notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+        break;
+      case AudioState::STARTED:
+      case AudioState::RELEASING:
+      case AudioState::READY_TO_RELEASE:
+        notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING);
+        break;
+      case AudioState::READY_TO_START:
+        notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+        break;
     }
   }
 
@@ -1988,8 +2048,13 @@ public:
     }
 
     auto group_id_to_close = active_group_id_;
-    sink_monitor_notified_status_ = std::nullopt;
-    source_monitor_notified_status_ = std::nullopt;
+    if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      sink_monitor_notified_status_ = std::nullopt;
+      source_monitor_notified_status_ = std::nullopt;
+    } else {
+      notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+      notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+    }
     log::info("Group id: {}, autonomous_inactive: {}", active_group_id_, autonomous_inactive);
 
     StopSuspendTimeout();
@@ -2315,8 +2380,12 @@ public:
          }
       }
     }
-
     log::info("defer_notify_active_until_stop_: {}", defer_notify_active_until_stop_);
+    if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      /* Reset sink and source listener notified status */
+      sink_monitor_notified_status_ = std::nullopt;
+      source_monitor_notified_status_ = std::nullopt;
+    }
 
     auto const& group_config_preference = group->GetPreferredAudioSetConfiguration();
     UpdateCodecConfigPreferenceToHal(group_config_preference.source.get(),
@@ -5002,6 +5071,10 @@ public:
     }
 
     ConfirmLocalAudioSourceStartRequestAndUpdateConfig(group);
+
+    if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING);
+    }
   }
 
   const struct bluetooth::le_audio::stream_configuration* GetStreamSourceConfiguration(
@@ -5128,6 +5201,9 @@ public:
     }
 
     ConfirmLocalAudioSinkStartRequestAndUpdateConfig(group);
+    if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING);
+    }
   }
 
   void SuspendAudio(void) {
@@ -5257,13 +5333,19 @@ public:
     if (active_group_id_ != bluetooth::groups::kGroupUnknown) {
       /* Bluetooth turned off while streaming */
       StopAudio();
-      SetUnicastMonitorMode(bluetooth::le_audio::types::kLeAudioDirectionSink, false);
+      if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+        SetUnicastMonitorMode(bluetooth::le_audio::types::kLeAudioDirectionSink, false);
+      }
       ClientAudioInterfaceRelease();
     } else {
       /* There may be not stopped Sink HAL client due to set Listening mode */
-      if (sink_monitor_mode_) {
+      if (sink_monitor_mode_ && !com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
         SetUnicastMonitorMode(bluetooth::le_audio::types::kLeAudioDirectionSink, false);
       }
+    }
+
+    if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+      SetUnicastMonitorMode(bluetooth::le_audio::types::kLeAudioDirectionBoth, false);
     }
     groupStateMachine_->Cleanup();
     aseGroups_.Cleanup();
@@ -5682,7 +5764,14 @@ public:
       log::error("invalid resume request for context type: {}",
                  ToString(upcoming_configuration_context_type));
       if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        handleInvalidContextTypeResumeRequest(group);
+        /* If lack of context type is an internal issue, let's don't report it as a remote issue
+         */
+        if (audioContextTypeManager_->IsAnyMetadataSet(
+                    bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+          handleInvalidContextTypeResumeRequest(group);
+        } else {
+          log::warn("Audio HAL did not set metadata for local source");
+        }
       }
       CancelLocalAudioSourceStreamingRequest();
       return;
@@ -5699,7 +5788,7 @@ public:
         /* Looks like previous Confirm did not get to the Audio Framework*/
         ConfirmLocalAudioSourceStreamingRequest(false);
         break;
-      case AudioState::IDLE:
+      case AudioState::IDLE: {
         switch (audio_receiver_state_) {
           case AudioState::IDLE:
             if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
@@ -5816,7 +5905,15 @@ public:
           StopReconfigurationTimeout(active_group_id_,
                                      bluetooth::le_audio::types::kLeAudioDirectionSource);
         }
+
+        if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+          /* If audio_sender_state changed and monitor is enabled, send notification */
+          if (audio_sender_state_ == AudioState::READY_TO_START) {
+            notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+          }
+        }
         break;
+      }
       case AudioState::READY_TO_START:
         log::error(
                 "called in wrong state, ignoring double start request. \n "
@@ -5938,31 +6035,42 @@ public:
                                                     "s_state: " + ToString(audio_sender_state_));
   }
 
-  void notifyAudioLocalSink(UnicastMonitorModeStatus status) {
-    if (sink_monitor_notified_status_.has_value()) {
-      log::verbose("source_monitor_notified_status_: {}, status: {}",
-                   ToString(sink_monitor_notified_status_.value()), ToString(status));
+  void notifyAudioLocalMonitor(uint8_t local_direction,
+                               std::optional<UnicastMonitorModeStatus>& current_status,
+                               UnicastMonitorModeStatus new_status) {
+    if (current_status.has_value()) {
+      log::verbose("current_status: {}, new_status: {}", ToString(current_status.value()),
+                   ToString(new_status));
     }
 
-    if (sink_monitor_notified_status_ != status) {
-      log::info("Stream monitoring status changed to: {}", ToString(status));
-      sink_monitor_notified_status_ = status;
-      callbacks_->OnUnicastMonitorModeStatus(bluetooth::le_audio::types::kLeAudioDirectionSink,
-                                             status);
+    if (current_status != new_status) {
+      log::info("{} stream monitoring status changed to: {}",
+                local_direction == bluetooth::le_audio::types::kLeAudioDirectionSink ? "Sink"
+                                                                                     : "Source",
+                ToString(new_status));
+      current_status = new_status;
+      callbacks_->OnUnicastMonitorModeStatus(local_direction, new_status);
     }
   }
 
+  void notifyAudioLocalSink(UnicastMonitorModeStatus status) {
+    if (!sink_monitor_mode_) {
+      log::verbose("Sink monitor not enabled");
+      return;
+    }
+    log::verbose("Notify Sink Monitor");
+    notifyAudioLocalMonitor(bluetooth::le_audio::types::kLeAudioDirectionSink,
+                            sink_monitor_notified_status_, status);
+  }
+
   void notifyAudioLocalSource(UnicastMonitorModeStatus status) {
-    if (source_monitor_notified_status_.has_value()) {
-      log::verbose("source_monitor_notified_status_: {}, status: {}",
-                   ToString(source_monitor_notified_status_.value()), ToString(status));
+    if (!source_monitor_mode_) {
+      log::verbose("Source monitor not enabled");
+      return;
     }
-    if (source_monitor_notified_status_ != status) {
-      log::info("Source stream monitoring status changed to: {}", ToString(status));
-      source_monitor_notified_status_ = status;
-      callbacks_->OnUnicastMonitorModeStatus(bluetooth::le_audio::types::kLeAudioDirectionSource,
-                                             status);
-    }
+    log::verbose("Notify Source Monitor");
+    notifyAudioLocalMonitor(bluetooth::le_audio::types::kLeAudioDirectionSource,
+                            source_monitor_notified_status_, status);
   }
 
   void OnLocalAudioSinkResume() {
@@ -6052,7 +6160,14 @@ public:
       log::error("invalid resume request for context type: {}",
                  ToString(configuration_context_type_));
       if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        handleInvalidContextTypeResumeRequest(group);
+        /* If lack of context type is an internal issue, let's don't report it as a remote issue
+         */
+        if (audioContextTypeManager_->IsAnyMetadataSet(
+                    bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+          handleInvalidContextTypeResumeRequest(group);
+        } else {
+          log::warn("Audio HAL did not set metadata for local sink");
+        }
       }
       CancelLocalAudioSinkStreamingRequest();
       return;
@@ -6071,7 +6186,7 @@ public:
       case AudioState::STARTED:
         ConfirmLocalAudioSinkStreamingRequest(false);
         break;
-      case AudioState::IDLE:
+      case AudioState::IDLE: {
         switch (audio_sender_state_) {
           case AudioState::IDLE:
             if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
@@ -6183,7 +6298,15 @@ public:
           StopReconfigurationTimeout(active_group_id_,
                                      bluetooth::le_audio::types::kLeAudioDirectionSink);
         }
+
+        if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+          /* If audio_receiver_state changed and monitor is enabled, send notification */
+          if (audio_receiver_state_ == AudioState::READY_TO_START) {
+            notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_REQUESTED);
+          }
+        }
         break;
+      }
       case AudioState::READY_TO_START:
         log::error(
                 "Double resume request, just ignore it.. \n audio_receiver_state: "
@@ -7828,6 +7951,10 @@ public:
         if (is_active_group_operation) {
           /** Stop Audio but don't release all the Audio resources */
           SuspendAudio();
+          if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+            notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+            notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+          }
         }
         break;
       case GroupStreamStatus::CONFIGURED_BY_USER:
@@ -7840,6 +7967,10 @@ public:
                 log::warn("Both BT App and UpdateMetadata received for call,"
                           " send reconfigurationComplete to BT HAL");
                 reconfigurationComplete();
+                if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+                  notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+                  notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+                }
               } else {
                 defer_reconfig_complete_update_ = true;
                 log::warn("Both BT App and UpdateMetadata not received for call,"
@@ -7865,6 +7996,10 @@ public:
             }
           } else {
             reconfigurationComplete();
+            if (com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+              notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+              notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+            }
           }
         }
         break;
@@ -7896,20 +8031,20 @@ public:
           // handleAsymmetricPhyForUnicast(group);
           UpdateLocationsAndContextsAvailability(group);
           if (!group->IsPendingConfiguration()) {
-            log::info("sink_monitor_mode_: {}, defer_notify_inactive_until_stop_: {}, "
-                      "defer_notify_active_until_stop_: {}, defer_source_suspend_ack_until_stop_: {}, "
-                      "defer_sink_suspend_ack_until_stop_: {}", sink_monitor_mode_,
-                      defer_notify_inactive_until_stop_, defer_notify_active_until_stop_,
-                      defer_source_suspend_ack_until_stop_, defer_sink_suspend_ack_until_stop_);
+              log::info("sink_monitor_mode_: {}, defer_notify_inactive_until_stop_: {}, "
+                        "defer_notify_active_until_stop_: {}, defer_source_suspend_ack_until_stop_: {}, "
+                        "defer_sink_suspend_ack_until_stop_: {}", sink_monitor_mode_,
+                        defer_notify_inactive_until_stop_, defer_notify_active_until_stop_,
+                        defer_source_suspend_ack_until_stop_, defer_sink_suspend_ack_until_stop_);
 
-            if (sink_monitor_mode_) {
-              notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
-            }
+              if (sink_monitor_mode_) {
+                notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+              }
 
-            log::info("source_monitor_mode_: {}", source_monitor_mode_);
-            if (source_monitor_mode_) {
-              notifyAudioLocalSource(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
-            }
+              log::info("source_monitor_mode_: {}", source_monitor_mode_);
+              if (source_monitor_mode_) {
+                notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+              }
 
             if (defer_source_suspend_ack_until_stop_) {
               defer_source_suspend_ack_until_stop_ = false;
@@ -7946,7 +8081,9 @@ public:
                 CancelStreamingRequest();
               }
             }
-          } else {
+          }
+
+          if (group->IsPendingConfiguration()) {
             if (!is_active_group_operation) {
               log::info("Clear pending configuration flag for group {}", group->group_id_);
               group->ClearPendingConfiguration();
@@ -7962,10 +8099,11 @@ public:
                               ? bluetooth::le_audio::types::kLeAudioDirectionSource
                               : bluetooth::le_audio::types::kLeAudioDirectionSink;
 
-              /* Reconfiguration to non requiring source scenario */
-              if (sink_monitor_mode_ &&
-                  (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink)) {
-                notifyAudioLocalSink(UnicastMonitorModeStatus::STREAMING_SUSPENDED);
+              if (!com_android_bluetooth_flags_leaudio_improve_unicast_monitor()) {
+                /* Reconfiguration to non requiring source scenario */
+                if (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink) {
+                  notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+                }
               }
 
               auto config = DirectionalRealignMetadataAudioContexts(group, remote_direction);
