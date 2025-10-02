@@ -942,6 +942,8 @@ BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
       log::debug("Remote source not supported for {}", common::ToString(ctx_type));
       remote_directions.source = false;
     }
+    log::info("Returning remote's source: {}, sink: {}",
+              remote_directions.source, remote_directions.sink);
     return remote_directions;
   }
 
@@ -956,12 +958,15 @@ BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
      * as a parameter, it means, this functions is called to build a cache which should not depend
      * on current context configuration
      */
+    log::debug("IsAnyMetadataSet");
     auto [config_context, remote_contexts] =
             audio_context_type_manager->GetAudioContextsForTheGroup(this);
     if (config_context == ctx_type) {
+      log::debug("ctx_type matches config_context");
       return {.sink = remote_contexts.sink.any(), .source = remote_contexts.source.any()};
     }
   }
+  log::debug("Returning Bidirectional pair");
 
   return audio_context_type_manager->GetDirectionsForGivenContext(ctx_type, this);
 }
@@ -985,7 +990,8 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
   };
 
   bool remote_has_gmap = false;
-
+  log::debug("leaudio_use_context_type_manager: {}",
+              com_android_bluetooth_flags_leaudio_use_context_type_manager());
   // Define a requirement for each location. Knowing codec specific
   // capabilities (i.e. multiplexing capability) the config provider can
   // determine the number of ASEs to activate.
@@ -997,8 +1003,11 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
     }
     BidirectionalPair<bool> has_location = {false, false};
     BidirectionalPair<bool> has_direction = GetDirectionSupport(ctx_type);
+    log::debug("has_direction: sink: {}", has_direction.sink);
+    log::debug("has_direction: source: {}", has_direction.source);
 
     for (auto remote_direction : {types::kLeAudioDirectionSink, types::kLeAudioDirectionSource}) {
+      log::debug("remote_direction: {}", remote_direction);
       if (!device->audio_locations_.get(remote_direction)) {
         log::debug("Device {} has no audio allocation for direction: {}", device->address_,
                    (int)remote_direction);
@@ -1009,6 +1018,8 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
          (remote_direction == types::kLeAudioDirectionSink)){
          auto direction_sink_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSink);
          auto direction_src_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSource);
+         log::info("direction_sink_contexs {}, direction_src_contexs {}",
+                  common::ToString(direction_sink_contexs), common::ToString(direction_src_contexs));
          if (!(direction_sink_contexs.test(ctx_type) && direction_src_contexs.test(ctx_type))){
            log::warn("Device {} does not have both direction  for {}, treat it as source only",
                       device->address_,
@@ -1034,9 +1045,12 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
           // direction.
+          log::info("Checking for Game/VA");
           auto group_contexts = GetAvailableContexts(types::kLeAudioDirectionBoth);
+          log::info("group_contexts {}", common::ToString(group_contexts));
           if (group_contexts.test(ctx_type)) {
             auto direction_contexs = device->GetAvailableContexts(remote_direction);
+            log::info("direction_contexs {}", common::ToString(direction_contexs));
             if (!direction_contexs.test(ctx_type)) {
               log::warn("Device {} has no {} context support", device->address_,
                         common::ToString(ctx_type));
