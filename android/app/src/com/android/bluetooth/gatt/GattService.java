@@ -58,7 +58,6 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.Utils.callbackToApp;
-import static com.android.bluetooth.Utils.getSystemClock;
 import static com.android.bluetooth.Utils.transportToString;
 import static com.android.bluetooth.gatt.GattUtil.gattStatusToString;
 import static com.android.bluetooth.gatt.GattUtil.isAndroidHeadtrackerSrvcUuid;
@@ -101,13 +100,13 @@ import android.sysprop.BluetoothProperties;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
-import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AbstractionLayer;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
 
 import com.google.protobuf.ByteString;
@@ -179,13 +178,13 @@ public class GattService extends ProfileService {
     @VisibleForTesting static final int GATT_CLIENT_LIMIT_PER_APP = 32;
 
     /** List of our registered clients. */
-    ContextMap<IBluetoothGattCallback> mClientMap = new ContextMap<>();
+    final ContextMap<IBluetoothGattCallback> mClientMap;
 
     /** List of our registered server apps. */
-    @VisibleForTesting ContextMap<IBluetoothGattServerCallback> mServerMap = new ContextMap<>();
+    private final ContextMap<IBluetoothGattServerCallback> mServerMap;
 
     /** Reliable write queue */
-    @VisibleForTesting Set<BluetoothDevice> mReliableQueue = new HashSet<>();
+    private final Set<BluetoothDevice> mReliableQueue;
 
     /**
      * Set of restricted (which require a BLUETOOTH_PRIVILEGED permission) handles per connectionId.
@@ -232,8 +231,11 @@ public class GattService extends ProfileService {
                 nativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
+                new ContextMap<>() /* mClientMap */,
+                new ContextMap<>() /* mServerMap */,
+                new HashSet<>() /* mReliableQueue */,
                 companionDeviceManager,
-                getSystemClock());
+                TimeProvider.getSystemClock());
     }
 
     @VisibleForTesting
@@ -242,11 +244,17 @@ public class GattService extends ProfileService {
             GattNativeInterface nativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
+            ContextMap<IBluetoothGattCallback> clientMap,
+            ContextMap<IBluetoothGattServerCallback> serverMap,
+            Set<BluetoothDevice> reliableQueue,
             CompanionDeviceManager companionDeviceManager,
             TimeProvider timeProvider) {
         super(BluetoothProfile.GATT, requireNonNull(adapterService));
         mActivityManager = requireNonNull(obtainSystemService(ActivityManager.class));
         mPackageManager = requireNonNull(mAdapterService.getPackageManager());
+        mClientMap = requireNonNull(clientMap);
+        mServerMap = requireNonNull(serverMap);
+        mReliableQueue = requireNonNull(reliableQueue);
         mCompanionDeviceManager = companionDeviceManager;
         mTimeProvider = timeProvider;
 

@@ -16,6 +16,7 @@
 
 package android.bluetooth.le;
 
+import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.BLUETOOTH_SCAN;
 import static android.Manifest.permission.UPDATE_DEVICE_STATS;
 
@@ -115,13 +116,20 @@ public final class BluetoothLeScanner {
      * later must have {@link android.Manifest.permission#ACCESS_FINE_LOCATION ACCESS_FINE_LOCATION}
      * permission in order to get results.
      *
+     * <p>This method requires the calling app to have the {@link
+     * android.Manifest.permission#BLUETOOTH_SCAN} permission. Additionally, an app must have the
+     * {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} if it is used for BLE scan only mode
+     * (when the adapter state is not {@link BluetoothAdapter#STATE_ON}).
+     *
      * @param callback Callback used to deliver scan results.
      * @throws IllegalArgumentException If {@code callback} is null.
      */
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
     @RequiresBluetoothLocationPermission
-    @RequiresPermission(BLUETOOTH_SCAN)
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN},
+            conditional = true)
     public void startScan(final ScanCallback callback) {
         startScan(null, new ScanSettings.Builder().build(), callback);
     }
@@ -137,6 +145,21 @@ public final class BluetoothLeScanner {
      * later must have {@link android.Manifest.permission#ACCESS_FINE_LOCATION ACCESS_FINE_LOCATION}
      * permission in order to get results.
      *
+     * <p>This method requires the calling app to have the {@link
+     * android.Manifest.permission#BLUETOOTH_SCAN} permission. Additionally, an app must have the
+     * {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} if any of the following is true:
+     *
+     * <ul>
+     *   <li>it is used for BLE scan only mode (when the adapter state is not {@link
+     *       BluetoothAdapter#STATE_ON}).
+     *   <li>the {@link ScanSettings} uses {@link ScanSettings#SCAN_MODE_AMBIENT_DISCOVERY}.
+     *   <li>the {@link ScanSettings} uses batched scanning ({@link
+     *       ScanSettings#getReportDelayMillis()} > 0) with {@link
+     *       ScanSettings#SCAN_RESULT_TYPE_ABBREVIATED}.
+     *   <li>a {@link ScanFilter} has a device address set, and either the address type is not
+     *       {@link BluetoothDevice#ADDRESS_TYPE_PUBLIC} or the IRK is not null.
+     * </ul>
+     *
      * @param filters {@link ScanFilter}s for finding exact BLE devices.
      * @param settings Settings for the scan.
      * @param callback Callback used to deliver scan results.
@@ -145,7 +168,9 @@ public final class BluetoothLeScanner {
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
     @RequiresBluetoothLocationPermission
-    @RequiresPermission(BLUETOOTH_SCAN)
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN},
+            conditional = true)
     public void startScan(
             List<ScanFilter> filters, ScanSettings settings, final ScanCallback callback) {
         startScan(filters, settings, null, callback, /* callbackIntent= */ null);
@@ -165,6 +190,21 @@ public final class BluetoothLeScanner {
      * contain one or more of the extras {@link #EXTRA_CALLBACK_TYPE}, {@link #EXTRA_ERROR_CODE} and
      * {@link #EXTRA_LIST_SCAN_RESULT} to indicate the result of the scan.
      *
+     * <p>This method requires the calling app to have the {@link
+     * android.Manifest.permission#BLUETOOTH_SCAN} permission. Additionally, an app must have the
+     * {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} if any of the following is true:
+     *
+     * <ul>
+     *   <li>it is used for BLE scan only mode (when the adapter state is not {@link
+     *       BluetoothAdapter#STATE_ON}).
+     *   <li>the {@link ScanSettings} uses {@link ScanSettings#SCAN_MODE_AMBIENT_DISCOVERY}.
+     *   <li>the {@link ScanSettings} uses batched scanning ({@link
+     *       ScanSettings#getReportDelayMillis()} > 0) with {@link
+     *       ScanSettings#SCAN_RESULT_TYPE_ABBREVIATED}.
+     *   <li>a {@link ScanFilter} has a device address set, and either the address type is not
+     *       {@link BluetoothDevice#ADDRESS_TYPE_PUBLIC} or the IRK is not null.
+     * </ul>
+     *
      * @param filters Optional list of ScanFilters for finding exact BLE devices.
      * @param settings Optional settings for the scan.
      * @param callbackIntent The PendingIntent to deliver the result to.
@@ -175,7 +215,9 @@ public final class BluetoothLeScanner {
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
     @RequiresBluetoothLocationPermission
-    @RequiresPermission(BLUETOOTH_SCAN)
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN},
+            conditional = true)
     public int startScan(
             @Nullable List<ScanFilter> filters,
             @Nullable ScanSettings settings,
@@ -192,6 +234,14 @@ public final class BluetoothLeScanner {
      * Start Bluetooth LE scan. Same as {@link #startScan(ScanCallback)} but allows the caller to
      * specify on behalf of which application(s) the work is being done.
      *
+     * <p>This method requires the calling app to have the {@link
+     * android.Manifest.permission#BLUETOOTH_SCAN} permission. Additionally, an app must have the
+     * {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} if it is used for BLE scan only mode
+     * (when the adapter state is not {@link BluetoothAdapter#STATE_ON}).
+     *
+     * <p>This method also requires the {@link android.Manifest.permission#UPDATE_DEVICE_STATS}
+     * permission if the {@code workSource} is not null.
+     *
      * @param workSource {@link WorkSource} identifying the application(s) for which to blame for
      *     the scan.
      * @param callback Callback used to deliver scan results.
@@ -201,7 +251,9 @@ public final class BluetoothLeScanner {
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
     @RequiresBluetoothLocationPermission
-    @RequiresPermission(allOf = {BLUETOOTH_SCAN, UPDATE_DEVICE_STATS})
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN, UPDATE_DEVICE_STATS},
+            conditional = true)
     public void startScanFromSource(final WorkSource workSource, final ScanCallback callback) {
         startScanFromSource(null, new ScanSettings.Builder().build(), workSource, callback);
     }
@@ -209,6 +261,24 @@ public final class BluetoothLeScanner {
     /**
      * Start Bluetooth LE scan. Same as {@link #startScan(List, ScanSettings, ScanCallback)} but
      * allows the caller to specify on behalf of which application(s) the work is being done.
+     *
+     * <p>This method requires the calling app to have the {@link
+     * android.Manifest.permission#BLUETOOTH_SCAN} permission. Additionally, an app must have the
+     * {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} if any of the following is true:
+     *
+     * <ul>
+     *   <li>it is used for BLE scan only mode (when the adapter state is not {@link
+     *       BluetoothAdapter#STATE_ON}).
+     *   <li>the {@link ScanSettings} uses {@link ScanSettings#SCAN_MODE_AMBIENT_DISCOVERY}.
+     *   <li>the {@link ScanSettings} uses batched scanning ({@link
+     *       ScanSettings#getReportDelayMillis()} > 0) with {@link
+     *       ScanSettings#SCAN_RESULT_TYPE_ABBREVIATED}.
+     *   <li>a {@link ScanFilter} has a device address set, and either the address type is not
+     *       {@link BluetoothDevice#ADDRESS_TYPE_PUBLIC} or the IRK is not null.
+     * </ul>
+     *
+     * <p>This method also requires the {@link android.Manifest.permission#UPDATE_DEVICE_STATS}
+     * permission if the {@code workSource} is not null.
      *
      * @param filters {@link ScanFilter}s for finding exact BLE devices.
      * @param settings Settings for the scan.
@@ -221,8 +291,10 @@ public final class BluetoothLeScanner {
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
     @RequiresBluetoothLocationPermission
-    @RequiresPermission(allOf = {BLUETOOTH_SCAN, UPDATE_DEVICE_STATS})
-    @SuppressLint("AndroidFrameworkRequiresPermission")
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN, UPDATE_DEVICE_STATS},
+            conditional = true)
+    @SuppressLint("AndroidFrameworkRequiresPermission") // See startRegistration() for reason
     public void startScanFromSource(
             List<ScanFilter> filters,
             ScanSettings settings,
@@ -231,7 +303,9 @@ public final class BluetoothLeScanner {
         startScan(filters, settings, workSource, callback, null);
     }
 
-    @RequiresPermission(BLUETOOTH_SCAN)
+    @RequiresPermission(
+            allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN},
+            conditional = true)
     private int startScan(
             List<ScanFilter> filters,
             ScanSettings settings,
@@ -408,7 +482,6 @@ public final class BluetoothLeScanner {
     }
 
     /** Bluetooth GATT interface callbacks */
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     private final class BleScanCallbackWrapper extends IScannerCallback.Stub {
         private static final int REGISTRATION_CALLBACK_TIMEOUT_MILLIS = 2000;
 
@@ -438,6 +511,13 @@ public final class BluetoothLeScanner {
             mScannerId = 0;
         }
 
+        @RequiresPermission(BLUETOOTH_SCAN)
+        // The permission {@link android.Manifest.permission#UPDATE_DEVICE_STATS} is required by
+        // IBluetoothScan#registerScanner only when `mWorkSource` is non-null. The @SystemApi
+        // methods that provide a WorkSource, such as `startScanFromSource()`, are already annotated
+        // with this permission. This suppression avoids propagating the conditional requirement to
+        // Public API methods that do not use a WorkSource.
+        @SuppressLint("AndroidFrameworkRequiresPermission")
         @SuppressWarnings("WaitNotInLoop") // TODO(b/314811467)
         void startRegistration() {
             synchronized (this) {
@@ -503,16 +583,16 @@ public final class BluetoothLeScanner {
         }
 
         /** Application interface registered - app is ready to go */
+        // TODO(b/447235251) Move all this logic to within the app without triggering the callback
+        @SuppressLint("AndroidFrameworkRequiresPermission")
         @Override
         public void onScannerRegistered(int status, int scannerId) {
             Log.d(
                     TAG,
-                    "onScannerRegistered() - status="
-                            + status
-                            + " scannerId="
-                            + scannerId
-                            + " mScannerId="
-                            + mScannerId);
+                    "onScannerRegistered(): "
+                            + ("status=" + status)
+                            + (" scannerId=" + scannerId)
+                            + (" mScannerId=" + mScannerId));
             synchronized (this) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     try {

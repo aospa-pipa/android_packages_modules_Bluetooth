@@ -20,7 +20,6 @@ import static android.bluetooth.BluetoothUtils.extractBytes;
 
 import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.Utils.checkCallerTargetSdk;
-import static com.android.bluetooth.Utils.getSystemClock;
 import static com.android.bluetooth.le_scan.ScanUtil.DEFAULT_REPORT_DELAY_FLOOR_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_RESULT_TYPE_TRUNCATED;
 
@@ -63,10 +62,10 @@ import android.util.Log;
 
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.Utils.TimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.NumberUtils;
+import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
 
 import libcore.util.HexEncoding;
@@ -158,7 +157,7 @@ public class ScanController {
                 new ScannerMap(),
                 companionDeviceManager,
                 null,
-                getSystemClock());
+                TimeProvider.getSystemClock());
     }
 
     @VisibleForTesting
@@ -485,10 +484,9 @@ public class ScanController {
         if (!address.equals(identityAddress)) {
             Log.v(
                     TAG,
-                    "found identityAddress of "
-                            + address
-                            + ", replace originalAddress as "
-                            + identityAddress);
+                    ("Found identityAddress of " + BluetoothUtils.toAnonymizedAddress(address))
+                            + (", replace originalAddress as "
+                                    + BluetoothUtils.toAnonymizedAddress(identityAddress)));
             originalAddress = identityAddress;
         }
 
@@ -499,7 +497,7 @@ public class ScanController {
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
             ScannerMap.ScannerApp app = mScannerMap.getById(client.getScannerId());
             if (app == null) {
-                Log.v(TAG, "App is null; skip.");
+                Log.v(TAG, "App is null for " + client + "; Skip");
                 continue;
             }
 
@@ -522,7 +520,7 @@ public class ScanController {
             if (settings.getLegacy()) {
                 if ((eventType & ET_LEGACY_MASK) == 0) {
                     // If this is legacy scan, but nonlegacy result - skip.
-                    Log.v(TAG, "Legacy scan, non legacy result; skip.");
+                    Log.v(TAG, "Legacy scan, non legacy result; Skip");
                     continue;
                 } else {
                     // Some apps are used to fixed-size advertise data.
@@ -548,7 +546,7 @@ public class ScanController {
 
             if (client.getHasDisavowedLocation()) {
                 if (mLocationDenylistPredicate.test(result)) {
-                    Log.i(TAG, "Skipping " + client + " for location deny list");
+                    Log.i(TAG, "Location deny list for " + client + "; Skip");
                     continue;
                 }
             }
@@ -570,18 +568,18 @@ public class ScanController {
                 }
             }
             if (!hasPermission) {
-                Log.v(TAG, "Skipping client: No permission");
+                Log.v(TAG, "No permission for " + client + "; Skip");
                 continue;
             }
             if (!matchesFilters(client, result, originalAddress)) {
-                Log.v(TAG, "Skipping client: No filter match");
+                Log.v(TAG, "No filter match for " + client + "; Skip");
                 continue;
             }
 
             final int callbackType = settings.getCallbackType();
             if (!(callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES
                     || callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH)) {
-                Log.v(TAG, "Skipping client: Not CALLBACK_TYPE_ALL_MATCHES");
+                Log.v(TAG, "Not CALLBACK_TYPE_ALL_MATCHES for " + client + "; Skip");
                 continue;
             }
 
@@ -590,7 +588,7 @@ public class ScanController {
                 if (app.mCallback != null) {
                     app.mCallback.onScanResult(result);
                 } else {
-                    Log.v(TAG, "Callback is null, sending scan results by pendingIntent");
+                    Log.v(TAG, "Callback null for " + client + "; Send results by pendingIntent");
                     List<ScanResult> results = new ArrayList<>(Arrays.asList(result));
                     sendResultsByPendingIntent(
                             app.mInfo, results, ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
@@ -1511,7 +1509,7 @@ public class ScanController {
      * PERIODIC SCANNING
      *************************************************************************/
 
-    void registerSync(
+    public void registerSync(
             BluetoothDevice device,
             int sid,
             int skip,
@@ -1521,23 +1519,23 @@ public class ScanController {
         mPeriodicScanManager.startSync(device, sid, skip, timeout, callback);
     }
 
-    void registerSync(
+    public void registerSync(
             ScanResult scanResult, int skip, int timeout, IPeriodicAdvertisingCallback callback) {
         enforceScanThread();
         mPeriodicScanManager.startSync(scanResult, skip, timeout, callback);
     }
 
-    void unregisterSync(IPeriodicAdvertisingCallback callback) {
+    public void unregisterSync(IPeriodicAdvertisingCallback callback) {
         enforceScanThread();
         mPeriodicScanManager.stopSync(callback);
     }
 
-    void transferSync(BluetoothDevice bda, int serviceData, int syncHandle) {
+    public void transferSync(BluetoothDevice bda, int serviceData, int syncHandle) {
         enforceScanThread();
         mPeriodicScanManager.transferSync(bda, serviceData, syncHandle);
     }
 
-    void transferSetInfo(
+    public void transferSetInfo(
             BluetoothDevice bda,
             int serviceData,
             int advHandle,

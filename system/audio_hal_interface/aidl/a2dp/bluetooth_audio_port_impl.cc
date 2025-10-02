@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define LOG_TAG "bluetooth-a2dp-aidl"
+
 #ifdef TARGET_FLOSS
 #include <audio_hal_interface/audio_linux.h>
 #else

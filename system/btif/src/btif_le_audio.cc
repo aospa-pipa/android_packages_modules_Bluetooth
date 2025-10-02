@@ -291,7 +291,7 @@ class LeAudioClientInterfaceImpl : public LeAudioClientInterface, public LeAudio
     do_in_main_thread(Bind(&LeAudioClient::SetInCall, Unretained(LeAudioClient::Get()), in_call));
   }
 
-  void SetUnicastMonitorMode(uint8_t direction, bool enable) {
+  void SetUnicastMonitorMode(uint8_t local_directions, bool enable) {
     log::verbose("enable: {}", enable);
     if (!initialized || !LeAudioClient::IsLeAudioClientRunning()) {
       log::verbose(
@@ -301,7 +301,7 @@ class LeAudioClientInterfaceImpl : public LeAudioClientInterface, public LeAudio
     }
 
     do_in_main_thread(Bind(&LeAudioClient::SetUnicastMonitorMode, Unretained(LeAudioClient::Get()),
-                           direction, enable));
+                           local_directions, enable));
   }
 
   void SendAudioProfilePreferences(int group_id, bool is_output_preference_le_audio,

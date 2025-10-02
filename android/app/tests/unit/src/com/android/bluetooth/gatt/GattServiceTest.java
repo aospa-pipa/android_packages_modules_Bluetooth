@@ -67,10 +67,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import com.android.bluetooth.TestUtils.FakeTimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.flags.Flags;
+import com.android.tests.bluetooth.FakeTimeProvider;
 import com.android.tests.bluetooth.MockitoRule;
 
 import org.junit.After;
@@ -235,12 +235,11 @@ public class GattServiceTest {
                         mNativeInterface,
                         mAdvertiseManagerNativeInterface,
                         mDistanceMeasurementNativeInterface,
+                        mClientMap,
+                        mServerMap,
+                        mReliableQueue,
                         mCompanionDeviceManager,
                         mTimeProvider);
-
-        mService.mClientMap = mClientMap;
-        mService.mReliableQueue = mReliableQueue;
-        mService.mServerMap = mServerMap;
 
         mockGetRemoteDevice(mAdapterService, mDevice);
     }
@@ -264,6 +263,9 @@ public class GattServiceTest {
                             mNativeInterface,
                             mAdvertiseManagerNativeInterface,
                             mDistanceMeasurementNativeInterface,
+                            mClientMap,
+                            mServerMap,
+                            mReliableQueue,
                             mCompanionDeviceManager,
                             mTimeProvider);
         }
