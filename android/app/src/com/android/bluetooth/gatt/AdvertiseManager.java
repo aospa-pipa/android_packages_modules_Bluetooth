@@ -100,6 +100,11 @@ public class AdvertiseManager {
         mAdvertiseSuspendManager = new AdvertiseSuspendManager(this, adapterService);
     }
 
+    public void setAvailable(boolean available) {
+        Log.d(TAG, "setAvailable: " + available);
+        mIsAvailable = available;
+    }
+
     /** Called by AdapterSuspend. We need to prepare for suspend by pausing all advertisements. */
     public void enterSuspend() {
         doOnAdvertiseThread(mAdvertiseSuspendManager::enterSuspend);
