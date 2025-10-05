@@ -164,10 +164,6 @@ class ScanManager {
     private static final int LIST_LOGIC_TYPE = 0x1111111;
     private static final int FILTER_LOGIC_TYPE = 1;
 
-    // MSFT-based hardware scan offload sysprop
-    @VisibleForTesting
-    static final String MSFT_HCI_EXT_ENABLED = "bluetooth.core.le.use_msft_hci_ext";
-
     // Hardcoded min number of hardware adv monitor slots for MSFT-enabled controllers
     private static final int MIN_NUM_MSFT_MONITOR_SLOTS = 20;
 
@@ -217,6 +213,8 @@ class ScanManager {
     private final BatchScanThrottler mBatchScanThrottler;
     // Whether or not MSFT-based scanning hardware offload is available on this device
     private final boolean mIsMsftSupported;
+    // Whether or not to use MSFT-based scan filtering
+    private final boolean mUseMsftFiltering;
 
     // TODO(b/397863857) Used when `Flags.scanControllerThread()`. Remove @Nullable on flag cleanup
     @VisibleForTesting @Nullable final Handler mHandler;
@@ -264,7 +262,8 @@ class ScanManager {
         mScanController = scanController;
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new ScanNativeInterface(mScanController));
+                        nativeInterface,
+                        () -> new ScanNativeInterface(new ScanNativeCallback(mScanController)));
         mNativeInterface.init();
         mTimeProvider = timeProvider;
         mAlarmManager = mAdapterService.getSystemService(AlarmManager.class);
@@ -294,10 +293,9 @@ class ScanManager {
                     }
                 });
         mAdapterService.registerReceiver(mBatchAlarmReceiver.get(), filter);
-        mIsMsftSupported =
-                Flags.leScanMsftSupport()
-                        && SystemProperties.getBoolean(MSFT_HCI_EXT_ENABLED, false)
-                        && mNativeInterface.isMsftSupported();
+        mIsMsftSupported = mNativeInterface.isMsftSupported();
+        // Prefer APCF filtering over MSFT if both are available
+        mUseMsftFiltering = !isFilteringSupported() && mIsMsftSupported;
         mDisplayManager = requireNonNull(mAdapterService.getSystemService(DisplayManager.class));
         mActivityManager = mAdapterService.getSystemService(ActivityManager.class);
         mLocationManager = mAdapterService.getSystemService(LocationManager.class);
@@ -323,7 +321,8 @@ class ScanManager {
         mAdapterService.registerReceiver(mLocationReceiver, locationIntentFilter);
         mBatchScanThrottler = new BatchScanThrottler(timeProvider, mScreenOn);
 
-        Log.d(TAG, "IsMsftSupported? " + mIsMsftSupported);
+        Log.d(TAG, "MSFT - IsSupported? " + mIsMsftSupported);
+        Log.d(TAG, "MSFT - UseFiltering? " + mUseMsftFiltering);
     }
 
     void cleanup() {
@@ -780,7 +779,7 @@ class ScanManager {
         if (isFilteringSupported()) {
             return true;
         }
-        if (mIsMsftSupported && !isBatchClient(client)) {
+        if (mUseMsftFiltering && !isBatchClient(client)) {
             return true;
         }
         return client.getSettings().getCallbackType() == ScanSettings.CALLBACK_TYPE_ALL_MATCHES
@@ -1339,14 +1338,14 @@ class ScanManager {
     }
 
     private void startRegularScan(ScanClient client) {
-        if ((isFilteringSupported() || mIsMsftSupported)
+        if ((isFilteringSupported() || mUseMsftFiltering)
                 && mFilterIndexStack.isEmpty()
                 && mClientFilterIndexMap.isEmpty()) {
             initFilterIndexStack();
         }
         if (isFilteringSupported()) {
             configureScanFilters(client);
-        } else if (mIsMsftSupported) {
+        } else if (mUseMsftFiltering) {
             addFiltersMsft(client);
         }
 
@@ -1565,7 +1564,7 @@ class ScanManager {
             }
         }
 
-        if (!isFilteringSupported() && mIsMsftSupported) {
+        if (mUseMsftFiltering) {
             removeFiltersMsft(client);
         } else {
             removeScanFilters(client.getScannerId());
@@ -1812,7 +1811,7 @@ class ScanManager {
 
     private void initFilterIndexStack() {
         int maxFiltersSupported = mAdapterService.getNumOfOffloadedScanFilterSupported();
-        if (!isFilteringSupported() && mIsMsftSupported) {
+        if (mUseMsftFiltering) {
             // Hardcoded minimum number of hardware adv monitor slots, because this value
             // cannot be queried from the controller for MSFT enabled devices
             maxFiltersSupported = MIN_NUM_MSFT_MONITOR_SLOTS;
@@ -2102,24 +2101,26 @@ class ScanManager {
         for (ScanFilter filter : client.getFilters()) {
             MsftAdvMonitor monitor = new MsftAdvMonitor(filter);
 
-            if (monitor.getAddress().bd_addr != null) {
+            if (monitor.getMonitor().condition_type == MsftAdvMonitor.MSFT_CONDITION_TYPE_INVALID) {
+                Log.d(TAG, "No MSFT monitor was translated from client filter: " + filter);
+                continue;
+            }
+
+            if (monitor.getMonitor().condition_type == MsftAdvMonitor.MSFT_CONDITION_TYPE_ADDRESS
+                    || monitor.getMonitor().condition_type
+                            == MsftAdvMonitor.MSFT_CONDITION_TYPE_UUID) {
                 int filterIndex = mFilterIndexStack.pop();
 
                 resetCountDownLatch();
                 mNativeInterface.msftAdvMonitorAdd(
                         monitor.getMonitor(),
                         monitor.getPatterns(),
+                        monitor.getUuid(),
                         monitor.getAddress(),
                         filterIndex);
                 waitForCallback();
 
                 clientFilterIndices.add(filterIndex);
-            }
-
-            if (monitor.getPatterns().length == 0) {
-                Log.d(
-                        TAG,
-                        "No MSFT pattern or address was translated from client filter: " + filter);
                 continue;
             }
 
@@ -2133,6 +2134,7 @@ class ScanManager {
                 mNativeInterface.msftAdvMonitorAdd(
                         monitor.getMonitor(),
                         monitor.getPatterns(),
+                        monitor.getUuid(),
                         monitor.getAddress(),
                         filterIndex);
                 waitForCallback();
@@ -2152,9 +2154,13 @@ class ScanManager {
         if (clientFilterIndices != null) {
             for (int filterIndex : clientFilterIndices) {
                 if (mMsftAdvMonitorMergedPatternList.remove(filterIndex)) {
-                    resetCountDownLatch();
-                    mNativeInterface.msftAdvMonitorRemove(filterIndex);
-                    waitForCallback();
+                    final int monitorHandle =
+                            mScanController.msftMonitorHandleFromFilterIndex(filterIndex);
+                    if (monitorHandle >= 0) {
+                        resetCountDownLatch();
+                        mNativeInterface.msftAdvMonitorRemove(filterIndex, monitorHandle);
+                        waitForCallback();
+                    }
                     mFilterIndexStack.add(filterIndex);
                 }
             }

@@ -348,6 +348,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_always_use_group_size_to_check_audio_config"
+    namespace: "bluetooth"
+    description: "When checking support for audio configuration, take into account all the devices"
+    bug: "441436893"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_intent_broadcast_in_state_machine_cleanup"
     namespace: "bluetooth"
     description: "Broadcast connection changed intent when state machine is cleaned up"
@@ -422,6 +432,16 @@ flag {
     namespace: "bluetooth"
     description: "Allow only local broadcast receiver device to be select as fallback"
     bug: "445133566"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_add_source_from_peer_device"
+    namespace: "bluetooth"
+    description: "After connected adding broadcast source from the peer device"
+    bug: "447646642"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
