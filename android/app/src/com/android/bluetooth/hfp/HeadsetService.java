@@ -29,7 +29,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
@@ -82,7 +81,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
@@ -381,15 +379,6 @@ public class HeadsetService extends ConnectableProfile {
 
         // Step 1: Clear
         setComponentAvailable(HFP_AG_IN_CALL_SERVICE, false);
-    }
-
-    /**
-     * Checks if this service object is able to accept binder calls
-     *
-     * @return True if the object can accept binder calls, False otherwise
-     */
-    public boolean isAlive() {
-        return isAvailable();
     }
 
     /**
@@ -1098,33 +1087,6 @@ public class HeadsetService extends ConnectableProfile {
     @VisibleForTesting
     public boolean getForceScoAudio() {
         return mForceScoAudio;
-    }
-
-    /**
-     * Get first available device for SCO audio
-     *
-     * @return first connected headset device
-     */
-    @VisibleForTesting
-    @Nullable
-    public BluetoothDevice getFirstConnectedAudioDevice() {
-        ArrayList<HeadsetStateMachine> stateMachines = new ArrayList<>();
-        synchronized (mStateMachines) {
-            List<BluetoothDevice> availableDevices =
-                    getDevicesMatchingConnectionStates(CONNECTING_CONNECTED_STATES);
-            for (BluetoothDevice device : availableDevices) {
-                final HeadsetStateMachine stateMachine = mStateMachines.get(device);
-                if (stateMachine == null) {
-                    continue;
-                }
-                stateMachines.add(stateMachine);
-            }
-        }
-        stateMachines.sort(Comparator.comparingLong(HeadsetStateMachine::getConnectingTimestampMs));
-        if (stateMachines.size() > 0) {
-            return stateMachines.get(0).getDevice();
-        }
-        return null;
     }
 
     /**

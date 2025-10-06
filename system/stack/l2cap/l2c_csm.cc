@@ -1089,8 +1089,10 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, tL2CEVT event, void* p_data) {
        */
       log::debug("Calling LeReconfigCompleted_Cb(), CID: 0x{:04x}", p_ccb->local_cid);
 
-      (*p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb)(p_lcb->remote_bd_addr,
-                                                                 p_ccb->local_cid, false, p_le_cfg);
+      if (p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb) {
+        (*p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb)(
+            p_lcb->remote_bd_addr, p_ccb->local_cid, false, p_le_cfg);
+      }
       break;
     case L2CEVT_L2CAP_CONFIG_REQ: /* Peer config request   */
       cfg_result = l2cu_process_peer_cfg_req(p_ccb, p_cfg);
@@ -1129,8 +1131,10 @@ static void l2c_csm_config(tL2C_CCB* p_ccb, tL2CEVT event, void* p_data) {
 
       log::debug("Calling Config_Rsp_Cb(), CID: 0x{:04x}", p_ccb->local_cid);
 
-      p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb(p_lcb->remote_bd_addr,
-                                                              p_ccb->local_cid, true, p_le_cfg);
+      if (p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb) {
+        p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb(
+            p_lcb->remote_bd_addr, p_ccb->local_cid, true, p_le_cfg);
+      }
 
       break;
     case L2CEVT_L2CAP_CONFIG_RSP: /* Peer config response  */
@@ -1381,8 +1385,10 @@ static void l2c_csm_open(tL2C_CCB* p_ccb, tL2CEVT event, void* p_data) {
        */
       if (p_le_cfg && (p_ccb->p_rcb)) {
         log::debug("Calling LeReconfigCompleted_Cb(), CID: 0x{:04x}", p_ccb->local_cid);
-        (*p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb)(
-                p_ccb->p_lcb->remote_bd_addr, p_ccb->local_cid, false, p_le_cfg);
+        if (p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb) {
+          (*p_ccb->p_rcb->api.pL2CA_CreditBasedReconfigCompleted_Cb)(
+              p_ccb->p_lcb->remote_bd_addr, p_ccb->local_cid, false, p_le_cfg);
+        }
       }
       break;
 

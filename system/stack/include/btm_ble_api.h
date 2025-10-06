@@ -419,6 +419,17 @@ bool BTM_BleLocalPrivacyEnabled(void);
 
 /*******************************************************************************
  *
+ * Function         BTM_BleIsFilteringSupported
+ *
+ * Description      Checks if the device supports filtering.
+ *
+ * Returns          Return true if filtering is supported else false
+ *
+ ******************************************************************************/
+bool BTM_BleIsFilteringSupported(void);
+
+/*******************************************************************************
+ *
  * Function         BTM_BleGetEncKeyMaterial
  *
  * Description      This function is called to get the local device Encrypted
@@ -429,5 +440,4 @@ bool BTM_BleLocalPrivacyEnabled(void);
  *
  ******************************************************************************/
 void BTM_BleGetEncKeyMaterial(uint8_t* enc_key_value);
-
 #endif

@@ -236,8 +236,7 @@ protected:
 TEST_F(PeriodicSyncManagerTest, startup_teardown) {}
 
 TEST_F(PeriodicSyncManagerTest, start_sync_test) {
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   int request_id = 0x01;
   uint8_t advertiser_sid = 0x02;
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
@@ -271,8 +270,7 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -311,8 +309,7 @@ TEST_F(PeriodicSyncManagerTest,
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -350,8 +347,7 @@ TEST_F(PeriodicSyncManagerTest, stop_sync_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -398,8 +394,7 @@ TEST_F(PeriodicSyncManagerTest, cancel_create_sync_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -434,8 +429,7 @@ TEST_F(PeriodicSyncManagerTest, cancel_create_sync_test) {
 }
 
 TEST_F(PeriodicSyncManagerTest, transfer_sync_test) {
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   uint16_t service_data = 0x10;
   uint16_t sync_handle = 0x11;
   uint16_t connection_handle = 0x12;
@@ -465,8 +459,7 @@ TEST_F(PeriodicSyncManagerTest, transfer_sync_test) {
 }
 
 TEST_F(PeriodicSyncManagerTest, sync_set_info_test) {
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   uint16_t service_data = 0x10;
   uint16_t advertising_handle = 0x11;
   uint16_t connection_handle = 0x12;
@@ -496,8 +489,7 @@ TEST_F(PeriodicSyncManagerTest, sync_set_info_test) {
 }
 
 TEST_F(PeriodicSyncManagerTest, sync_tx_parameters_test) {
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   uint8_t mode = 0x00;
   uint16_t skip = 0x11;
   uint16_t timeout = 0x12;
@@ -522,8 +514,7 @@ TEST_F(PeriodicSyncManagerTest, handle_sync_lost_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -571,8 +562,7 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // First request which will finish with error
@@ -646,8 +636,7 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
 TEST_F(PeriodicSyncManagerTest,
        handle_advertising_sync_established_after_create_command_error_test) {
   uint16_t sync_handle = 0x12;
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // First request which will finish with error
@@ -714,8 +703,7 @@ TEST_F(PeriodicSyncManagerTest,
 TEST_F(PeriodicSyncManagerTest,
        handle_advertising_sync_established_after_cancel_command_error_test) {
   uint16_t sync_handle = 0x12;
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // First request which will finish with timeout error
@@ -798,8 +786,7 @@ TEST_F(PeriodicSyncManagerTest, onStartSyncTimeout_callWithoutPendingRequestsAnd
 
 TEST_F(PeriodicSyncManagerTest, onStartSyncTimeout_callWithoutPeriodicSyncs) {
   uint16_t sync_handle = 0x12;
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   int request_id_1 = 0x01;
@@ -823,8 +810,7 @@ TEST_F(PeriodicSyncManagerTest, onStartSyncTimeout_callWithoutPeriodicSyncs) {
 TEST_F(PeriodicSyncManagerTest,
        handlePeriodicAdvertisingCreateSyncStatus_callWithoutPeriodicSyncs) {
   uint16_t sync_handle = 0x12;
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   int request_id_1 = 0x01;
@@ -921,8 +907,7 @@ TEST_F(PeriodicSyncManagerTest, handleLeBigInfoAdvertisingReport_callWithoutPeri
 TEST_F(PeriodicSyncManagerTest, syncEstablished_pendingCheckToCorrectTheOrder) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // start scan
@@ -985,8 +970,7 @@ TEST_F(PeriodicSyncManagerTest, handle_periodic_advertising_report_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,
@@ -1037,8 +1021,7 @@ TEST_F(PeriodicSyncManagerTest, handle_biginfo_advertising_report_test) {
   uint16_t sync_handle = 0x12;
   uint8_t advertiser_sid = 0x02;
   // start scan
-  Address address;
-  Address::FromString("00:11:22:33:44:55", address);
+  Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
           .request_id = 0x01,

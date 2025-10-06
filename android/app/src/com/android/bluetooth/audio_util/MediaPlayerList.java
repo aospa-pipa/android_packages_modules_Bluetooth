@@ -1116,13 +1116,13 @@ public class MediaPlayerList {
                     for (AudioPlaybackConfiguration config : configs) {
                         if (config.isActive() && (((config.getAudioAttributes().getUsage()
                                                         == AudioAttributes
-                                                                .USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
-                                                && config.getAudioAttributes().getContentType()
-                                                        == AudioAttributes.CONTENT_TYPE_SPEECH)
-                                        || config.getAudioAttributes().getUsage()
+                                                                .USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                                                && (config.getAudioAttributes().getContentType()
+                                                        == AudioAttributes.CONTENT_TYPE_SPEECH))
+                                        || (config.getAudioAttributes().getUsage()
                                                 == AudioAttributes.USAGE_MEDIA)
-                                || config.getAudioAttributes().getUsage()
-                                   == AudioAttributes.USAGE_NOTIFICATION_RINGTONE)) {
+                                        || (config.getAudioAttributes().getUsage()
+                                                == AudioAttributes.USAGE_NOTIFICATION_RINGTONE))) {
                             activeConfig = config;
                             isActive = true;
                         }
