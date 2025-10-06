@@ -500,12 +500,12 @@ public:
      * case, remote_directions are limited when there is no phone call and decoding session is not
      * resumed.
      */
-
+    /*
     if (!audio_hal_is_capable_to_send_empty_metadata_ &&
         audio_receiver_state_ == AudioState::IDLE && !(IsInCall() || IsInVoipCall())) {
       return remote_direction;
     }
-
+    */
     return bluetooth::le_audio::types::kLeAudioDirectionBoth;
   }
 
@@ -533,7 +533,7 @@ public:
         audio_hal_is_capable_to_send_empty_metadata_ = false;
       }
 
-      if (!audio_hal_is_capable_to_send_empty_metadata_) {
+      if (audio_hal_is_capable_to_send_empty_metadata_) {
         std::vector<record_track_metadata_v7> empty_tracks = {};
         audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
 
@@ -6745,7 +6745,8 @@ public:
         }
 
         if (!audio_hal_check_completed_) {
-          StartVbcCloseTimeout(true);
+          log::info("Commented StartVbcCloseTimeout");
+          //StartVbcCloseTimeout(true);
           audio_hal_check_completed_ = true;
           return;
         }
