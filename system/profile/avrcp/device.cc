@@ -572,8 +572,20 @@ void Device::HandleGetCapabilities(uint8_t label,
   }
 }
 
+void Device::SetRcFeatures(RcFeature feature) {
+  log::info("feature={}", static_cast<std::underlying_type_t<RcFeature>>(feature));
+  peer_feature_ = feature;
+}
+
 void Device::HandleNotification(uint8_t label,
                                 const std::shared_ptr<RegisterNotificationRequest>& pkt) {
+  if (pkt->GetLength() == 0) {
+    log::error("invalid param length");
+    auto response =
+            RejectBuilder::MakeBuilder((CommandPdu)pkt->GetCommandPdu(), Status::INTERNAL_ERROR);
+    send_message(label, false, std::move(response));
+    return;
+  }
   if (!pkt->IsValid()) {
     log::warn("{}: Request packet is not valid", address_);
     auto response = RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::INVALID_PARAMETER);

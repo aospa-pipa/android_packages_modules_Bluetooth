@@ -942,6 +942,8 @@ BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
       log::debug("Remote source not supported for {}", common::ToString(ctx_type));
       remote_directions.source = false;
     }
+    log::info("Returning remote's source: {}, sink: {}",
+              remote_directions.source, remote_directions.sink);
     return remote_directions;
   }
 
@@ -956,12 +958,15 @@ BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
      * as a parameter, it means, this functions is called to build a cache which should not depend
      * on current context configuration
      */
+    log::debug("IsAnyMetadataSet");
     auto [config_context, remote_contexts] =
             audio_context_type_manager->GetAudioContextsForTheGroup(this);
     if (config_context == ctx_type) {
+      log::debug("ctx_type matches config_context");
       return {.sink = remote_contexts.sink.any(), .source = remote_contexts.source.any()};
     }
   }
+  log::debug("Returning Bidirectional pair");
 
   return audio_context_type_manager->GetDirectionsForGivenContext(ctx_type, this);
 }
@@ -985,7 +990,8 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
   };
 
   bool remote_has_gmap = false;
-
+  log::debug("leaudio_use_context_type_manager: {}",
+              com_android_bluetooth_flags_leaudio_use_context_type_manager());
   // Define a requirement for each location. Knowing codec specific
   // capabilities (i.e. multiplexing capability) the config provider can
   // determine the number of ASEs to activate.
@@ -997,8 +1003,11 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
     }
     BidirectionalPair<bool> has_location = {false, false};
     BidirectionalPair<bool> has_direction = GetDirectionSupport(ctx_type);
+    log::debug("has_direction: sink: {}", has_direction.sink);
+    log::debug("has_direction: source: {}", has_direction.source);
 
     for (auto remote_direction : {types::kLeAudioDirectionSink, types::kLeAudioDirectionSource}) {
+      log::debug("remote_direction: {}", remote_direction);
       if (!device->audio_locations_.get(remote_direction)) {
         log::debug("Device {} has no audio allocation for direction: {}", device->address_,
                    (int)remote_direction);
@@ -1009,6 +1018,8 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
          (remote_direction == types::kLeAudioDirectionSink)){
          auto direction_sink_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSink);
          auto direction_src_contexs = device->GetAvailableContexts(types::kLeAudioDirectionSource);
+         log::info("direction_sink_contexs {}, direction_src_contexs {}",
+                  common::ToString(direction_sink_contexs), common::ToString(direction_src_contexs));
          if (!(direction_sink_contexs.test(ctx_type) && direction_src_contexs.test(ctx_type))){
            log::warn("Device {} does not have both direction  for {}, treat it as source only",
                       device->address_,
@@ -1034,9 +1045,12 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
           // direction.
+          log::info("Checking for Game/VA");
           auto group_contexts = GetAvailableContexts(types::kLeAudioDirectionBoth);
+          log::info("group_contexts {}", common::ToString(group_contexts));
           if (group_contexts.test(ctx_type)) {
             auto direction_contexs = device->GetAvailableContexts(remote_direction);
+            log::info("direction_contexs {}", common::ToString(direction_contexs));
             if (!direction_contexs.test(ctx_type)) {
               log::warn("Device {} has no {} context support", device->address_,
                         common::ToString(ctx_type));
@@ -1496,6 +1510,10 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::GetGroupSinkStrategy() c
       */
       bool mCapNoAudioLocPts =
             osi_property_get_bool("persist.bluetooth.cap_no_audio_loc", false);
+
+      if (com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config()) {
+        expected_group_size = DesiredSize();
+      }
 
       if (!audio_locations_.get(direction)) {
         log::error("No audio locations for direction: {} available in the group", +direction);
@@ -2206,7 +2224,8 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
     // but use UNSPECIFIED which is always supported (but can be unavailable)
     auto device_cnt = NumOfAvailableForDirection(direction);
     log::debug("device_cnt: {}", device_cnt);
-    if (device_cnt == 0) {
+    if (device_cnt == 0 ||
+        com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config()) {
       device_cnt = DesiredSize();
       log::debug("DesiredSize of device_cnt: {}", device_cnt);
       if (device_cnt == 0) {
@@ -2333,8 +2352,11 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
       required_device_cnt--;
     }
 
-    if (required_device_cnt > 0) {
-      /* Don't left any active devices if requirements are not met */
+    /* If at least one device got configured we are good to go. */
+    if ((!com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config() &&
+         required_device_cnt > 0) ||
+        (com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config() &&
+         (required_device_cnt == device_cnt))) {
       log::debug("Could not configure all the devices for direction: {}",
                  direction == types::kLeAudioDirectionSink ? "Sink" : "Source");
       return false;
@@ -2412,8 +2434,16 @@ bool LeAudioDeviceGroup::ConfigureAses(
       continue;
     }
 
-    auto const max_required_device_cnt = NumOfAvailableForDirection(direction);
-    auto required_device_cnt = max_required_device_cnt;
+    int max_required_device_cnt = 0;
+    int required_device_cnt = 0;
+
+    if (com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config()) {
+      max_required_device_cnt = DesiredSize();
+      required_device_cnt = NumOfAvailableForDirection(direction);
+    } else {
+      max_required_device_cnt = required_device_cnt = NumOfAvailableForDirection(direction);
+    }
+
     log::debug("Maximum {} device(s) required for {}", max_required_device_cnt, direction_str);
 
     uint8_t active_ase_cnt = 0;

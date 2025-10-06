@@ -196,7 +196,7 @@ extern bluetooth::vc::VolumeControlInterface* btif_volume_control_get_interface(
 /* vendor  */
 extern btvendor_interface_t* btif_vendor_get_interface();
 
-bt_status_t btif_av_sink_execute_service(bool b_enable);
+BtStatus btif_av_sink_execute_service(bool b_enable);
 
 extern void bta_gatt_client_dump(int fd);
 

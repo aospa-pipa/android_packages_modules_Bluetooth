@@ -136,6 +136,7 @@ static jmethodID method_onBigInfoReport;
 /** Pointer to the LE scanner interface methods.*/
 static BleScannerInterface* sScanner = NULL;
 static jobject mScanCallbacksObj = NULL;
+static jfieldID sScanCallbacksField;
 static jobject mPeriodicScanCallbacksObj = NULL;
 static std::shared_mutex callbacks_mutex;
 
@@ -684,7 +685,8 @@ static bool isMsftSupportedNative(JNIEnv* /* env */, jobject /* object */) {
 
 static void msftAdvMonitorAddNative(JNIEnv* env, jobject /* object*/, jobject msft_adv_monitor,
                                     jobjectArray msft_adv_monitor_patterns,
-                                    jobject msft_adv_monitor_address, jint filter_index) {
+                                    jobject msft_adv_monitor_uuid, jobject msft_adv_monitor_address,
+                                    jint filter_index) {
   if (!sScanner) {
     return;
   }
@@ -697,10 +699,6 @@ static void msftAdvMonitorAddNative(JNIEnv* env, jobject /* object*/, jobject ms
   jfieldID rssiSamplingPeriodFid =
           env->GetFieldID(msftAdvMonitorClazz, "rssi_sampling_period", "B");
   jfieldID conditionTypeFid = env->GetFieldID(msftAdvMonitorClazz, "condition_type", "B");
-
-  jclass msftAdvMonitorAddressClazz = env->GetObjectClass(msft_adv_monitor_address);
-  jfieldID addrTypeFid = env->GetFieldID(msftAdvMonitorAddressClazz, "addr_type", "B");
-  jfieldID bdAddrFid = env->GetFieldID(msftAdvMonitorAddressClazz, "bd_addr", "Ljava/lang/String;");
 
   MsftAdvMonitor native_msft_adv_monitor{};
   ScopedLocalRef<jobject> msft_adv_monitor_object(env, msft_adv_monitor);
@@ -715,16 +713,56 @@ static void msftAdvMonitorAddNative(JNIEnv* env, jobject /* object*/, jobject ms
   native_msft_adv_monitor.condition_type =
           env->GetByteField(msft_adv_monitor_object.get(), conditionTypeFid);
 
-  MsftAdvMonitorAddress native_msft_adv_monitor_address{};
-  ScopedLocalRef<jobject> msft_adv_monitor_address_object(env, msftAdvMonitorAddressClazz);
-  native_msft_adv_monitor_address.addr_type =
-          env->GetByteField(msft_adv_monitor_address_object.get(), addrTypeFid);
-  native_msft_adv_monitor_address.bd_addr = str2addr(
-          env, (jstring)env->GetObjectField(msft_adv_monitor_address_object.get(), bdAddrFid));
-  native_msft_adv_monitor.addr_info = native_msft_adv_monitor_address;
+  if (native_msft_adv_monitor.condition_type == MSFT_CONDITION_TYPE_ADDRESS) {
+    jclass msftAdvMonitorAddressClazz = env->GetObjectClass(msft_adv_monitor_address);
+    jfieldID addrTypeFid = env->GetFieldID(msftAdvMonitorAddressClazz, "addr_type", "B");
+    jfieldID bdAddrFid =
+            env->GetFieldID(msftAdvMonitorAddressClazz, "bd_addr", "Ljava/lang/String;");
 
-  int numPatterns = env->GetArrayLength(msft_adv_monitor_patterns);
-  if (numPatterns == 0) {
+    MsftAdvMonitorAddress native_msft_adv_monitor_address{};
+    ScopedLocalRef<jobject> msft_adv_monitor_address_object(env, msft_adv_monitor_address);
+    native_msft_adv_monitor_address.addr_type =
+            env->GetByteField(msft_adv_monitor_address_object.get(), addrTypeFid);
+    native_msft_adv_monitor_address.bd_addr = str2addr(
+            env, (jstring)env->GetObjectField(msft_adv_monitor_address_object.get(), bdAddrFid));
+
+    native_msft_adv_monitor.addr_info = native_msft_adv_monitor_address;
+
+    sScanner->MsftAdvMonitorAdd(std::move(native_msft_adv_monitor),
+                                base::Bind(&msft_monitor_add_cb, filter_index));
+    return;
+  }
+
+  if (native_msft_adv_monitor.condition_type == MSFT_CONDITION_TYPE_UUID) {
+    jclass msftAdvMonitorUuidClazz = env->GetObjectClass(msft_adv_monitor_uuid);
+    jfieldID uuidFid = env->GetFieldID(msftAdvMonitorUuidClazz, "uuid", "[B");
+
+    MsftAdvMonitorUuid native_msft_adv_monitor_uuid{};
+    ScopedLocalRef<jobject> msft_adv_monitor_uuid_object(env, msft_adv_monitor_uuid);
+
+    ScopedLocalRef<jbyteArray> uuidByteArray(
+            env, (jbyteArray)env->GetObjectField(msft_adv_monitor_uuid_object.get(), uuidFid));
+    if (uuidByteArray.get() == nullptr) {
+      log::error("Cannot obtain uuid byte array.");
+      jniThrowIOException(env, EINVAL);
+      return;
+    }
+
+    jbyte* uuidBytes = env->GetByteArrayElements(uuidByteArray.get(), NULL);
+    if (uuidBytes == NULL) {
+      log::error("Cannot obtain uuid bytes.");
+      jniThrowIOException(env, EINVAL);
+      return;
+    }
+
+    native_msft_adv_monitor_uuid.uuid.resize(env->GetArrayLength(uuidByteArray.get()));
+    std::copy(uuidBytes, uuidBytes + env->GetArrayLength(uuidByteArray.get()),
+              native_msft_adv_monitor_uuid.uuid.begin());
+
+    env->ReleaseByteArrayElements(uuidByteArray.get(), uuidBytes, 0);
+
+    native_msft_adv_monitor.uuid_info = native_msft_adv_monitor_uuid;
+
     sScanner->MsftAdvMonitorAdd(std::move(native_msft_adv_monitor),
                                 base::Bind(&msft_monitor_add_cb, filter_index));
     return;
@@ -736,7 +774,9 @@ static void msftAdvMonitorAddNative(JNIEnv* env, jobject /* object*/, jobject ms
   jfieldID startByteFid = env->GetFieldID(msftAdvMonitorPatternClazz, "start_byte", "B");
   jfieldID patternFid = env->GetFieldID(msftAdvMonitorPatternClazz, "pattern", "[B");
 
+  int numPatterns = env->GetArrayLength(msft_adv_monitor_patterns);
   std::vector<MsftAdvMonitorPattern> patterns;
+
   for (int i = 0; i < numPatterns; i++) {
     MsftAdvMonitorPattern native_msft_adv_monitor_pattern{};
     ScopedLocalRef<jobject> msft_adv_monitor_pattern_object(
@@ -872,7 +912,10 @@ static void scanInitializeNative(JNIEnv* env, jobject object) {
     mScanCallbacksObj = NULL;
   }
 
-  mScanCallbacksObj = env->NewGlobalRef(object);
+  if ((mScanCallbacksObj = env->NewGlobalRef(env->GetObjectField(object, sScanCallbacksField))) ==
+      nullptr) {
+    log::fatal("Failed to allocate Global Ref for Scan Callbacks");
+  }
 }
 
 static void scanCleanupNative(JNIEnv* env, jobject /* object */) {
@@ -924,11 +967,7 @@ static void transferSetInfoNative(JNIEnv* env, jobject /* object */, jint pa_sou
   sScanner->TransferSetInfo(str2addr(env, addr), service_data, adv_handle, pa_source);
 }
 
-/**
- * JNI function definitions
- */
-
-// JNI functions defined in ScanNativeInterface class.
+// JNI functions defined in ScanNativeInterface
 static int register_com_android_bluetooth_scan_(JNIEnv* env) {
   const JNINativeMethod methods[] = {
           {"initializeNative", "()V", (void*)scanInitializeNative},
@@ -955,7 +994,8 @@ static int register_com_android_bluetooth_scan_(JNIEnv* env) {
           {"isMsftSupportedNative", "()Z", (bool*)isMsftSupportedNative},
           {"msftAdvMonitorAddNative",
            "(Lcom/android/bluetooth/le_scan/MsftAdvMonitor$Monitor;[Lcom/android/bluetooth/le_scan/"
-           "MsftAdvMonitor$Pattern;Lcom/android/bluetooth/le_scan/MsftAdvMonitor$Address;I)V",
+           "MsftAdvMonitor$Pattern;Lcom/android/bluetooth/le_scan/MsftAdvMonitor$Uuid;Lcom/android/"
+           "bluetooth/le_scan/MsftAdvMonitor$Address;I)V",
            (void*)msftAdvMonitorAddNative},
           {"msftAdvMonitorRemoveNative", "(II)V", (void*)msftAdvMonitorRemoveNative},
           {"msftAdvMonitorEnableNative", "(Z)V", (void*)msftAdvMonitorEnableNative},
@@ -966,8 +1006,14 @@ static int register_com_android_bluetooth_scan_(JNIEnv* env) {
     return result;
   }
 
+  jclass jniNativeInterfaceClass =
+          env->FindClass("com/android/bluetooth/le_scan/ScanNativeInterface");
+  sScanCallbacksField = env->GetFieldID(jniNativeInterfaceClass, "mNativeCallback",
+                                        "Lcom/android/bluetooth/le_scan/ScanNativeCallback;");
+  env->DeleteLocalRef(jniNativeInterfaceClass);
+
+  // Client callback functions defined in ScanNativeCallback
   const JNIJavaMethod javaMethods[] = {
-          // Client callbacks
           {"onScannerRegistered", "(IIJJ)V", &method_onScannerRegistered},
           {"onScanResult", "(IILjava/lang/String;IIIIII[BLjava/lang/String;)V",
            &method_onScanResult},
@@ -989,7 +1035,7 @@ static int register_com_android_bluetooth_scan_(JNIEnv* env) {
           {"onMsftAdvMonitorRemove", "(II)V", &method_onMsftAdvMonitorRemove},
           {"onMsftAdvMonitorEnable", "(ZI)V", &method_onMsftAdvMonitorEnable},
   };
-  GET_JAVA_METHODS(env, "com/android/bluetooth/le_scan/ScanNativeInterface", javaMethods);
+  GET_JAVA_METHODS(env, "com/android/bluetooth/le_scan/ScanNativeCallback", javaMethods);
   return 0;
 }
 

@@ -26,6 +26,7 @@
 #include <sstream>
 #include <vector>
 
+#include "include/btif_status.h"
 #include "stack/include/a2dp_constants.h"
 
 __BEGIN_DECLS
@@ -297,7 +298,7 @@ typedef struct {
 } btav_a2dp_scmst_info_t;
 
 typedef struct {
-  bt_status_t status;
+  BtStatus status = BtifStatus();
   uint8_t error_code;
   std::optional<std::string> error_msg;
 } btav_error_t;
