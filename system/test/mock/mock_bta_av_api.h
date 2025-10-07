@@ -31,13 +31,14 @@
 //       still applies, but crafting proper inclusion is out of scope
 //       for this effort.  This compilation unit may compile as-is, or
 //       may need attention to prune from (or add to ) the inclusion set.
+#include <bluetooth/types/address.h>
+
 #include "bta/av/bta_av_int.h"
 #include "btif/include/btif_av.h"
 #include "osi/include/allocator.h"
 #include "osi/include/compat.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_uuid16.h"
-#include "types/raw_address.h"
 
 // Original usings
 
@@ -335,6 +336,16 @@ struct BTA_AvSetCodecMode {
   void operator()(tBTA_AV_HNDL handle, uint16_t enc_mode) { body(handle, enc_mode); }
 };
 extern struct BTA_AvSetCodecMode BTA_AvSetCodecMode;
+
+// Name: modify_sniff_policy
+// Params: bool policy_enable, const RawAddress& peer_addr
+// Return: void
+struct modify_sniff_policy {
+  std::function<void(bool policy_enable, const RawAddress& peer_addr)> body{
+          [](bool /*policy_enable*/, const RawAddress& /*peer_addr*/){}};
+  void operator()(bool policy_enable, const RawAddress& peer_addr) { body(policy_enable, peer_addr); }
+};
+extern struct modify_sniff_policy modify_sniff_policy;
 
 // Name: BTA_AvUpdateAptxData
 // Params: uint32_t data

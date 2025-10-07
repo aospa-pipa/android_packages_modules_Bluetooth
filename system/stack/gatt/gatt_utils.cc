@@ -24,6 +24,7 @@
 #define LOG_TAG "gatt_utils"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 
 #include <cstdint>
@@ -48,7 +49,6 @@
 #include "stack/include/btm_sec_api.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/sdp_api.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth::legacy::stack::sdp;
 using namespace bluetooth;
@@ -1508,8 +1508,6 @@ void gatt_sr_update_cback_cnt(tGATT_TCB& tcb, uint16_t cid, tGATT_IF gatt_if, bo
  *
  ******************************************************************************/
 void gatt_sr_update_prep_cnt(tGATT_TCB& tcb, tGATT_IF gatt_if, bool is_inc, bool is_reset_first) {
-  uint8_t idx = ((uint8_t)gatt_if) - 1;
-
   log::verbose("tcb idx={} gatt_if={} is_inc={} is_reset_first={}", tcb.tcb_idx, gatt_if, is_inc,
                is_reset_first);
 

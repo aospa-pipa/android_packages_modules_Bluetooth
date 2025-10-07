@@ -24,6 +24,9 @@
 #ifndef BTM_API_H
 #define BTM_API_H
 
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
+
 #include <cstdint>
 
 #include "bt_types.h"
@@ -33,8 +36,6 @@
 #include "stack/include/btm_api_types.h"
 #include "stack/include/btm_status.h"
 #include "stack/rnr/remote_name_request.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 /* Global BTM control block structure. */
 extern tBTM_CB btm_cb;
@@ -125,6 +126,17 @@ void BTM_reset_complete();
  ******************************************************************************/
 void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len, uint8_t* p_param_buf,
                                tBTM_VSC_CMPL_CB* p_cb);
+
+/*******************************************************************************
+**
+** Function         btm_register_ssr_cback
+**
+** Description      Register callback to process SSR
+**
+** Returns          void
+**
+*******************************************************************************/
+void btm_register_ssr_cback (tBTM_NOTIFY_SSR_CB *p_cb);
 
 /*******************************************************************************
  *

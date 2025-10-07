@@ -18,7 +18,12 @@
  * Generated mock file from original source file
  *   Functions generated:72
  */
+
+#include <bluetooth/types/address.h>
+
+
 #ifndef MOCK_CERT_TEST
+
 #include <cstdint>
 
 #include "stack/include/bt_hdr.h"
@@ -27,7 +32,6 @@
 #include "stack/include/l2cap_security_interface.h"
 #include "stack/l2cap/l2c_int.h"
 #include "test/common/mock_functions.h"
-#include "types/raw_address.h"
 
 bool l2c_is_cmd_rejected(uint8_t /* cmd_code */, uint8_t /* signal_id */, tL2C_LCB* /* p_lcb */) {
   inc_func_call_count(__func__);

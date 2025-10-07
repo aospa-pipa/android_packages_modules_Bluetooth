@@ -95,7 +95,7 @@ void LeAddressManager::SetPrivacyPolicyForInitiatorAddress(
         std::chrono::milliseconds maximum_rotation_time) {
   // Handle repeated calls to the function for IRK rotation
   if (address_policy_ != AddressPolicy::POLICY_NOT_SET) {
-    // Need to update some parameteres like IRK if privacy is supported
+    // Need to update some parameters like IRK if privacy is supported
     if (supports_ble_privacy) {
       log::info("Updating rotation parameters.");
       handler_->CallOn(
@@ -298,7 +298,13 @@ bool LeAddressManager::UnregisterSync(LeAddressManagerCallback* callback,
   handler_->BindOnceOn(this, &LeAddressManager::unregister_client, callback)();
   std::promise<void> promise;
   auto future = promise.get_future();
-  handler_->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
+  if (com::android::bluetooth::flags::use_shared_promise_for_le_address_manager()) {
+    handler_->Post(common::BindOnce([](std::promise<void> promise) { promise.set_value(); },
+                                    std::move(promise)));
+  } else {
+    handler_->Post(common::BindOnce(&std::promise<void>::set_value, common::Unretained(&promise)));
+  }
+
   return future.wait_for(timeout) == std::future_status::ready;
 }
 
@@ -358,7 +364,7 @@ void LeAddressManager::ack_pause(LeAddressManagerCallback* callback) {
     return;
   }
   registered_clients_.find(callback)->second = ClientState::PAUSED;
-  for (auto client : registered_clients_) {
+  for (auto& client : registered_clients_) {
     switch (client.second) {
       case ClientState::PAUSED:
         log::verbose("Client already in paused state");

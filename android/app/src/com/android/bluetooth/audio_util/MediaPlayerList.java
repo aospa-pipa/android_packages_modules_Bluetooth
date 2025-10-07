@@ -341,7 +341,10 @@ public class MediaPlayerList {
         if (!Util.areMultiplePlayersSupported()) {
             return BLUETOOTH_PLAYER_ID;
         }
-        if (mMediaPlayerIds.containsValue(playerId)) {
+        Log.d(TAG,"setAddressedPlayer with mAddressedPlayerId: " + mAddressedPlayerId 
+              + ", playerId: " + playerId + ", mActivePlayerId: " + mActivePlayerId);
+        if (mMediaPlayerIds.containsValue(playerId) && mAddressedPlayerId != playerId &&
+            mAddressedPlayerId != mActivePlayerId) {
             mAddressedPlayerId = playerId;
             sendFolderUpdate(false, true, false);
             Log.d(TAG, "setAddressedPlayer to: " + mAddressedPlayerId);
@@ -556,8 +559,12 @@ public class MediaPlayerList {
             String displayName = Util.getDisplayName(mContext, browser.getPackageName());
             int id = mMediaPlayerIds.get(browser.getPackageName());
 
-            Log.d(TAG, "getFolderItemsMediaPlayerList: Adding player " + displayName);
-            Folder playerFolder = new Folder(Utils.formatSimple("%02d", id), false, displayName);
+            Folder playerFolder =
+                    new Folder(
+                            Utils.formatSimple("%02d", id),
+                            false,
+                            displayName,
+                            (int) android.media.MediaDescription.BT_FOLDER_TYPE_MIXED);
             playerList.add(new ListItem(playerFolder));
         }
         cb.run("", playerList);
@@ -804,6 +811,9 @@ public class MediaPlayerList {
         int previousActivePlayerId = mActivePlayerId;
         MediaPlayerWrapper previousPlayer = getActivePlayer();
 
+        Log.d(TAG, "setActivePlayer: playerId: " + playerId + ", previousActivePlayerId:" +
+                previousActivePlayerId);
+
         if (playerId == previousActivePlayerId) {
             if (previousPlayer != null) {
                 Log.w(TAG, previousPlayer.getPackageName() + " is already the active player");
@@ -816,6 +826,9 @@ public class MediaPlayerList {
         }
 
         mActivePlayerId = playerId;
+
+        Log.d(TAG, "setActivePlayer: mActivePlayerId: " + mActivePlayerId +
+                   ", mAddressedPlayerId:" + mAddressedPlayerId);
 
         if (Utils.isPtsTestMode()) {
             sendFolderUpdate(true, true, false);

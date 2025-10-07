@@ -74,7 +74,6 @@ public:
   std::vector<uint8_t> enc_key_value;
   uint32_t interval_min;
   uint32_t interval_max;
-  AdvertisingType advertising_type;
   AdvertiserAddressType requested_advertiser_address_type;
   PeerAddressType peer_address_type;
   Address peer_address;
@@ -185,7 +184,7 @@ public:
                std::vector<GapData> data_encrypt) = 0;
 
   virtual void RegisterAdvertisingCallback(AdvertisingCallback* advertising_callback) = 0;
-
+  virtual void Dump(int fd) = 0;
   virtual void SetPeriodicData(AdvertiserId advertiser_id, std::vector<GapData> data,
                        std::vector<GapData> data_encrypt) = 0;
 
@@ -194,7 +193,6 @@ public:
   virtual void RegisterEncKeyMaterialCallback(EncKeyMaterialCallback* enc_key_material_callback) = 0;
 
   virtual void GetEncKeyMaterial() = 0;
-
 };
 
 }  // namespace hci

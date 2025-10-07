@@ -42,7 +42,7 @@ import android.telephony.TelephonyManager;
 import android.text.util.Rfc822Token;
 import android.text.util.Rfc822Tokenizer;
 
-import androidx.test.runner.AndroidJUnit4;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.SignedLongLong;
@@ -678,7 +678,7 @@ public class BluetoothMapContentTest {
                         new String[] {
                             "MessageColFromAddress", BluetoothMapContract.ConvoContactColumns.UCI
                         });
-        cursor.addRow(new Object[] {(long) 1, TEST_ADDRESS});
+        cursor.addRow(new Object[] {1L, TEST_ADDRESS});
         cursor.moveToFirst();
         doReturn(cursor)
                 .when(mMapMethodProxy)
@@ -796,7 +796,7 @@ public class BluetoothMapContentTest {
                         new String[] {
                             "MessageColFromAddress", BluetoothMapContract.ConvoContactColumns.NAME
                         });
-        cursor.addRow(new Object[] {(long) 1, TEST_NAME});
+        cursor.addRow(new Object[] {1L, TEST_NAME});
         cursor.moveToFirst();
         doReturn(cursor)
                 .when(mMapMethodProxy)

@@ -25,6 +25,7 @@
 #define AVRC_API_H
 
 #include <base/functional/callback.h>
+#include <bluetooth/types/address.h>
 
 #include <cstdint>
 
@@ -33,7 +34,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/sdp_status.h"
 #include "stack/sdp/sdp_discovery_db.h"
-#include "types/raw_address.h"
 
 /*****************************************************************************
  *  constants
@@ -788,4 +788,5 @@ bool AVRC_IsValidPlayerAttr(uint8_t attr);
 
 void AVRC_UpdateCcb(RawAddress* addr, uint32_t company_id);
 
+void AVRC_ResetServiceUuid();
 #endif /* AVRC_API_H */

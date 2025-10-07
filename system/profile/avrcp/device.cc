@@ -19,6 +19,7 @@
 #include "device.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include "abstract_message_loop.h"
@@ -44,7 +45,6 @@
 #include "packet/avrcp/set_absolute_volume.h"
 #include "packet/avrcp/set_addressed_player.h"
 #include "packet/avrcp/set_player_application_setting_value.h"
-#include "types/raw_address.h"
 #include "btif/include/btif_config.h"
 #include "storage/config_keys.h"
 
@@ -184,7 +184,12 @@ void Device::HandlePendingPlay() {
 
     if (d->IsPendingPlay()) {
       log::info("Send PLAY to {}", d->address_);
-      d->media_interface_->SendKeyEvent(uint8_t(OperationID::PLAY), KeyState::PUSHED);
+      if(!d->media_interface_){
+        log::info("media_interface_ is NULL, return");
+        return;
+      }
+      d->media_interface_->SendKeyEvent(d->address_, uint8_t(OperationID::PLAY), KeyState::PUSHED);
+      d->media_interface_->SendKeyEvent(d->address_, uint8_t(OperationID::PLAY), KeyState::RELEASED);
       d->IsPendingPlay_ = false;
     }
   },
@@ -238,7 +243,6 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
           active_labels_.erase(label);
           volume_interface_ = nullptr;
           volume_ = VOL_REGISTRATION_FAILED;
-          last_request_volume_ = volume_;
           return;
         }
 
@@ -253,22 +257,31 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
         }
         break;
       }
-
       case CommandPdu::SET_ABSOLUTE_VOLUME: {
-        auto set_absolute_volume =
-            Packet::Specialize<SetAbsoluteVolumeResponse>(pkt);
         active_labels_.erase(label);
-        volume_label_ = MAX_TRANSACTION_LABEL;
-        if (set_absolute_volume->IsValid()) {
-          volume_ = set_absolute_volume->GetVolume();
-          volume_ &= ~0x80;
-          log::verbose("{}: current volume={}, last request volume={}",
-                       address_, (int)volume_, (int)last_request_volume_);
-          if (last_request_volume_ != volume_) SetVolume(last_request_volume_);
-        } else {
-          log::warn("{}: Response packet is not valid", address_);
-          last_request_volume_ = volume_;
+        if (!com::android::bluetooth::flags::use_returned_absolute_volume()) {
+          break;
         }
+
+        set_vol_cmd_in_progress_ = false;
+
+        if (pkt->GetCType() == CType::REJECTED) {
+          return;
+        }
+        auto set_vol = Packet::Specialize<SetAbsoluteVolumeResponse>(pkt);
+        int8_t vol = set_vol->GetVolume();
+        vol &= ~0x80;  // remove RFA bit
+        log::info("SET_ABSOLUTE_VOLUME label: {}, volume_: {}, last vol: {}", label, volume_, vol);
+        if (volume_ != vol) {
+          volume_ = vol;
+          if (pending_volume_.has_value()) {
+            log::info("Set pending volume with {}", pending_volume_.value());
+            SetVolume(pending_volume_.value());
+          } else if (volume_interface_ != nullptr) {
+            volume_interface_->SetVolume(volume_);
+          }
+        }
+        pending_volume_.reset();
         break;
       }
       default:
@@ -482,12 +495,11 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
         auto set_absolute_volume =
             Packet::Specialize<SetAbsoluteVolumeResponse>(pkt);
         active_labels_.erase(label);
-        volume_label_ = MAX_TRANSACTION_LABEL;
         volume_ = set_absolute_volume->GetVolume();
         volume_ &= ~0x80;
-        log::verbose("{}: CType is CONTROL, current volume={}, last request volume={}",
-                       address_, (int)volume_, (int)last_request_volume_);
-        auto request = SetAbsoluteVolumeResponseBuilder::MakeBuilder(last_request_volume_);
+        log::verbose("{}: CType is CONTROL, current volume={}",
+                       address_, (int)volume_);
+        auto request = SetAbsoluteVolumeResponseBuilder::MakeBuilder(volume_);
         send_message_cb_.Run(label, false, std::move(request));
       } else {
         log::error("{}: Unhandled Vendor Packet: {}", address_, pkt->ToString());
@@ -680,6 +692,8 @@ void Device::HandleVolumeChanged(uint8_t label,
                                  const std::shared_ptr<RegisterNotificationResponse>& pkt) {
   log::verbose("interim={}", pkt->IsInterim());
 
+  pending_volume_.reset();
+
   if (volume_interface_ == nullptr) {
     return;
   }
@@ -694,7 +708,6 @@ void Device::HandleVolumeChanged(uint8_t label,
     // Disable Absolute Volume
     active_labels_.erase(label);
     volume_ = VOL_REGISTRATION_FAILED;
-    last_request_volume_ = volume_;
     log::error("device rejected register Volume changed notification request.");
     log::error("Putting Device in ABSOLUTE_VOLUME rejectlist");
     interop_database_add(INTEROP_DISABLE_ABSOLUTE_VOLUME, &address_, 3);
@@ -725,29 +738,41 @@ void Device::HandleVolumeChanged(uint8_t label,
     return;
   }
 
-  volume_ = pkt->GetVolume();
-  volume_ &= ~0x80;  // remove RFA bit
-  last_request_volume_ = volume_;
-  log::verbose("Volume has changed to {}", (uint32_t)volume_);
-  volume_interface_->SetVolume(volume_);
+  int8_t vol = pkt->GetVolume();
+  vol &= ~0x80;  // remove RFA bit
+
+  bool use_returned_volume_flag = com::android::bluetooth::flags::use_returned_absolute_volume();
+
+  if (!use_returned_volume_flag || (use_returned_volume_flag && volume_ != vol)) {
+    volume_ = vol;
+    log::info("Volume has changed to {}", (uint32_t)volume_);
+    volume_interface_->SetVolume(volume_);
+  } else {
+    log::info("ignore same volume {}", (uint32_t)volume_);
+  }
 }
 
 void Device::SetVolume(int8_t volume) {
   // TODO (apanicke): Implement logic for Multi-AVRCP
-  log::verbose("request volume={}, last request volume={}, current volume={}",
-               (int)volume, (int)last_request_volume_, (int)volume_);
+  log::info("volume={}", (int)volume);
   if (volume == volume_) {
     log::warn("{}: Ignoring volume change same as current volume level", address_);
     return;
   }
+  volume_ = volume;
 
-  last_request_volume_ = volume;
-  if (volume_label_ != MAX_TRANSACTION_LABEL) {
-    log::warn(
-        "{}: There is already a volume command in progress, cache volume={}",
-        address_, (int)last_request_volume_);
-    return;
+  bool use_returned_volume_flag = com::android::bluetooth::flags::use_returned_absolute_volume();
+
+  if (use_returned_volume_flag) {
+    if (set_vol_cmd_in_progress_) {
+      log::info("There is already a volume command in progress");
+      pending_volume_ = std::make_optional(volume);
+      return;
+    }
+
+    set_vol_cmd_in_progress_ = true;
   }
+
   auto request = SetAbsoluteVolumeRequestBuilder::MakeBuilder(volume);
 
   uint8_t label = MAX_TRANSACTION_LABEL;
@@ -755,7 +780,6 @@ void Device::SetVolume(int8_t volume) {
     if (active_labels_.find(i) == active_labels_.end()) {
       active_labels_.insert(i);
       label = i;
-      volume_label_ = label;
       break;
     }
   }
@@ -875,6 +899,9 @@ void Device::PlaybackStatusNotificationResponse(uint8_t label, bool interim, Pla
     state_to_send = PlayState::PAUSED;
   }
   log::verbose("state_to_send: {}", state_to_send);
+
+  last_media_player_status_ = status.state;
+
   if (!interim && state_to_send == last_play_status_.state) {
     log::verbose("Not sending notification due to no state update {}", address_);
     return;
@@ -1222,7 +1249,10 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
                     log::warn("Ignore passthrough play during active Call");
                     return;
                   }
-
+                  if(!d->media_interface_){
+                    log::info("media_interface_ is NULL, return");
+                    return;
+                  }
                   if (!d->IsActive()) {
                     log::info("Setting {} to be the active device", d->address_);
                     d->media_interface_->SetActiveDevice(d->address_);
@@ -1235,7 +1265,7 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
                       d->IsPendingPlay_ = true;
                     }
                   } else {
-                    d->media_interface_->SendKeyEvent(uint8_t(OperationID::PLAY), KeyState::PUSHED);
+                    d->media_interface_->SendKeyEvent(d->address_, uint8_t(OperationID::PLAY), KeyState::PUSHED);
                   }
                 },
                 weak_ptr_factory_.GetWeakPtr()));
@@ -1267,7 +1297,11 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
             if (d->IsActive()) {
               log::verbose("SendKeyEvent: PT:{}, KEYSTATE:{}", packet->GetOperationId(),
                   packet->GetKeyState());
-              d->media_interface_->SendKeyEvent(packet->GetOperationId(),
+              if(!d->media_interface_){
+                log::info("media_interface_ is NULL, return");
+                return;
+              }
+              d->media_interface_->SendKeyEvent(d->address_, packet->GetOperationId(),
                   packet->GetKeyState());
             }
           }, weak_ptr_factory_.GetWeakPtr(), pass_through_packet));
@@ -1803,7 +1837,8 @@ void Device::GetMediaPlayerListResponse(uint8_t label, std::shared_ptr<GetFolder
   }
 
   for (size_t i = pkt->GetStartItem(); i <= pkt->GetEndItem() && i < players.size(); i++) {
-    MediaPlayerItem item(players[i].id, players[i].name, players[i].browsing_supported);
+    MediaPlayerItem item(players[i].id, players[i].name, players[i].browsing_supported,
+                         static_cast<uint8_t>(last_media_player_status_));
     builder->AddMediaPlayer(item);
   }
 
@@ -1848,9 +1883,8 @@ void Device::GetVFSListResponse(uint8_t label, std::shared_ptr<GetFolderItemsReq
   for (auto i = pkt->GetStartItem(); i <= pkt->GetEndItem() && i < items.size(); i++) {
     if (items[i].type == ListItem::FOLDER) {
       auto folder = items[i].folder;
-      // right now we always use folders of mixed type
-      FolderItem folder_item(vfs_ids_.get_uid(folder.media_id), 0x00, folder.is_playable,
-                             folder.name);
+      FolderItem folder_item(vfs_ids_.get_uid(folder.media_id), folder.folderType,
+                             folder.is_playable, folder.name);
       if (!builder->AddFolder(folder_item)) {
         break;
       }
@@ -2192,6 +2226,9 @@ void Device::DeviceDisconnected() {
   log::info("{} : Device was disconnected", address_);
   play_pos_update_cb_.Cancel();
 
+  set_vol_cmd_in_progress_ = false;
+  pending_volume_.reset();
+
   // TODO (apanicke): Once the interfaces are set in the Device construction,
   // remove these conditionals.
   if (volume_interface_ != nullptr) {
@@ -2202,7 +2239,6 @@ void Device::DeviceDisconnected() {
   // to reset the local volume var to be sure we send the correct value
   // to the remote device on the next connection.
   volume_ = VOL_NOT_SUPPORTED;
-  last_request_volume_ = volume_;
   fast_forwarding_ = false;
   fast_rewinding_ = false;
 }

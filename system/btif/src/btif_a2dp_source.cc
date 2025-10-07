@@ -25,6 +25,8 @@
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 #include <stdio.h>
 
@@ -42,7 +44,6 @@
 #include "a2dp_codec_api.h"
 #include "audio_hal_interface/a2dp_encoding.h"
 #include "avdt_api.h"
-#include "bt_transport.h"
 #include "bta_av_api.h"
 #include "bta_av_ci.h"
 #include "btif_av.h"
@@ -66,7 +67,6 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/main_thread.h"
-#include "types/raw_address.h"
 
 #ifdef __ANDROID__
 #include <cutils/trace.h>
@@ -248,7 +248,8 @@ private:
 ///   - btif_a2dp_source_audio_handle_timer
 ///   - btif_a2dp_source_read_callback
 ///   - btif_a2dp_source_enqueue_callback
-static bluetooth::common::MessageLoopThread btif_a2dp_source_thread("bt_a2dp_source_worker_thread");
+static bluetooth::common::MessageLoopThread btif_a2dp_source_thread(
+        "bt_a2dp_source_worker_thread", bluetooth::os::Thread::Priority::REAL_TIME);
 
 static BtifA2dpSource btif_a2dp_source_cb;
 static uint8_t btif_a2dp_source_dynamic_audio_buffer_size = MAX_OUTPUT_A2DP_FRAME_QUEUE_SZ;
@@ -334,6 +335,14 @@ bool btif_a2dp_source_init(void) {
   // Start A2DP Source media task
   btif_a2dp_source_thread.StartUp();
 
+  if (com::android::bluetooth::flags::a2dp_source_null_fixed_queue()) {
+    if (!btif_a2dp_source_thread.EnableRealTimeScheduling()) {
+#if defined(__ANDROID__)
+      log::fatal("unable to enable real time scheduling");
+#endif
+    }
+  }
+
   do_in_main_thread(base::BindOnce(&btif_a2dp_source_init_delayed));
   return true;
 }
@@ -402,6 +411,7 @@ class A2dpStreamCallbacks : public bluetooth::audio::a2dp::StreamCallbacks {
   }
 
   Status SetLatencyMode(bool low_latency) const override {
+    invoke_switch_buffer_size_cb(low_latency);
     btif_av_set_low_latency(low_latency);
     return Status::SUCCESS;
   }
@@ -436,8 +446,16 @@ static bool btif_a2dp_source_startup(void) {
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateStartingUp);
   btif_a2dp_source_cb.tx_audio_queue = fixed_queue_new(SIZE_MAX);
 
-  // Schedule the rest of the operations
-  do_in_main_thread(base::BindOnce(&btif_a2dp_source_startup_delayed));
+  if (com::android::bluetooth::flags::a2dp_source_null_fixed_queue()) {
+    if (!bluetooth::audio::a2dp::init(get_main_thread(), &a2dp_stream_callbacks,
+                                      btif_av_is_a2dp_offload_enabled())) {
+      log::warn("Failed to setup the bluetooth audio HAL");
+    }
+    btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateRunning);
+  } else {
+    // Schedule the rest of the operations
+    do_in_main_thread(base::BindOnce(&btif_a2dp_source_startup_delayed));
+  }
 
   return true;
 }
@@ -924,14 +942,14 @@ static void btif_a2dp_source_audio_tx_start_event(void) {
                    "assert failed: btif_a2dp_source_cb.encoder_interface != nullptr");
 
   log::info("starting media encoder timer with interval {}ms",
-               btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms());
+            btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms());
 
   wakelock_acquire();
   btif_a2dp_source_cb.encoder_interface->feeding_reset();
   btif_a2dp_source_cb.tx_flush = false;
   btif_a2dp_source_cb.sw_audio_is_encoding = true;
   btif_a2dp_source_cb.media_alarm.SchedulePeriodic(
-          btif_a2dp_source_thread.GetWeakPtr(),
+          &btif_a2dp_source_thread,
           base::BindRepeating(&btif_a2dp_source_audio_handle_timer),
           std::chrono::milliseconds(
                   btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms()));
@@ -993,7 +1011,7 @@ static void btif_a2dp_source_audio_handle_timer(void) {
   {
     static uint64_t previous_timestamp_us = 0;
     log::verbose("timestamp_us={} delta_us={:08} tx_queue_len={}", timestamp_us,
-              timestamp_us - previous_timestamp_us, tx_queue_len);
+                 timestamp_us - previous_timestamp_us, tx_queue_len);
     previous_timestamp_us = timestamp_us;
   }
 

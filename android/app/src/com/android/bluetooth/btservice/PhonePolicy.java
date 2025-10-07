@@ -287,10 +287,6 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
 
     boolean isLeAudioOnlyGroup(BluetoothDevice device) {
         String log = "isLeAudioOnlyGroup(" + device + "): ";
-        if (!Flags.leaudioAllowLeaudioOnlyDevices()) {
-            Log.d(TAG, log + "missing flag leaudio_allow_leaudio_only_devices");
-            return false;
-        }
 
         final var csipSetCoordinator = getCsipSetCoordinatorService();
         if (csipSetCoordinator.isEmpty()) {
@@ -345,11 +341,6 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
          * Note, that we need to have all set bonded to take the decision.
          * If the set is not bonded, we cannot assume that.
          */
-
-        if (!Flags.leaudioAllowLeaudioOnlyDevices()) {
-            Log.d(TAG, log + "missing flag leaudio_allow_leaudio_only_devices");
-            return false;
-        }
 
         if (!Utils.arrayContains(uuids, BluetoothUuid.LE_AUDIO)) {
             Log.d(TAG, log + "Device does not supports LE_AUDIO");
@@ -469,7 +460,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             if (mAutoConnectProfilesSupported) {
                 hidHost.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
             } else {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.HID_HOST, CONNECTION_POLICY_ALLOWED);
             }
             MetricsLogger.getInstance()
@@ -488,13 +479,13 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                                 == CONNECTION_POLICY_UNKNOWN))) {
             if (!isDualModeAudioEnabled() && isLeAudioProfileAllowed) {
                 Log.d(TAG, log + "Dual mode device detected: clear hfp profile priority");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.HEADSET, CONNECTION_POLICY_FORBIDDEN);
             } else {
                 if (mAutoConnectProfilesSupported) {
                     headset.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.HEADSET, CONNECTION_POLICY_ALLOWED);
                 }
             }
@@ -506,13 +497,13 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 && (a2dp.get().getConnectionPolicy(device) == CONNECTION_POLICY_UNKNOWN)) {
             if (!isDualModeAudioEnabled() && isLeAudioProfileAllowed) {
                 Log.d(TAG, log + "Dual mode device detected: clear A2dp profile priority");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.A2DP, CONNECTION_POLICY_FORBIDDEN);
             } else {
                 if (mAutoConnectProfilesSupported) {
                     a2dp.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.A2DP, CONNECTION_POLICY_ALLOWED);
                 }
             }
@@ -527,7 +518,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             if (mAutoConnectProfilesSupported) {
                 csipSetCoordinator.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
             } else {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.CSIP_SET_COORDINATOR, CONNECTION_POLICY_ALLOWED);
             }
         }
@@ -546,12 +537,12 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                             .syncPost(
                                     v -> v.setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED));
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.VOLUME_CONTROL, CONNECTION_POLICY_ALLOWED);
                 }
             } else {
                 Log.d(TAG, log + "LE_AUDIO is not allowed: Clear VCP priority");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.VOLUME_CONTROL, CONNECTION_POLICY_FORBIDDEN);
             }
         }
@@ -566,7 +557,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             if (mAutoConnectProfilesSupported) {
                 pan.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
             } else {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.PAN, CONNECTION_POLICY_ALLOWED);
             }
         }
@@ -579,12 +570,12 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 if (mAutoConnectProfilesSupported) {
                     leAudio.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.LE_AUDIO, CONNECTION_POLICY_ALLOWED);
                 }
             } else {
                 Log.d(TAG, log + "LE_AUDIO is not allowed: Clear LE_AUDIO priority");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.LE_AUDIO, CONNECTION_POLICY_FORBIDDEN);
             }
         }
@@ -594,14 +585,14 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 && (hearingAid.get().getConnectionPolicy(device) == CONNECTION_POLICY_UNKNOWN)) {
             if (isLeAudioProfileAllowed) {
                 Log.i(TAG, log + "LE_AUDIO is preferred over ASHA");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.HEARING_AID, CONNECTION_POLICY_FORBIDDEN);
             } else {
                 Log.d(TAG, log + "Setting ASHA priority");
                 if (mAutoConnectProfilesSupported) {
                     hearingAid.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.HEARING_AID, CONNECTION_POLICY_ALLOWED);
                 }
             }
@@ -612,14 +603,19 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 && (hapClient.get().getConnectionPolicy(device) == CONNECTION_POLICY_UNKNOWN)) {
             Log.d(TAG, log + "Setting HAP priority");
             if (isLeAudioProfileAllowed) {
-                if (mAutoConnectProfilesSupported) {
+                if (mAutoConnectProfilesSupported && !Flags.hapOnMainLooper()) {
                     hapClient.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
+                } else if (mAutoConnectProfilesSupported && Flags.hapOnMainLooper()) {
+                    hapClient
+                            .get()
+                            .syncPost(
+                                    h -> h.setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED));
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device, BluetoothProfile.HAP_CLIENT, CONNECTION_POLICY_ALLOWED);
                 }
             } else {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.HAP_CLIENT, CONNECTION_POLICY_FORBIDDEN);
             }
         }
@@ -632,14 +628,14 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 if (mAutoConnectProfilesSupported) {
                     bassClient.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
                 } else {
-                    mDatabaseManager.setProfileConnectionPolicy(
+                    mAdapterService.setProfileConnectionPolicy(
                             device,
                             BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT,
                             CONNECTION_POLICY_ALLOWED);
                 }
             } else {
                 Log.d(TAG, log + "LE_AUDIO Broadcast is not allowed: Clear BASS priority");
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device,
                         BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT,
                         CONNECTION_POLICY_FORBIDDEN);
@@ -653,14 +649,14 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             if (mAutoConnectProfilesSupported) {
                 battery.get().setConnectionPolicy(device, CONNECTION_POLICY_ALLOWED);
             } else {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, BluetoothProfile.BATTERY, CONNECTION_POLICY_ALLOWED);
             }
         }
     }
 
-    void handleLeAudioOnlyDeviceAfterCsipConnect(BluetoothDevice device) {
-        String log = "handleLeAudioOnlyDeviceAfterCsipConnect(" + device + "): ";
+    void handleConnectionPolicyAfterCsipConnect(BluetoothDevice device) {
+        String log = "handleConnectionPolicyAfterCsipConnect(" + device + "): ";
 
         final var leAudio = getLeAudioService();
         if (leAudio.isEmpty()
@@ -673,6 +669,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
         List<BluetoothDevice> groupDevices = new ArrayList<>();
         boolean isAnyOtherGroupMemberAllowed = false;
 
+        /* isLeAudioOnlyGroup returning true implies csipSetCoordinatorService is valid */
         final var csipSetCoordinator = getCsipSetCoordinatorService();
         if (csipSetCoordinator.isPresent()) {
             /* Since isLeAudioOnlyGroup return true it means csipSetCoordinatorService is valid */
@@ -696,19 +693,37 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                         + ("isAnyOtherGroupMemberAllowed=" + isAnyOtherGroupMemberAllowed)
                         + (" isLeAudioOnlyGroup=" + isLeAudioOnlyGroup));
 
+        /* This is the key check for Dual Mode devices.
+         * If the group is dual mode and no other member has an active ALLOWED policy,
+         * we return early to avoid enabling all profiles for the entire group.
+         */
         if (!isAnyOtherGroupMemberAllowed && !isLeAudioOnlyGroup) {
             /* Log no needed as above function will log on error. */
             return;
         }
 
+        /* For LE Audio Only groups, or for a Dual Mode group that already has an active member,
+         * iterate through all members and ensure their LE Audio connection policy is set to
+         * ALLOWED.
+         */
         for (BluetoothDevice dev : groupDevices) {
             if (leAudio.get().getConnectionPolicy(dev) != CONNECTION_POLICY_ALLOWED) {
-                /* Setting LeAudio service as allowed is sufficient,
-                 * because other LeAudio services e.g. VC will
-                 * be enabled by LeAudio service automatically.
-                 */
-                Log.d(TAG, log + "...." + dev);
-                leAudio.get().setConnectionPolicy(dev, CONNECTION_POLICY_ALLOWED);
+                int bondState = mAdapterService.getBondState(dev);
+                if (bondState != BluetoothDevice.BOND_BONDED) {
+                    Log.w(
+                            TAG,
+                            log
+                                    + "member"
+                                    + dev
+                                    + " not bonded, do not set LEA policy to ALLOWED.");
+                } else {
+                    /* Setting LeAudio service as allowed is sufficient,
+                     * because other LeAudio services e.g. VC will
+                     * be enabled by LeAudio service automatically.
+                     */
+                    Log.d(TAG, log + "...." + dev);
+                    leAudio.get().setConnectionPolicy(dev, CONNECTION_POLICY_ALLOWED);
+                }
             }
         }
     }
@@ -726,7 +741,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 case BluetoothProfile.A2DP -> mA2dpRetrySet.remove(device);
                 case BluetoothProfile.HEADSET -> mHeadsetRetrySet.remove(device);
                 case BluetoothProfile.CSIP_SET_COORDINATOR ->
-                        handleLeAudioOnlyDeviceAfterCsipConnect(device);
+                        handleConnectionPolicyAfterCsipConnect(device);
                 default -> {} // Nothing to do
             }
             connectOtherProfile(device);
@@ -899,29 +914,15 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
             return;
         }
 
-        if (Flags.autoConnectOnMultipleHfpWhenNoA2dpDevice()) {
-            final List<BluetoothDevice> mostRecentlyConnectedHfpDevices =
-                    mDatabaseManager.getMostRecentlyActiveHfpDevices();
-            for (BluetoothDevice hfpDevice : mostRecentlyConnectedHfpDevices) {
-                Log.d(TAG, log + "Attempting HFP device" + hfpDevice);
-                autoConnectHeadset(hfpDevice);
-            }
-            if (mostRecentlyConnectedHfpDevices.size() == 0) {
-                Log.d(TAG, log + "No hfp device to connect");
-            }
-            return;
+        final List<BluetoothDevice> mostRecentlyConnectedHfpDevices =
+                mDatabaseManager.getMostRecentlyActiveHfpDevices();
+        for (BluetoothDevice hfpDevice : mostRecentlyConnectedHfpDevices) {
+            Log.d(TAG, log + "Attempting HFP device" + hfpDevice);
+            autoConnectHeadset(hfpDevice);
         }
-        Log.d(TAG, log + "Multi HFP is not enabled");
-
-        // Try to autoConnect with Hfp only if there was no a2dp valid device
-        final BluetoothDevice mostRecentlyConnectedHfpDevice =
-                mDatabaseManager.getMostRecentlyActiveHfpDevice();
-        if (mostRecentlyConnectedHfpDevice != null) {
-            Log.d(TAG, log + "Attempting most recent HFP device" + mostRecentlyConnectedHfpDevice);
-            autoConnectHeadset(mostRecentlyConnectedHfpDevice);
-            return;
+        if (mostRecentlyConnectedHfpDevices.size() == 0) {
+            Log.d(TAG, log + "No hfp device to connect");
         }
-        Log.i(TAG, log + "No device to reconnect to");
     }
 
     private void autoConnectA2dp(BluetoothDevice device) {
@@ -1136,7 +1137,19 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                 bassClient.get().connect(device);
             }
         }
-        if (hapClient.isPresent()) {
+        if (Flags.hapOnMainLooper()) {
+            hapClient.ifPresent(
+                    hap -> {
+                        List<BluetoothDevice> connectedDevices = hap.getConnectedDevices();
+                        if (!connectedDevices.contains(device)
+                                && (hap.getConnectionPolicy(device) == CONNECTION_POLICY_ALLOWED)
+                                && (hap.getConnectionState(device) == STATE_DISCONNECTED)) {
+                            Log.d(TAG, log + "Retrying HAP connection");
+                            hap.connect(device);
+                        }
+                    });
+        }
+        if (!Flags.hapOnMainLooper() && hapClient.isPresent()) {
             List<BluetoothDevice> connectedDevices = hapClient.get().getConnectedDevices();
             if (!connectedDevices.contains(device)
                     && (hapClient.get().getConnectionPolicy(device) == CONNECTION_POLICY_ALLOWED)
@@ -1181,9 +1194,9 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
         for (int profileId = BluetoothProfile.HEADSET;
                 profileId < BluetoothProfile.MAX_PROFILE_ID;
                 profileId++) {
-            if (mDatabaseManager.getProfileConnectionPolicy(device, profileId)
+            if (mAdapterService.getProfileConnectionPolicy(device, profileId)
                     == CONNECTION_POLICY_ALLOWED) {
-                mDatabaseManager.setProfileConnectionPolicy(
+                mAdapterService.setProfileConnectionPolicy(
                         device, profileId, CONNECTION_POLICY_FORBIDDEN);
             }
         }

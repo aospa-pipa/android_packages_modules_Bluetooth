@@ -17,7 +17,7 @@
 #ifndef ANDROID_INCLUDE_BT_HD_H
 #define ANDROID_INCLUDE_BT_HD_H
 
-#include "types/raw_address.h"
+#include <bluetooth/types/address.h>
 #include <stdint.h>
 
 __BEGIN_DECLS

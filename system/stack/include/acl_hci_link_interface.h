@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/hci_role.h>
+
 #include <cstdint>
 
 #include "hci/class_of_device.h"
@@ -24,8 +27,6 @@
 #include "stack/include/hci_error_code.h"
 #include "stack/include/hci_mode.h"
 #include "stack/include/hcidefs.h"
-#include "types/hci_role.h"
-#include "types/raw_address.h"
 
 // This header contains functions for HCIF-Acl Management to invoke
 //
@@ -64,3 +65,4 @@ void btm_pm_on_sniff_subrating(tHCI_STATUS status, uint16_t handle,
                                uint16_t minimum_remote_timeout, uint16_t minimum_local_timeout);
 
 void acl_cache_role(const RawAddress& bd_addr, tHCI_ROLE new_role, bool overwrite_cache);
+void btm_notify_ssr_trigger(void);

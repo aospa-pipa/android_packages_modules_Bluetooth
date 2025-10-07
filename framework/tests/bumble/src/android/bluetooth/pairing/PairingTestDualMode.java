@@ -155,7 +155,10 @@ public class PairingTestDualMode {
     public void testBondLe_InitiateBrEdrPairingFromDUT() {
         IntentReceiver intentReceiver =
                 new IntentReceiver.Builder(
-                                mTargetContext, BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+                                mTargetContext,
+                                BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+                                BluetoothDevice.ACTION_ACL_CONNECTED,
+                                BluetoothDevice.ACTION_PAIRING_REQUEST)
                         .build();
         // Pairing Event Observer
         StreamObserver<SecurityProto.PairingEventAnswer> pairingEventAnswerObserver =
@@ -206,6 +209,7 @@ public class PairingTestDualMode {
         // Approve pairing from Android
         assertThat(mBumbleDevice.setPairingConfirmation(true)).isTrue();
 
+        pairingEvent = mPairingEventStreamObserver.iterator().next();
         assertThat(pairingEvent.hasJustWorks()).isTrue();
         pairingEventAnswerObserver.onNext(
                 SecurityProto.PairingEventAnswer.newBuilder()
@@ -264,7 +268,8 @@ public class PairingTestDualMode {
                 new IntentReceiver.Builder(
                                 mTargetContext,
                                 BluetoothDevice.ACTION_BOND_STATE_CHANGED,
-                                BluetoothDevice.ACTION_ACL_CONNECTED)
+                                BluetoothDevice.ACTION_ACL_CONNECTED,
+                                BluetoothDevice.ACTION_PAIRING_REQUEST)
                         .build();
 
         StreamObserver<SecurityProto.PairingEventAnswer> pairingEventAnswerObserver =
@@ -310,6 +315,7 @@ public class PairingTestDualMode {
         // Start bonding from remote side
         testStep_BondBredrFromRemote(intentReceiver);
 
+        pairingEvent = mPairingEventStreamObserver.iterator().next();
         assertThat(pairingEvent.hasJustWorks()).isTrue();
         pairingEventAnswerObserver.onNext(
                 SecurityProto.PairingEventAnswer.newBuilder()
@@ -357,7 +363,9 @@ public class PairingTestDualMode {
                 new IntentReceiver.Builder(
                                 mTargetContext,
                                 BluetoothDevice.ACTION_BOND_STATE_CHANGED,
-                                BluetoothDevice.ACTION_ENCRYPTION_CHANGE)
+                                BluetoothDevice.ACTION_ENCRYPTION_CHANGE,
+                                BluetoothDevice.ACTION_ACL_CONNECTED,
+                                BluetoothDevice.ACTION_PAIRING_REQUEST)
                         .build();
 
         assertThat(mBumbleDevice.createBond(BluetoothDevice.TRANSPORT_BREDR)).isTrue();
@@ -388,6 +396,11 @@ public class PairingTestDualMode {
         HostProto.ConnectResponse response = mBumble.hostBlocking().connect(connectionRequest);
 
         assertThat(response.hasConnection()).isTrue();
+
+        intentReceiver.verifyReceivedOrdered(
+                hasAction(BluetoothDevice.ACTION_ACL_CONNECTED),
+                hasExtra(BluetoothDevice.EXTRA_DEVICE, mBumbleDevice),
+                hasExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_BREDR));
 
         // Verify the link encryption after restart
         intentReceiver.verifyReceived(
@@ -480,17 +493,8 @@ public class PairingTestDualMode {
         intentReceiver.close();
     }
 
-    private void testStep_VerifyBondIntents(
-            IntentReceiver parentIntentReceiver, BluetoothDevice device, int transport) {
-        IntentReceiver intentReceiver =
-                IntentReceiver.update(
-                        parentIntentReceiver,
-                        new IntentReceiver.Builder(
-                                mTargetContext,
-                                BluetoothDevice.ACTION_BOND_STATE_CHANGED,
-                                BluetoothDevice.ACTION_ACL_CONNECTED,
-                                BluetoothDevice.ACTION_PAIRING_REQUEST));
-
+    private static void testStep_VerifyBondIntents(
+            IntentReceiver intentReceiver, BluetoothDevice device, int transport) {
         intentReceiver.verifyReceived(
                 hasAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
                 hasExtra(BluetoothDevice.EXTRA_DEVICE, device),
@@ -507,8 +511,6 @@ public class PairingTestDualMode {
                 hasExtra(
                         BluetoothDevice.EXTRA_PAIRING_VARIANT,
                         BluetoothDevice.PAIRING_VARIANT_CONSENT));
-
-        intentReceiver.close();
     }
 
     private static void testStep_restartBt() {
@@ -523,7 +525,8 @@ public class PairingTestDualMode {
                         new IntentReceiver.Builder(
                                 mTargetContext,
                                 BluetoothDevice.ACTION_ACL_CONNECTED,
-                                BluetoothDevice.ACTION_BOND_STATE_CHANGED));
+                                BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+                                BluetoothDevice.ACTION_PAIRING_REQUEST));
 
         assertThat(mBumbleDevice.createBond(BluetoothDevice.TRANSPORT_BREDR)).isTrue();
 

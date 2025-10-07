@@ -18,7 +18,7 @@ package com.android.bluetooth.pbapclient;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import androidx.test.runner.AndroidJUnit4;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.bluetooth.FakeObexServer;
 import com.android.obex.ClientSession;
@@ -128,11 +128,11 @@ public class PullPhonebookRequestTest {
             super();
         }
 
-        public void setResponseCode(int responseCode) {
+        void setResponseCode(int responseCode) {
             mResponseCode = responseCode;
         }
 
-        public void addContact(String vcard) {
+        void addContact(String vcard) {
             mPhonebook.add(vcard);
         }
 

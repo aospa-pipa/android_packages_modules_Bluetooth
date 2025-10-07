@@ -683,7 +683,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                         BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__START,
                         source.getUid());
 
-        if (Flags.vcpOnMainLooper()) {
+        if (Flags.vcpOnMainLooper() || Flags.hapOnMainLooper()) {
             return service.syncPost(
                     () -> {
                         return service.connectAllEnabledProfiles(device);
@@ -726,7 +726,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 TAG,
                 "disconnectAllEnabledProfiles: device=" + device + ", from " + getUidPidString());
 
-        if (Flags.vcpOnMainLooper()) {
+        if (Flags.vcpOnMainLooper() || Flags.hapOnMainLooper()) {
             return service.syncPost(
                     () -> {
                         return service.disconnectAllEnabledProfiles(device);
@@ -1193,18 +1193,6 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         }
 
         return service.getMaxConnectedAudioDevices();
-    }
-
-    @Override
-    public boolean factoryReset(AttributionSource source) {
-        AdapterService service = getService();
-        if (service == null
-                || !checkConnectPermissionForDataDelivery(service, source, TAG, "factoryReset")) {
-            return false;
-        }
-
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        return service.factoryReset();
     }
 
     @Override
@@ -2136,7 +2124,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return -1;
         }
 
-        return service.getDatabaseManager().getKeyMissingCount(device);
+        return service.getKeyMissingCount(device);
     }
 
     @Override

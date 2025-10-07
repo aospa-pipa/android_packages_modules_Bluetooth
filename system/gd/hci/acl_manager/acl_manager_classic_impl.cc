@@ -23,9 +23,6 @@
 
 namespace bluetooth::hci::acl_manager {
 
-constexpr uint16_t kQualcommDebugHandle = 0xedc;
-constexpr uint16_t kSamsungDebugHandle = 0xeef;
-
 using common::BindOnce;
 
 using acl_manager::classic_impl;
@@ -44,6 +41,7 @@ AclManagerClassicImpl::AclManagerClassicImpl(os::Handler* handler, HciInterface&
       classic_impl_(hci, handler_, round_robin_scheduler, crash_on_unknown_handle, acl_scheduler,
                     remote_name_request_module) {
   hci.SetClassicAclDataConsumer(this);
+  log::verbose("AclManagerClassic module started !!");
 }
 
 AclManagerClassicImpl::~AclManagerClassicImpl() {
@@ -52,6 +50,8 @@ AclManagerClassicImpl::~AclManagerClassicImpl() {
     handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
     delete handler_;
   }
+
+  log::verbose("AclManagerClassic module stopped !!");
 }
 
 void AclManagerClassicImpl::RegisterCallbacks(ConnectionCallbacks* callbacks,

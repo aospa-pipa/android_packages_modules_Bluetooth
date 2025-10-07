@@ -70,6 +70,7 @@ constexpr uint8_t kBitsPerSample32 = 32;
 struct StreamCallbacks {
   std::function<bool(bool start_media_task)> on_resume_;
   std::function<bool(void)> on_suspend_;
+  std::function<bool(void)> on_audio_server_restart_;
   std::function<bool(const source_metadata_v7_t&, DsaMode)> on_metadata_update_;
   std::function<bool(const sink_metadata_v7_t&)> on_sink_metadata_update_;
 };
@@ -107,6 +108,7 @@ private:
                                   int32_t priority) = 0;
     virtual void SuspendedForReconfiguration() = 0;
     virtual void ReconfigurationComplete() = 0;
+    virtual void StreamSuspended() = 0;
   };
 
 public:
@@ -130,6 +132,7 @@ public:
             const ::bluetooth::le_audio::broadcast_offload_config& config);
     void SuspendedForReconfiguration() override;
     void ReconfigurationComplete() override;
+    void StreamSuspended() override;
     // Read the stream of bytes sinked to us by the upper layers
     size_t Read(uint8_t* p_buf, uint32_t len);
     bool IsBroadcaster() { return is_broadcaster_; }
@@ -169,6 +172,7 @@ public:
                           int32_t priority) override;
     void SuspendedForReconfiguration() override;
     void ReconfigurationComplete() override;
+    void StreamSuspended() override;
     // Source the given stream of bytes to be sinked into the upper layers
     size_t Write(const uint8_t* p_buf, uint32_t len);
     void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,

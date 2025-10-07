@@ -19,6 +19,8 @@
 #ifndef BTM_API_TYPES_H
 #define BTM_API_TYPES_H
 
+#include <bluetooth/types/address.h>
+
 #include <cstdint>
 #include <string>
 
@@ -27,7 +29,6 @@
 #include "stack/include/bt_types.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/sdpdefs.h"
-#include "types/raw_address.h"
 
 /* Structure returned with Vendor Specific Command complete callback */
 typedef struct {
@@ -44,6 +45,8 @@ typedef struct {
  * data.
  */
 typedef void(tBTM_CMPL_CB)(void* p1);
+
+typedef void(tBTM_NOTIFY_SSR_CB)(void);
 
 /* VSC callback function for notifying an application that a synchronous
  * BTM function is complete. The pointer contains the address of any returned

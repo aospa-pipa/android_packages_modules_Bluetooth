@@ -54,7 +54,6 @@
 #include "main/shim/helpers.h"
 #include "osi/include/compat.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_sco_hfp_hal.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/port_api.h"
@@ -1247,6 +1246,12 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         p_scb->masked_features = p_scb->masked_features & ~(BTA_AG_FEAT_INBAND);
       }
 
+      if (interop_match_addr_or_name(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr,
+                                     &btif_storage_get_remote_device_property)) {
+        log::verbose("disable codec negotiation, remote for denylist device");
+        p_scb->masked_features = p_scb->masked_features & ~(BTA_AG_FEAT_CODEC);
+        p_scb->peer_features = p_scb->peer_features & ~(BTA_AG_PEER_FEAT_CODEC);
+      }
       log::verbose("BRSF HF: 0x{:x}, phone: 0x{:x}", p_scb->peer_features, p_scb->masked_features);
 
       /* send BRSF, send OK */
@@ -1370,8 +1375,8 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         p_scb->peer_codecs = bta_ag_parse_bac(p_arg, p_end);
         p_scb->codec_updated = true;
 
-        bool wbs_supported = hfp_hal_interface::get_wbs_supported();
-        bool swb_supported = hfp_hal_interface::get_swb_supported();
+        bool wbs_supported = bta_ag_get_wbs_supported();
+        bool swb_supported = bta_ag_get_swb_supported();
         const bool aptx_voice = is_hfp_aptx_voice_enabled() && p_scb->is_aptx_swb_codec;
         log::verbose("BTA_AG_AT_BAC_EVT aptx_voice={}", aptx_voice);
 
@@ -1445,13 +1450,13 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
           !bta_ag_is_call_present(&p_scb->peer_addr)) {
         log::warn(
             "NOT opening SCO for EVT {} as {} does not have call, call setup",
-            "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr.ToStringForLogging());
+            "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
       if (!bta_ag_sco_is_active_device(p_scb->peer_addr)) {
         log::warn("NOT opening SCO for EVT {} as {} is not the active HFP device",
-                  "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr.ToStringForLogging());
+                  "BTA_AG_LOCAL_EVT_BCC", p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
@@ -1465,7 +1470,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         log::warn(
                 "Sending error for AT+BCC received when call is in ringing state"
                 " and in-band ringtone is disabled for {} device",
-                p_scb->peer_addr.ToStringForLogging());
+                p_scb->peer_addr);
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_ALLOWED);
         break;
       }
@@ -1488,8 +1493,8 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_SUPPORTED);
         break;
       }
-      if (com::android::bluetooth::flags::qc_prioritize_lc3_codec() &&
-          hfp_hal_interface::get_swb_supported() && (p_scb->peer_codecs & BTM_SCO_CODEC_LC3) &&
+      if (com::android::bluetooth::flags::qc_prioritize_lc3_codec() && bta_ag_get_swb_supported() &&
+          (p_scb->peer_codecs & BTM_SCO_CODEC_LC3) &&
           !(p_scb->disabled_codecs & BTM_SCO_CODEC_LC3)) {
         log::warn("Phone and BT device support LC3, return error for QAC");
         bta_ag_send_error(p_scb, BTA_AG_ERR_OP_NOT_SUPPORTED);
@@ -2111,15 +2116,13 @@ bool bta_ag_is_sco_open_allowed([[maybe_unused]] tBTA_AG_SCB* p_scb,
             LeAudioClient::IsLeAudioClientRunning() ? LeAudioClient::Get()->IsInCall() : false;
 
     log::info("Is Duplex preferred profile le audio for device {} is {} ",
-              p_scb->peer_addr.ToStringForLogging().c_str(), is_duplex_pref_leaudio);
+              p_scb->peer_addr, is_duplex_pref_leaudio);
     log::info("Is call in progress {}", is_in_call);
     if (is_duplex_pref_leaudio && is_in_call) {
-      log::info("NOT opening SCO for EVT {} on dual mode device {}", event.c_str(),
-                p_scb->peer_addr.ToStringForLogging().c_str());
+      log::info("NOT opening SCO for EVT {} on dual mode device {}", event, p_scb->peer_addr);
       return false;
     } else {
-      log::info("Opening SCO for EVT {} on dual mode device {}", event,
-                p_scb->peer_addr.ToStringForLogging());
+      log::info("Opening SCO for EVT {} on dual mode device {}", event, p_scb->peer_addr);
     }
   }
 #endif
@@ -2200,7 +2203,7 @@ void bta_ag_send_qcs(tBTA_AG_SCB* p_scb) {
  *
  ******************************************************************************/
 void bta_ag_send_qac(tBTA_AG_SCB* p_scb) {
-  if (!get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX, &p_scb->peer_addr)) {
+  if (!get_swb_codec_status(bluetooth::headset::BTHF_SWB_CODEC_VENDOR_APTX, p_scb->peer_addr)) {
     log::verbose("send +QAC codecs unsupported");
     bta_ag_send_result(p_scb, BTA_AG_LOCAL_RES_QAC, SWB_CODECS_UNSUPPORTED, 0);
     return;

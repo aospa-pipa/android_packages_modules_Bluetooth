@@ -171,7 +171,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         on_set_terminated_(on_set_terminated) {
     le_maximum_advertising_data_length_ = controller_->GetLeMaximumAdvertisingDataLength();
 
-    num_instances_ = controller_->GetLeNumberOfSupportedAdverisingSets();
+    num_instances_ = controller_->GetLeNumberOfSupportedAdvertisingSets();
 
     le_advertising_interface_ = hci_->GetLeAdvertisingInterface(
             handler_->BindOn(this, &LeAdvertisingManagerImpl::impl::handle_event));
@@ -200,8 +200,16 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   }
 
   ~impl() {
+    if (com::android::bluetooth::flags::fix_event_handler_reg_and_dereg()) {
+      hci_->ReleaseLeAdvertisingInterface();
+    }
+
     if (address_manager_registered) {
-      le_address_manager_->Unregister(this);
+      if (com::android::bluetooth::flags::fix_use_after_object_destroyed()) {
+        le_address_manager_->UnregisterSync(this);
+      } else {
+        le_address_manager_->Unregister(this);
+      }
     }
     advertising_sets_.clear();
 
@@ -426,13 +434,14 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   AdvertiserId allocate_advertiser() {
     // number of LE_MULTI_ADVT start from 1
     AdvertiserId id = advertising_api_type_ == AdvertisingApiType::ANDROID_HCI ? 1 : 0;
-    while (id < num_instances_ && advertising_sets_.count(id) != 0) {
+    while (id < num_instances_ && advertising_sets_.contains(id) && advertising_sets_[id].in_use) {
       id++;
     }
     if (id == num_instances_) {
       log::warn("Number of max instances {} reached", (uint16_t)num_instances_);
       return kInvalidId;
     }
+    advertising_sets_[id] = Advertiser();
     advertising_sets_[id].in_use = true;
     return id;
   }
@@ -461,7 +470,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 
   void remove_advertiser(AdvertiserId advertiser_id) {
     std::unique_lock lock(id_mutex_);
-    if (advertising_sets_.count(advertiser_id) == 0) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       return;
     }
 
@@ -576,8 +585,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
 
     switch (advertising_api_type_) {
       case (AdvertisingApiType::LEGACY): {
-        if (config.advertising_type == AdvertisingType::ADV_IND ||
-            config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+        if (config.scannable) {
           if (!kEncryptedAdvertisingDataSupported) {
             set_data(id, true, config.scan_response);
           } else {
@@ -596,8 +604,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         }
       } break;
       case (AdvertisingApiType::ANDROID_HCI): {
-        if (config.advertising_type == AdvertisingType::ADV_IND ||
-            config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+        if (config.scannable) {
           if (!kEncryptedAdvertisingDataSupported) {
             set_data(id, true, config.scan_response);
           } else {
@@ -759,8 +766,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       }
     }
     if (!kEncryptedAdvertisingDataSupported) {
-      if (config.advertising_type == AdvertisingType::ADV_IND ||
-          config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+      if (config.scannable) {
         set_data(id, true, config.scan_response);
       }
       set_data(id, false, config.advertisement);
@@ -782,8 +788,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         enabled_sets_[id] = curr_set;
       }
     } else {
-      if (config.advertising_type == AdvertisingType::ADV_IND ||
-          config.advertising_type == AdvertisingType::ADV_NONCONN_IND) {
+      if (config.scannable) {
         set_enc_data(id, true, config.scan_response, config.scan_response_enc);
       }
       set_enc_data(id, false, config.advertisement, config.advertisement_enc);
@@ -995,7 +1000,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   }
 
   void get_own_address(AdvertiserId advertiser_id) {
-    if (advertising_sets_.find(advertiser_id) == advertising_sets_.end()) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       log::info("Unknown advertising id {}", advertiser_id);
       return;
     }
@@ -1042,9 +1047,10 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       case (AdvertisingApiType::LEGACY): {
         le_advertising_interface_->EnqueueCommand(
                 hci::LeSetAdvertisingParametersBuilder::Create(
-                        config.interval_min, config.interval_max, config.advertising_type,
-                        own_address_type, config.peer_address_type, config.peer_address,
-                        config.channel_map, config.filter_policy),
+                        config.interval_min, config.interval_max,
+                        get_legacy_advertising_type(config), own_address_type,
+                        config.peer_address_type, config.peer_address, config.channel_map,
+                        config.filter_policy),
                 handler_->BindOnceOn(
                         this, &impl::check_status_with_id<LeSetAdvertisingParametersCompleteView>,
                         true, advertiser_id));
@@ -1052,8 +1058,8 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       case (AdvertisingApiType::ANDROID_HCI): {
         le_advertising_interface_->EnqueueCommand(
                 hci::LeMultiAdvtParamBuilder::Create(
-                        config.interval_min, config.interval_max, config.advertising_type,
-                        own_address_type,
+                        config.interval_min, config.interval_max,
+                        get_legacy_advertising_type(config), own_address_type,
                         advertising_sets_[advertiser_id].current_address.GetAddress(),
                         config.peer_address_type, config.peer_address, config.channel_map,
                         config.filter_policy, advertiser_id, config.tx_power),
@@ -1119,6 +1125,17 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         }
       } break;
     }
+  }
+
+  AdvertisingType get_legacy_advertising_type(AdvertisingConfig config) {
+    if (config.connectable && config.directed) {
+      return config.high_duty_cycle ? AdvertisingType::ADV_DIRECT_IND_HIGH
+                                    : AdvertisingType::ADV_DIRECT_IND_LOW;
+    }
+    if (!config.connectable) {
+      return config.scannable ? AdvertisingType::ADV_SCAN_IND : AdvertisingType::ADV_NONCONN_IND;
+    }
+    return AdvertisingType::ADV_IND;
   }
 
   bool data_has_flags(std::vector<GapData> data) {
@@ -1364,7 +1381,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     std::vector<EnabledSet> enabled_sets = {curr_set};
     Enable enable_value = enable ? Enable::ENABLED : Enable::DISABLED;
 
-    if (!advertising_sets_.count(advertiser_id)) {
+    if (!advertising_sets_.contains(advertiser_id)) {
       log::warn("No advertising set with key: {}", advertiser_id);
       return;
     }
@@ -2040,7 +2057,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   std::recursive_mutex id_mutex_;
   size_t num_instances_;
   std::vector<hci::EnabledSet> enabled_sets_;
-  // map to mapping the id from java layer and advertier id
+  // map to mapping the id from java layer and advertiser id
   std::map<uint8_t, int> id_map_;
 
   AdvertisingApiType advertising_api_type_{0};
@@ -2377,8 +2394,9 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
         }
       } else {
         advertising_sets_[enabled_set.advertising_handle_].started = true;
-        advertising_callbacks_->OnAdvertisingSetStarted(reg_id, id, le_physical_channel_tx_power_,
-                                                        advertising_status);
+        advertising_callbacks_->OnAdvertisingSetStarted(
+                reg_id, id, advertising_sets_[enabled_set.advertising_handle_].tx_power,
+                advertising_status);
       }
     }
   }
@@ -2593,6 +2611,26 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     advertising_callbacks_->OnAdvertisingSetStarted(reg_id, kInvalidId, 0, status);
   }
 
+  void dump(int fd) {
+    std::string output;
+    auto&& out = std::back_inserter(output);
+    auto& advertising_sets = advertising_sets_;
+
+    std::format_to(out, "\nLE Advertising Manager Dumpsys:\n");
+    for (AdvertiserId i = 0; i < num_instances_; i++) {
+      if (advertising_sets.contains(i)) {
+        auto& advertiser = advertising_sets[i];
+        std::format_to(out,
+                       "    id: {} address: {} duration: {} in_use: {} started: {} connectable: {} "
+                       "discoverable: {} directed: {} periodic: {}\n",
+                       i, advertiser.current_address, advertiser.duration, advertiser.in_use,
+                       advertiser.started, advertiser.connectable, advertiser.discoverable,
+                       advertiser.directed, advertiser.is_periodic);
+      }
+    }
+    dprintf(fd, "%s", output.c_str());
+  }
+
   void get_enc_key_material(storage::StorageModule* storage_module_, hci::HciLayer* hci_layer_,
                             os::Handler* handler) {
     std::optional<std::vector<uint8_t>> keyiv =
@@ -2633,9 +2671,12 @@ LeAdvertisingManagerImpl::LeAdvertisingManagerImpl(
         hci::LeAddressManager* le_address_manager,
         hci::OnAdvertisingSetTerminatedInterface* on_set_terminated) {
   pimpl_ = std::make_unique<impl>(handler, hci, controller, le_address_manager, on_set_terminated);
+  log::verbose("LeAdvertisingManager module started !!");
 }
 
-LeAdvertisingManagerImpl::~LeAdvertisingManagerImpl() = default;
+LeAdvertisingManagerImpl::~LeAdvertisingManagerImpl() {
+  log::verbose("LeAdvertisingManager module stopped !!");
+};
 
 void LeAdvertisingManagerImpl::GetEncKeyMaterial() {
   // TODO: Bring back GetDependency
@@ -2663,8 +2704,7 @@ void LeAdvertisingManagerImpl::ExtendedCreateAdvertiser(
   AdvertisingApiType advertising_api_type = pimpl_->get_advertising_api_type();
   if (advertising_api_type != AdvertisingApiType::EXTENDED) {
     if (config.peer_address == Address::kEmpty) {
-      if (config.advertising_type == hci::AdvertisingType::ADV_DIRECT_IND_HIGH ||
-          config.advertising_type == hci::AdvertisingType::ADV_DIRECT_IND_LOW) {
+      if (config.directed) {
         log::warn("Peer address can not be empty for directed advertising");
         pimpl_->handler_->CallOn(pimpl_.get(), &impl::start_advertising_fail, reg_id,
                                  AdvertisingCallback::AdvertisingStatus::INTERNAL_ERROR);
@@ -2799,10 +2839,11 @@ void LeAdvertisingManagerImpl::RegisterAdvertisingCallback(
                            advertising_callback);
 }
 
+void LeAdvertisingManagerImpl::Dump(int fd) { pimpl_->dump(fd); }
+
 void LeAdvertisingManagerImpl::RegisterEncKeyMaterialCallback(
         EncKeyMaterialCallback* enc_key_material_callback) {
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::register_enc_key_material_callback, enc_key_material_callback);
 }
-
 }  // namespace hci
 }  // namespace bluetooth

@@ -78,15 +78,12 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
         await self.ref.open()
 
     @override
-    async def async_setup_test(self) -> None:
-        await super().async_setup_test()
-
-    @override
     async def async_teardown_test(self) -> None:
-        await super().async_teardown_test()
+        self.dut.bt.audioStop()
         # Make sure Bumble is off to cancel any running tasks.
         async with self.assert_not_timeout(_DEFAULT_STEP_TIMEOUT_SECONDS):
             await self.ref.close()
+        await super().async_teardown_test()
 
     def _is_ranchu_emulator(self, dev: android_device.AndroidDevice) -> bool:
         return (build_info := dev.build_info) and build_info["hardware"] == "ranchu"
@@ -331,6 +328,10 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
             await self._wait_for_call_state(dut_telecom_cb, _CallState.CONNECTING,
                                             _CallState.DIALING)
 
+            self.logger.info("[DUT] Start streaming.")
+            self.dut.bt.audioSetRepeat(android_constants.RepeatMode.ONE)
+            await asyncio.to_thread(self.dut.bt.audioPlaySine)
+
             self.logger.info("[DUT] Wait for SCO connected.")
             await self._wait_for_sco_state(dut_hfp_cb, _ScoState.CONNECTED)
 
@@ -340,8 +341,6 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
 
                 self.assertEqual(ref_hfp_protocol.active_codec, preferred_codec)
 
-            self.logger.info("[DUT] Start streaming.")
-            await asyncio.to_thread(self.dut.bt.audioPlaySine)
             self.logger.info("[DUT] Start recording.")
             recorder = await asyncio.to_thread(
                 lambda: self.dut.bl4a.start_audio_recording(_RECORDING_PATH))
@@ -407,6 +406,12 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
             f"/data/media/{self.dut.adb.current_user_id}/Recordings/record.wav",
         ])
 
+        if (self.user_params.get(navi_test_base.RECORD_FULL_DATA) and rx_received_buffer):
+            self.write_test_output_data(
+                f"hfp_ag_data.{preferred_codec.name.lower()}",
+                rx_received_buffer,
+            )
+
         if check_audio_correctness:
             tx_dominant_frequency = audio.get_dominant_frequency(
                 ref_sink_buffer,
@@ -469,6 +474,13 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
             timeout=_DEFAULT_STEP_TIMEOUT_SECONDS,
         )
 
+        condition = asyncio.Condition()
+
+        @ref_hfp_protocol.on(ref_hfp_protocol.EVENT_AG_INDICATOR)
+        async def _(*_) -> None:
+            async with condition:
+                condition.notify_all()
+
         self.logger.info("[DUT] Make incoming call.")
         with self.dut.bl4a.make_phone_call(
                 _CALLER_NAME,
@@ -477,8 +489,12 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
         ):
             await self._wait_for_call_state(dut_telecom_cb, _CallState.RINGING)
 
-            self.logger.info("[DUT] Wait for SCO connected.")
-            await self._wait_for_sco_state(dut_hfp_cb, _ScoState.CONNECTED)
+            self.logger.info("[REF] Wait for callsetup.")
+            async with self.assert_not_timeout(_DEFAULT_STEP_TIMEOUT_SECONDS):
+                async with condition:
+                    call_setup = next(indicator for indicator in ref_hfp_protocol.ag_indicators
+                                      if indicator.indicator == hfp.AgIndicator.CALL_SETUP)
+                    await condition.wait_for(lambda: (call_setup.current_status == 1))
 
             if call_answer == _CallAnswer.ACCEPT:
                 self.logger.info("[REF] Answer call.")
@@ -673,6 +689,9 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
                     constants.Direction.OUTGOING,
                 ),
         ):
+            self.dut.bt.audioSetRepeat(android_constants.RepeatMode.ONE)
+            self.dut.bt.audioPlaySine()
+
             await self._wait_for_call_state(dut_telecom_cb, _CallState.CONNECTING,
                                             _CallState.DIALING)
 
@@ -725,6 +744,9 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
         ):
             await self.classic_connect_and_pair()
 
+            self.dut.bt.audioSetRepeat(android_constants.RepeatMode.ONE)
+            self.dut.bt.audioPlaySine()
+
             self.logger.info("[DUT] Wait for SCO connected.")
             await self._wait_for_sco_state(dut_hfp_cb, _ScoState.CONNECTED)
             async with self.assert_not_timeout(
@@ -732,6 +754,15 @@ class HfpAgTest(navi_test_base.TwoDevicesTestBase):
                     msg="[REF] Wait for HFP connected.",
             ):
                 ref_hfp_protocol = await ref_hfp_protocol_queue.get()
+
+            if not self.dut.device.is_emulator:
+                self.logger.info("[DUT] Wait for SCO active.")
+                await dut_audio_cb.wait_for_event(
+                    bl4a_api.CommunicationDeviceChanged(
+                        self.ref.address,
+                        device_type=android_constants.AudioDeviceType.BLUETOOTH_SCO,
+                    ))
+
             # Somehow volume change cannot be broadcasted to Bluetooth at the moment
             # when SCO becomes active.
             await asyncio.sleep(0.5)

@@ -25,6 +25,7 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <list>
@@ -38,7 +39,6 @@
 #include "internal_include/bt_target.h"
 #include "internal_include/bt_trace.h"
 #include "macros.h"
-#include "types/ble_address_with_type.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -299,6 +299,7 @@ extern const uint16_t bta_service_id_to_uuid_lkup_tbl[];
 
 extern const tBTA_DM_PM_CFG* p_bta_dm_pm_cfg;
 tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC* get_bta_dm_pm_spec();
+size_t bta_dm_get_num_pm_entry();
 extern const tBTM_PM_PWR_MD* p_bta_dm_pm_md;
 extern tBTA_DM_SSR_SPEC* p_bta_dm_ssr_spec;
 
@@ -357,9 +358,11 @@ void bta_dm_ble_subrate_request(const RawAddress& bd_addr, uint16_t subrate_min,
                                 uint16_t subrate_max, uint16_t max_latency, uint16_t cont_num,
                                 uint16_t timeout);
 
+tBTM_PM_PWR_MD bta_dm_pm_get_sniff_entry(size_t index);
 void bta_dm_disable_timer_cback(void);
 void bta_dm_bredr_cleanup(void);
 void bta_dm_bredr_startup(void);
+void bta_dm_process_ssr(void);
 
 namespace bluetooth::legacy::testing {
 

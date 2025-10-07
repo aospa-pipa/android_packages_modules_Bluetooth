@@ -28,6 +28,9 @@
 
 #include <android_bluetooth_sysprop.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
+#include <bluetooth/types/hci_role.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -78,10 +81,8 @@
 #include "stack/include/btm_log_history.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/l2cap_interface.h"
+#include "stack/acl/acl.h"
 #include "storage/config_keys.h"
-#include "types/bt_transport.h"
-#include "types/hci_role.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 
@@ -618,7 +619,7 @@ void bta_av_switch_role(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
   p_scb->wait &= ~(BTA_AV_WAIT_ROLE_SW_RES_OPEN | BTA_AV_WAIT_ROLE_SW_RES_START);
 
   if (p_scb->q_tag == BTA_AV_Q_TAG_OPEN) {
-    if (bta_av_switch_if_needed(p_scb) || !bta_av_link_role_ok(p_scb, A2DP_SET_MULTL_BIT)) {
+    if (!bta_av_link_role_ok(p_scb, A2DP_SET_MULTL_BIT)) {
       p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_OPEN;
     } else {
       /* this should not happen in theory. Just in case...
@@ -666,7 +667,10 @@ void bta_av_role_res(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       p_scb->wait &= ~BTA_AV_WAIT_ROLE_SW_BITS;
       if (p_data->role_res.hci_status != HCI_SUCCESS) {
         p_scb->role &= ~BTA_AV_ROLE_START_INT;
-        bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+        bta_sys_idle(BTA_ID_AV,
+                     com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                      : p_scb->hdi,
+                     p_scb->PeerAddress());
         /* start failed because of role switch. */
         tBTA_AV bta_av_data = {
                 .start =
@@ -779,7 +783,7 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   switch (p_data->api_open.switch_res) {
     case BTA_AV_RS_NONE:
-      if (bta_av_switch_if_needed(p_scb) || !bta_av_link_role_ok(p_scb, A2DP_SET_MULTL_BIT)) {
+      if (!bta_av_link_role_ok(p_scb, A2DP_SET_MULTL_BIT)) {
         /* waiting for role switch result. save the api to control block */
         memcpy(&p_scb->q_info.open, &p_data->api_open, sizeof(tBTA_AV_API_OPEN));
         p_scb->wait |= BTA_AV_WAIT_ROLE_SW_RES_OPEN;
@@ -1033,6 +1037,8 @@ void bta_av_disconnect_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
   tBTA_AV_RCB* p_rcb;
 
   log::verbose("conn_lcb: 0x{:x} peer_addr: {}", bta_av_cb.conn_lcb, p_scb->PeerAddress());
+  //enable sniff when AV profile got disconnected.
+  get_btm_client_interface().link_policy.BTM_unblock_sniff_mode_for(p_scb->PeerAddress());
 
   alarm_cancel(p_scb->link_signalling_timer);
   alarm_cancel(p_scb->accept_signalling_timer);
@@ -1098,7 +1104,6 @@ void bta_av_security_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
  ******************************************************************************/
 void bta_av_setconfig_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   uint8_t avdt_handle = p_data->ci_setconfig.avdt_handle;
-  int i;
   uint8_t local_sep;
 
   /* we like this codec_type. find the sep_idx */
@@ -1868,11 +1873,11 @@ void bta_av_setconfig_rej(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   tBTA_AV bta_av_data;
 
   bta_av_data = {
-    .reject =
-    {
-      .bd_addr = p_scb->PeerAddress(),
-      .hndl = p_scb->hndl,
-    },
+          .reject =
+                  {
+                          .bd_addr = p_scb->PeerAddress(),
+                          .hndl = p_scb->hndl,
+                  },
   };
 
   (*bta_av_cb.p_cback)(BTA_AV_REJECT_EVT, &bta_av_data);
@@ -1927,7 +1932,7 @@ void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       p_scb->wait, p_scb->hdi);
   if (bta_av_cb.sco_occupied) {
     log::warn("A2dp stream start failed");
-    bta_av_start_failed(p_scb, p_data);
+    bta_av_start_failed(p_scb, nullptr);
     return;
   }
 
@@ -1961,14 +1966,17 @@ void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
 
   p_scb->role |= BTA_AV_ROLE_START_INT;
-  bta_sys_busy(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
   /* disallow role switch during streaming, only if we are the central role
    * i.e. allow role switch, if we are peripheral.
    * It would not hurt us, if the peer device wants us to be central
    * disable sniff mode unconditionally during streaming */
   tHCI_ROLE cur_role;
-  if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), &cur_role) ==
-       tBTM_STATUS::BTM_SUCCESS) &&
+  if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), BT_TRANSPORT_BR_EDR,
+                                                          &cur_role) == tBTM_STATUS::BTM_SUCCESS) &&
       (cur_role == HCI_ROLE_CENTRAL)) {
     BTM_block_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   } else {
@@ -1978,7 +1986,7 @@ void bta_av_do_start(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   uint16_t result = AVDT_StartReq(&p_scb->avdt_handle, 1);
   if (result != AVDT_SUCCESS) {
     log::error("AVDT_StartReq failed for peer {} result:{}", p_scb->PeerAddress(), result);
-    bta_av_start_failed(p_scb, p_data);
+    bta_av_start_failed(p_scb, nullptr);
   } else if (p_data) {
     bta_av_set_use_latency_mode(p_scb, p_data->do_start.use_latency_mode);
   }
@@ -2013,7 +2021,10 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
   if(!is_delay_subrate) {
     log::info("Not delaying Sniff Subrating");
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                  : p_scb->hdi,
+                 p_scb->PeerAddress());
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
 
@@ -2041,7 +2052,9 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   if (com::android::bluetooth::flags::delay_sniff_subrating()) {
     log::info("Delayed Sniff Subrating");
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id : p_scb->hdi,
+                 p_scb->PeerAddress());
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
 
@@ -2072,8 +2085,7 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   if (p_data && p_data->api_stop.suspend) {
     log::verbose("peer {} suspending: {}, sup:{}, suspending: {}", p_scb->PeerAddress(), start,
                  p_scb->suspend_sup, p_scb->suspending);
-    if ((start) && (p_scb->suspend_sup) && (!p_scb->suspend_local_sent) &&
-        ((!p_scb->suspending) || !com::android::bluetooth::flags::avdtp_prevent_double_suspend())) {
+    if ((start) && (p_scb->suspend_sup) && (!p_scb->suspend_local_sent) && !p_scb->suspending) {
       sus_evt = false;
       p_scb->suspend_local_sent = true;
       p_scb->suspending = true;
@@ -2386,7 +2398,10 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   if (p_data && (p_data->hdr.offset != BTA_AV_RS_NONE)) {
     p_scb->wait &= ~BTA_AV_WAIT_ROLE_SW_BITS;
     if (p_data->hdr.offset == BTA_AV_RS_FAIL) {
-      bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+      bta_sys_idle(BTA_ID_AV,
+                   com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                    : p_scb->hdi,
+                   p_scb->PeerAddress());
       tBTA_AV bta_av_data = {
               .start =
                       {
@@ -2435,7 +2450,10 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   /* tell role manager to check M/S role */
   bta_sys_conn_open(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
 
-  bta_sys_busy(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
 
   if (p_scb->media_type == AVDT_MEDIA_TYPE_AUDIO) {
     /* in normal logic, conns should be bta_av_cb.audio_count - 1,
@@ -2462,19 +2480,18 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   }
 
   {
-    /* If sink starts stream, disable sniff mode here */
+    /* If sink starts stream, do not disable sniff mode here */
     if (!initiator) {
       /* If source is the central role, disable role switch during streaming.
        * Otherwise allow role switch, if source is peripheral.
        * Because it would not hurt source, if the peer device wants source to be
        * central.
-       * disable sniff mode unconditionally during streaming */
-      if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(), &cur_role) ==
+       * do not disable sniff mode unconditionally during streaming */
+      if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(),
+                                                              BT_TRANSPORT_BR_EDR, &cur_role) ==
            tBTM_STATUS::BTM_SUCCESS) &&
           (cur_role == HCI_ROLE_CENTRAL)) {
-        BTM_block_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
-      } else {
-        get_btm_client_interface().link_policy.BTM_block_sniff_mode_for(p_scb->PeerAddress());
+         get_btm_client_interface().link_policy.BTM_block_role_switch_for(p_scb->PeerAddress());
       }
     }
 
@@ -2528,14 +2545,26 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_av_start_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
-  log::info(
-      "peer {} bta_handle:0x{:x} p_scb->hdi:{} started:{} co_started:{}",
-      p_scb->PeerAddress(), p_scb->hndl, p_scb->hdi,
-      p_scb->started, p_scb->co_started);
+void bta_av_start_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
+  uint8_t err_code = p_data ? p_data->str_msg.msg.start_cfm.err_code : -1;
+
+  log::error(
+      "peer {} bta_handle:0x{:x} audio_open_cnt:{} started:{} co_started:{} status:{} hdi:{}",
+      p_scb->PeerAddress(), p_scb->hndl, bta_av_cb.audio_open_cnt, p_scb->started,
+      p_scb->co_started, err_code, p_scb->hdi);
 
   if (!p_scb->started && !p_scb->co_started) {
-    bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
+    bta_sys_idle(BTA_ID_AV,
+                 com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                  : p_scb->hdi,
+                 p_scb->PeerAddress());
+
+    if (com::android::bluetooth::flags::avdt_close_on_start_failure_bad_state() &&
+        err_code == AVDT_ERR_BAD_STATE) {
+      /* START failed. Close connection. */
+      bta_av_ssm_execute(p_scb, BTA_AV_API_CLOSE_EVT, NULL);
+    }
+
     notify_start_failed(p_scb);
   }
 
@@ -2666,8 +2695,11 @@ void bta_av_suspend_cfm(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->cong = false;
   }
 
-  bta_sys_idle(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
-  BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
+  bta_sys_idle(BTA_ID_AV,
+               com::android::bluetooth::flags::a2dp_pm_app_id() ? p_scb->app_id
+                                                                : p_scb->hdi,
+               p_scb->PeerAddress());
+  get_btm_client_interface().link_policy.BTM_unblock_role_switch_for(p_scb->PeerAddress());
 
   /* in case that we received suspend_ind, we may need to call co_stop here */
   if (p_scb->co_started) {
@@ -2718,20 +2750,18 @@ void bta_av_rcfg_str_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->p_cos->update_mtu(p_scb->hndl, p_scb->PeerAddress(), p_scb->stream_mtu);
   }
 
-  if (com::android::bluetooth::flags::fix_avdt_rconfig_not_setting_l2cap()) {
-    /* Set the media channel as high priority */
-    if (!stack::l2cap::get_interface().L2CA_SetTxPriority(p_scb->l2c_cid,
-                                                          L2CAP_CHNL_PRIORITY_HIGH)) {
-      log::warn("Unable to set L2CAP Tx priority peer:{} cid:{}", p_scb->PeerAddress(),
-                p_scb->l2c_cid);
-    }
-
-    if (!stack::l2cap::get_interface().L2CA_SetChnlFlushability(p_scb->l2c_cid, true)) {
-      log::warn("Unable to set L2CAP flush peer:{} cid:{}", p_scb->PeerAddress(), p_scb->l2c_cid);
-    }
-
-    stack::l2cap::get_interface().L2CA_SetMediaStreamChannel(p_scb->l2c_cid, true);
+  /* Set the media channel as high priority */
+  if (!stack::l2cap::get_interface().L2CA_SetTxPriority(p_scb->l2c_cid,
+                                                        L2CAP_CHNL_PRIORITY_HIGH)) {
+    log::warn("Unable to set L2CAP Tx priority peer:{} cid:{}", p_scb->PeerAddress(),
+              p_scb->l2c_cid);
   }
+
+  if (!stack::l2cap::get_interface().L2CA_SetChnlFlushability(p_scb->l2c_cid, true)) {
+    log::warn("Unable to set L2CAP flush peer:{} cid:{}", p_scb->PeerAddress(), p_scb->l2c_cid);
+  }
+
+  stack::l2cap::get_interface().L2CA_SetMediaStreamChannel(p_scb->l2c_cid, true);
 
   /* rc listen */
   bta_av_st_rc_timer(p_scb, NULL);
@@ -3409,7 +3439,11 @@ void bta_av_qti_offload_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   /* Check if stream has already been started. */
   /* Support offload if only one audio source stream is open. */
-  if (p_scb->started != true) {
+  if (!p_scb->started) {
+    log::warn("stream not started, start offload failed.");
+    tBTA_AV bta_av_data = {};
+    bta_av_data.status = BTA_AV_FAIL_STREAM;
+    (*bta_av_cb.p_cback)(BTA_AV_OFFLOAD_START_RSP_EVT, &bta_av_data);
     return;
   }
 

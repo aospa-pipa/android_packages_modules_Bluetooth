@@ -21,7 +21,9 @@
  ******************************************************************************/
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <string.h>
 
@@ -45,8 +47,6 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_status.h"
 #include "stack_config.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 #define GAP_ENC_KEY_CONNECTING 1     /* wait for connection */
 #define GAP_ENC_KEY_CHARACTERISTIC 2 /* Read for Enc Key Material Characteristic */

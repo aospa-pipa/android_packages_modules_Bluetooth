@@ -23,6 +23,7 @@
 
 #include <assert.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <ctype.h>
 #include <fcntl.h>
 #include <hardware/bluetooth.h>
@@ -45,7 +46,6 @@
 #include "osi/include/config.h"
 #include "osi/include/list.h"
 #include "osi/include/osi.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 
@@ -504,6 +504,12 @@ int interop_feature_name_to_feature_id(const char* feature_name) {
   return it->second;
 }
 
+static bool interop_addr_from_str(const std::string& str, RawAddress* out) {
+  auto addr = RawAddress::FromString(str);
+  *out = addr.value_or(RawAddress::kEmpty);
+  return addr.has_value();
+}
+
 static bool interop_config_add_or_remove(interop_db_entry_t* db_entry, bool add) {
   bool status = true;
   std::string key;
@@ -515,8 +521,7 @@ static bool interop_config_add_or_remove(interop_db_entry_t* db_entry, bool add)
     case INTEROP_BL_TYPE_ADDR: {
       interop_addr_entry_t addr_entry = db_entry->entry_type.addr_entry;
 
-      const std::string bdstr =
-              addr_entry.addr.ToColonSepHexString().substr(0, addr_entry.length * 3 - 1);
+      const std::string bdstr = addr_entry.addr.ToString().substr(0, addr_entry.length * 3 - 1);
 
       feature = db_entry->entry_type.addr_entry.feature;
       key.assign(bdstr);
@@ -558,7 +563,7 @@ static bool interop_config_add_or_remove(interop_db_entry_t* db_entry, bool add)
       interop_hid_ssr_max_lat_t ssr_entry = db_entry->entry_type.ssr_max_lat_entry;
       char m_ssr_max_lat[KEY_MAX_LENGTH] = {'\0'};
 
-      const std::string bdstr = ssr_entry.addr.ToColonSepHexString().substr(0, 3 * 3 - 1);
+      const std::string bdstr = ssr_entry.addr.ToString().substr(0, 3 * 3 - 1);
 
       snprintf(m_ssr_max_lat, sizeof(m_ssr_max_lat), "%s-0x%04x", bdstr.c_str(),
                db_entry->entry_type.ssr_max_lat_entry.max_lat);
@@ -582,7 +587,7 @@ static bool interop_config_add_or_remove(interop_db_entry_t* db_entry, bool add)
     case INTEROP_BL_TYPE_LMP_VERSION: {
       interop_lmp_version_t lmp_version_entry = db_entry->entry_type.lmp_version_entry;
       char m_lmp_version[KEY_MAX_LENGTH] = {'\0'};
-      const std::string bdstr = lmp_version_entry.addr.ToColonSepHexString().substr(0, 3 * 3 - 1);
+      const std::string bdstr = lmp_version_entry.addr.ToString().substr(0, 3 * 3 - 1);
 
       snprintf(m_lmp_version, sizeof(m_lmp_version), "%s-0x%02x-0x%04x", bdstr.c_str(),
                db_entry->entry_type.lmp_version_entry.lmp_ver,
@@ -853,7 +858,7 @@ static bool get_addr_range(char* str, RawAddress* addr_start, RawAddress* addr_e
   if ((token = strtok_r(str, VENDOR_VALUE_SEPARATOR, &saveptr)) != NULL) {
     trim(token);
     osi_strlcpy(addr_start_str, token, 18);
-    if (!RawAddress::FromString(addr_start_str, *addr_start)) {
+    if (!interop_addr_from_str(addr_start_str, addr_start)) {
       return false;
     }
   } else {
@@ -863,7 +868,7 @@ static bool get_addr_range(char* str, RawAddress* addr_start, RawAddress* addr_e
   if ((token = strtok_r(NULL, VENDOR_VALUE_SEPARATOR, &saveptr)) != NULL) {
     trim(token);
     osi_strlcpy(addr_end_str, token, 18);
-    if (RawAddress::FromString(addr_end_str, *addr_end)) {
+    if (interop_addr_from_str(addr_end_str, addr_end)) {
       ret_value = true;
     }
   }
@@ -917,7 +922,7 @@ static bool load_to_database(int feature, const char* key, const char* value,
       bdstr.append(append_str);
     }
 
-    if (!RawAddress::FromString(bdstr, addr)) {
+    if (!interop_addr_from_str(bdstr, &addr)) {
       log::warn("key {} or Bluetooth Address {} is invalid, not added to interop list", key, addr);
       return false;
     }
@@ -1015,7 +1020,7 @@ static bool load_to_database(int feature, const char* key, const char* value,
 
     bdstr.append(append_str);
 
-    if (!RawAddress::FromString(bdstr, addr)) {
+    if (!interop_addr_from_str(bdstr, &addr)) {
       log::warn("key {} or Bluetooth Address {} is invalid, not added to interop list", key, addr);
       return false;
     }
@@ -1076,7 +1081,7 @@ static bool load_to_database(int feature, const char* key, const char* value,
 
     bdstr.append(append_str);
 
-    if (!RawAddress::FromString(bdstr, addr)) {
+    if (!interop_addr_from_str(bdstr, &addr)) {
       log::warn("key {} or Bluetooth Address {} is invalid, not added to interop list", key, addr);
       return false;
     }

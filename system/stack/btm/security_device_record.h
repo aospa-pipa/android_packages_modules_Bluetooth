@@ -19,6 +19,8 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/remote_version.h>
 
 #include <cstdint>
 #include <string>
@@ -30,8 +32,6 @@
 #include "stack/include/bt_octets.h"
 #include "stack/include/btm_sec_api_types.h"
 #include "stack/include/hci_error_code.h"
-#include "types/ble_address_with_type.h"
-#include "types/remote_version_type.h"
 
 typedef struct {
   uint16_t min_conn_int;
@@ -367,6 +367,7 @@ public:
 
   bool role_central;  /* true if current mode is central (BLE) */
   bool is_originator; /* true if device is originating ACL connection */
+  bool switch_role_after_encryption; /* true if role switch must be requested after encryption */
 
   // BLE connection parameters
   tBTM_LE_CONN_PRAMS conn_params;

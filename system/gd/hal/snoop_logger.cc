@@ -615,6 +615,8 @@ SnoopLogger::SnoopLogger(os::Handler* handler, std::string snoop_log_path,
   alarm_ = std::make_unique<os::RepeatingAlarm>(&handler_->thread());
   alarm_->Schedule(common::Bind(&delete_old_btsnooz_files, snooz_log_path_, snooz_log_life_time_),
                    snooz_log_delete_alarm_interval_);
+
+  log::verbose("SnoopLogger module started !!");
 }
 
 os::Handler* SnoopLogger::GetHandler() { return handler_; }
@@ -1254,9 +1256,7 @@ void SnoopLogger::Capture(const HciPacket& immutable_packet, Direction direction
     timestamp_us -= ((uint64_t)tmp_gmt_offset * 1000000LL);
   }
 #ifdef __ANDROID__
-  if (com::android::bluetooth::flags::snoop_logger_tracing()) {
-    LogTracePoint(packet, direction, type);
-  }
+  LogTracePoint(packet, direction, type);
 #endif  // __ANDROID__
 
   std::bitset<32> flags = 0;
@@ -1419,6 +1419,8 @@ SnoopLogger::~SnoopLogger() {
     handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
     delete handler_;
   }
+
+  log::verbose("SnoopLogger module stoped !!");
 }
 
 size_t SnoopLogger::GetMaxPacketsPerFile() {

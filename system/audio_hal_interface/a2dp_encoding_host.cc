@@ -17,6 +17,7 @@
 #include "a2dp_encoding_host.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <grp.h>
 #include <sys/stat.h>
 
@@ -28,7 +29,6 @@
 #include "btif/include/btif_av.h"
 #include "btif/include/btif_hf.h"
 #include "stack/include/avdt_api.h"
-#include "types/raw_address.h"
 #include "udrv/include/uipc.h"
 
 #define A2DP_DATA_READ_POLL_MS 10
@@ -393,6 +393,8 @@ tA2DP_STATUS parse_a2dp_configuration(::bluetooth::a2dp::CodecId /* codec_id */,
 }
 
 }  // namespace provider
+
+std::optional<btav_a2dp_hal_provider_info_t> get_provider_info() { return std::nullopt; }
 
 }  // namespace a2dp
 }  // namespace audio

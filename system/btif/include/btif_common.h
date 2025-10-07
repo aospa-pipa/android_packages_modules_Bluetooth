@@ -23,6 +23,7 @@
 #include <base/functional/bind.h>
 #include <base/location.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <hardware/bluetooth.h>
 #include <stdlib.h>
 
@@ -32,7 +33,6 @@
 #include "bta/include/bta_api.h"
 #include "osi/include/osi.h"
 #include "stack/include/bt_hdr.h"
-#include "types/ble_address_with_type.h"
 
 /*******************************************************************************
  *  Constants & Macros
@@ -166,4 +166,5 @@ void invoke_switch_buffer_size_cb(bool is_low_latency_buffer_size);
 void invoke_switch_codec_cb(bool is_low_latency_buffer_size);
 void invoke_key_missing_cb(tBTA_DM_KEY_MISSING key_missing);
 void invoke_encryption_change_cb(bt_encryption_change_evt encryption_change);
+void invoke_ssr_event_cb();
 #endif /* BTIF_COMMON_H */

@@ -16,8 +16,6 @@
 
 #include "hci/acl_manager/acl_manager_le_impl.h"
 
-#include <bluetooth/log.h>
-
 #include <format>
 #include <string>
 
@@ -46,8 +44,8 @@ AclManagerLeImpl::AclManagerLeImpl(os::Handler* handler, hci::HciInterface& hci,
       round_robin_scheduler_(round_robin_scheduler),
       le_impl_(hci, controller, handler_, round_robin_scheduler, storage_module,
                crash_on_unknown_handle, classic_acl_count_provider) {
-  log::info("constructing AclManagerLeImpl");
   hci.SetLeAclDataConsumer(this);
+  log::verbose("AclManagerLe module started !!");
 }
 
 void AclManagerLeImpl::RegisterLeCallbacks(LeConnectionCallbacks* callbacks, os::Handler* handler) {
@@ -145,8 +143,8 @@ void AclManagerLeImpl::OnLeSuspendInitiatedDisconnect(uint16_t handle, ErrorCode
   handler_->CallOn(&le_impl_, &le_impl::on_le_disconnect, handle, reason);
 }
 
-void AclManagerLeImpl::SetSystemSuspendState(bool suspended) {
-  handler_->CallOn(&le_impl_, &le_impl::set_system_suspend_state, suspended);
+void AclManagerLeImpl::SetSystemSuspendState(bool suspended, std::promise<void> promise) {
+  handler_->CallOn(&le_impl_, &le_impl::set_system_suspend_state, suspended, std::move(promise));
 }
 
 LeAddressManager* AclManagerLeImpl::GetLeAddressManager() { return le_impl_.le_address_manager_; }

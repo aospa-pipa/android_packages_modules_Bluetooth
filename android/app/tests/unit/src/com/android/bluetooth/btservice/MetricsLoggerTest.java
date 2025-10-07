@@ -32,9 +32,9 @@ import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
 import android.provider.Settings;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMetricsProto.BluetoothRemoteDeviceInformation;
 import com.android.bluetooth.BluetoothStatsLog;
@@ -100,8 +100,8 @@ public class MetricsLoggerTest {
     @Mock private RemoteDevices mRemoteDevices;
 
     private static class TestableMetricsLogger extends MetricsLogger {
-        public final HashMap<Integer, Long> mTestableCounters = new HashMap<>();
-        public final HashMap<String, Integer> mTestableDeviceNames = new HashMap<>();
+        final HashMap<Integer, Long> mTestableCounters = new HashMap<>();
+        final HashMap<String, Integer> mTestableDeviceNames = new HashMap<>();
 
         @Override
         public boolean count(int key, long count) {

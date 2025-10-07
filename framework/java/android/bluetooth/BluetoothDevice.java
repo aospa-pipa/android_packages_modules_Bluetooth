@@ -179,8 +179,9 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * contain the extra fields {@link #EXTRA_NAME} and/or {@link #EXTRA_RSSI} and/or {@link
      * #EXTRA_IS_COORDINATED_SET_MEMBER} if they are available.
      *
-     * <p>It can contain the extra field {@link #EXTRA_DISCOVERY_RESULT_TYPE}. Based on the
-     * discovery result type, it can contain extra fields for UUIDs:
+     * <p>From {@link Build.VERSION_CODES_FULL.BAKLAVA_1}, it contains the extra field {@link
+     * #EXTRA_DISCOVERY_RESULT_TYPE}. Based on the discovery result type, it can contain extra
+     * fields for UUIDs:
      *
      * <ul>
      *   <li>If {@link #EXTRA_DISCOVERY_RESULT_TYPE} is {@link #DEVICE_TYPE_CLASSIC}, it can contain
@@ -2769,7 +2770,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @RequiresPermission(BLUETOOTH_CONNECT)
     public ParcelUuid[] getUuids() {
         final IBluetooth service = getService();
-        if (service == null || !isBluetoothEnabled()) {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (service == null || (adapter != null && adapter.getState() != BluetoothAdapter.STATE_ON && adapter.getState() != BluetoothAdapter.STATE_TURNING_ON)) {
             Log.e(TAG, "BT not enabled. Cannot get remote device Uuids");
             if (DBG) log(Log.getStackTraceString(new Throwable()));
         } else {
@@ -3233,8 +3235,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * the authentication of the link key to prevent person-in-the-middle type of attacks. For
      * example, for Bluetooth 2.1 devices, if any of the devices does not have an input and output
      * capability or just has the ability to display a numeric key, a secure socket connection is
-     * not possible. In such a case, use {@link createInsecureRfcommSocket}. For more details, refer
-     * to the Security Model section 5.2 (vol 3) of Bluetooth Core Specification version 2.1 + EDR.
+     * not possible. For more details, refer to the Security Model section 5.2 (vol 3) of Bluetooth
+     * Core Specification version 2.1 + EDR.
      *
      * <p>Use {@link BluetoothSocket#connect} to initiate the outgoing connection.
      *
@@ -3253,6 +3255,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             Log.e(TAG, "Bluetooth is not enabled");
             throw new IOException();
         }
+        if (channel != BluetoothAdapter.SOCKET_CHANNEL_AUTO_STATIC_NO_SDP
+                && (channel < 1 || channel > BluetoothSocket.MAX_RFCOMM_CHANNEL)) {
+            throw new IOException("Invalid RFCOMM channel: " + channel);
+        }
         return new BluetoothSocket(this, BluetoothSocket.TYPE_RFCOMM, true, true, channel, null);
     }
 
@@ -3267,8 +3273,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * the authentication of the link key to prevent person-in-the-middle type of attacks. For
      * example, for Bluetooth 2.1 devices, if any of the devices does not have an input and output
      * capability or just has the ability to display a numeric key, a secure socket connection is
-     * not possible. In such a case, use {@link createInsecureRfcommSocket}. For more details, refer
-     * to the Security Model section 5.2 (vol 3) of Bluetooth Core Specification version 2.1 + EDR.
+     * not possible. For more details, refer to the Security Model section 5.2 (vol 3) of Bluetooth
+     * Core Specification version 2.1 + EDR.
      *
      * <p>Use {@link BluetoothSocket#connect} to initiate the outgoing connection.
      *
@@ -3276,12 +3282,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @param channel L2cap PSM/channel to connect to
      * @return a RFCOMM BluetoothServerSocket ready for an outgoing connection
-     * @throws IOException on error, for example Bluetooth not available, or insufficient
-     *     permissions
      * @hide
      */
     @RequiresNoPermission
-    public BluetoothSocket createL2capSocket(int channel) throws IOException {
+    public BluetoothSocket createL2capSocket(int channel) {
         return new BluetoothSocket(this, BluetoothSocket.TYPE_L2CAP, true, true, channel, null);
     }
 
@@ -3298,12 +3302,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @param channel L2cap PSM/channel to connect to
      * @return a RFCOMM BluetoothServerSocket ready for an outgoing connection
-     * @throws IOException on error, for example Bluetooth not available, or insufficient
-     *     permissions
      * @hide
      */
     @RequiresNoPermission
-    public BluetoothSocket createInsecureL2capSocket(int channel) throws IOException {
+    public BluetoothSocket createInsecureL2capSocket(int channel) {
         return new BluetoothSocket(this, BluetoothSocket.TYPE_L2CAP, false, false, channel, null);
     }
 
@@ -3392,7 +3394,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * the returned #BluetoothSocket to begin the connection. The remote device will not be
      * authenticated and communication on this socket will not be encrypted.
      *
-     * @param port remote port
+     * @param channel remote channel
      * @return An RFCOMM BluetoothSocket
      * @throws IOException On error, for example Bluetooth not available, or insufficient
      *     permissions.
@@ -3401,12 +3403,18 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @UnsupportedAppUsage(
             publicAlternatives = "Use {@link #createInsecureRfcommSocketToServiceRecord} instead.")
     @RequiresNoPermission
-    public BluetoothSocket createInsecureRfcommSocket(int port) throws IOException {
+    public BluetoothSocket createInsecureRfcommSocket(int channel) throws IOException {
+        // TODO replace usage to createInsecureRfcommSocketToServiceRecord
         if (!isBluetoothEnabled()) {
             Log.e(TAG, "Bluetooth is not enabled");
             throw new IOException();
         }
-        return new BluetoothSocket(this, BluetoothSocket.TYPE_RFCOMM, false, false, port, null);
+
+        if (channel != BluetoothAdapter.SOCKET_CHANNEL_AUTO_STATIC_NO_SDP
+                && (channel < 1 || channel > BluetoothSocket.MAX_RFCOMM_CHANNEL)) {
+            throw new IOException("Invalid RFCOMM channel: " + channel);
+        }
+        return new BluetoothSocket(this, BluetoothSocket.TYPE_RFCOMM, false, false, channel, null);
     }
 
     /**
@@ -3679,7 +3687,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             throw new IOException();
         }
         if (DBG) Log.d(TAG, "createL2capChannel: psm=" + psm);
-        return new BluetoothSocket(this, BluetoothSocket.TYPE_L2CAP_LE, true, true, psm, null);
+        return new BluetoothSocket(this, BluetoothSocket.TYPE_LE, true, true, psm, null);
     }
 
     /**
@@ -3712,7 +3720,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
         if (DBG) {
             Log.d(TAG, "createInsecureL2capChannel: psm=" + psm);
         }
-        return new BluetoothSocket(this, BluetoothSocket.TYPE_L2CAP_LE, false, false, psm, null);
+        return new BluetoothSocket(this, BluetoothSocket.TYPE_LE, false, false, psm, null);
     }
 
     /**
@@ -3738,7 +3746,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *     as input or if BluetoothSocket#TYPE_LE with invalid PSM is passed.
      * @throws IOException on error, for example Bluetooth not available.
      */
-    @FlaggedApi(Flags.FLAG_SOCKET_SETTINGS_API)
     @RequiresNoPermission
     public @NonNull BluetoothSocket createUsingSocketSettings(
             @NonNull BluetoothSocketSettings settings) throws IOException {

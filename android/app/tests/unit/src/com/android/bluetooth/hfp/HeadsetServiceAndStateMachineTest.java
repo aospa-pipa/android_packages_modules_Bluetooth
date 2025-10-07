@@ -21,9 +21,7 @@ import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_UNKNOWN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
-import static android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO;
-import static android.media.audio.Flags.scoManagedByAudio;
-import static android.media.audio.Flags.unifyAbsoluteVolumeManagement;
+import static android.platform.test.flag.junit.DeviceFlagsValueProvider.createCheckFlagsRule;
 
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasAction;
 import static androidx.test.espresso.intent.matcher.IntentMatchers.hasData;
@@ -69,8 +67,10 @@ import android.os.ParcelUuid;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.os.SystemProperties;
-import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
+import android.platform.test.annotations.RequiresFlagsDisabled;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.telecom.PhoneAccount;
 
@@ -119,11 +119,11 @@ public class HeadsetServiceAndStateMachineTest {
     private static final String TAG = HeadsetServiceAndStateMachineTest.class.getSimpleName();
 
     @Rule public final SetFlagsRule mSetFlagsRule;
+    @Rule public final CheckFlagsRule mCheckFlagsRule = createCheckFlagsRule();
 
     @Parameters(name = "{0}")
     public static List<FlagsWrapper> getParams() {
-        return FlagsWrapper.progressionOf(
-                FLAG_SCO_MANAGED_BY_AUDIO, Flags.FLAG_VOICE_RECOGNITION_FIXES);
+        return FlagsWrapper.progressionOf(Flags.FLAG_VOICE_RECOGNITION_FIXES);
     }
 
     public HeadsetServiceAndStateMachineTest(FlagsWrapper flags) {
@@ -201,12 +201,15 @@ public class HeadsetServiceAndStateMachineTest {
         doReturn(mPhoneState).when(mSystemInterface).getHeadsetPhoneState();
         doReturn(mAudioManager).when(mSystemInterface).getAudioManager();
         doReturn(mAudioDeviceVolumeManager).when(mSystemInterface).getAudioDeviceVolumeManager();
-        doReturn(true).when(mSystemInterface).activateVoiceRecognition();
-        doReturn(true).when(mSystemInterface).deactivateVoiceRecognition();
+        doReturn(true).when(mSystemInterface).activateVoiceRecognition(any(BluetoothDevice.class));
+        doReturn(true)
+                .when(mSystemInterface)
+                .deactivateVoiceRecognition(any(BluetoothDevice.class));
         doReturn(mVoiceRecognitionWakeLock).when(mSystemInterface).getVoiceRecognitionWakeLock();
         doReturn(true).when(mSystemInterface).isCallIdle();
         doReturn(false).when(mSystemInterface).isScoManagedByAudioEnabled();
-        if (scoManagedByAudio()) {
+        doReturn(true).when(mSystemInterface).requestBluetoothAudio(any(BluetoothDevice.class));
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             doReturn(true).when(mSystemInterface).isScoManagedByAudioEnabled();
         }
         // Mock methods in HeadsetNativeInterface
@@ -230,31 +233,32 @@ public class HeadsetServiceAndStateMachineTest {
         doCallRealMethod()
                 .when(mObjectsFactory)
                 .makeStateMachine(any(), any(), any(), any(), any(), any());
-        // Mock methods in HeadsetObjectsFactory
-        doReturn(mSystemInterface).when(mObjectsFactory).makeSystemInterface(any(), any(), any());
-
         mTestLooper = new TestLooper();
 
         mHeadsetService =
-                new HeadsetService(mAdapterService, mNativeInterface, mTestLooper.getLooper());
+                new HeadsetService(
+                        mAdapterService,
+                        mNativeInterface,
+                        mSystemInterface,
+                        mTestLooper.getLooper());
         mHeadsetService.setAvailable(true);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager)
                     .registerAudioDeviceCallback(
                             mAudioDeviceCallbackArgumentCaptor.capture(), any());
         }
 
-        verify(mObjectsFactory)
-                .makeSystemInterface(mAdapterService, mHeadsetService, mTestLooper.getLooper());
         verify(mNativeInterface).init(MAX_HEADSET_CONNECTIONS + 1, true /* inband ringtone */);
-        verify(mNativeInterface).setIsScoManagedByAudio(scoManagedByAudio());
+        verify(mNativeInterface)
+                .setIsScoManagedByAudio(android.media.audio.Flags.scoManagedByAudio());
 
         // Set up the Connection State Changed receiver
+        BluetoothDevice device = mHeadsetService.getActiveDevice();
         verify(mNativeInterface)
                 .enableSwb(
                         eq(HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX),
                         anyBoolean(),
-                        eq(mHeadsetService.getActiveDevice()));
+                        eq(device));
     }
 
     @After
@@ -287,7 +291,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testConnectFromApi() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -328,7 +332,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testUnbondDevice_disconnectBeforeUnbond() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -372,7 +376,7 @@ public class HeadsetServiceAndStateMachineTest {
     public void testUnbondDevice_disconnectAfterUnbond() {
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         mBondedDevices.add(device);
         assertThat(mHeadsetService.connect(device)).isTrue();
@@ -446,7 +450,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(activeDevice)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(activeDevice);
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChangedIntent(activeDevice);
         } else {
             verifyActiveDeviceChanged_scoManagement(activeDevice);
@@ -489,7 +493,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(activeDevice)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(activeDevice);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChanged_scoManagement(activeDevice);
         } else {
             verifyActiveDeviceChangedIntent(activeDevice);
@@ -537,7 +541,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(activeDevice)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(activeDevice);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChanged_scoManagement(activeDevice);
         } else {
             verifyActiveDeviceChangedIntent(activeDevice);
@@ -591,7 +595,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(activeDevice)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(activeDevice);
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChangedIntent(activeDevice);
         } else {
             verifyActiveDeviceChanged_scoManagement(activeDevice);
@@ -607,7 +611,7 @@ public class HeadsetServiceAndStateMachineTest {
         Uri dialOutUri = Uri.fromParts(PhoneAccount.SCHEME_TEL, TEST_PHONE_NUMBER, null);
         mHeadsetService.messageFromNative(dialingOutEvent);
         mTestLooper.dispatchAll();
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChangedIntent(dialingOutDevice);
         } else {
             verifyActiveDeviceChanged_scoManagement(dialingOutDevice);
@@ -636,13 +640,7 @@ public class HeadsetServiceAndStateMachineTest {
         mTestLooper.dispatchAll();
         verify(mNativeInterface)
                 .atResponseCode(activeDevice, HeadsetHalConstants.AT_RESPONSE_ERROR, 0);
-        mInOrder.verify(mAdapterService, times(0))
-                .sendBroadcastAsUser(
-                        MockitoHamcrest.argThat(
-                                hasAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED)),
-                        any(),
-                        any(),
-                        any());
+        verifyNoIntentSent();
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(dialingOutDevice);
 
         // Make sure only one intent is fired
@@ -694,7 +692,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(activeDevice)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(activeDevice);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChanged_scoManagement(activeDevice);
         } else {
             verifyActiveDeviceChangedIntent(activeDevice);
@@ -715,7 +713,7 @@ public class HeadsetServiceAndStateMachineTest {
         Uri dialOutUri = Uri.fromParts(PhoneAccount.SCHEME_TEL, TEST_PHONE_NUMBER, null);
         mHeadsetService.messageFromNative(dialingOutEvent);
         mTestLooper.dispatchAll();
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verifyActiveDeviceChanged_scoManagement(dialingOutDevice);
         } else {
             verifyActiveDeviceChangedIntent(dialingOutDevice);
@@ -743,7 +741,7 @@ public class HeadsetServiceAndStateMachineTest {
      * <p>Reference: Section 4.25, Page 64/144 of HFP 1.7.1 specification
      */
     @Test
-    @DisableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsDisabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testVoiceRecognition_SingleHfInitiatedSuccess() {
         // Connect HF
         BluetoothDevice device = getTestDevice(0);
@@ -764,7 +762,7 @@ public class HeadsetServiceAndStateMachineTest {
      * SCO connection is handled by the Audio Framework
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testVoiceRecognition_SingleHfInitiatedSuccess_ScoManagedByAudio() {
         // Connect HF
         BluetoothDevice device = getTestDevice(0);
@@ -773,6 +771,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        verifyActiveDeviceChanged_scoManagement(device);
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
@@ -795,10 +794,15 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
+            startVoiceRecognitionFromHf(device);
+        } else {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
             // Since we're mocking audio framework behavior, need to move the state machine to
             // AudioConnected for stopVoiceRecognition to process
@@ -816,8 +820,6 @@ public class HeadsetServiceAndStateMachineTest {
                             HeadsetHalConstants.AUDIO_STATE_CONNECTED,
                             device));
             mTestLooper.dispatchAll();
-        } else {
-            startVoiceRecognitionFromHf(device);
         }
         // Stop voice recognition
         HeadsetStackEvent stopVrEvent =
@@ -828,10 +830,10 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(stopVrEvent);
         mTestLooper.dispatchAll();
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).deactivateVoiceRecognition();
+        verify(mSystemInterface).deactivateVoiceRecognition(device);
         verify(mNativeInterface, times(2))
                 .atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_OK, 0);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).clearCommunicationDevice();
         } else {
             verify(mNativeInterface).disconnectAudio(device);
@@ -842,7 +844,7 @@ public class HeadsetServiceAndStateMachineTest {
                         anyBoolean(),
                         eq(device));
 
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             // Extra interaction since disconnectAudio calls setActiveDevice which calls
             // sendBsir.  ClearCommunicationDevice would trigger the audio framework callback
             // if it's not mocked.
@@ -860,14 +862,17 @@ public class HeadsetServiceAndStateMachineTest {
      */
     @Test
     public void testVoiceRecognition_SingleHfInitiatedFailedToActivate() {
-        doReturn(false).when(mSystemInterface).activateVoiceRecognition();
         // Connect HF
         BluetoothDevice device = getTestDevice(0);
         connectTestDevice(device);
+        doReturn(false).when(mSystemInterface).activateVoiceRecognition(device);
         // Make device active
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
@@ -878,13 +883,11 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(startVrEvent);
         mTestLooper.dispatchAll();
-        if (scoManagedByAudio()) {
-            verifyActiveDeviceChanged_scoManagement(device);
-        }
-        verify(mSystemInterface).activateVoiceRecognition();
+        verify(mSystemInterface).activateVoiceRecognition(device);
         verify(mNativeInterface).atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_ERROR, 0);
         verifyNoMoreInteractions(ignoreStubs(mNativeInterface));
-        if (!unifyAbsoluteVolumeManagement() && !scoManagedByAudio()) {
+        if (!android.media.audio.Flags.unifyAbsoluteVolumeManagement()
+                && !android.media.audio.Flags.scoManagedByAudio()) {
             verifyNoMoreInteractions(mAudioManager);
         }
     }
@@ -905,6 +908,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
@@ -915,11 +921,8 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(startVrEvent);
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).activateVoiceRecognition();
-        if (scoManagedByAudio()) {
-            verifyActiveDeviceChanged_scoManagement(device);
-        }
-
+        verify(mSystemInterface).activateVoiceRecognition(device);
+        assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         mTestLooper.moveTimeForward(mHeadsetService.sStartVrTimeoutMs); // Trigger timeout
         mTestLooper.dispatchAll();
         verify(mNativeInterface).atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_ERROR, 0);
@@ -930,7 +933,8 @@ public class HeadsetServiceAndStateMachineTest {
                         anyBoolean(),
                         eq(device));
         verifyNoMoreInteractions(ignoreStubs(mNativeInterface));
-        if (!unifyAbsoluteVolumeManagement() && !scoManagedByAudio()) {
+        if (!android.media.audio.Flags.unifyAbsoluteVolumeManagement()
+                && !android.media.audio.Flags.scoManagedByAudio()) {
             verifyNoMoreInteractions(mAudioManager);
         }
     }
@@ -944,7 +948,7 @@ public class HeadsetServiceAndStateMachineTest {
      * <p>Reference: Section 4.25, Page 64/144 of HFP 1.7.1 specification
      */
     @Test
-    @DisableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsDisabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testVoiceRecognition_SingleAgInitiatedSuccess() {
         // Connect HF
         BluetoothDevice device = getTestDevice(0);
@@ -965,7 +969,7 @@ public class HeadsetServiceAndStateMachineTest {
      * SCO connection is handled by the Audio Framework
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testVoiceRecognition_SingleAgInitiatedSuccess_ScoManagedByAudio() {
         // Connect HF
         BluetoothDevice device = getTestDevice(0);
@@ -974,6 +978,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        verifyActiveDeviceChanged_scoManagement(device);
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
@@ -997,10 +1002,13 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromAg_ScoManagedByAudio();
         } else {
             startVoiceRecognitionFromAg();
@@ -1009,7 +1017,7 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.stopVoiceRecognition(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).stopVoiceRecognition(device);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).clearCommunicationDevice();
         } else {
             verify(mNativeInterface).disconnectAudio(device);
@@ -1059,7 +1067,7 @@ public class HeadsetServiceAndStateMachineTest {
         connectTestDevice(deviceA);
         BluetoothDevice deviceB = getTestDevice(1);
         connectTestDevice(deviceB);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             when(mAudioDeviceInfo.getType()).thenReturn(AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
             final String deviceBAddress = deviceB.getAddress();
             when(mAudioDeviceInfo.getAddress()).thenReturn(deviceBAddress);
@@ -1080,6 +1088,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(deviceB)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(deviceB);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(deviceB);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceB);
         // Start voice recognition from non active device A
         HeadsetStackEvent startVrEventA =
@@ -1089,9 +1100,12 @@ public class HeadsetServiceAndStateMachineTest {
                         deviceA);
         mHeadsetService.messageFromNative(startVrEventA);
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).activateVoiceRecognition();
+        verify(mSystemInterface).activateVoiceRecognition(deviceA);
         // Active device should have been swapped to device A
         verify(mNativeInterface).setActiveDevice(deviceA);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(deviceA);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceA);
         // Start voice recognition from other device should fail
         HeadsetStackEvent startVrEventB =
@@ -1106,7 +1120,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.startVoiceRecognition(deviceA);
         mTestLooper.dispatchAll();
         verify(mNativeInterface).atResponseCode(deviceA, HeadsetHalConstants.AT_RESPONSE_OK, 0);
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).setA2dpSuspended(true);
             verify(mAudioManager).setLeAudioSuspended(true);
             verify(mNativeInterface).connectAudio(deviceA);
@@ -1143,6 +1157,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(deviceB)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(deviceB);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(deviceB);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceB);
         // Start voice recognition from non active device A
         HeadsetStackEvent startVrEventA =
@@ -1152,9 +1169,12 @@ public class HeadsetServiceAndStateMachineTest {
                         deviceA);
         mHeadsetService.messageFromNative(startVrEventA);
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).activateVoiceRecognition();
+        verify(mSystemInterface).activateVoiceRecognition(deviceA);
         // Active device should have been swapped to device A
         verify(mNativeInterface).setActiveDevice(deviceA);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(deviceA);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceA);
         // Start voice recognition from other device should fail
         HeadsetStackEvent startVrEventB =
@@ -1170,7 +1190,7 @@ public class HeadsetServiceAndStateMachineTest {
         mTestLooper.dispatchAll();
         // We still continue on the initiating HF
         verify(mNativeInterface).atResponseCode(deviceA, HeadsetHalConstants.AT_RESPONSE_OK, 0);
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).setA2dpSuspended(true);
             verify(mAudioManager).setLeAudioSuspended(true);
             verify(mNativeInterface).connectAudio(deviceA);
@@ -1206,9 +1226,12 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(deviceB)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(deviceB);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(deviceB);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceB);
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromAg_ScoManagedByAudio();
         } else {
             startVoiceRecognitionFromAg();
@@ -1222,7 +1245,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(startVrEventA);
         mTestLooper.dispatchAll();
         verify(mNativeInterface).stopVoiceRecognition(deviceB);
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).clearCommunicationDevice();
         } else {
             verify(mNativeInterface).disconnectAudio(deviceB);
@@ -1253,7 +1276,15 @@ public class HeadsetServiceAndStateMachineTest {
         connectTestDevice(deviceA);
         BluetoothDevice deviceB = getTestDevice(1);
         connectTestDevice(deviceB);
-        if (scoManagedByAudio()) {
+        InOrder inOrder = inOrder(mNativeInterface);
+        inOrder.verify(mNativeInterface).sendBsir(eq(deviceA), eq(false));
+        inOrder.verify(mNativeInterface).sendBsir(eq(deviceB), eq(false));
+        // Set active device to device B
+        assertThat(mHeadsetService.setActiveDevice(deviceB)).isTrue();
+        mTestLooper.dispatchAll();
+        verify(mNativeInterface).setActiveDevice(deviceB);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            AudioDeviceCallback callbackVal = mAudioDeviceCallbackArgumentCaptor.getValue();
             when(mAudioDeviceInfo.getType()).thenReturn(AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
             final String deviceBAddress = deviceB.getAddress();
             when(mAudioDeviceInfo.getAddress()).thenReturn(deviceBAddress);
@@ -1266,22 +1297,42 @@ public class HeadsetServiceAndStateMachineTest {
                     .thenReturn(deviceA);
             when(mAudioManager.getAvailableCommunicationDevices())
                     .thenReturn(List.of(mAudioDeviceInfo, mAudioDeviceInfo2));
+            callbackVal.onAudioDevicesAdded(new AudioDeviceInfo[] {mAudioDeviceInfo});
+            assertThat(mHeadsetService.mExposedActiveDevice).isEqualTo(deviceB);
+            verifyIntentSent(
+                    hasAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED),
+                    hasExtra(BluetoothDevice.EXTRA_DEVICE, deviceB));
+            mTestLooper.dispatchAll();
         }
-        InOrder inOrder = inOrder(mNativeInterface);
-        inOrder.verify(mNativeInterface).sendBsir(eq(deviceA), eq(false));
-        inOrder.verify(mNativeInterface).sendBsir(eq(deviceB), eq(false));
-        // Set active device to device B
-        assertThat(mHeadsetService.setActiveDevice(deviceB)).isTrue();
-        mTestLooper.dispatchAll();
-        verify(mNativeInterface).setActiveDevice(deviceB);
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceB);
         // Start voice recognition should succeed
         assertThat(mHeadsetService.startVoiceRecognition(deviceA)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(deviceA);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            AudioDeviceCallback callbackVal = mAudioDeviceCallbackArgumentCaptor.getValue();
+            when(mAudioDeviceInfo.getType()).thenReturn(AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
+            final String deviceBAddress = deviceB.getAddress();
+            when(mAudioDeviceInfo.getAddress()).thenReturn(deviceBAddress);
+            when(mAdapterService.getDeviceFromByte(Utils.getBytesFromAddress(deviceBAddress)))
+                    .thenReturn(deviceB);
+            final String deviceAAddress = deviceA.getAddress();
+            when(mAudioDeviceInfo2.getType()).thenReturn(AudioDeviceInfo.TYPE_BLUETOOTH_SCO);
+            when(mAudioDeviceInfo2.getAddress()).thenReturn(deviceAAddress);
+            when(mAdapterService.getDeviceFromByte(Utils.getBytesFromAddress(deviceAAddress)))
+                    .thenReturn(deviceA);
+            when(mAudioManager.getAvailableCommunicationDevices())
+                    .thenReturn(List.of(mAudioDeviceInfo, mAudioDeviceInfo2));
+            callbackVal.onAudioDevicesAdded(new AudioDeviceInfo[] {mAudioDeviceInfo2});
+            assertThat(mHeadsetService.mExposedActiveDevice).isEqualTo(deviceA);
+            verifyIntentSent(
+                    hasAction(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED),
+                    hasExtra(BluetoothDevice.EXTRA_DEVICE, deviceA));
+            mTestLooper.dispatchAll();
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(deviceA);
         verify(mNativeInterface).startVoiceRecognition(deviceA, true);
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             verify(mAudioManager).setA2dpSuspended(true);
             verify(mAudioManager).setLeAudioSuspended(true);
             verify(mNativeInterface).connectAudio(deviceA);
@@ -1373,6 +1424,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         // Simulate AptX SWB enabled, LC3 SWB disabled
         int swbCodec = HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX;
@@ -1404,7 +1458,7 @@ public class HeadsetServiceAndStateMachineTest {
         verifyCallStateToNativeInvocation(incomingCallState, connectedDevices);
         doReturn(true).when(mSystemInterface).isRinging();
         // Check aptx when sco management feature is not active
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             // Connect Audio
             assertThat(mHeadsetService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS);
             mTestLooper.dispatchAll();
@@ -1461,6 +1515,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         // Simulate AptX SWB enabled, LC3 SWB disabled
         int swbCodec = HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX;
@@ -1492,7 +1549,7 @@ public class HeadsetServiceAndStateMachineTest {
         verifyCallStateToNativeInvocation(incomingCallState, connectedDevices);
         // TestUtils.waitForLooperToFinishScheduledTask(mTestLooper.getLooper());
         // Aptx is only enabled with the non sco management path
-        if (!scoManagedByAudio()) {
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
             doReturn(true).when(mSystemInterface).isRinging();
             // Connect Audio
             assertThat(mHeadsetService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS);
@@ -1540,6 +1597,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Simulate SWB
@@ -1551,7 +1611,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(event);
         mTestLooper.dispatchAll();
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1575,6 +1635,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Simulate SWB
@@ -1586,7 +1649,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(event);
         mTestLooper.dispatchAll();
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1609,6 +1672,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Simulate SWB
@@ -1620,7 +1686,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(event);
         mTestLooper.dispatchAll();
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1644,6 +1710,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Simulate SWB
@@ -1653,7 +1722,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(event);
         mTestLooper.dispatchAll();
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1676,7 +1745,9 @@ public class HeadsetServiceAndStateMachineTest {
         // Make device active
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
-        verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Simulate SWB
@@ -1686,7 +1757,7 @@ public class HeadsetServiceAndStateMachineTest {
         mHeadsetService.messageFromNative(event);
         mTestLooper.dispatchAll();
         // Start voice recognition
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1711,10 +1782,13 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
         // Start voice recognition to connect audio
-        if (scoManagedByAudio()) {
+        if (android.media.audio.Flags.scoManagedByAudio()) {
             startVoiceRecognitionFromHf_ScoManagedByAudio(device);
         } else {
             startVoiceRecognitionFromHf(device);
@@ -1749,21 +1823,24 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
         verify(mNativeInterface).sendBsir(eq(device), eq(true));
 
         // this device is a HFP only device
         doReturn(CONNECTION_POLICY_ALLOWED)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.A2DP);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEARING_AID);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.LE_AUDIO);
 
         doReturn(true).when(mSystemInterface).isInCall();
@@ -1809,7 +1886,9 @@ public class HeadsetServiceAndStateMachineTest {
                         HeadsetHalConstants.AUDIO_STATE_DISCONNECTED,
                         device));
         mTestLooper.dispatchAll();
-        verify(mLeAudioService, atLeastOnce()).setActiveAfterHfpHandover();
+        if (!android.media.audio.Flags.scoManagedByAudio()) {
+            verify(mLeAudioService, atLeastOnce()).setActiveAfterHfpHandover();
+        }
     }
 
     @Test
@@ -1836,6 +1915,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
 
         assertThat(mHeadsetService.stopVoiceRecognition(device)).isFalse();
@@ -1868,6 +1950,9 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).setActiveDevice(device);
+        if (android.media.audio.Flags.scoManagedByAudio()) {
+            verifyActiveDeviceChanged_scoManagement(device);
+        }
         assertThat(mHeadsetService.getActiveDevice()).isEqualTo(device);
 
         assertThat(mHeadsetService.startVoiceRecognition(device)).isFalse();
@@ -1883,7 +1968,7 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(startVrEvent);
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).activateVoiceRecognition();
+        verify(mSystemInterface).activateVoiceRecognition(device);
         assertThat(mHeadsetService.startVoiceRecognition(device)).isTrue();
         mTestLooper.dispatchAll();
         verify(mNativeInterface).atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_OK, 0);
@@ -1928,7 +2013,7 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(startVrEvent);
         mTestLooper.dispatchAll();
-        verify(mSystemInterface).activateVoiceRecognition();
+        verify(mSystemInterface).activateVoiceRecognition(device);
         // has not add verification AudioDeviceInfo because it is final, unless add a wrapper
         mHeadsetService.startVoiceRecognition(device);
         mTestLooper.dispatchAll();
@@ -1994,7 +2079,7 @@ public class HeadsetServiceAndStateMachineTest {
      * mActiveDevice's CALL_STATE_CHANGED message
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testPhoneStateChange_SynchronousCallStateChanged() {
         BluetoothDevice device = getTestDevice(0);
         assertThat(device).isNotNull();
@@ -2034,7 +2119,7 @@ public class HeadsetServiceAndStateMachineTest {
      * starts audio connection.
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testHfStartsAudioConnection_scoManagedByAudio() {
         BluetoothDevice device = getTestDevice(0);
         assertThat(device).isNotNull();
@@ -2056,11 +2141,11 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(atBccEvent);
         mTestLooper.dispatchAll();
-        assertThat(mHeadsetService.mPendingScoConnection).isEqualTo(device);
+        assertThat(mHeadsetService.mPendingScoConnectionDevice).isEqualTo(device);
 
         verifyActiveDeviceChanged_scoManagement(device);
 
-        verify(mAudioManager).setCommunicationDevice(mAudioDeviceInfo);
+        verify(mSystemInterface).requestBluetoothAudio(device);
     }
 
     /*
@@ -2068,7 +2153,7 @@ public class HeadsetServiceAndStateMachineTest {
      * starts audio connection but device is disconnected before starting SCO.
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testHfStartsAudioConnection_deviceDisconnected() {
         ArgumentCaptor<AudioDeviceCallback> callback =
                 ArgumentCaptor.forClass(AudioDeviceCallback.class);
@@ -2093,7 +2178,7 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(atBccEvent);
         mTestLooper.dispatchAll();
-        assertThat(mHeadsetService.mPendingScoConnection).isEqualTo(device);
+        assertThat(mHeadsetService.mPendingScoConnectionDevice).isEqualTo(device);
 
         // Now disconnect the device
         HeadsetStackEvent connectingEvent =
@@ -2106,7 +2191,7 @@ public class HeadsetServiceAndStateMachineTest {
 
         verifyConnectionStateIntent(device, STATE_DISCONNECTED, STATE_CONNECTED);
 
-        assertThat(mHeadsetService.mPendingScoConnection).isEqualTo(null);
+        assertThat(mHeadsetService.mPendingScoConnectionDevice).isEqualTo(null);
         verify(mAudioManager, times(0)).setCommunicationDevice(mAudioDeviceInfo);
     }
 
@@ -2115,7 +2200,7 @@ public class HeadsetServiceAndStateMachineTest {
      * starts audio connection but device has SCO started by other means.
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testHfStartsAudioConnection_scoStartedByOtherMeans() {
         ArgumentCaptor<AudioDeviceCallback> callback =
                 ArgumentCaptor.forClass(AudioDeviceCallback.class);
@@ -2140,7 +2225,7 @@ public class HeadsetServiceAndStateMachineTest {
                         device);
         mHeadsetService.messageFromNative(atBccEvent);
         mTestLooper.dispatchAll();
-        assertThat(mHeadsetService.mPendingScoConnection).isEqualTo(device);
+        assertThat(mHeadsetService.mPendingScoConnectionDevice).isEqualTo(device);
 
         // Transition to AUDIO_STATE_CONNECTED as if SCO is connected
         doReturn(true).when(mSystemInterface).isInCall();
@@ -2151,14 +2236,14 @@ public class HeadsetServiceAndStateMachineTest {
                         device));
         mTestLooper.dispatchAll();
 
-        assertThat(mHeadsetService.mPendingScoConnection).isEqualTo(null);
+        assertThat(mHeadsetService.mPendingScoConnectionDevice).isEqualTo(null);
     }
 
     /*
      * Test that mExposedDevice is set correctly
      */
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testMExposedDevice_isSetCorrectly() {
         BluetoothDevice device = getTestDevice(0);
         assertThat(device).isNotNull();
@@ -2188,7 +2273,7 @@ public class HeadsetServiceAndStateMachineTest {
     }
 
     @Test
-    @EnableFlags(FLAG_SCO_MANAGED_BY_AUDIO)
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
     public void testSetActiveDeviceNull_broadcastsIntent() {
         BluetoothDevice device = getTestDevice(0);
         connectTestDevice(device);
@@ -2203,12 +2288,29 @@ public class HeadsetServiceAndStateMachineTest {
     }
 
     @Test
+    @RequiresFlagsEnabled(android.media.audio.Flags.FLAG_SCO_MANAGED_BY_AUDIO)
+    public void testSetActiveDeviceWhilePreviousSetActiveDeviceInProgress_returnsFalse() {
+        BluetoothDevice device = getTestDevice(0);
+        BluetoothDevice device1 = getTestDevice(1);
+        connectTestDevice(device);
+
+        assertThat(mHeadsetService.setActiveDevice(device)).isTrue();
+        mTestLooper.dispatchAll();
+
+        assertThat(mHeadsetService.setActiveDevice(device1)).isFalse();
+        mTestLooper.dispatchAll();
+
+        verify(mNativeInterface).setActiveDevice(device);
+        verify(mNativeInterface, never()).setActiveDevice(device1);
+    }
+
+    @Test
     @EnableFlags(Flags.FLAG_SEND_OK_CLCC_BEFORE_SLC)
     public void testProcessSendClccResponse_rfcommNotCompleted() {
         doReturn(true).when(mSystemInterface).listCurrentCalls(mHeadsetService);
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded
@@ -2257,7 +2359,7 @@ public class HeadsetServiceAndStateMachineTest {
         doReturn(true).when(mSystemInterface).listCurrentCalls(mHeadsetService);
         BluetoothDevice device = getTestDevice(0);
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded
@@ -2327,7 +2429,7 @@ public class HeadsetServiceAndStateMachineTest {
 
     private void connectTestDevice(BluetoothDevice device) {
         doReturn(CONNECTION_POLICY_UNKNOWN)
-                .when(mDatabaseManager)
+                .when(mAdapterService)
                 .getProfileConnectionPolicy(device, BluetoothProfile.HEADSET);
         doReturn(BluetoothDevice.BOND_BONDED).when(mAdapterService).getBondState(eq(device));
         // Make device bonded
@@ -2372,8 +2474,21 @@ public class HeadsetServiceAndStateMachineTest {
         assertThat(mHeadsetService.getConnectionState(device)).isEqualTo(STATE_CONNECTED);
     }
 
+    private void verifyNoIntentSent() {
+        if (Flags.onlyBroadcastToLocalUser()) {
+            mInOrder.verify(mAdapterService, never()).sendBroadcast(any(), any(), any());
+            return;
+        }
+        mInOrder.verify(mAdapterService, never()).sendBroadcastAsUser(any(), any(), any(), any());
+    }
+
     @SafeVarargs
     private void verifyIntentSent(Matcher<Intent>... matchers) {
+        if (Flags.onlyBroadcastToLocalUser()) {
+            mInOrder.verify(mAdapterService)
+                    .sendBroadcast(MockitoHamcrest.argThat(AllOf.allOf(matchers)), any(), any());
+            return;
+        }
         mInOrder.verify(mAdapterService)
                 .sendBroadcastAsUser(
                         MockitoHamcrest.argThat(AllOf.allOf(matchers)), any(), any(), any());
@@ -2401,7 +2516,7 @@ public class HeadsetServiceAndStateMachineTest {
                 hasExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState));
     }
 
-    /*
+    /**
      * Verify the series of invocations after {@link
      * BluetoothHeadset#startScoUsingVirtualVoiceCall()}
      *

@@ -166,8 +166,12 @@ Status A2dpTransport::StartRequest(bool is_low_latency) {
 
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_START;
   auto status = stream_callbacks_->StartStream(is_low_latency);
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_START : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 
   return status;
 }
@@ -187,8 +191,12 @@ Status A2dpTransport::SuspendRequest() {
 
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_SUSPEND;
   auto status = stream_callbacks_->SuspendStream();
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_SUSPEND : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 
   return status;
 }
@@ -196,8 +204,12 @@ Status A2dpTransport::SuspendRequest() {
 void A2dpTransport::StopRequest() {
   log::info("");
 
+  a2dp_pending_cmd_ = A2DP_CTRL_CMD_STOP;
   auto status = stream_callbacks_->StopStream();
-  a2dp_pending_cmd_ = status == Status::PENDING ? A2DP_CTRL_CMD_STOP : A2DP_CTRL_CMD_NONE;
+  if (status != Status::PENDING) {
+    log::warn("status: {}, reset a2dp_pending_cmd_", status);
+    a2dp_pending_cmd_ = A2DP_CTRL_CMD_NONE;
+  }
 }
 
 void A2dpTransport::SetLatencyMode(LatencyMode latency_mode) {
@@ -683,7 +695,7 @@ provider::get_a2dp_configuration(
 
   // Convert the user preferences into a configuration hint.
   A2dpConfigurationHint hint;
-  hint.bdAddr = peer_address.ToArray();
+  hint.bdAddr = peer_address.address;
   auto& codecParameters = hint.codecParameters.emplace();
   switch (user_preferences.audio_context) {
     case BTAV_A2DP_CODEC_AUDIO_CONTEXT_MEDIA:
@@ -853,6 +865,44 @@ tA2DP_STATUS provider::parse_a2dp_configuration(::bluetooth::a2dp::CodecId codec
   }
 
   return static_cast<tA2DP_STATUS>(a2dp_status.value());
+}
+
+/***
+ * Reads the provider information from the HAL.
+ * May return std::nullopt if the HAL Provider Info is empty.
+ ***/
+std::optional<btav_a2dp_hal_provider_info_t> get_provider_info() {
+  auto source_provider_info = BluetoothAudioClientInterface::GetProviderInfo(
+          SessionType::A2DP_HARDWARE_OFFLOAD_ENCODING_DATAPATH, nullptr);
+
+  auto sink_provider_info = BluetoothAudioClientInterface::GetProviderInfo(
+          SessionType::A2DP_HARDWARE_OFFLOAD_DECODING_DATAPATH, nullptr);
+
+  if (!source_provider_info.has_value() && !sink_provider_info.has_value()) {
+    log::warn("the provider info is empty");
+    return std::nullopt;
+  }
+
+  btav_a2dp_hal_provider_info_t codecs_info;
+
+  for (auto& codec_info : source_provider_info->codecInfos) {
+    auto source_codec = convertCodecInfo(codec_info);
+    if (source_codec.has_value()) {
+      log::verbose("provider source codec: {}", source_codec.value().ToString());
+      codecs_info.source_codecs.push_back(source_codec.value());
+    }
+  }
+
+  for (auto& codec_info : sink_provider_info->codecInfos) {
+    auto sink_codec = convertCodecInfo(codec_info);
+    if (sink_codec.has_value()) {
+      log::verbose("provider sink codec: {}", sink_codec.value().ToString());
+      codecs_info.sink_codecs.push_back(sink_codec.value());
+    }
+  }
+
+  log::info("successfully loaded provider info");
+  return std::make_optional<btav_a2dp_hal_provider_info_t>(codecs_info);
 }
 
 }  // namespace a2dp

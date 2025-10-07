@@ -56,7 +56,6 @@ import android.util.Log;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.avrcp.AvrcpTargetService;
-import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.btservice.ConnectableProfile;
@@ -159,7 +158,7 @@ public class A2dpService extends ConnectableProfile {
         mMaxConnectedAudioDevices = mAdapterService.getMaxConnectedAudioDevices();
         Log.i(TAG, "Max connected audio devices set to " + mMaxConnectedAudioDevices);
 
-        mA2dpCodecConfig = new A2dpCodecConfig(this, mNativeInterface);
+        mA2dpCodecConfig = new A2dpCodecConfig(this, mNativeInterface, mAudioManager);
 
         mNativeInterface.init(
                 mMaxConnectedAudioDevices,
@@ -194,10 +193,6 @@ public class A2dpService extends ConnectableProfile {
 
     public static boolean isEnabled() {
         return BluetoothProperties.isProfileA2dpSourceEnabled().orElse(false);
-    }
-
-    ActiveDeviceManager getActiveDeviceManager() {
-        return mAdapterService.getActiveDeviceManager();
     }
 
     @Override
@@ -266,10 +261,17 @@ public class A2dpService extends ConnectableProfile {
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
 
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            Log.e(TAG, "Cannot connect to " + device + " : CONNECTION_POLICY_FORBIDDEN");
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                Log.e(TAG, "Cannot connect to " + device + " : CONNECTION_POLICY_FORBIDDEN");
+                return false;
+            }
         }
+
         if (!Utils.arrayContains(mAdapterService.getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have A2DP Sink UUID");
             return false;
@@ -714,7 +716,7 @@ public class A2dpService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
@@ -805,18 +807,19 @@ public class A2dpService extends ConnectableProfile {
                                 BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_ADAPTIVE) {
 
             switch ((int)(cs4 & APTX_MODE_MASK)) {
-                case APTX_HQ:
+                case APTX_HQ -> {
                     mIsScanEnabled = false;
-                    break;
-                case APTX_LL:
+                }
+                case APTX_LL -> {
                     if ((cs4 & APTX_SCAN_FILTER_MASK) == APTX_SCAN_FILTER_MASK) {
                         mIsScanEnabled = true;
                     } else {
                         mIsScanEnabled = false;
                     }
-                    break;
-                default:
+                }
+                default -> {
                     Log.e(TAG, cs4 + " is not a aptX profile mode feedback");
+                }
             }
             mAdapterService.getBluetoothScanController()
                            .setAptXLowLatencyMode(mIsScanEnabled);
@@ -1237,7 +1240,7 @@ public class A2dpService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
     }
 
     private void broadcastCodecConfig(BluetoothDevice device, BluetoothCodecStatus codecStatus) {
@@ -1248,7 +1251,7 @@ public class A2dpService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
     }
 
     @Override
@@ -1260,17 +1263,6 @@ public class A2dpService extends ConnectableProfile {
         Log.d(TAG, "setStreamMode: isGamingEnabled: " + isGamingEnabled +
                     "isLowLatencyEnabled: " + isLowLatencyEnabled);
         mNativeInterface.setStreamMode(isGamingEnabled, isLowLatencyEnabled);
-    }
-
-    // TODO: b/395691070 delete this method
-    @VisibleForTesting
-    void bondStateChangedFromTest(BluetoothDevice device, int bondState) {
-        Log.d(
-                TAG,
-                ("bondStateChangedFromTest(" + device + ", " + bondState + "): ")
-                        + "called while A2DP_CLEANUP_ON_REMOVE_DEVICE is set to "
-                        + Flags.a2dpCleanupOnRemoveDevice());
-        bondStateChanged(device, bondState);
     }
 
     /**
@@ -1298,14 +1290,6 @@ public class A2dpService extends ConnectableProfile {
             A2dpStateMachine sm = mStateMachines.get(device);
             if (sm == null) {
                 Log.d(TAG, "bondStateChanged: SM is null, return ");
-                return;
-            }
-            // Bond removal implies that the ACL is disconnected and device properties are removed.
-            // If pseudo address is not same as the identity address, all further events from the
-            // native stack would get ignored. So the state machine must be removed right away.
-            if (!Flags.a2dpCleanupOnRemoveDevice()
-                    && sm.getConnectionState() != STATE_DISCONNECTED) {
-                Log.d(TAG, "bondStateChanged: not in STATE_DISCONNECTED, return ");
                 return;
             }
         }

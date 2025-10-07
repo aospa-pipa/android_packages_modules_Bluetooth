@@ -34,6 +34,10 @@
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/metric_id_api.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_transport.h>
+#include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
 #include <cstdlib>
@@ -42,6 +46,7 @@
 #include <utility>
 #include <vector>
 
+#include "bta/ag/bta_ag_int.h"
 #include "bta/gatt/bta_gattc_int.h"
 #include "bta/hh/bta_hh_int.h"
 #include "bta/include/bta_api.h"
@@ -80,6 +85,7 @@
 #include "btif/include/btif_sock.h"
 #include "btif/include/btif_sock_logging.h"
 #include "btif/include/btif_storage.h"
+#include "btif/include/btif_vendor.h"
 #include "btif/include/core_callbacks.h"
 #include "btif/include/stack_manager_t.h"
 #include "common/address_obfuscator.h"
@@ -130,9 +136,6 @@
 #include "stack/include/pan_api.h"
 #include "stack/include/sdp_api.h"
 #include "storage/config_keys.h"
-#include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 
@@ -377,6 +380,7 @@ static bluetooth::core::CoreInterface* CreateInterfaceToProfiles() {
           .invoke_link_quality_report_cb = invoke_link_quality_report_cb,
           .invoke_key_missing_cb = invoke_key_missing_cb,
           .invoke_encryption_change_cb = invoke_encryption_change_cb,
+          .invoke_ssr_event_cb = invoke_ssr_event_cb,
   };
   static bluetooth::core::HACK_ProfileInterface profileInterface{
           // HID
@@ -511,9 +515,9 @@ static void cleanup(void) { stack_manager_get_interface()->clean_up_stack(&stop_
 
 bool is_restricted_mode() { return restricted_mode; }
 
-static bool get_wbs_supported() { return hfp_hal_interface::get_wbs_supported(); }
+static bool get_wbs_supported() { return bta_ag_get_wbs_supported(); }
 
-static bool get_swb_supported() { return hfp_hal_interface::get_swb_supported(); }
+static bool get_swb_supported() { return bta_ag_get_swb_supported(); }
 
 static bool is_coding_format_supported(esco_coding_format_t coding_format) {
   return hfp_hal_interface::is_coding_format_supported(coding_format);
@@ -879,6 +883,12 @@ static int set_event_filter_connection_setup_all_devices() {
 }
 
 static void dump(int fd, const char** /*arguments*/) {
+  if (com::android::bluetooth::flags::protect_dumpsys_during_stack_shutdown() &&
+      !stack_manager_get_interface()->get_stack_is_running()) {
+    log::error("Stack is not running, skipping dumpsys!!");
+    return;
+  }
+
   log::debug("Started bluetooth dumpsys");
   btif_debug_conn_dump(fd);
   btif_debug_bond_event_dump(fd);
@@ -1561,6 +1571,10 @@ void invoke_encryption_change_cb(bt_encryption_change_evt encryption_change) {
             HAL_CBACK(bt_hal_cbacks, encryption_change_cb, encryption_change);
           },
           encryption_change));
+}
+
+void invoke_ssr_event_cb() {
+  btif_vendor_update_ssr_event();
 }
 
 namespace bluetooth::testing {

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <bluetooth/log.h>
+
 #include <future>
 #include <memory>
 
@@ -67,7 +69,7 @@ public:
   // compiling AclManagerLeImpl's destructor. Hence we need to forward declare the
   // destructor for AclManagerLeImpl to delay compiling AclManagerLeImpl's destructor until
   // it starts linking the .cc file.
-  virtual ~AclManagerLeImpl() {}
+  virtual ~AclManagerLeImpl() { log::verbose("AclManagerLe module stopped !!"); }
 
   void Dump(int fd) const override;
 
@@ -112,7 +114,7 @@ public:
 
   // Virtual ACL disconnect emitted during suspend.
   void OnLeSuspendInitiatedDisconnect(uint16_t handle, ErrorCode reason) override;
-  void SetSystemSuspendState(bool suspended) override;
+  void SetSystemSuspendState(bool suspended, std::promise<void> promise) override;
 
   Address HACK_GetLeAddress(uint16_t connection_handle) override;
 

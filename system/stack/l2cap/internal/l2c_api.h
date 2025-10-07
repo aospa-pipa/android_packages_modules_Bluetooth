@@ -24,6 +24,9 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
+#include <bluetooth/types/hci_role.h>
 #include <stdbool.h>
 
 #include <cstdint>
@@ -32,9 +35,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cap_types.h"
-#include "types/bt_transport.h"
-#include "types/hci_role.h"
-#include "types/raw_address.h"
 
 /*****************************************************************************
  *  Constants

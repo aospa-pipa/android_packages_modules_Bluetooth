@@ -19,6 +19,7 @@
 #include "bta_hh_co.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 #include <fcntl.h>
 #include <linux/hid.h>
@@ -52,7 +53,6 @@
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
 #include "storage/config_keys.h"
-#include "types/raw_address.h"
 
 #define BTA_HH_NV_LOAD_MAX 16
 static tBTA_HH_RPT_CACHE_ENTRY sReportCache[BTA_HH_NV_LOAD_MAX];
@@ -882,7 +882,6 @@ void bta_hh_co_data(uint8_t dev_handle, uint8_t* p_rpt, uint16_t len) {
 void bta_hh_co_send_hid_info(btif_hh_device_t* p_dev, const char* dev_name, uint16_t vendor_id,
                              uint16_t product_id, uint16_t version, uint8_t ctry_code,
                              uint16_t dscp_len, uint8_t* p_dscp) {
-  int result;
   tBTA_HH_TO_UHID_EVT to_uhid = {};
   struct uhid_event& ev = to_uhid.uhid;
 

@@ -26,6 +26,7 @@
 #define LOG_TAG "devctl"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,7 +52,6 @@
 #include "stack/include/dev_hci_link_interface.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/l2cap_controller_interface.h"
-#include "types/raw_address.h"
 
 using namespace ::bluetooth;
 
@@ -352,6 +352,38 @@ void BTM_VendorSpecificCommand(uint16_t opcode, uint8_t param_len, uint8_t* p_pa
 
   /* Send the HCI command (opcode will be OR'd with HCI_GRP_VENDOR_SPECIFIC) */
   btsnd_hcic_vendor_spec_cmd(opcode, param_len, p_param_buf, p_cb);
+}
+
+/*******************************************************************************
+**
+** Function         btm_register_ssr_cback
+**
+** Description      Register callback to process SSR
+**
+** Returns          void
+**
+*******************************************************************************/
+void btm_register_ssr_cback (tBTM_NOTIFY_SSR_CB *p_cb) {
+    btm_cb.devcb.p_ssr_cb = p_cb;
+}
+
+
+/*******************************************************************************
+ *
+ * Function         btm_notify_ssr_trigger
+ *
+ * Description      This function is called when SSR triggered to notify
+ *                  the application to handle SSR
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_notify_ssr_trigger(void) {
+  if (btm_cb.devcb.p_ssr_cb) {
+    log::warn("");
+    (*btm_cb.devcb.p_ssr_cb)();
+    return;
+  }
 }
 
 /*******************************************************************************

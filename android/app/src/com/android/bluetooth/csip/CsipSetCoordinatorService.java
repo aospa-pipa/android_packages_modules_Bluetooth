@@ -236,13 +236,22 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
     @Override
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
-        if (device == null) {
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            requireNonNull(device);
+
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (device == null) {
+                return false;
+            }
+
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                return false;
+            }
         }
 
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            return false;
-        }
         final ParcelUuid[] featureUuids = mAdapterService.getRemoteUuids(device);
         if (!Utils.arrayContains(featureUuids, BluetoothUuid.COORDINATED_SET)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have CSIS UUID");
@@ -302,7 +311,11 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
      * @return true if connection is allowed, otherwise false
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    @Override
     public boolean okToConnect(BluetoothDevice device) {
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            return super.okToConnect(device);
+        }
         // Check if this is an incoming connection in Quiet mode.
         if (mAdapterService.isQuietModeEnabled()) {
             Log.e(TAG, "okToConnect: cannot connect to " + device + " : quiet mode enabled");
@@ -435,7 +448,7 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
     @Override
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
-        mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
+        mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
             connect(device);
         } else if (connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
@@ -576,7 +589,7 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
      * @return related list of devices sorted from the lowest to the highest rank value.
      */
     public @NonNull List<BluetoothDevice> getGroupDevicesOrdered(int groupId) {
-        final Map<BluetoothDevice, Integer> deviceRankMap = new HashMap();
+        final Map<BluetoothDevice, Integer> deviceRankMap = new HashMap<>();
         for (Map.Entry<BluetoothDevice, ?> entry : mDeviceGroupIdRankMap.entrySet()) {
             Map<Integer, Integer> rankMap = (Map<Integer, Integer>) entry.getValue();
             BluetoothDevice device = entry.getKey();
@@ -588,7 +601,7 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
         // Return device list sorted by descending rank order
         return deviceRankMap.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
-                .map(e -> e.getKey())
+                .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
     }
 
@@ -631,7 +644,7 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
         }
 
         if (!mDeviceGroupIdRankMap.containsKey(device)) {
-            mDeviceGroupIdRankMap.put(device, new HashMap<Integer, Integer>());
+            mDeviceGroupIdRankMap.put(device, new HashMap<>());
         }
 
         Map<Integer, Integer> all_device_groups = mDeviceGroupIdRankMap.get(device);
@@ -834,19 +847,18 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
             if (stackEvent.type
                     == CsipSetCoordinatorStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED) {
                 if (sm == null) {
-                    switch (stackEvent.valueInt1) {
-                        case CsipSetCoordinatorStackEvent.CONNECTION_STATE_CONNECTED:
-                        case CsipSetCoordinatorStackEvent.CONNECTION_STATE_CONNECTING:
-                            sm = getOrCreateStateMachine(device);
-                            break;
-                        default:
-                            break;
-                    }
-                }
+                    sm =
+                            switch (stackEvent.valueInt1) {
+                                case CsipSetCoordinatorStackEvent.CONNECTION_STATE_CONNECTED,
+                                        CsipSetCoordinatorStackEvent.CONNECTION_STATE_CONNECTING ->
+                                        getOrCreateStateMachine(device);
+                                default -> null;
+                            };
 
-                if (sm == null) {
-                    Log.e(TAG, "Cannot process stack event: no state machine: " + stackEvent);
-                    return;
+                    if (sm == null) {
+                        Log.e(TAG, "Cannot process stack event: no state machine: " + stackEvent);
+                        return;
+                    }
                 }
                 sm.sendMessage(CsipSetCoordinatorStateMachine.STACK_EVENT, stackEvent);
             }
@@ -889,10 +901,8 @@ public class CsipSetCoordinatorService extends ConnectableProfile {
     @VisibleForTesting
     void bondStateChanged(BluetoothDevice device, int bondState) {
         Log.d(TAG, "Bond state changed for device: " + device + " state: " + bondState);
-        if (bondState == BluetoothDevice.BOND_BONDING
-                && mFoundSetMemberToGroupId.containsKey(device)) {
-            mFoundSetMemberToGroupId.remove(device);
-        }
+
+        mFoundSetMemberToGroupId.remove(device);
 
         // Remove state machine if the bonding for a device is removed
         if (bondState != BluetoothDevice.BOND_NONE) {

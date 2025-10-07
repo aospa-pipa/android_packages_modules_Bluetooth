@@ -16,11 +16,12 @@
 
 #pragma once
 
+#include <bluetooth/types/ble_address_with_type.h>
+
 #include "bta/include/bta_api.h"
 #include "bta/include/bta_hh_api.h"
 #include "include/hardware/bluetooth.h"
 #include "stack/include/btm_ble_api_types.h"
-#include "types/ble_address_with_type.h"
 
 namespace bluetooth {
 namespace core {
@@ -58,6 +59,7 @@ struct EventCallbacks {
                                         int negative_acknowledgement_count);
   void (*invoke_key_missing_cb)(tBTA_DM_KEY_MISSING key_missing);
   void (*invoke_encryption_change_cb)(bt_encryption_change_evt encryption_change);
+  void (*invoke_ssr_event_cb)();
 
   EventCallbacks& operator=(const EventCallbacks&) = delete;
 };

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <bluetooth/types/address.h>
 #include <sys/types.h>
 
 #include <cstdint>
@@ -23,7 +24,6 @@
 #include "btif/include/stack_manager_t.h"
 #include "hardware/bluetooth.h"
 #include "stack/include/bt_octets.h"
-#include "types/raw_address.h"
 
 void invoke_adapter_state_changed_cb(bt_state_t /* state */) {}
 void invoke_adapter_properties_cb(bt_status_t /* status */, int /* num_properties */,
@@ -62,6 +62,7 @@ void invoke_link_quality_report_cb(uint64_t /* timestamp */, int /* report_id */
                                    int /* negative_acknowledgement_count */) {}
 void invoke_key_missing_cb(tBTA_DM_KEY_MISSING /* key_missing */) {}
 void invoke_encryption_change_cb(bt_encryption_change_evt /* bd_addr */) {}
+void invoke_ssr_event_cb() {}
 
 static void init_stack(bluetooth::core::CoreInterface* /* interface */) {}
 

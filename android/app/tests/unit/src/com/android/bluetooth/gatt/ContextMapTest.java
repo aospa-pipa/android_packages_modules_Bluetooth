@@ -31,9 +31,9 @@ import android.bluetooth.IBluetoothGattCallback;
 import android.content.AttributionSource;
 import android.content.pm.PackageManager;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 import androidx.test.rule.ServiceTestRule;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.gatt.ContextMap.App;
@@ -82,13 +82,13 @@ public class ContextMapTest {
     public void getAppMethods() {
         ContextMap<IBluetoothGattCallback> contextMap = getMapWithAppAndConnection();
         App contextMapById = contextMap.getById(APP_ID1);
-        assertThat(contextMapById.packageName).isEqualTo(APP_NAME);
+        assertThat(contextMapById.getPackageName()).isEqualTo(APP_NAME);
         assertThat(contextMapById.getCallback()).isEqualTo(mMockCallback);
-        assertThat(contextMapById.uuid).isEqualTo(RANDOM_UUID1);
+        assertThat(contextMapById.mUuid).isEqualTo(RANDOM_UUID1);
         App contextMapByUuid = contextMap.getByUuid(RANDOM_UUID1);
-        assertThat(contextMapByUuid.packageName).isEqualTo(APP_NAME);
+        assertThat(contextMapByUuid.getPackageName()).isEqualTo(APP_NAME);
         App contextMapByConn = contextMap.getByConnId(CONN_ID1);
-        assertThat(contextMapByConn.packageName).isEqualTo(APP_NAME);
+        assertThat(contextMapByConn.getPackageName()).isEqualTo(APP_NAME);
 
         List<Integer> ids = contextMap.getAllAppsIds();
         assertThat(ids).containsExactly(APP_ID1, APP_ID2);

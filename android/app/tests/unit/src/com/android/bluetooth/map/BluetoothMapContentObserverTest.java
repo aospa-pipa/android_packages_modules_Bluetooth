@@ -53,8 +53,8 @@ import android.telephony.TelephonyManager;
 import android.test.mock.MockContentProvider;
 import android.test.mock.MockContentResolver;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.map.BluetoothMapContract.MessageColumns;
@@ -2021,9 +2021,9 @@ public class BluetoothMapContentObserverTest {
     @Test
     public void handleMmsSendIntent_withInvalidHandle() {
         when(mClient.isConnected()).thenReturn(true);
-        doReturn((long) -1)
+        doReturn(-1L)
                 .when(mIntent)
-                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1);
+                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1L);
 
         assertThat(mObserver.handleMmsSendIntent(mContext, mIntent)).isTrue();
     }
@@ -2074,9 +2074,9 @@ public class BluetoothMapContentObserverTest {
         doReturn(1)
                 .when(mIntent)
                 .getIntExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_TRANSPARENT, 0);
-        doReturn((long) -1)
+        doReturn(-1L)
                 .when(mIntent)
-                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1);
+                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1L);
         // This mock sets type to MMS
         doReturn(4)
                 .when(mIntent)
@@ -2115,9 +2115,9 @@ public class BluetoothMapContentObserverTest {
         doReturn(1)
                 .when(mIntent)
                 .getIntExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_TRANSPARENT, 0);
-        doReturn((long) -1)
+        doReturn(-1L)
                 .when(mIntent)
-                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1);
+                .getLongExtra(BluetoothMapContentObserver.EXTRA_MESSAGE_SENT_HANDLE, -1L);
 
         mObserver.actionMmsSent(mContext, mIntent, 1, mmsMsgList);
 

@@ -16,6 +16,7 @@
 
 package com.android.pandora
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothLeAudio
 import android.bluetooth.BluetoothManager
@@ -26,15 +27,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.MediaRecorder
+import android.os.Environment
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import com.google.protobuf.Empty
 import io.grpc.Status
 import io.grpc.stub.StreamObserver
 import java.io.Closeable
 import java.io.PrintWriter
 import java.io.StringWriter
+import kotlin.io.path.Path
+import kotlin.io.path.div
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -63,11 +70,13 @@ class LeAudio(val context: Context) : LeAudioImplBase(), Closeable {
         getProfileProxy<BluetoothLeAudio>(context, BluetoothProfile.LE_AUDIO)
 
     private var audioTrack: AudioTrack? = null
+    private var mediaRecorder: MediaRecorder? = null
 
     init {
         scope = CoroutineScope(Dispatchers.Default)
         val intentFilter = IntentFilter()
         intentFilter.addAction(BluetoothLeAudio.ACTION_LE_AUDIO_CONNECTION_STATE_CHANGED)
+        intentFilter.addAction(BluetoothLeAudio.ACTION_LE_AUDIO_ACTIVE_DEVICE_CHANGED)
 
         flow = intentFlow(context, intentFilter, scope).shareIn(scope, SharingStarted.Eagerly)
     }
@@ -100,6 +109,28 @@ class LeAudio(val context: Context) : LeAudioImplBase(), Closeable {
             AudioUsage.AUDIO_USAGE_ASSISTANT -> AudioAttributes.USAGE_ASSISTANT
             AudioUsage.AUDIO_USAGE_CALL_ASSISTANT -> AudioAttributes.USAGE_CALL_ASSISTANT
             else -> AudioAttributes.USAGE_UNKNOWN
+        }
+    }
+
+    fun mapAudioSource(audioSource: AudioSource): Int {
+        return when (audioSource) {
+            AudioSource.AUDIO_SOURCE_DEFAULT -> MediaRecorder.AudioSource.DEFAULT
+            AudioSource.AUDIO_SOURCE_MIC -> MediaRecorder.AudioSource.MIC
+            AudioSource.AUDIO_SOURCE_VOICE_UPLINK -> MediaRecorder.AudioSource.VOICE_UPLINK
+            AudioSource.AUDIO_SOURCE_VOICE_DOWNLINK -> MediaRecorder.AudioSource.VOICE_DOWNLINK
+            AudioSource.AUDIO_SOURCE_VOICE_CALL -> MediaRecorder.AudioSource.VOICE_CALL
+            AudioSource.AUDIO_SOURCE_CAMCORDER -> MediaRecorder.AudioSource.CAMCORDER
+            AudioSource.AUDIO_SOURCE_VOICE_RECOGNITION ->
+                MediaRecorder.AudioSource.VOICE_RECOGNITION
+            AudioSource.AUDIO_SOURCE_VOICE_COMMUNICATION ->
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION
+            AudioSource.AUDIO_SOURCE_REMOTE_SUBMIX -> MediaRecorder.AudioSource.REMOTE_SUBMIX
+            AudioSource.AUDIO_SOURCE_UNPROCESSED -> MediaRecorder.AudioSource.UNPROCESSED
+            AudioSource.AUDIO_SOURCE_VOICE_PERFORMANCE ->
+                MediaRecorder.AudioSource.VOICE_PERFORMANCE
+            else -> {
+                MediaRecorder.AudioSource.DEFAULT
+            }
         }
     }
 
@@ -142,9 +173,14 @@ class LeAudio(val context: Context) : LeAudioImplBase(), Closeable {
         responseObserver: StreamObserver<Empty>,
     ) {
         val audioUsage: AudioUsage = request.audioUsage
+        val metadataTag: String? = request.metadataTag
         grpcUnary<Empty>(scope, responseObserver) {
             if (audioTrack == null) {
-                audioTrack = buildAudioTrack(audioUsage = mapAudioUsage(audioUsage))
+                audioTrack =
+                    buildAudioTrack(
+                        audioUsage = mapAudioUsage(audioUsage),
+                        metadataTag = metadataTag,
+                    )
             }
             val device = request.connection.toBluetoothDevice(bluetoothAdapter)
             Log.i(TAG, "start: device=$device")
@@ -173,6 +209,99 @@ class LeAudio(val context: Context) : LeAudioImplBase(), Closeable {
 
             Empty.getDefaultInstance()
         }
+    }
+
+    override fun leAudioStopRecorder(
+        request: LeAudioStopRecorderRequest,
+        responseObserver: StreamObserver<Empty>,
+    ) {
+        grpcUnary<Empty>(scope, responseObserver) {
+            mediaRecorder?.let {
+                it.stop()
+                it.release()
+            } ?: Log.i(TAG, "leAudioStopRecorder: Cannot stop, MediaRecorder is null")
+            mediaRecorder = null
+
+            Empty.getDefaultInstance()
+        }
+    }
+
+    override fun leAudioPrepareRecorder(
+        request: LeAudioPrepareRecorderRequest,
+        responseObserver: StreamObserver<Empty>,
+    ) {
+        val audioSource: AudioSource = request.audioSource
+        grpcUnary<Empty>(scope, responseObserver) {
+            val device = request.connection.toBluetoothDevice(bluetoothAdapter)
+            Log.i(TAG, "leAudioPrepareRecorder: device=$device")
+
+            if (bluetoothLeAudio.getConnectionState(device) != BluetoothLeAudio.STATE_CONNECTED) {
+                throw RuntimeException("Device is not connected, cannot start")
+            }
+            bluetoothLeAudio.setActiveDevice(device)
+            flow
+                .filter { it.action == BluetoothLeAudio.ACTION_LE_AUDIO_ACTIVE_DEVICE_CHANGED }
+                .filter { it.getBluetoothDeviceExtra() == device }
+                .first()
+            Log.i(TAG, "leAudioPrepareRecorder: Active device changed to $device")
+
+            val filePath =
+                context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.let {
+                    (Path(it.absolutePath) / "recording.amr").toString()
+                }
+                    ?: throw IllegalStateException(
+                        "External music directory not found, cannot create recording path."
+                    )
+
+            Log.i(
+                TAG,
+                "leAudioPrepareRecorder: initializing media recorder. Recorded file path: $filePath",
+            )
+            mediaRecorder =
+                MediaRecorder(context).apply {
+                    setAudioSource(mapAudioSource(audioSource))
+                    setAudioSamplingRate(16000)
+                    setOutputFormat(MediaRecorder.OutputFormat.AMR_WB)
+                    setOutputFile(filePath)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
+                    prepare()
+                }
+            Log.i(TAG, "leAudioPrepareRecorder: MediaRecorder prepared")
+
+            Empty.getDefaultInstance()
+        }
+    }
+
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
+    override fun leAudioCaptureAudio(
+        request: LeAudioCaptureAudioRequest,
+        responseObserver: StreamObserver<LeAudioCaptureAudioResponse>,
+    ) {
+        val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+        Log.i(TAG, "leAudioCaptureAudio: Number of available input devices: ${devices.size}")
+
+        for (device in devices) {
+            Log.i(TAG, "leAudioCaptureAudio: Available device type: ${device.type}")
+            if (device.type == AudioDeviceInfo.TYPE_BLE_HEADSET) {
+                Log.i(
+                    TAG,
+                    "leAudioCaptureAudio: BLE_HEADSET found. Setting preferred device: ${device.address}",
+                )
+                mediaRecorder?.let {
+                    it.preferredDevice = device
+                    it.start()
+                }
+                    ?: Log.i(
+                        TAG,
+                        "leAudioCaptureAudio: Cannot set preferred device, MediaRecorder is null",
+                    )
+            } else {
+                Log.i(TAG, "leAudioCaptureAudio: Skipping (not a BLE_HEADSET device).")
+            }
+        }
+
+        responseObserver.onNext(LeAudioCaptureAudioResponse.getDefaultInstance())
+        responseObserver.onCompleted()
     }
 
     override fun leAudioPlaybackAudio(

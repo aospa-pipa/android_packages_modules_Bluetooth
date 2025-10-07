@@ -26,12 +26,13 @@
 #ifndef BTA_AV_API_H
 #define BTA_AV_API_H
 
+#include <bluetooth/types/address.h>
+
 #include <cstdint>
 
 #include "bta/include/bta_api.h"
 #include "stack/include/avrc_defs.h"
 #include "stack/include/bt_hdr.h"
-#include "types/raw_address.h"
 
 /*****************************************************************************
  *  Constants and data types
@@ -782,5 +783,7 @@ void bta_debug_av_dump(int fd);
  * @param sep the peer sep
  */
 void BTA_AvSetPeerSep(const RawAddress& bdaddr, uint8_t sep);
+
+void modify_sniff_policy(bool policy_enable, const RawAddress& peer_addr);
 
 #endif /* BTA_AV_API_H */

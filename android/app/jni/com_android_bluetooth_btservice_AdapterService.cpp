@@ -19,6 +19,7 @@
 
 #include <android/log.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 #include <jni.h>
 #include <nativehelper/JNIHelp.h>
@@ -40,7 +41,6 @@
 #include "com_android_bluetooth.h"
 #include "hardware/bluetooth.h"
 #include "hardware/bt_sock.h"
-#include "types/ble_address_with_type.h"
 
 using bluetooth::Uuid;
 extern bt_interface_t bluetoothInterface;
@@ -1347,7 +1347,7 @@ static jboolean set_data(JNIEnv* env, jobject oobData, jint transport, bt_oob_da
         env->ReleaseByteArrayElements(leAppearance, leAppearanceBytes, 0);
         return JNI_FALSE;
       }
-      memcpy(oob_data->sm_tk, leAppearanceBytes, OOB_LE_APPEARANCE_SIZE);
+      memcpy(oob_data->le_appearance, leAppearanceBytes, OOB_LE_APPEARANCE_SIZE);
       env->ReleaseByteArrayElements(leAppearance, leAppearanceBytes, 0);
     }
 
@@ -1962,12 +1962,11 @@ static jboolean interopMatchAddrNative(JNIEnv* env, jclass /* clazz */, jstring 
     log::warn("address is null.");
     return JNI_FALSE;
   }
-  RawAddress bdaddr;
-  bool success = RawAddress::FromString(tmp_addr, bdaddr);
+  auto bdaddr = RawAddress::FromString(tmp_addr);
 
   env->ReleaseStringUTFChars(address, tmp_addr);
 
-  if (!success) {
+  if (!bdaddr.has_value()) {
     log::warn("address is invalid.");
     return JNI_FALSE;
   }
@@ -1978,7 +1977,7 @@ static jboolean interopMatchAddrNative(JNIEnv* env, jclass /* clazz */, jstring 
     return JNI_FALSE;
   }
 
-  bool matched = sBluetoothInterface->interop_match_addr(feature_name_str, &bdaddr);
+  bool matched = sBluetoothInterface->interop_match_addr(feature_name_str, &bdaddr.value());
   env->ReleaseStringUTFChars(feature_name, feature_name_str);
 
   return matched ? JNI_TRUE : JNI_FALSE;
@@ -2027,12 +2026,12 @@ static jboolean interopMatchAddrOrNameNative(JNIEnv* env, jclass /* clazz */, js
     log::warn("address is null.");
     return JNI_FALSE;
   }
-  RawAddress bdaddr;
-  bool success = RawAddress::FromString(tmp_addr, bdaddr);
+
+  auto bdaddr = RawAddress::FromString(tmp_addr);
 
   env->ReleaseStringUTFChars(address, tmp_addr);
 
-  if (!success) {
+  if (!bdaddr.has_value()) {
     log::warn("address is invalid.");
     return JNI_FALSE;
   }
@@ -2043,7 +2042,7 @@ static jboolean interopMatchAddrOrNameNative(JNIEnv* env, jclass /* clazz */, js
     return JNI_FALSE;
   }
 
-  bool matched = sBluetoothInterface->interop_match_addr_or_name(feature_name_str, &bdaddr);
+  bool matched = sBluetoothInterface->interop_match_addr_or_name(feature_name_str, &bdaddr.value());
   env->ReleaseStringUTFChars(feature_name, feature_name_str);
 
   return matched ? JNI_TRUE : JNI_FALSE;
@@ -2068,12 +2067,12 @@ static void interopDatabaseAddRemoveAddrNative(JNIEnv* env, jclass /* clazz */, 
     log::warn("address is null.");
     return;
   }
-  RawAddress bdaddr;
-  bool success = RawAddress::FromString(tmp_addr, bdaddr);
+
+  auto bdaddr = RawAddress::FromString(tmp_addr);
 
   env->ReleaseStringUTFChars(address, tmp_addr);
 
-  if (!success) {
+  if (!bdaddr.has_value()) {
     log::warn("address is invalid.");
     return;
   }
@@ -2084,8 +2083,8 @@ static void interopDatabaseAddRemoveAddrNative(JNIEnv* env, jclass /* clazz */, 
     return;
   }
 
-  sBluetoothInterface->interop_database_add_remove_addr((do_add == JNI_TRUE), feature_name_str,
-                                                        &bdaddr, static_cast<int>(length));
+  sBluetoothInterface->interop_database_add_remove_addr(do_add == JNI_TRUE, feature_name_str,
+                                                        &bdaddr.value(), static_cast<int>(length));
 
   env->ReleaseStringUTFChars(feature_name, feature_name_str);
 }
@@ -2132,17 +2131,16 @@ static int getRemotePbapPceVersionNative(JNIEnv* env, jobject /* obj */, jstring
     return JNI_FALSE;
   }
 
-  RawAddress bdaddr;
-  bool success = RawAddress::FromString(tmp_addr, bdaddr);
+  auto bdaddr = RawAddress::FromString(tmp_addr);
 
   env->ReleaseStringUTFChars(address, tmp_addr);
 
-  if (!success) {
+  if (!bdaddr.has_value()) {
     log::warn("address is invalid.");
     return JNI_FALSE;
   }
 
-  return sBluetoothInterface->get_remote_pbap_pce_version(&bdaddr);
+  return sBluetoothInterface->get_remote_pbap_pce_version(&bdaddr.value());
 }
 
 static jboolean pbapPseDynamicVersionUpgradeIsEnabledNative(JNIEnv* /* env */,
@@ -2447,6 +2445,12 @@ jint JNI_OnLoad(JavaVM* jvm, void* /* reserved */) {
   status = android::register_com_android_bluetooth_btservice_BluetoothKeystore(e);
   if (status < 0) {
     log::error("jni BluetoothKeyStore registration failure: {}", status);
+    return JNI_ERR;
+  }
+
+  status = android::register_com_android_bluetooth_scan(e);
+  if (status < 0) {
+    log::error("jni scan registration failure: {}", status);
     return JNI_ERR;
   }
 

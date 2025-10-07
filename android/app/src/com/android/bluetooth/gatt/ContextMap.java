@@ -17,7 +17,7 @@
 package com.android.bluetooth.gatt;
 
 import static com.android.bluetooth.Utils.transportToString;
-import static com.android.bluetooth.util.AttributionSourceUtil.getLastAttributionTag;
+import static com.android.bluetooth.util.AttributionSourceUtils.getLastAttributionTag;
 
 import android.annotation.Nullable;
 import android.bluetooth.BluetoothDevice;
@@ -53,8 +53,7 @@ import java.util.function.Predicate;
  * @param <C> the callback type (must implement {@link IInterface}) for this map
  */
 class ContextMap<C extends IInterface> {
-    private static final String TAG =
-            GattServiceConfig.TAG_PREFIX + ContextMap.class.getSimpleName();
+    private static final String TAG = GattUtil.TAG_PREFIX + ContextMap.class.getSimpleName();
 
     private static final int MAX_LAST_RECORDS = 5;
 
@@ -78,12 +77,12 @@ class ContextMap<C extends IInterface> {
 
     /** Application entry mapping UUIDs to appIDs and callbacks. */
     class App {
-        public final UUID uuid;
+        final UUID mUuid;
         private final C mCallback;
-        public final int uid;
-        public final String packageName;
+        final int mUid;
+        private final String mPackageName;
         private final int mTransport;
-        @Nullable public final String attributionTag;
+        @Nullable final String mAttributionTag;
 
         public int id;
 
@@ -103,16 +102,20 @@ class ContextMap<C extends IInterface> {
                 String packageName,
                 int transport,
                 AttributionSource source) {
-            this.uuid = uuid;
-            this.mCallback = callback;
-            this.uid = appUid;
-            this.packageName = packageName;
-            this.mTransport = transport;
-            attributionTag = getLastAttributionTag(source);
+            mUuid = uuid;
+            mCallback = callback;
+            mUid = appUid;
+            mPackageName = packageName;
+            mTransport = transport;
+            mAttributionTag = getLastAttributionTag(source);
         }
 
         C getCallback() {
             return mCallback;
+        }
+
+        String getPackageName() {
+            return mPackageName;
         }
 
         int getTransport() {
@@ -157,22 +160,22 @@ class ContextMap<C extends IInterface> {
     }
 
     private class AppRecord {
-        public final UUID uuid;
-        public final String packageName;
-        public final int transport;
-        @Nullable public final String attributionTag;
-        public final Instant registerTime;
+        private final UUID mUuid;
+        private final String mPackageName;
+        private final int mTransport;
+        @Nullable private final String mAttributionTag;
+        private final Instant mRegisterTime;
 
-        public int clientIf;
-        public RemoveReason reason;
-        @Nullable public Instant unregisterTime;
+        private int mClientIf;
+        private RemoveReason mReason;
+        @Nullable private Instant mUnregisterTime;
 
         AppRecord(App app) {
-            uuid = app.uuid;
-            packageName = app.packageName;
-            transport = app.getTransport();
-            attributionTag = app.attributionTag;
-            registerTime = Instant.now();
+            mUuid = app.mUuid;
+            mPackageName = app.mPackageName;
+            mTransport = app.getTransport();
+            mAttributionTag = app.mAttributionTag;
+            mRegisterTime = Instant.now();
         }
 
         private static final DateTimeFormatter sDateFormat =
@@ -182,19 +185,19 @@ class ContextMap<C extends IInterface> {
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append("AppRecord<")
-                    .append(sDateFormat.format(registerTime))
+                    .append(sDateFormat.format(mRegisterTime))
                     .append(" ~ ")
-                    .append(sDateFormat.format(unregisterTime))
+                    .append(sDateFormat.format(mUnregisterTime))
                     .append(" app_if: ")
-                    .append(clientIf)
+                    .append(mClientIf)
                     .append(", appName: ")
-                    .append(packageName)
+                    .append(mPackageName)
                     .append(", transport: ")
-                    .append(transportToString(transport));
-            if (attributionTag != null) {
-                sb.append(", tag: ").append(attributionTag);
+                    .append(transportToString(mTransport));
+            if (mAttributionTag != null) {
+                sb.append(", tag: ").append(mAttributionTag);
             }
-            sb.append(", reason: ").append(reason).append(">");
+            sb.append(", reason: ").append(mReason).append(">");
             return sb.toString();
         }
     }
@@ -257,7 +260,7 @@ class ContextMap<C extends IInterface> {
             Iterator<App> i = mApps.iterator();
             while (i.hasNext()) {
                 App entry = i.next();
-                if (entry.uuid.equals(uuid)) {
+                if (entry.mUuid.equals(uuid)) {
                     entry.unlinkToDeath();
                     i.remove();
                     recordUnregisterApp(entry, reason);
@@ -289,7 +292,7 @@ class ContextMap<C extends IInterface> {
     }
 
     public List<Integer> getAllAppsIds() {
-        List<Integer> appIds = new ArrayList();
+        List<Integer> appIds = new ArrayList<>();
         synchronized (mAppsLock) {
             for (App entry : mApps) {
                 appIds.add(entry.id);
@@ -300,7 +303,7 @@ class ContextMap<C extends IInterface> {
 
     /** Get all registered application callbacks. */
     public List<C> getAllAppsCallbackId() {
-        List<C> appIds = new ArrayList();
+        List<C> appIds = new ArrayList<>();
         synchronized (mAppsLock) {
             for (App entry : mApps) {
                 appIds.add(entry.getCallback());
@@ -311,9 +314,10 @@ class ContextMap<C extends IInterface> {
 
     /** Add a new connection for a given application ID. */
     void addConnection(int id, int connId, int transport, BluetoothDevice device) {
-        synchronized (mConnectionsLock) {
-            App entry = getById(id);
-            if (entry != null) {
+        App entry = getById(id);
+
+        if (entry != null) {
+            synchronized (mConnectionsLock) {
                 mConnections.add(new Connection(connId, device, transport, id));
             }
         }
@@ -366,7 +370,7 @@ class ContextMap<C extends IInterface> {
 
     /** Get an application context by UUID. */
     public App getByUuid(UUID uuid) {
-        App app = getAppByPredicate(entry -> entry.uuid.equals(uuid));
+        App app = getAppByPredicate(entry -> entry.mUuid.equals(uuid));
         if (app == null) {
             Log.e(TAG, "Context not found for UUID " + uuid);
         }
@@ -417,7 +421,7 @@ class ContextMap<C extends IInterface> {
      * <p>This function provides a way to get all connections for a device so we can do the above.
      */
     List<Connection> getConnectionsByDevice(int appId, BluetoothDevice device) {
-        List<Connection> currentConnections = new ArrayList<Connection>();
+        List<Connection> currentConnections = new ArrayList<>();
         synchronized (mConnectionsLock) {
             for (Connection connection : mConnections) {
                 if (connection.device.equals(device) && connection.appId == appId) {
@@ -442,7 +446,7 @@ class ContextMap<C extends IInterface> {
 
     /** Returns all Connections that have a given app UID. */
     public List<Connection> getConnectionByApp(int appId) {
-        List<Connection> currentConnections = new ArrayList<Connection>();
+        List<Connection> currentConnections = new ArrayList<>();
         synchronized (mConnectionsLock) {
             for (Connection connection : mConnections) {
                 if (connection.appId == appId) {
@@ -456,7 +460,7 @@ class ContextMap<C extends IInterface> {
     /** Counts the number of applications that have a given app UID. */
     public int countByAppUid(int appUid) {
         synchronized (mAppsLock) {
-            return (int) (mApps.stream().filter(app -> app.uid == appUid).count());
+            return (int) (mApps.stream().filter(app -> app.mUid == appUid).count());
         }
     }
 
@@ -506,11 +510,11 @@ class ContextMap<C extends IInterface> {
     @GuardedBy("mAppsLock")
     private void recordUnregisterApp(App app, RemoveReason reason) {
         for (int i = 0; i < mOngoingRecords.size(); i++) {
-            if (app.uuid.equals(mOngoingRecords.get(i).uuid)) {
+            if (app.mUuid.equals(mOngoingRecords.get(i).mUuid)) {
                 AppRecord record = mOngoingRecords.remove(i);
-                record.clientIf = app.id;
-                record.reason = reason;
-                record.unregisterTime = Instant.now();
+                record.mClientIf = app.id;
+                record.mReason = reason;
+                record.mUnregisterTime = Instant.now();
 
                 if (mLastRecords.size() >= MAX_LAST_RECORDS) {
                     mLastRecords.remove(0);

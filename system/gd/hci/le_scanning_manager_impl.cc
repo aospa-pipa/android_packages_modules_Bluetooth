@@ -21,6 +21,7 @@
 
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <memory>
@@ -40,7 +41,6 @@
 #include "os/system_properties.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/btm_sec_api.h"
-#include "types/ble_address_with_type.h"
 
 namespace bluetooth {
 namespace hci {
@@ -224,8 +224,13 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
   ~impl() {
     stop();
     if (address_manager_registered_) {
-      le_address_manager_->Unregister(this);
+      if (com::android::bluetooth::flags::fix_use_after_object_destroyed()) {
+        le_address_manager_->UnregisterSync(this);
+      } else {
+        le_address_manager_->Unregister(this);
+      }
     }
+
     if (!com::android::bluetooth::flags::same_handler_for_all_modules()) {
       handler_->Clear();
       handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
@@ -234,9 +239,15 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
   }
 
   void stop() {
-    for (auto subevent_code : LeScanningEvents) {
-      hci_layer_->UnregisterLeEventHandler(subevent_code);
+    if (com::android::bluetooth::flags::fix_event_handler_reg_and_dereg()) {
+      hci_layer_->ReleaseLeScanningInterface();
     }
+    else {
+      for (auto subevent_code : LeScanningEvents) {
+        hci_layer_->UnregisterLeEventHandler(subevent_code);
+      }
+    }
+
     if (is_batch_scan_supported_) {
       // TODO implete vse module
       // hci_layer_->UnregisterVesEventHandler(VseSubeventCode::BLE_THRESHOLD);
@@ -766,18 +777,14 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
   }
 
   bool is_bonded(Address target_address) {
-    if (com::android::bluetooth::flags::irk_scan_bond_check_update()) {
-      return BTM_IsBonded(RawAddress(target_address.address), BT_TRANSPORT_LE);
-    } else {
-      for (auto device : storage_module_->GetBondedDevices()) {
-        if (device.GetAddress() == target_address) {
-          log::debug("Addresses match!");
-          return true;
-        }
+    for (auto device : storage_module_->GetBondedDevices()) {
+      if (device.GetAddress() == target_address) {
+        log::debug("Addresses match!");
+        return true;
       }
-      log::debug("Addresses don't match!");
-      return false;
     }
+    log::debug("Addresses don't match!");
+    return false;
   }
 
   void scan_filter_parameter_setup(ApcfAction action, uint8_t filter_index,
@@ -814,6 +821,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
         if (entry != remove_me_later_map_.end()) {
           // Don't want to remove for a bonded device
           if (!is_bonded(entry->second.GetAddress())) {
+            log::info("{} not bonded, removing from resolving list", entry->second.GetAddress());
             le_address_manager_->RemoveDeviceFromResolvingList(
                     static_cast<PeerAddressType>(entry->second.GetAddressType()),
                     entry->second.GetAddress());
@@ -830,6 +838,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
         if (entry != remove_me_later_map_.end()) {
           // Don't want to remove for a bonded device
           if (!is_bonded(entry->second.GetAddress())) {
+            log::info("{} not bonded, removing from resolving list", entry->second.GetAddress());
             le_address_manager_->RemoveDeviceFromResolvingList(
                     static_cast<PeerAddressType>(entry->second.GetAddressType()),
                     entry->second.GetAddress());
@@ -934,6 +943,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
         if (entry != remove_me_later_map_.end()) {
           // Don't want to remove for a bonded device
           if (!is_bonded(entry->second.GetAddress())) {
+            log::info("{} not bonded, removing from resolving list", entry->second.GetAddress());
             le_address_manager_->RemoveDeviceFromResolvingList(
                     static_cast<PeerAddressType>(entry->second.GetAddressType()),
                     entry->second.GetAddress());
@@ -1672,12 +1682,10 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     paused_ = false;
     if (scan_on_resume_) {
       scan_on_resume_ = false;
-      if (com::android::bluetooth::flags::configure_scan_on_resume()) {
-        // This is a workaround for b/381010390.
-        // We'll eventually recover scan parameters which could be overridden by
-        // btm_send_hci_set_scan_params.
-        configure_scan();
-      }
+      // This is a workaround for b/381010390.
+      // We'll eventually recover scan parameters which could be overridden by
+      // btm_send_hci_set_scan_params.
+      configure_scan();
       start_scan();
     }
     le_address_manager_->AckResume(this);
@@ -1728,9 +1736,12 @@ LeScanningManagerImpl::LeScanningManagerImpl(os::Handler* handler, hci::HciInter
                                              storage::StorageModule* storage_module) {
   pimpl_ = std::make_unique<impl>(handler, hci_layer, controller, le_address_manager,
                                   storage_module);
+  log::verbose("LeScanningManager module started !!");
 }
 
-LeScanningManagerImpl::~LeScanningManagerImpl() = default;
+LeScanningManagerImpl::~LeScanningManagerImpl() {
+  log::verbose("LeScanningManager module stopped !!");
+};
 
 void LeScanningManagerImpl::RegisterScanner(Uuid app_uuid) {
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::register_scanner, app_uuid);
@@ -1774,7 +1785,7 @@ void LeScanningManagerImpl::ScanFilterAdd(
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::scan_filter_add, filter_index, filters);
 }
 
-void LeScanningManagerImpl::BatchScanConifgStorage(uint8_t batch_scan_full_max,
+void LeScanningManagerImpl::BatchScanConfigStorage(uint8_t batch_scan_full_max,
                                                    uint8_t batch_scan_truncated_max,
                                                    uint8_t batch_scan_notify_threshold,
                                                    ScannerId scanner_id) {

@@ -35,6 +35,8 @@
 
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/hci_role.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -83,8 +85,6 @@
 #include "stack/include/l2cdefs.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_int.h"
-#include "types/ble_address_with_type.h"
-#include "types/hci_role.h"
 
 #ifndef PROPERTY_LINK_SUPERVISION_TIMEOUT
 #define PROPERTY_LINK_SUPERVISION_TIMEOUT "bluetooth.core.acl.link_supervision_timeout"
@@ -481,18 +481,24 @@ void btm_acl_device_down(void) {
   BTM_db_reset();
 }
 
-tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, tHCI_ROLE* p_role) {
+tBTM_STATUS BTM_GetRole(const RawAddress& remote_bd_addr, tBT_TRANSPORT transport,
+                        tHCI_ROLE* p_role) {
   if (p_role == nullptr) {
     return tBTM_STATUS::BTM_ILLEGAL_VALUE;
   }
   *p_role = HCI_ROLE_UNKNOWN;
 
-  tACL_CONN* p_acl = internal_.btm_bda_to_acl(remote_bd_addr, BT_TRANSPORT_BR_EDR);
+  tACL_CONN* p_acl = internal_.btm_bda_to_acl(remote_bd_addr, transport);
   if (p_acl == nullptr) {
-    log::warn("Unable to find active acl");
+    log::warn("Unable to find active acl. bd_addr: {}, transport: {}", remote_bd_addr,
+              bt_transport_text(transport));
     return tBTM_STATUS::BTM_UNKNOWN_ADDR;
   }
   *p_role = p_acl->link_role;
+
+  log::verbose("{} transport: {}, role: {}", remote_bd_addr, bt_transport_text(transport),
+               hci_role_text(*p_role));
+
   return tBTM_STATUS::BTM_SUCCESS;
 }
 

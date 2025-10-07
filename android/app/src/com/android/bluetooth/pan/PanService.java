@@ -336,7 +336,7 @@ public class PanService extends ConnectableProfile {
             intent.putExtra(
                     BluetoothPan.EXTRA_TETHERING_STATE,
                     mTetherOn ? BluetoothPan.TETHERING_STATE_ON : BluetoothPan.TETHERING_STATE_OFF);
-            sendBroadcast(intent, null, Utils.getTempBroadcastOptions().toBundle());
+            sendBroadcast(intent, null, Utils.getTempBroadcastBundle());
         }
     }
 
@@ -358,7 +358,7 @@ public class PanService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {

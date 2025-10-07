@@ -41,6 +41,7 @@
 #ifndef TARGET_FLOSS
 #include <cutils/multiuser.h>
 #endif
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,11 +63,11 @@
 #include "internal_include/bt_target.h"
 #include "main/shim/entry.h"
 #include "main/shim/helpers.h"
+#include "main/shim/shim.h"
 #include "osi/include/allocator.h"
 #include "stack/include/bt_octets.h"
 #include "stack/include/bt_uuid16.h"
 #include "storage/config_keys.h"
-#include "types/ble_address_with_type.h"
 
 /* This is a local property to add a device found */
 #define BT_PROPERTY_REMOTE_DEVICE_TIMESTAMP 0xFF
@@ -131,6 +132,13 @@ static void btif_storage_set_mode(RawAddress* remote_bd_addr) {
 }
 
 static bool prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
+  if (com::android::bluetooth::flags::prevent_storage_access_without_gd_running()) {
+    if (!bluetooth::shim::is_gd_stack_started_up()) {
+      log::error("is_gd_stack_started_up=false");
+      return false;
+    }
+  }
+
   std::string bdstr;
   if (remote_bd_addr) {
     bdstr = remote_bd_addr->ToString();
@@ -237,6 +245,13 @@ static bool prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
 }
 
 static bool cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
+  if (com::android::bluetooth::flags::prevent_storage_access_without_gd_running()) {
+    if (!bluetooth::shim::is_gd_stack_started_up()) {
+      log::error("is_gd_stack_started_up=false");
+      return false;
+    }
+  }
+
   std::string bdstr;
   if (remote_bd_addr) {
     bdstr = remote_bd_addr->ToString();
@@ -837,6 +852,17 @@ bt_status_t btif_storage_remove_bonded_device(const RawAddress* remote_bd_addr) 
 
   btif_config_remove_device(bdstr);
 
+  /* Check the length of the paired devices, and if 0 then reset IRK */
+  if (com::android::bluetooth::flags::btsec_cycle_irks()) {
+    auto paired_devices = btif_config_get_paired_devices();
+    if (paired_devices.empty()) {
+      btif_remove_local_irk_from_resolving_list();
+
+      log::info("Last paired device removed, resetting IRK");
+      BTA_DmBleResetId();
+    }
+  }
+
   return BT_STATUS_SUCCESS;
 }
 
@@ -875,7 +901,7 @@ static void remove_devices_with_sample_ltk() {
  * Function         btif_storage_load_le_devices
  *
  * Description      BTIF storage API - Loads all LE-only and Dual Mode devices
- *                  from NVRAM. This API invokes the adaper_properties_cb.
+ *                  from NVRAM. This API invokes the adapter_properties_cb.
  *                  It also invokes invoke_address_consolidate_cb
  *                  to consolidate each Dual Mode device and
  *                  invoke_le_address_associate_cb to associate each LE-only
@@ -945,7 +971,7 @@ void btif_storage_load_le_devices(void) {
  *
  * Description      BTIF storage API - Loads all the bonded devices from NVRAM
  *                  and adds to the BTA.
- *                  Additionally, this API also invokes the adaper_properties_cb
+ *                  Additionally, this API also invokes the adapter_properties_cb
  *                  and remote_device_properties_cb for each of the bonded
  *                  devices.
  *
@@ -960,7 +986,6 @@ bt_status_t btif_storage_load_bonded_devices(void) {
   bt_property_t remote_properties[11];
   RawAddress addr;
   bt_bdname_t name, alias, model_name;
-  bt_scan_mode_t mode;
   uint32_t disc_timeout;
   Uuid local_uuids[BT_MAX_NUM_UUIDS];
   Uuid remote_uuids[BT_MAX_NUM_UUIDS];
@@ -1048,11 +1073,9 @@ bt_status_t btif_storage_load_bonded_devices(void) {
                                    sizeof(remote_uuids), &remote_properties[num_props]);
       num_props++;
 
-      if (com::android::bluetooth::flags::separate_service_storage()) {
-        btif_storage_get_remote_prop(p_remote_addr, BT_PROPERTY_UUIDS_LE, &remote_uuids_le,
-                                     sizeof(remote_uuids_le), &remote_properties[num_props]);
-        num_props++;
-      }
+      btif_storage_get_remote_prop(p_remote_addr, BT_PROPERTY_UUIDS_LE, &remote_uuids_le,
+                                   sizeof(remote_uuids_le), &remote_properties[num_props]);
+      num_props++;
 
       // Floss needs appearance for metrics purposes
       uint16_t appearance = 0;
@@ -1216,9 +1239,8 @@ bt_status_t btif_in_fetch_bonded_ble_device(const std::string& remote_bd_addr, i
   tBLE_ADDR_TYPE addr_type;
   bool device_added = false;
   bool key_found = false;
-  RawAddress bd_addr;
 
-  RawAddress::FromString(remote_bd_addr, bd_addr);
+  RawAddress bd_addr = RawAddress::FromString(remote_bd_addr).value_or(RawAddress::kEmpty);
 
   if (!btif_config_get_int(remote_bd_addr, BTIF_STORAGE_KEY_DEV_TYPE, &device_type)) {
     return BT_STATUS_FAIL;
@@ -1466,10 +1488,6 @@ void btif_storage_remove_gatt_cl_db_hash(const RawAddress& bd_addr) {
 
 std::vector<bluetooth::Uuid> btif_storage_get_services(const RawAddress& bd_addr,
                                                        tBT_TRANSPORT transport) {
-  if (!com::android::bluetooth::flags::separate_service_storage()) {
-    transport = BT_TRANSPORT_BR_EDR;
-  }
-
   // Get BR/EDR services if requested transport is BT_TRANSPORT_BR_EDR or BT_TRANSPORT_AUTO
   bool get_bredr_services = transport != BT_TRANSPORT_LE;
 
@@ -1521,7 +1539,7 @@ void btif_storage_migrate_services() {
                                remote_uuids);
     btif_storage_get_remote_device_property(&mac_address, &remote_uuids_prop);
 
-    log::info("Will migrate Services => ServicesLe for {}", mac_address.ToStringForLogging());
+    log::info("Will migrate Services => ServicesLe for {}", mac_address);
 
     std::vector<uint8_t> property_value;
     for (auto& uuid : remote_uuids) {
@@ -1539,7 +1557,7 @@ void btif_storage_migrate_services() {
 
     /* Write LE services to storage */
     btif_storage_set_remote_device_property(&mac_address, &le_uuids_prop);
-    log::info("Migration finished for {}", mac_address.ToStringForLogging());
+    log::info("Migration finished for {}", mac_address);
   }
 }
 

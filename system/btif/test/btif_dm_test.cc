@@ -16,6 +16,7 @@
 
 #include "btif/include/btif_dm.h"
 
+#include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 #include <flag_macros.h>
 #include <gtest/gtest.h>
@@ -23,7 +24,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "types/ble_address_with_type.h"
 #include "bta/include/bta_api_data_types.h"
 #include "btif/include/mock_core_callbacks.h"
 #include "btif/include/stack_manager_t.h"

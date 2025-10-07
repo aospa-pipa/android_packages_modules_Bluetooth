@@ -18,6 +18,7 @@
 #ifndef ANDROID_INCLUDE_BLUETOOTH_H
 #define ANDROID_INCLUDE_BLUETOOTH_H
 
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -27,7 +28,6 @@
 #include <vector>
 
 #include "avrcp/avrcp.h"
-#include "types/ble_address_with_type.h"
 
 /**
  * The Bluetooth Hardware Module ID
@@ -111,6 +111,11 @@ typedef enum {
   BT_STATUS_UNEXPECTED_STATE,
   BT_STATUS_SOCKET_ERROR
 } bt_status_t;
+
+typedef enum : uint8_t {
+  BT_REASON_FOR_NO_UUIDS_EMPTY_UUID_LIST = 0x01,
+  BT_REASON_FOR_NO_UUIDS_NO_UUID_TYPES_EXIST = 0x02,
+} bt_reason_for_no_uuids;
 
 inline std::string bt_status_text(const bt_status_t& status) {
   switch (status) {
@@ -443,16 +448,22 @@ typedef enum {
   /**
    * Description - Bluetooth Service 128-bit UUIDs in Extended inquiry result (EIR).
    * Access mode - Only GET.
-   * Data type   - Array of bluetooth::Uuid (Array size inferred from property
-   *               length).
+   * Data type   - The data type should be inferred from the property length:
+   *   - If the length is 1, bt_reason_for_no_uuids (uint8_t):
+   *     - BT_REASON_FOR_NO_UUIDS_EMPTY_UUID_LIST: UUID type exists, but the UUID list is empty.
+   *     - BT_REASON_FOR_NO_UUIDS_NO_UUID_TYPES_EXIST: No UUID type exists in EIR, or no EIR exists.
+   *   - Otherwise, Array of bluetooth::Uuid (Array size inferred from property length).
    */
   BT_PROPERTY_UUIDS_FROM_EXTENDED_INQUIRY_RESPONSE,
 
   /**
    * Description - Bluetooth Service 128-bit UUIDs in LE Advertising data (AD)
    * Access mode - Only GET.
-   * Data type   - Array of bluetooth::Uuid (Array size inferred from property
-   *               length).
+   * Data type   - The data type should be inferred from the property length:
+   *   - If the length is 1, bt_reason_for_no_uuids (uint8_t):
+   *     - BT_REASON_FOR_NO_UUIDS_EMPTY_UUID_LIST: UUID type exists, but the UUID list is empty.
+   *     - BT_REASON_FOR_NO_UUIDS_NO_UUID_TYPES_EXIST: No UUID type exists in AD, or no AD exists.
+   *   - Otherwise, Array of bluetooth::Uuid (Array size inferred from property length).
    */
   BT_PROPERTY_UUIDS_FROM_LE_ADVERTISING_DATA,
 

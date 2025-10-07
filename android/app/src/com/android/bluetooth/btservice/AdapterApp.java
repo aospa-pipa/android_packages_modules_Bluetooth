@@ -22,7 +22,6 @@ import android.util.Log;
 import com.android.bluetooth.btservice.storage.BluetoothDatabaseU2VMigration;
 
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.flags.Flags;
 
 public class AdapterApp extends Application {
     private static final String TAG = Utils.BT_PREFIX + AdapterApp.class.getSimpleName();
@@ -31,20 +30,11 @@ public class AdapterApp extends Application {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "onCreate");
-        if (Flags.factoryResetAtBluetoothStart()) {
-            return;
-        }
 
         try {
             BluetoothDatabaseU2VMigration.run(this);
         } catch (Exception e) {
             Log.e(TAG, "U2VMigration failure: ", e);
-        }
-
-        try {
-            DataMigration.run(this);
-        } catch (Exception e) {
-            Log.e(TAG, "Migration failure: ", e);
         }
     }
 }

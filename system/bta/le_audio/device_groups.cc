@@ -20,6 +20,7 @@
 
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/bt_transport.h>
 #include <stdio.h>
 
 #include <algorithm>
@@ -59,7 +60,6 @@
 #include "metrics_collector.h"
 #include "osi/include/properties.h"
 #include "stack/include/btm_client_interface.h"
-#include "types/bt_transport.h"
 #include "osi/include/properties.h"
 
 namespace bluetooth::le_audio {
@@ -176,7 +176,7 @@ void LeAudioDeviceGroup::Cleanup(void) {
     auto& source_stream_locations = stream_conf.stream_params.source.stream_config.stream_map;
 
     if (!sink_stream_locations.empty()) {
-      for (const auto info : sink_stream_locations) {
+      for (const auto& info : sink_stream_locations) {
         auto cis_handle = info.stream_handle;
         bluetooth::hci::IsoManager::GetInstance()->DisconnectCis(cis_handle, HCI_ERR_PEER_USER);
 
@@ -434,7 +434,7 @@ uint8_t LeAudioDeviceGroup::GetActiveQoSConfiguredDirections(void) {
   }
 
   uint8_t enabled_remote_directions = 0;
-  for (const auto dev : leAudioDevices_) {
+  for (const auto& dev : leAudioDevices_) {
     auto device = dev.lock();
     if (device == nullptr) {
       continue;
@@ -447,7 +447,7 @@ uint8_t LeAudioDeviceGroup::GetActiveQoSConfiguredDirections(void) {
 
 uint8_t LeAudioDeviceGroup::GetActiveEnabledDirections(void) {
   uint8_t enabled_remote_directions = 0;
-  for (const auto dev : leAudioDevices_) {
+  for (const auto& dev : leAudioDevices_) {
     auto device = dev.lock();
     if (device == nullptr) {
       continue;
@@ -1412,7 +1412,7 @@ bool LeAudioDeviceGroup::IsGroupStreamReady(void) const {
 }
 
 bool LeAudioDeviceGroup::HaveAllCisesDisconnected(void) const {
-  for (auto const dev : leAudioDevices_) {
+  for (auto const& dev : leAudioDevices_) {
     if (dev.expired()) {
       continue;
     }
@@ -1435,6 +1435,8 @@ uint8_t LeAudioDeviceGroup::CigConfiguration::GetFirstFreeCisId(CisType cis_type
 }
 
 types::LeAudioConfigurationStrategy LeAudioDeviceGroup::GetGroupSinkStrategy() const {
+  log::debug(" ");
+
   /* Update the strategy if not set yet or was invalidated */
   if (!strategy_) {
     /* Choose the group configuration strategy based on PAC records */
@@ -1505,6 +1507,7 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::GetGroupSinkStrategy() c
 
 types::LeAudioConfigurationStrategy LeAudioDeviceGroup::FindGroupStrategyForConfig(
         const types::AudioSetConfiguration* audio_set_conf) const {
+  log::debug(" ");
   auto strategy_selector = [&, this](uint8_t direction) {
     int expected_group_size = Size();
 
@@ -1539,6 +1542,7 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::FindGroupStrategyForConf
     auto max_channel_count = (config_element != configs.end())
                                      ? config_element->codec.GetChannelCountPerIsoStream()
                                      : 1;
+    log::debug("max_channel_count {}", max_channel_count);
     if (max_channel_count == 1) {
       return types::LeAudioConfigurationStrategy::STEREO_TWO_CISES_PER_DEVICE;
     }
@@ -1642,7 +1646,9 @@ void LeAudioDeviceGroup::CigConfiguration::GetCisCount(LeAudioContextType contex
 
   // For non-LC3 codecs like Opus, we should base the strategy calcualation based on the config
   const bool derive_strategy_from_config =
-          current_config && com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type();
+          current_config && true/*com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()*/;
+  log::info("derive_strategy_from_config {}", derive_strategy_from_config);
+
   auto strategy = derive_strategy_from_config
                           ? group_->FindGroupStrategyForConfig(current_config.get())
                           : group_->GetGroupSinkStrategy();
@@ -1989,6 +1995,35 @@ void LeAudioDeviceGroup::CigConfiguration::UnassignCis(LeAudioDevice* leAudioDev
   }
 }
 
+types::BidirectionalPair<bool> LeAudioDeviceGroup::CigConfiguration::GetConnectedCisDirections(
+        void) {
+  types::BidirectionalPair<bool> response = {false, false};
+
+  for (struct bluetooth::le_audio::types::cis& cis_entry : cises) {
+    if (cis_entry.addr.IsEmpty()) {
+      continue;
+    }
+
+    switch (cis_entry.type) {
+      case CisType::CIS_TYPE_UNIDIRECTIONAL_SINK:
+        response.sink = true;
+        break;
+      case CisType::CIS_TYPE_UNIDIRECTIONAL_SOURCE:
+        response.source = true;
+        break;
+      case CisType::CIS_TYPE_BIDIRECTIONAL:
+        response.sink = true;
+        response.source = true;
+        break;
+    }
+
+    if (response.sink && response.source) {
+      return response;
+    }
+  }
+  return response;
+}
+
 static bool CheckIfStrategySupported(types::LeAudioConfigurationStrategy strategy,
                                      const types::AseConfiguration& conf, uint8_t direction,
                                      const LeAudioDevice& device) {
@@ -2071,7 +2106,6 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
    *    scenarion will be covered.
    * 3) ASEs should be filled according to performance profile.
    */
-  auto required_snk_strategy = GetGroupSinkStrategy();
   bool status = false;
   for (auto direction : {types::kLeAudioDirectionSink, types::kLeAudioDirectionSource}) {
     log::debug("Looking for configuration: {} - {}", audio_set_conf->name,
@@ -2143,6 +2177,7 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
     uint8_t const max_required_ase_per_dev = ase_cnt / device_cnt + (ase_cnt % device_cnt);
 
     // Use strategy for the whole group (not only the connected devices)
+    auto required_snk_strategy = FindGroupStrategyForConfig(audio_set_conf);
     auto const strategy = utils::GetStrategyForAseConfig(ase_confs, device_cnt);
 
     log::debug(
@@ -2453,6 +2488,9 @@ void LeAudioDeviceGroup::DisableLeXCodec(bool status) {
   lex_codec_disabled.second = true;
 }
 
+bool LeAudioDeviceGroup::IsLeXCodecEnabled() {
+  return !lex_codec_disabled.first;
+}
 std::shared_ptr<const types::AudioSetConfiguration>
 LeAudioDeviceGroup::GetConfiguration(LeAudioContextType context_type) const {
   log::info("context_type: {}", ToHexString(context_type));
@@ -2822,6 +2860,28 @@ std::unique_ptr<types::AudioSetConfiguration> LeAudioDeviceGroup::FindFirstSuppo
   }
 
   return nullptr;
+}
+
+void LeAudioDeviceGroup::StartConnSubrateIfNeeded() {
+  if (!com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only()) {
+    return;
+  }
+
+  for (auto* leAudioDevice = GetFirstDevice(); leAudioDevice;
+       leAudioDevice = GetNextDevice(leAudioDevice)) {
+    leAudioDevice->StartConnSubrate();
+  }
+}
+
+void LeAudioDeviceGroup::StopConnSubrateIfNeeded() {
+  if (!com::android::bluetooth::flags::start_leaudio_subrate_for_active_set_only()) {
+    return;
+  }
+
+  for (auto* leAudioDevice = GetFirstDevice(); leAudioDevice;
+       leAudioDevice = GetNextDevice(leAudioDevice)) {
+    leAudioDevice->StopConnSubrate();
+  }
 }
 
 /* This method should choose aproperiate ASEs to be active and set a cached

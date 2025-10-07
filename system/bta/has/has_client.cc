@@ -19,6 +19,8 @@
 #include <base/functional/callback.h>
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <hardware/bt_gatt_types.h>
@@ -61,8 +63,6 @@
 #include "osi/include/properties.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/bt_types.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 using base::Closure;
 using bluetooth::Uuid;
@@ -1600,6 +1600,44 @@ private:
     if (pending_group_operation_timeouts_.empty()) {
       if (!com::android::bluetooth::flags::synchronize_preset_can_timeout()) {
         callbacks_->OnActivePresetSelected(device->addr, device->currently_active_preset);
+      }
+      return;
+    }
+
+    if (com::android::bluetooth::flags::hap_safely_erase_pending_operation_timeout()) {
+      for (auto it = pending_group_operation_timeouts_.rbegin();
+           it != pending_group_operation_timeouts_.rend();) {
+        auto& group_op_coordinator = it->second;
+
+        bool matches = false;
+        switch (group_op_coordinator.operation.opcode) {
+          case PresetCtpOpcode::SET_ACTIVE_PRESET:
+          case PresetCtpOpcode::SET_NEXT_PRESET:
+          case PresetCtpOpcode::SET_PREV_PRESET:
+          case PresetCtpOpcode::SET_ACTIVE_PRESET_SYNC:
+          case PresetCtpOpcode::SET_NEXT_PRESET_SYNC:
+          case PresetCtpOpcode::SET_PREV_PRESET_SYNC: {
+            if (group_op_coordinator.SetCompleted(device->addr)) {
+              matches = true;
+              break;
+            }
+          } break;
+          default:
+            /* Ignore */
+            break;
+        }
+        if (group_op_coordinator.IsFullyCompleted()) {
+          if (!com::android::bluetooth::flags::synchronize_preset_can_timeout()) {
+            callbacks_->OnActivePresetSelectedForGroup(group_op_coordinator.operation.GetGroupId(),
+                                                       device->currently_active_preset);
+          }
+          it = decltype(it)(pending_group_operation_timeouts_.erase(std::next(it).base()));
+        } else {
+          ++it;
+        }
+        if (matches) {
+          break;
+        }
       }
       return;
     }

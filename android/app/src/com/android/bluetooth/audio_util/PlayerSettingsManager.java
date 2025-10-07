@@ -21,10 +21,10 @@ import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
 
+import com.android.bluetooth.avrcp.AvrcpTargetService;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import com.android.bluetooth.avrcp.AvrcpTargetService;
 
 /** Manager class for player apps. */
 public class PlayerSettingsManager {
@@ -37,10 +37,10 @@ public class PlayerSettingsManager {
     private final MediaControllerCallback mControllerCallback;
 
     /**
-     * Map containing the current values of the player settings.
-     * Used to prevent sending a state change event when values are unchanged.
+     * Map containing the current values of the player settings. Used to prevent sending a state
+     * change event when values are unchanged.
      */
-    private final Map<Integer, Integer> mCurrentAppSettingValue = new HashMap();
+    private final Map<Integer, Integer> mCurrentAppSettingValue = new HashMap<>();
 
     /**
      * Instantiates a new PlayerSettingsManager.
@@ -50,8 +50,7 @@ public class PlayerSettingsManager {
     public PlayerSettingsManager(MediaPlayerList mediaPlayerList, AvrcpTargetService service) {
         mService = service;
         mMediaPlayerList = mediaPlayerList;
-        mMediaPlayerList.setPlayerSettingsCallback(
-                (mediaPlayerWrapper) -> activePlayerChanged(mediaPlayerWrapper));
+        mMediaPlayerList.setPlayerSettingsCallback(this::activePlayerChanged);
         mControllerCallback = new MediaControllerCallback();
 
         MediaPlayerWrapper wrapper = mMediaPlayerList.getActivePlayer();
@@ -62,10 +61,7 @@ public class PlayerSettingsManager {
                 Log.w(TAG, "PlayerSettingsManager sessionToken is null");
                 return;
             }
-            mActivePlayerController =
-                    new MediaControllerCompat(
-                            mService,
-                            sessionToken);
+            mActivePlayerController = new MediaControllerCompat(mService, sessionToken);
             if (!registerMediaControllerCallback(mActivePlayerController, mControllerCallback)) {
                 mActivePlayerController = null;
             }
@@ -74,11 +70,9 @@ public class PlayerSettingsManager {
             mActivePlayerController = null;
         }
         mCurrentAppSettingValue.put(
-                PlayerSettingsValues.SETTING_REPEAT,
-                PlayerSettingsValues.STATE_REPEAT_OFF);
+                PlayerSettingsValues.SETTING_REPEAT, PlayerSettingsValues.STATE_REPEAT_OFF);
         mCurrentAppSettingValue.put(
-                PlayerSettingsValues.SETTING_SHUFFLE,
-                PlayerSettingsValues.STATE_SHUFFLE_OFF);
+                PlayerSettingsValues.SETTING_SHUFFLE, PlayerSettingsValues.STATE_SHUFFLE_OFF);
     }
 
     /** Unregister callbacks */
@@ -103,10 +97,7 @@ public class PlayerSettingsManager {
                 return;
             }
             Log.i(TAG, "activePlayerChanged : " + mediaPlayerWrapper.getPackageName());
-            mActivePlayerController =
-                    new MediaControllerCompat(
-                            mService,
-                            sessionToken);
+            mActivePlayerController = new MediaControllerCompat(mService, sessionToken);
             if (!registerMediaControllerCallback(mActivePlayerController, mControllerCallback)) {
                 mActivePlayerController = null;
             }
@@ -125,10 +116,13 @@ public class PlayerSettingsManager {
      * been removed - The repeat / shuffle player state changed
      */
     private void updateRemoteDevice() {
-        int currentRepeatMode = mCurrentAppSettingValue.getOrDefault(
-                PlayerSettingsValues.SETTING_REPEAT, PlayerSettingsValues.STATE_REPEAT_OFF);
-        int currentShuffleMode = mCurrentAppSettingValue.getOrDefault(
-                PlayerSettingsValues.SETTING_SHUFFLE, PlayerSettingsValues.STATE_SHUFFLE_OFF);
+        int currentRepeatMode =
+                mCurrentAppSettingValue.getOrDefault(
+                        PlayerSettingsValues.SETTING_REPEAT, PlayerSettingsValues.STATE_REPEAT_OFF);
+        int currentShuffleMode =
+                mCurrentAppSettingValue.getOrDefault(
+                        PlayerSettingsValues.SETTING_SHUFFLE,
+                        PlayerSettingsValues.STATE_SHUFFLE_OFF);
 
         int repeatMode = getPlayerRepeatMode();
         int shuffleMode = getPlayerShuffleMode();
@@ -137,13 +131,15 @@ public class PlayerSettingsManager {
                 TAG,
                 "updateRemoteDevice: repeat ("
                         + getRepeatModeStringValue(currentRepeatMode)
-                        + " -> " + getRepeatModeStringValue(repeatMode)
+                        + " -> "
+                        + getRepeatModeStringValue(repeatMode)
                         + "), shuffle ("
                         + getShuffleModeStringValue(currentShuffleMode)
-                        + " -> " + getShuffleModeStringValue(shuffleMode) + ")");
+                        + " -> "
+                        + getShuffleModeStringValue(shuffleMode)
+                        + ")");
 
-        if (currentRepeatMode != repeatMode
-                || currentShuffleMode != shuffleMode) {
+        if (currentRepeatMode != repeatMode || currentShuffleMode != shuffleMode) {
             mCurrentAppSettingValue.put(PlayerSettingsValues.SETTING_REPEAT, repeatMode);
             mCurrentAppSettingValue.put(PlayerSettingsValues.SETTING_SHUFFLE, shuffleMode);
             mService.sendPlayerSettings(repeatMode, shuffleMode);

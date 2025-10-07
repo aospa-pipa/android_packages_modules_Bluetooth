@@ -17,6 +17,7 @@
 
 #include <aics/api.h>
 #include <base/functional/bind.h>
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <gmock/gmock.h>
@@ -38,7 +39,6 @@
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_status.h"
 #include "test/common/mock_functions.h"
-#include "types/raw_address.h"
 
 struct alarm_t {
   alarm_callback_t cb = nullptr;
@@ -441,7 +441,6 @@ protected:
     __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
     com::android::bluetooth::flags::provider_->reset_flags();
 
-    com::android::bluetooth::flags::provider_->leaudio_add_aics_support(true);
     com::android::bluetooth::flags::provider_->vcp_handle_group_id_internally(true);
 
     bluetooth::manager::SetMockBtmInterface(&btm_interface);
@@ -1359,6 +1358,14 @@ TEST_F(VolumeControlCallbackTest, test_volume_state_changed_malformed) {
   GetNotificationEvent(0x0021, too_long);
 }
 
+TEST_F(VolumeControlCallbackTest, audio_input_state_changed__invalid_gain__is_rejected) {
+  uint8_t invalid_gain = 2;
+  std::vector<uint8_t> value(
+          {invalid_gain, (uint8_t)Mute::NOT_MUTED, (uint8_t)GainMode::MANUAL, 0x04});
+  EXPECT_CALL(callbacks, OnExtAudioInStateChanged(_, _, _, _, _)).Times(0);
+  GetNotificationEvent(0x0032, value);
+}
+
 TEST_F(VolumeControlCallbackTest, audio_input_state_changed__invalid_mute__is_rejected) {
   uint8_t invalid_mute = 0x03;
   std::vector<uint8_t> value({0x03, invalid_mute, (uint8_t)GainMode::MANUAL, 0x04});
@@ -1374,16 +1381,16 @@ TEST_F(VolumeControlCallbackTest, audio_input_state_changed__invalid_gain_mode__
 }
 
 TEST_F(VolumeControlCallbackTest, test_audio_input_state_changed__muted) {
-  std::vector<uint8_t> value({0x03, (uint8_t)Mute::MUTED, (uint8_t)GainMode::MANUAL, 0x04});
+  std::vector<uint8_t> value({0x01, (uint8_t)Mute::MUTED, (uint8_t)GainMode::MANUAL, 0x04});
   EXPECT_CALL(callbacks,
-              OnExtAudioInStateChanged(test_address, _, 0x03, Mute::MUTED, GainMode::MANUAL));
+              OnExtAudioInStateChanged(test_address, _, 0x01, Mute::MUTED, GainMode::MANUAL));
   GetNotificationEvent(0x0032, value);
 }
 
 TEST_F(VolumeControlCallbackTest, test_audio_input_state_changed__disabled) {
-  std::vector<uint8_t> value({0x03, (uint8_t)Mute::DISABLED, (uint8_t)GainMode::MANUAL, 0x04});
+  std::vector<uint8_t> value({0x01, (uint8_t)Mute::DISABLED, (uint8_t)GainMode::MANUAL, 0x04});
   EXPECT_CALL(callbacks,
-              OnExtAudioInStateChanged(test_address, _, 0x03, Mute::DISABLED, GainMode::MANUAL));
+              OnExtAudioInStateChanged(test_address, _, 0x01, Mute::DISABLED, GainMode::MANUAL));
   GetNotificationEvent(0x0032, value);
 }
 
@@ -2451,39 +2458,104 @@ TEST_F(VolumeControlGroupId, test_set_volume_device_not_ready_no_group) {
   Mock::VerifyAndClearExpectations(&gatt_queue);
 }
 
-TEST_F(VolumeControlGroupId, autonomus_test_set_volume) {
+TEST_F(VolumeControlGroupId, autonomus_test_set_volume_forward_required) {
+  // Connect and ready
   TestConnect(test_address_1);
   GetConnectedEvent(test_address_1, conn_id_1);
   GetSearchCompleteEvent(conn_id_1);
+
+  // Connect and ready
   TestConnect(test_address_2);
   GetConnectedEvent(test_address_2, conn_id_2);
   GetSearchCompleteEvent(conn_id_2);
 
-  /* Now inject notification and make sure callback is sent up to Java layer */
-  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x03, false, true));
+  const std::vector<uint8_t> vol({0x04, /*change_cnt*/ 0, 0x10});
+  std::vector<uint8_t> ntf({0x10, 0, /*change_cnt*/ 1});
 
-  std::vector<uint8_t> value({0x03, 0x00, 0x02});
-  GetNotificationEvent(conn_id_1, test_address_1, 0x0021, value);
-  GetNotificationEvent(conn_id_2, test_address_2, 0x0021, value);
+  // Inject autonomous notification and make sure that second remote is updated
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, vol, GATT_WRITE, _, _));
+  GetNotificationEvent(conn_id_1, test_address_1, 0x0021, ntf);
+
+  // Inject second notification and make sure that callback is sent up to Java layer
+  // No devices updated
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x10, false, true));
+  GetNotificationEvent(conn_id_2, test_address_2, 0x0021, ntf);
+}
+
+TEST_F(VolumeControlGroupId, autonomus_test_set_volume_forward_not_required_not_ready) {
+  // Connect and ready
+  TestConnect(test_address_1);
+  GetConnectedEvent(test_address_1, conn_id_1);
+  GetSearchCompleteEvent(conn_id_1);
+
+  // Connect but not ready
+  TestConnect(test_address_2);
+  GetConnectedEvent(test_address_2, conn_id_2);
+  do_not_respond_to_reads = true;
+  GetSearchCompleteEvent(conn_id_2);
+
+  std::vector<uint8_t> ntf({0x10, 0, /*change_cnt*/ 1});
+
+  // Inject autonomous notification and make sure callback is sent up to Java layer
+  // No update of second remote because it is not ready yet
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x10, false, true));
+  GetNotificationEvent(conn_id_1, test_address_1, 0x0021, ntf);
+}
+
+TEST_F(VolumeControlGroupId, autonomus_test_set_volume_forward_not_required_same_volume) {
+  // Connect and ready
+  TestConnect(test_address_1);
+  GetConnectedEvent(test_address_1, conn_id_1);
+  GetSearchCompleteEvent(conn_id_1);
+
+  std::vector<uint8_t> ntf({0x10, 0, /*change_cnt*/ 1});
+
+  // Inject autonomous notification and make sure callback is sent up to Java layer
+  // No update of second remote because it is not connected
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x10, false, true));
+  GetNotificationEvent(conn_id_1, test_address_1, 0x0021, ntf);
+
+  // Connect and ready
+  TestConnect(test_address_2);
+  GetConnectedEvent(test_address_2, conn_id_2);
+  GetSearchCompleteEvent(conn_id_2);
+
+  // Inject notification and make sure that second remote is not updated as it has the same volume
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x10, false, true));
+  GetNotificationEvent(conn_id_2, test_address_2, 0x0021, ntf);
 }
 
 TEST_F(VolumeControlGroupId, autonomus_single_device_test_set_volume) {
+  // Connect and ready
   TestConnect(test_address_1);
   GetConnectedEvent(test_address_1, conn_id_1);
   GetSearchCompleteEvent(conn_id_1);
+
+  // Connect and ready
   TestConnect(test_address_2);
   GetConnectedEvent(test_address_2, conn_id_2);
   GetSearchCompleteEvent(conn_id_2);
 
-  /* Disconnect one device. */
+  // Disconnect second device
   EXPECT_CALL(callbacks, OnConnectionState(ConnectionState::DISCONNECTED, test_address_1));
   GetDisconnectedEvent(test_address_1, conn_id_1);
 
-  /* Now inject notification and make sure callback is sent up to Java layer */
-  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x03, false, true));
-
-  std::vector<uint8_t> value({0x03, 0x00, 0x02});
-  GetNotificationEvent(conn_id_2, test_address_2, 0x0021, value);
+  // Inject autonomous notification and make sure callback is sent up to Java layer
+  // No update of second remote because it is disconneted
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_1, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(gatt_queue, WriteCharacteristic(conn_id_2, 0x0024, _, GATT_WRITE, _, _)).Times(0);
+  EXPECT_CALL(callbacks, OnGroupVolumeStateChanged(group_id, 0x10, false, true));
+  std::vector<uint8_t> ntf({0x10, 0, /*change_cnt*/ 1});
+  GetNotificationEvent(conn_id_2, test_address_2, 0x0021, ntf);
 }
 
 }  // namespace

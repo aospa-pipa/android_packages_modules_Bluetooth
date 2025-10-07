@@ -51,6 +51,7 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.ServiceFactory;
 import com.android.bluetooth.le_audio.LeAudioService;
+import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
@@ -204,13 +205,22 @@ public class HearingAidService extends ConnectableProfile {
     @Override
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
-        if (device == null) {
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            requireNonNull(device);
+
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (device == null) {
+                return false;
+            }
+
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                return false;
+            }
         }
 
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            return false;
-        }
         final ParcelUuid[] featureUuids = mAdapterService.getRemoteUuids(device);
         if (!Utils.arrayContains(featureUuids, BluetoothUuid.HEARING_AID)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have Hearing Aid UUID");
@@ -332,7 +342,11 @@ public class HearingAidService extends ConnectableProfile {
      * @return true if connection is allowed, otherwise false
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    @Override
     public boolean okToConnect(BluetoothDevice device) {
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            return super.okToConnect(device);
+        }
         // Check if this is an incoming connection in Quiet mode.
         if (mAdapterService.isQuietModeEnabled()) {
             Log.e(TAG, "okToConnect: cannot connect to " + device + " : quiet mode enabled");
@@ -444,7 +458,7 @@ public class HearingAidService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
@@ -595,19 +609,17 @@ public class HearingAidService extends ConnectableProfile {
             HearingAidStateMachine sm = mStateMachines.get(device);
             if (sm == null) {
                 if (stackEvent.type == HearingAidStackEvent.EVENT_TYPE_CONNECTION_STATE_CHANGED) {
-                    switch (stackEvent.valueInt1) {
-                        case STATE_CONNECTED:
-                        case STATE_CONNECTING:
-                            sm = getOrCreateStateMachine(device);
-                            break;
-                        default:
-                            break;
-                    }
+                    sm =
+                            switch (stackEvent.valueInt1) {
+                                case STATE_CONNECTED, STATE_CONNECTING ->
+                                        getOrCreateStateMachine(device);
+                                default -> null;
+                            };
                 }
-            }
-            if (sm == null) {
-                Log.e(TAG, "Cannot process stack event: no state machine: " + stackEvent);
-                return;
+                if (sm == null) {
+                    Log.e(TAG, "Cannot process stack event: no state machine: " + stackEvent);
+                    return;
+                }
             }
             sm.sendMessage(HearingAidStateMachine.MESSAGE_STACK_EVENT, stackEvent);
         }
@@ -620,7 +632,11 @@ public class HearingAidService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        sendBroadcastAsUser(intent, UserHandle.ALL, BLUETOOTH_CONNECT);
+        if (Flags.onlyBroadcastToLocalUser()) {
+            sendBroadcast(intent, BLUETOOTH_CONNECT);
+        } else {
+            sendBroadcastAsUser(intent, UserHandle.ALL, BLUETOOTH_CONNECT);
+        }
     }
 
     /* Notifications of audio device disconnection events. */

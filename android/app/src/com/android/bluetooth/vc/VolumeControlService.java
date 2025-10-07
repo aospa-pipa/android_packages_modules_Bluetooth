@@ -115,7 +115,8 @@ public class VolumeControlService extends ConnectableProfile {
     private final Looper mStateMachinesLooper;
     private final VolumeControlNativeInterface mNativeInterface;
 
-    private final Map<BluetoothDevice, VolumeControlStateMachine> mStateMachines = new HashMap<>();
+    private final Map<BluetoothDevice, VolumeControlStateMachine> mStateMachines =
+            new ConcurrentHashMap<>();
     private final Map<BluetoothDevice, VolumeControlOffsetDescriptor> mAudioOffsets =
             new HashMap<>();
     private final Map<BluetoothDevice, VolumeControlInputDescriptor> mAudioInputs =
@@ -217,6 +218,20 @@ public class VolumeControlService extends ConnectableProfile {
                     return null;
                 },
                 null);
+    }
+
+    public void post(Consumer<VolumeControlService> consumer) {
+        Utils.enforceMainLooperIsNotUsed();
+
+        mHandler.post(
+                () -> {
+                    // Service can become unavailable while the message is being posted
+                    if (!isAvailable()) {
+                        Log.e(TAG, "Service is no longer available");
+                        return;
+                    }
+                    consumer.accept(this);
+                });
     }
 
     public <T> T syncPost(Function<VolumeControlService, T> function, T defaultValue) {
@@ -352,13 +367,22 @@ public class VolumeControlService extends ConnectableProfile {
     public boolean connect(BluetoothDevice device) {
         enforceMainLooperIsUsed();
         Log.d(TAG, "connect(): " + device);
-        if (device == null) {
-            return false;
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            requireNonNull(device);
+
+            if (!okToConnect(device)) {
+                return false;
+            }
+        } else {
+            if (device == null) {
+                return false;
+            }
+
+            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
+                return false;
+            }
         }
 
-        if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-            return false;
-        }
         final ParcelUuid[] featureUuids = mAdapterService.getRemoteUuids(device);
         if (!Utils.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
             Log.e(
@@ -467,7 +491,13 @@ public class VolumeControlService extends ConnectableProfile {
     }
 
     public List<BluetoothDevice> getConnectedDevices() {
-        enforceMainLooperIsUsed();
+        if (Flags.vcpOnMainLooper()) {
+            // Getter can be accessed from Binder thread
+            return mStateMachines.values().stream()
+                    .filter(VolumeControlStateMachine::isConnected)
+                    .map(VolumeControlStateMachine::getDevice)
+                    .toList();
+        }
         List<BluetoothDevice> devices = new ArrayList<>();
         synchronized (mStateMachines) {
             for (VolumeControlStateMachine sm : mStateMachines.values()) {
@@ -496,7 +526,11 @@ public class VolumeControlService extends ConnectableProfile {
      * @return true if connection to a peer device is allowed, otherwise false
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
+    @Override
     public boolean okToConnect(BluetoothDevice device) {
+        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+            return super.okToConnect(device);
+        }
         enforceMainLooperIsUsed();
         /* Make sure device is valid */
         if (device == null) {
@@ -589,7 +623,7 @@ public class VolumeControlService extends ConnectableProfile {
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         enforceMainLooperIsUsed();
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
-        mDatabaseManager.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
+        mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy);
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
             connect(device);
         } else if (connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
@@ -1667,7 +1701,11 @@ public class VolumeControlService extends ConnectableProfile {
 
     @Override
     public void handleBondStateChanged(BluetoothDevice device, int fromState, int toState) {
-        mHandler.post(() -> bondStateChanged(device, toState));
+        if (Flags.vcpOnMainLooper() && Flags.bondStateMachineLooper()) {
+            bondStateChanged(device, toState);
+        } else {
+            mHandler.post(() -> bondStateChanged(device, toState));
+        }
     }
 
     /** Remove state machine if the bonding for a device is removed */
@@ -1719,7 +1757,7 @@ public class VolumeControlService extends ConnectableProfile {
                  return;
              }
              switch (action) {
-                 case ACTION_CHANGE_MUTE: {
+                 case ACTION_CHANGE_MUTE -> {
                      BluetoothDevice device =
                              intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                      boolean isMute = intent.getBooleanExtra(EXTRA_MUTE, false);
@@ -1741,16 +1779,18 @@ public class VolumeControlService extends ConnectableProfile {
                              unmuteGroup(groupId);
                          }
                      }
-                     break;
                  }
-		 default:
-		     break;
+                 default -> {}
              }
          }
     };
 
     void handleConnectionStateChanged(BluetoothDevice device, int fromState, int toState) {
-        mHandler.post(() -> connectionStateChanged(device, fromState, toState));
+        if (Flags.vcpOnMainLooper()) {
+            connectionStateChanged(device, fromState, toState);
+        } else {
+            mHandler.post(() -> connectionStateChanged(device, fromState, toState));
+        }
     }
 
     @VisibleForTesting

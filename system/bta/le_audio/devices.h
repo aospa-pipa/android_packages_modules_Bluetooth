@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <bluetooth/types/address.h>
+
 #include <memory>
 #include <utility>  // for std::pair
 #include <vector>
@@ -28,7 +30,6 @@
 #include "le_audio_types.h"
 #include "osi/include/alarm.h"
 #include "stack/btm/btm_dev.h"
-#include "types/raw_address.h"
 
 namespace bluetooth::le_audio {
 
@@ -170,6 +171,7 @@ public:
 
   void SetConnectionState(DeviceConnectState state);
   DeviceConnectState GetConnectionState(void);
+  SubrateState GetSubrateState(void);
   void ClearPACs(void);
   void RegisterPACs(std::vector<struct types::acs_ac_record>* apr_db,
                     std::vector<struct types::acs_ac_record>* apr);
@@ -183,6 +185,7 @@ public:
                                                             types::DataPathState data_path_state);
   struct types::ase* GetFirstInactiveAse(uint8_t direction, bool reconnect = false);
   struct types::ase* GetFirstAseWithState(uint8_t direction, types::AseState state);
+  struct types::ase* GetAseWaitingForDataPathByConnHandle(uint16_t conn_handle);
   struct types::ase* GetNextActiveAse(struct types::ase* ase);
   struct types::ase* GetAseToMatchBidirectionCis(struct types::ase* ase);
   types::BidirectionalPair<struct types::ase*> GetAsesByCisConnHdl(uint16_t conn_hdl);

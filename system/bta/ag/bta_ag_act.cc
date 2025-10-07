@@ -23,6 +23,8 @@
  ******************************************************************************/
 
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/bluetooth_event.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -40,10 +42,11 @@
 #include "device/include/device_iot_conf_defs.h"
 #include "osi/include/alarm.h"
 #include "sdp_status.h"
-#include "types/bt_transport.h"
 
 #ifdef __ANDROID__
 #endif
+
+#include <bluetooth/types/address.h>
 
 #include "btif/include/btif_config.h"
 #include "device/include/device_iot_config.h"
@@ -54,10 +57,10 @@
 #include "stack/include/port_api.h"
 #include "stack/include/sdp_api.h"
 #include "storage/config_keys.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 using namespace bluetooth::legacy::stack::sdp;
+using namespace metrics;
 
 /*****************************************************************************
  *  Constants
@@ -107,6 +110,7 @@ static void bta_ag_cback_open(tBTA_AG_SCB* p_scb, const RawAddress& bd_addr,
   open.hdr.handle = bta_ag_scb_to_idx(p_scb);
   open.hdr.app_id = p_scb->app_id;
   open.status = status;
+  LogMetricAgOpenStatus(bd_addr, open.status);
   open.service_id = bta_ag_svc_id[p_scb->conn_service];
   open.bd_addr = bd_addr;
 

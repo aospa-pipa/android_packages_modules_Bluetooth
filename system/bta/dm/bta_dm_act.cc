@@ -30,6 +30,7 @@
 #include <android_bluetooth_sysprop.h>
 #include <base/location.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -41,6 +42,7 @@
 #include "bta/dm/bta_dm_gatt_client.h"
 #include "bta/dm/bta_dm_int.h"
 #include "bta/dm/bta_dm_sec_int.h"
+#include "bta/dm/bta_dm_pm_offload.h"
 #include "bta/include/bta_api.h"
 #include "bta/include/bta_dm_acl.h"
 #include "bta/include/bta_dm_api.h"
@@ -71,7 +73,6 @@
 #include "stack/include/gatt_api.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
-#include "types/ble_address_with_type.h"
 #include "osi/include/osi.h"
 
 using bluetooth::Uuid;
@@ -197,6 +198,7 @@ static void bta_dm_init_cb(void) {
       bta_dm_cb.pm_timer[i].timer[j] = alarm_new("bta_dm.pm_timer");
     }
   }
+  get_btm_client_interface().vendor.BTM_RegisterSsrCallback(bta_dm_process_ssr);
 }
 
 /*******************************************************************************
@@ -227,6 +229,22 @@ static void bta_dm_deinit_cb(void) {
   }
   bta_dm_cb.pending_removals.clear();
   bta_dm_cb = {};
+}
+
+/*******************************************************************************
+**
+** Function         bta_dm_process_ssr
+**
+** Description      Notifies SSR event to application
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+void bta_dm_process_ssr(void) {
+  log::warn("");
+  if( bta_dm_sec_cb.p_sec_cback )
+    bta_dm_sec_cb.p_sec_cback(BTA_DM_SSR_EVT, NULL);
 }
 
 void BTA_dm_on_hw_off() {
@@ -292,11 +310,9 @@ void BTA_dm_on_hw_on() {
     }
   }
 
-  if (com::android::bluetooth::flags::socket_settings_api()) {
-    /* Read low power processor offload features */
-    if (bta_dm_acl_cb.p_acl_cback) {
-      bta_dm_acl_cb.p_acl_cback(BTA_DM_LPP_OFFLOAD_FEATURES_READ, NULL);
-    }
+  /* Read low power processor offload features */
+  if (bta_dm_acl_cb.p_acl_cback) {
+    bta_dm_acl_cb.p_acl_cback(BTA_DM_LPP_OFFLOAD_FEATURES_READ, NULL);
   }
 
   btm_ble_scanner_init();
@@ -309,6 +325,9 @@ void BTA_dm_on_hw_on() {
   /* if sniff is offload, no need to handle it in the stack */
   if (osi_property_get_bool(kPropertySniffOffloadEnabled, false)) {
     log::info("Sniff offloaded. Skip bta_dm_init_pm.");
+    if(com::android::bluetooth::flags::sniff_offload_with_vsc_based_control()) {
+      bta_dm_init_pm_offload();
+    }
   } else {
     /* initialize bluetooth low power manager */
     bta_dm_init_pm();
@@ -1404,45 +1423,6 @@ static bool bta_dm_dev_connected(const RawAddress& bd_addr,
 
 /*******************************************************************************
  *
- * Function         bta_dm_get_conn_info_
- *
- * Description      This function retrieves the connection information.
- *
- * Returns          connection information
- *
- ******************************************************************************/
-// Remove when le_disconnect_notification_handling is shipped
-static tBTA_DM_CONNECTION_INFO bta_dm_get_conn_info_(const RawAddress& target) {
-  // Find all aliases and connection status on all transports
-  RawAddress pseudo_addr = target;
-  RawAddress identity_addr = target;
-  bool le_connected = false;
-  bool bredr_connected = false;
-  tBTA_DM_CONNECTION_INFO conn_info;
-
-  le_connected = get_btm_client_interface().peer.BTM_ReadConnectedTransportAddress(
-          &pseudo_addr, BT_TRANSPORT_LE);
-  if (pseudo_addr.IsEmpty()) {
-    pseudo_addr = target;
-  }
-
-  bredr_connected = get_btm_client_interface().peer.BTM_ReadConnectedTransportAddress(
-          &identity_addr, BT_TRANSPORT_BR_EDR);
-  /* If connection not found with identity address, check with pseudo address if different */
-  if (!bredr_connected && identity_addr != pseudo_addr) {
-    identity_addr = pseudo_addr;
-    bredr_connected = get_btm_client_interface().peer.BTM_ReadConnectedTransportAddress(
-            &identity_addr, BT_TRANSPORT_BR_EDR);
-  }
-  if (identity_addr.IsEmpty()) {
-    identity_addr = target;
-  }
-  conn_info = {pseudo_addr, identity_addr, le_connected, bredr_connected};
-  return conn_info;
-}
-
-/*******************************************************************************
- *
  * Function         bta_dm_get_conn_info
  *
  * Description      This function retrieves the connection information.
@@ -1457,10 +1437,6 @@ static tBTA_DM_CONNECTION_INFO bta_dm_get_conn_info(const RawAddress& target) {
   bool le_connected = false;
   bool bredr_connected = false;
   tBTA_DM_CONNECTION_INFO conn_info;
-
-  if (!com::android::bluetooth::flags::le_disconnect_notification_handling()) {
-    return bta_dm_get_conn_info_(target);
-  }
 
   // Get identity and pseudo address
   std::pair<RawAddress, RawAddress> pseudo_identity_addr_pair =

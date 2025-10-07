@@ -22,6 +22,7 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 
 #include <cstdint>
 #include <memory>
@@ -34,7 +35,6 @@
 #include "stack/btm/neighbor_inquiry.h"
 #include "stack/include/btm_ble_api_types.h"
 #include "stack/rnr/remote_name_request.h"
-#include "types/raw_address.h"
 
 using TimestampedStringCircularBuffer = bluetooth::common::TimestampedStringCircularBuffer;
 
@@ -72,6 +72,8 @@ typedef struct tBTM_DEVCB {
                                        LE test mode command has been sent successfully */
 
   RawAddress read_tx_pwr_addr; /* read TX power target address     */
+
+  tBTM_NOTIFY_SSR_CB * p_ssr_cb;
 
   void Init() {
     read_rssi_timer = alarm_new("btm.read_rssi_timer");

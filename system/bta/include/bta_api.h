@@ -27,6 +27,9 @@
 
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 
 #include <cstdint>
@@ -44,9 +47,6 @@
 #include "stack/include/btm_ble_api_types.h"
 #include "stack/include/hci_error_code.h"
 #include "stack/include/sdp_device_id.h"
-#include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 /*
  * Service ID
@@ -230,7 +230,7 @@ typedef struct {
   const uint8_t* p_eir; /* received EIR */
   uint16_t eir_len;     /* received EIR length */
   uint8_t inq_result_type;
-  uint8_t last_inq_result_from_type; /* Whether the last inquiry is from LE or BR/EDR */
+  tBT_TRANSPORT last_inq_result_transport; /* Whether the last inquiry is from LE or BR/EDR */
   tBLE_ADDR_TYPE ble_addr_type;
   uint16_t ble_evt_type;
   uint8_t ble_primary_phy;

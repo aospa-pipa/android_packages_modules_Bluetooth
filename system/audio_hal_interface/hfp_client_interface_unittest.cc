@@ -25,6 +25,7 @@
 #include "aidl/hfp_client_interface_aidl.h"
 #include "aidl/transport_instance.h"
 #include "audio_hal_interface/hal_version_manager.h"
+#include "com_android_bluetooth_flags.h"
 
 #pragma GCC diagnostic ignored "-Wunused-private-field"
 
@@ -167,6 +168,7 @@ BluetoothAudioCtrlAck HfpDecodingTransport::SuspendRequest() {
   return BluetoothAudioCtrlAck::SUCCESS_FINISHED;
 }
 void HfpDecodingTransport::SetLatencyMode(LatencyMode /*latency_mode*/) {}
+void HfpDecodingTransport::AudioServerRestart() {}
 bool HfpDecodingTransport::GetPresentationPosition(uint64_t* /*remote_delay_report_ns*/,
                                                    uint64_t* /*total_bytes_written*/,
                                                    timespec* /*data_position*/) {
@@ -191,6 +193,7 @@ BluetoothAudioCtrlAck HfpEncodingTransport::SuspendRequest() {
   return BluetoothAudioCtrlAck::SUCCESS_FINISHED;
 }
 void HfpEncodingTransport::StopRequest() {}
+void HfpEncodingTransport::AudioServerRestart() {}
 void HfpEncodingTransport::SetLatencyMode(LatencyMode /*latency_mode*/) {}
 bool HfpEncodingTransport::GetPresentationPosition(uint64_t* /*remote_delay_report_ns*/,
                                                    uint64_t* /*total_bytes_written*/,
@@ -212,8 +215,8 @@ bool HfpEncodingTransport::IsStreamActive() { return encoding_transport_is_strea
 
 namespace {
 
-bluetooth::common::MessageLoopThread message_loop_thread("test message loop");
-static base::MessageLoop* message_loop_;
+bluetooth::common::MessageLoopThread message_loop_thread(
+        "test message loop", bluetooth::os::Thread::Priority::REAL_TIME);
 
 static void init_message_loop_thread() {
   message_loop_thread.StartUp();
@@ -225,14 +228,14 @@ static void init_message_loop_thread() {
     bluetooth::log::warn("Unable to set real time scheduling");
   }
 
-  message_loop_ = message_loop_thread.message_loop();
-  if (message_loop_ == nullptr) {
-    FAIL() << "unable to get message loop.";
+  if (!com::android::bluetooth::flags::replace_message_loop_thread_with_gd_handler()) {
+    if (message_loop_thread.message_loop() == nullptr) {
+      FAIL() << "unable to get message loop.";
+    }
   }
 }
 
 static void cleanup_message_loop_thread() {
-  message_loop_ = nullptr;
   message_loop_thread.ShutDown();
 }
 

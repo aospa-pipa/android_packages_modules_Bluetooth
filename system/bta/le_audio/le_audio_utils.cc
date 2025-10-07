@@ -89,6 +89,10 @@ LeAudioContextType AudioContentToLeAudioContext(audio_content_type_t content_typ
 
       return LeAudioContextType::SOUNDEFFECTS;
     case AUDIO_USAGE_GAME:
+      if (content_type == AUDIO_CONTENT_TYPE_SONIFICATION &&
+          com::android::bluetooth::flags::leaudio_use_game_sonification_as_regular_sonification()) {
+        return LeAudioContextType::SOUNDEFFECTS;
+      }
       return LeAudioContextType::GAME;
     case AUDIO_USAGE_NOTIFICATION:
     case AUDIO_USAGE_NOTIFICATION_EVENT:
@@ -864,12 +868,12 @@ bool IsAseConfigMatchedWithPreferredRequirements(
     /* Octets per frame */
     if (!ase_config.octets_per_codec_frame || !req_config.octets_per_codec_frame) {
       log::debug("Missing octets per codec frame");
-      return false;
     }
-    if (ase_config.octets_per_codec_frame.value() != req_config.octets_per_codec_frame.value()) {
+    if (ase_config.octets_per_codec_frame &&
+        req_config.octets_per_codec_frame &&
+        ase_config.octets_per_codec_frame.value() != req_config.octets_per_codec_frame.value()) {
       log::debug("Ase cfg: Octets per frame={}", ase_config.octets_per_codec_frame.value());
       log::debug("Req cfg: Octets per frame={}", req_config.octets_per_codec_frame.value());
-      return false;
     }
   }
 

@@ -40,9 +40,9 @@ import android.bluetooth.BluetoothGattService;
 import android.os.Looper;
 import android.util.Pair;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
 import androidx.test.rule.ServiceTestRule;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.tests.bluetooth.MockitoRule;
@@ -197,24 +197,23 @@ public class TbsGattTest {
             Pair<Integer, Boolean> flagStatePair = (Pair<Integer, Boolean>) value;
             notifyWithValue = true;
             switch (flagStatePair.first) {
-                case TbsGatt.STATUS_FLAG_INBAND_RINGTONE_ENABLED:
+                case TbsGatt.STATUS_FLAG_INBAND_RINGTONE_ENABLED -> {
                     if (flagStatePair.second) {
                         assertThat(mTbsGatt.setInbandRingtoneFlag(device)).isTrue();
                     } else {
                         assertThat(mTbsGatt.clearInbandRingtoneFlag(device)).isTrue();
                     }
-                    break;
+                }
 
-                case TbsGatt.STATUS_FLAG_SILENT_MODE_ENABLED:
+                case TbsGatt.STATUS_FLAG_SILENT_MODE_ENABLED -> {
                     if (flagStatePair.second) {
                         assertThat(mTbsGatt.setSilentModeFlag()).isTrue();
                     } else {
                         assertThat(mTbsGatt.clearSilentModeFlag()).isTrue();
                     }
-                    break;
+                }
 
-                default:
-                    assertWithMessage("Unexpected flag: " + flagStatePair.first).fail();
+                default -> assertWithMessage("Unexpected flag: " + flagStatePair.first).fail();
             }
 
         } else if (characteristic.getUuid().equals(TbsGatt.UUID_CALL_STATE)) {

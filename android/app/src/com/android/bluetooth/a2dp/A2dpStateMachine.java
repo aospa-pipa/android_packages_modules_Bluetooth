@@ -209,6 +209,10 @@ final class A2dpStateMachine extends StateMachine {
                         Log.e(TAG, "Disconnected: error connecting to " + mDevice);
                         break;
                     }
+                    if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+                        transitionTo(mConnecting);
+                        break;
+                    }
                     if (mA2dpService.okToConnect(mDevice, true)) {
                         transitionTo(mConnecting);
                     } else {
@@ -763,8 +767,10 @@ final class A2dpStateMachine extends StateMachine {
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
         mA2dpService.handleConnectionStateChanged(mDevice, prevState, newState);
-        mA2dpService.sendBroadcast(
-                intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        mA2dpService.sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+
+        // Log the A2DP state change to the metrics logger.
+        logA2dpStateMetric(mDevice, newState);
     }
 
     private void broadcastAudioState(int newState, int prevState) {
@@ -780,8 +786,10 @@ final class A2dpStateMachine extends StateMachine {
         intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
         intent.putExtra(BluetoothProfile.EXTRA_STATE, newState);
         intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-        mA2dpService.sendBroadcast(
-                intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastOptions().toBundle());
+        mA2dpService.sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+
+        // Log the A2DP stream state change to the metrics logger.
+        logA2dpStateMetric(mDevice, newState);
     }
 
     @Override
@@ -804,11 +812,11 @@ final class A2dpStateMachine extends StateMachine {
         return switch (reason) {
             case /* BTA_AV_SUCCESS */ 0 -> BluetoothStatusCodes.SUCCESS;
             case /* BTA_AV_FAIL */ 1 -> BluetoothStatusCodes.ERROR_UNKNOWN;
-            case /* BTA_AV_FAIL_SDP */ 2 -> BluetoothStatusCodes.SDP_DISCOVERY_FAILED;
-            case /* BTA_AV_FAIL_STREAM */ 3 -> BluetoothStatusCodes.STREAM_CONNECTION_FAILED;
-            case /* BTA_AV_FAIL_RESOURCES */ 4 -> BluetoothStatusCodes.INSUFFICIENT_RESOURCES;
-            case /* BTA_AV_FAIL_ROLE */ 5 -> BluetoothStatusCodes.ROLE_SWITCH_FAILED;
-            case /* BTA_AV_FAIL_GET_CAP */ 6 -> BluetoothStatusCodes.AVDTP_DISCOVERY_FAILED;
+            case /* BTA_AV_FAIL_SDP */ 2 -> BluetoothStatusCodes.ERROR_SDP_DISCOVERY_FAILED;
+            case /* BTA_AV_FAIL_STREAM */ 3 -> BluetoothStatusCodes.ERROR_STREAM_CONNECTION_FAILED;
+            case /* BTA_AV_FAIL_RESOURCES */ 4 -> BluetoothStatusCodes.ERROR_INSUFFICIENT_RESOURCES;
+            case /* BTA_AV_FAIL_ROLE */ 5 -> BluetoothStatusCodes.ERROR_ROLE_SWITCH_FAILED;
+            case /* BTA_AV_FAIL_GET_CAP */ 6 -> BluetoothStatusCodes.ERROR_AVDTP_DISCOVERY_FAILED;
             default -> BluetoothStatusCodes.ERROR_UNKNOWN;
         };
     }
@@ -897,5 +905,49 @@ final class A2dpStateMachine extends StateMachine {
     @Override
     protected void log(String msg) {
         super.log(msg);
+    }
+
+    private static int MetricsProfileToProtoState(int profileState) {
+        return switch (profileState) {
+            case BluetoothProfile.STATE_DISCONNECTED ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_DISCONNECTED;
+            case BluetoothProfile.STATE_CONNECTING ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_CONNECTING;
+            case BluetoothProfile.STATE_CONNECTED ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_CONNECTED;
+            case BluetoothProfile.STATE_DISCONNECTING ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_DISCONNECTING;
+            case BluetoothA2dp.STATE_NOT_PLAYING ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_NOT_PLAYING;
+            case BluetoothA2dp.STATE_PLAYING ->
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__A2DP_STATE_PLAYING;
+            default -> BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__STATE_UNKNOWN;
+        };
+    }
+
+    private static void logA2dpStateMetric(BluetoothDevice device, int state) {
+        if (device == null) {
+            return;
+        }
+        int metricsState = MetricsProfileToProtoState(state);
+        int eventType =
+                BluetoothStatsLog
+                        .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__A2DP_PROFILE_STATE_CHANGE;
+        if (metricsState
+                == BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__STATE_UNKNOWN) {
+            eventType =
+                    BluetoothStatsLog
+                            .BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__A2DP_PROFILE_ERROR_STATE_CHANGE;
+            MetricsLogger.getInstance().logBluetoothEvent(device, eventType, metricsState, 0);
+            return;
+        }
+
+        MetricsLogger.getInstance().logBluetoothEvent(device, eventType, metricsState, 0);
     }
 }

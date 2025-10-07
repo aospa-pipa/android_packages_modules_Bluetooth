@@ -41,20 +41,10 @@ cc_defaults {
     name: "libbluetooth_gd_defaults",
     defaults: [
         "gd_defaults",
+        "libbluetooth_gd_os_defaults",
     ],
     host_supported: true,
     target: {
-        linux: {
-            srcs: [
-                "os/linux_generic/alarm.cc",
-                "os/linux_generic/files.cc",
-                "os/linux_generic/reactive_semaphore.cc",
-                "os/linux_generic/reactor.cc",
-                "os/linux_generic/repeating_alarm.cc",
-                "os/linux_generic/thread.cc",
-                "os/linux_generic/wakelock_manager.cc",
-            ],
-        },
         host: {
             srcs: [
                 "hal/hci_hal_impl_host_rootcanal.cc",
@@ -132,7 +122,6 @@ cc_defaults {
         "hci/remote_name_request_impl.cc",
         "hci/uuid.cc",
         "lpp/lpp_offload_manager.cc",
-        "os/handler.cc",
         "os/system_properties_common.cc",
         "storage/classic_device.cc",
         "storage/config_cache.cc",
@@ -177,6 +166,54 @@ cc_defaults {
         "packages/modules/Bluetooth/system/internal_include",
         "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/types",
+    ],
+}
+
+cc_library_static {
+    name: "libbluetooth_gd_os",
+    defaults: [
+        "libbluetooth_gd_os_defaults",
+    ],
+    include_dirs: [
+        "packages/modules/Bluetooth/system",
+    ],
+    apex_available: ["com.android.bt"],
+    min_sdk_version: "36",
+    static_libs: [
+        "bluetooth_flags_c_lib",
+        "libchrome",
+    ],
+}
+
+cc_defaults {
+    name: "libbluetooth_gd_os_defaults",
+    host_supported: true,
+    srcs: [
+        "os/handler.cc",
+        "os/linux_generic/alarm.cc",
+        "os/linux_generic/boottime_clock.cc",
+        "os/linux_generic/files.cc",
+        "os/linux_generic/reactive_semaphore.cc",
+        "os/linux_generic/reactor.cc",
+        "os/linux_generic/repeating_alarm.cc",
+        "os/linux_generic/thread.cc",
+        "os/linux_generic/wakelock_manager.cc",
+    ],
+    static_libs: [
+        "bluetooth_flags_c_lib",
+        "libaconfig_storage_read_api_cc",
+        "libbase",
+        "libbluetooth_crypto_toolbox",
+        "libbluetooth_log",
+        "libbluetooth_metrics",
+        "libbluetooth_types",
+        "libcom.android.sysprop.bluetooth.wrapped",
+        "libosi",
+        "server_configurable_flags",
+    ],
+    include_dirs: [
+        "packages/modules/Bluetooth/system/include",
+        "packages/modules/Bluetooth/system/stack/include",
     ],
 }
 
@@ -272,6 +309,7 @@ cc_test {
         "os/handler.cc",
         "os/linux_generic/alarm.cc",
         "os/linux_generic/alarm_timerfd_unittest.cc",
+        "os/linux_generic/boottime_clock.cc",
         "os/linux_generic/files.cc",
         "os/linux_generic/reactive_semaphore.cc",
         "os/linux_generic/reactor.cc",
@@ -289,6 +327,56 @@ cc_test {
     shared_libs: [
         "libbase",
         "liblog",
+    ],
+    sanitize: {
+        address: true,
+    },
+    min_sdk_version: "36",
+}
+
+/**
+ * This tests module will test with a real timer. It is not included in the
+ * bluetooth_test_gd_unit test because it may take too long to run on
+ * Android as it uses a real timer.
+ */
+cc_test {
+    name: "bluetooth_test_gd_unit_rt",
+    test_suites: ["general-tests"],
+    defaults: [
+        "gd_defaults",
+        "mts_defaults",
+    ],
+    include_dirs: [
+        "packages/modules/Bluetooth/system",
+        "packages/modules/Bluetooth/system/include",
+        "packages/modules/Bluetooth/system/stack/include",
+    ],
+    host_supported: true,
+    // TODO(b/231993739): Reenable isolated:true by deleting the explicit disable below
+    isolated: false,
+    srcs: [
+        "os/handler_unittest_rt.cc",
+    ],
+    static_libs: [
+        "bluetooth_flags_c_lib_for_test",
+        "libbase",
+        "libbluetooth_crypto_toolbox",
+        "libbluetooth_gd",
+        "libbluetooth_log",
+        "libbt-common",
+        "libbtdevice",
+        "libchrome",
+        "libcom.android.sysprop.bluetooth.wrapped",
+        "libflagtest",
+        "libflatbuffers-cpp",
+        "libgmock",
+        "libosi",
+        "server_configurable_flags",
+    ],
+    shared_libs: [
+        "libPlatformProperties",
+        "libaconfig_storage_read_api_cc",
+        "libcrypto",
     ],
     sanitize: {
         address: true,
@@ -401,6 +489,7 @@ cc_test {
         "hci/remote_name_request_impl_test.cc",
         "hci/uuid_unittest.cc",
         "os/handler_unittest.cc",
+        "os/parameter_provider_test.cc",
         "os/system_properties_common_test.cc",
         "storage/classic_device_test.cc",
         "storage/config_cache_helper_test.cc",
@@ -498,7 +587,10 @@ cc_test {
 
 cc_defaults {
     name: "gd_fuzz_defaults",
-    defaults: ["gd_defaults"],
+    defaults: [
+        "bluetooth_fuzz_config",
+        "gd_defaults",
+    ],
     srcs: [
         ":TestMockMainShimEntry",
         "fuzz/helpers.cc",
@@ -564,10 +656,6 @@ cc_fuzz {
         "fuzz_test.cc",
         "hci/hci_packets_fuzz_test.cc",
     ],
-    fuzz_config: {
-        cc: ["android-bluetooth-security@google.com"],
-        componentid: 27441,
-    },
 }
 
 cc_fuzz {
@@ -585,6 +673,7 @@ cc_fuzz {
     srcs: [
         ":TestCommonMockFunctions",
         ":TestMockMainShim",
+        ":TestMockStackBtm",
         "hci/fuzz/acl_manager_fuzz_test.cc",
     ],
     static_libs: [
@@ -593,11 +682,8 @@ cc_fuzz {
     include_dirs: [
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/include",
+        "packages/modules/Bluetooth/system/stack/include",
     ],
-    fuzz_config: {
-        cc: ["android-bluetooth-security@google.com"],
-        componentid: 27441,
-    },
 }
 
 cc_benchmark {
@@ -610,6 +696,7 @@ cc_benchmark {
     srcs: [
         "benchmark.cc",
         "os/alarm_benchmark.cc",
+        "os/handler_benchmark.cc",
         "os/queue_benchmark.cc",
         "os/thread_benchmark.cc",
     ],

@@ -16,11 +16,11 @@
 
 #pragma once
 
+#include <bluetooth/types/ble_address_with_type.h>
 #include <gmock/gmock.h>
 
 #include "btif/include/core_callbacks.h"
 #include "include/hardware/bluetooth.h"
-#include "types/ble_address_with_type.h"
 
 namespace bluetooth {
 namespace core {
@@ -66,6 +66,7 @@ EventCallbacks mock_event_callbacks = {
                    int /* negative_acknowledgement_count */) {},
         .invoke_key_missing_cb = [](tBTA_DM_KEY_MISSING /* key_missing */) {},
         .invoke_encryption_change_cb = [](bt_encryption_change_evt /* encryption_change */) {},
+        .invoke_ssr_event_cb = []() {},
 };
 
 // This interface lets us query for configuration properties of the stack that

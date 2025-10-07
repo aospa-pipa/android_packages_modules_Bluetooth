@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <bluetooth/types/address.h>
+
 #include <vector>
 
 #include "a2dp_constants.h"
@@ -24,7 +26,6 @@
 #include "common/message_loop_thread.h"
 #include "hardware/bt_av.h"
 #include "osi/include/properties.h"
-#include "types/raw_address.h"
 
 namespace bluetooth {
 namespace audio {
@@ -147,6 +148,13 @@ tA2DP_STATUS parse_a2dp_configuration(::bluetooth::a2dp::CodecId codec_id,
                                       std::vector<uint8_t>* vendor_specific_parameters);
 
 }  // namespace provider
+
+/***
+ * Reads the provider information from the HAL.
+ * May return std::nullopt if the HAL Provider Info is empty.
+ ***/
+std::optional<btav_a2dp_hal_provider_info_t> get_provider_info();
+
 }  // namespace a2dp
 }  // namespace aidl
 }  // namespace audio

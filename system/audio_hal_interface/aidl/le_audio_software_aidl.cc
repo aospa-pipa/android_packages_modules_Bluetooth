@@ -147,6 +147,13 @@ void LeAudioTransport::StopRequest() {
   }
 }
 
+void LeAudioTransport::AudioServerRestart() {
+  log::info("");
+  if(stream_cb_.on_audio_server_restart_()) {
+    log::info("completed with a success");
+  }
+}
+
 void LeAudioTransport::SetLatencyMode(LatencyMode latency_mode) {
   log::debug("Latency mode: {}",
              ::aidl::android::hardware::bluetooth::audio::toString(latency_mode));
@@ -219,8 +226,6 @@ void LeAudioTransport::SourceMetadataChanged(const source_metadata_v7_t& source_
 }
 
 void LeAudioTransport::SinkMetadataChanged(const sink_metadata_v7_t& sink_metadata) {
-  auto track_count = sink_metadata.track_count;
-
   if (stream_cb_.on_sink_metadata_update_) {
     stream_cb_.on_sink_metadata_update_(sink_metadata);
   }
@@ -350,6 +355,8 @@ BluetoothAudioCtrlAck LeAudioSinkTransport::SuspendRequest() {
 
 void LeAudioSinkTransport::StopRequest() { transport_->StopRequest(); }
 
+void LeAudioSinkTransport::AudioServerRestart() { transport_->AudioServerRestart(); }
+
 void LeAudioSinkTransport::SetLatencyMode(LatencyMode latency_mode) {
   transport_->SetLatencyMode(latency_mode);
 }
@@ -437,6 +444,8 @@ BluetoothAudioCtrlAck LeAudioSourceTransport::SuspendRequest() {
 }
 
 void LeAudioSourceTransport::StopRequest() { transport_->StopRequest(); }
+
+void LeAudioSourceTransport::AudioServerRestart() { transport_->AudioServerRestart(); }
 
 void LeAudioSourceTransport::SetLatencyMode(LatencyMode latency_mode) {
   transport_->SetLatencyMode(latency_mode);
@@ -767,7 +776,7 @@ AudioConfiguration stream_config_to_hal_audio_config(
       LeAudioConfiguration::StreamMap::BluetoothDeviceAddress aidl_device_address;
       // The address should be set only if stream is active
       if (info.is_stream_active) {
-        aidl_device_address.deviceAddress = info.address.ToArray();
+        aidl_device_address.deviceAddress = info.address.address;
         aidl_device_address.deviceAddressType =
                 (info.address_type == BLE_ADDR_PUBLIC || info.address_type == BLE_ADDR_PUBLIC_ID)
                         ? LeAudioConfiguration::StreamMap::BluetoothDeviceAddress::DeviceAddressType::
@@ -797,6 +806,7 @@ AudioConfiguration stream_config_to_hal_audio_config(
       auto id = offload_config.stream_map.at(0).codec_config.id;
       log::info("Non LC3 Codec config is used. Format: {}, Vendor: {}, Company: {}", id.coding_format,
                 id.vendor_codec_id, id.vendor_company_id);
+
     }
     log::debug( ": coding_format = {}, vendor_codec_id = {}",
                 offload_config.codec_id.coding_format,

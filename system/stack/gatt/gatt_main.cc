@@ -23,6 +23,7 @@
  ******************************************************************************/
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include "btif/include/btif_dm.h"
@@ -50,7 +51,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/srvc_api.h"  // tDIS_VALUE
-#include "types/raw_address.h"
 
 using bluetooth::eatt::EattExtension;
 using namespace bluetooth;
@@ -387,6 +387,19 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb, bool is_a
     }
   } else {
     if (p_tcb->app_hold_link.empty()) {
+      if (com::android::bluetooth::flags::gatt_discovery_is_non_opportunistic_client() &&
+          p_tcb->transport == BT_TRANSPORT_LE) {
+        tHCI_ROLE role;
+        auto status = get_btm_client_interface().link_policy.BTM_GetRole(p_tcb->peer_bda,
+                                                                         BT_TRANSPORT_LE, &role);
+        if (status == tBTM_STATUS::BTM_SUCCESS && role == tHCI_ROLE::HCI_ROLE_PERIPHERAL) {
+          log::info(
+                  "{} is peripheral and the central device is responsible to disconnect if needed "
+                  "or ACL link should be disconnected.",
+                  p_tcb->peer_bda);
+          return;
+        }
+      }
       // acl link is connected but no application needs to use the link
       if (p_tcb->att_lcid == L2CAP_ATT_CID && is_valid_handle) {
         /* Drop EATT before closing ATT */
@@ -621,8 +634,6 @@ static void read_dis_cback(const RawAddress& bd_addr, tDIS_VALUE* p_dis_value) {
 
 /** This function is called to process the congestion callback from lcb */
 static void gatt_channel_congestion(tGATT_TCB* p_tcb, bool congested) {
-  uint8_t i = 0;
-  tGATT_REG* p_reg = NULL;
   tCONN_ID conn_id;
 
   /* if uncongested, check to see if there is any more pending data */
@@ -927,8 +938,6 @@ static void gatt_l2cif_congest_cback(uint16_t lcid, bool congested) {
 
 /** Callback used to notify layer above about a connection */
 static void gatt_send_conn_cback(tGATT_TCB* p_tcb) {
-  uint8_t i;
-  tGATT_REG* p_reg;
   tCONN_ID conn_id;
 
   std::set<tGATT_IF> apps = connection_manager::get_apps_connecting_to(p_tcb->peer_bda);

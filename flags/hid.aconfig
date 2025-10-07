@@ -10,46 +10,6 @@ flag {
 }
 
 flag {
-    name: "hogp_reconnection"
-    namespace: "bluetooth"
-    description: "Allow reconnection from HOGP device irrespective of disconnection reason"
-    bug: "378162528"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "pending_hid_connection_cancellation"
-    namespace: "bluetooth"
-    description: "Properly cancel the pending connection to the already added devices"
-    bug: "381135214"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "vup_for_pending_connection"
-    namespace: "bluetooth"
-    description: "Generate HID VUP for pending connections as well"
-    bug: "396747085"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "ignore_unselected_hid_transport_states"
-    namespace: "bluetooth"
-    description: "Ignore HID state transitions for transports that are not selected"
-    bug: "397460323"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "early_incoming_hid_connection"
     namespace: "bluetooth"
     description: "Allow early incoming HID connection"
@@ -104,6 +64,16 @@ flag {
     namespace: "bluetooth"
     description: "Mark device unused only after it's properly disconnected"
     bug: "412876005"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "hogp_direct_connection_upgrade"
+    namespace: "bluetooth"
+    description: "Allow background connection requests to be upgraded to direct connections"
+    bug: "430179438"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

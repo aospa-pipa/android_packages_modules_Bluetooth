@@ -30,6 +30,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.AudioPlaybackConfiguration;
 import android.media.AudioAttributes;
@@ -102,6 +103,7 @@ public class AvrcpTargetService extends ProfileService {
     // Only used to see if the metadata has changed from its previous value
     private MediaData mCurrentData;
 
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     private static AvrcpTargetService sInstance = null;
 
     public AvrcpTargetService(AdapterService adapterService) {
@@ -208,7 +210,7 @@ public class AvrcpTargetService extends ProfileService {
 
     /**
      * Listens for {@link AudioManager.ACTION_VOLUME_CHANGED} events to update {@link
-     * AvrcpVolumeManager}.
+     * AvrcpVolumeManager} in case the remote device doesn't support absolute volume.
      */
     private class AvrcpBroadcastReceiver extends BroadcastReceiver {
         @Override
@@ -232,6 +234,7 @@ public class AvrcpTargetService extends ProfileService {
 
     /** Sets the AvrcpTargetService instance. */
     @VisibleForTesting
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     public static void set(AvrcpTargetService instance) {
         sInstance = instance;
     }
@@ -241,6 +244,7 @@ public class AvrcpTargetService extends ProfileService {
      *
      * <p>Returns null if the service hasn't been initialized.
      */
+    @Deprecated // TODO(b/422543753) Delete on flag cleanup
     public static AvrcpTargetService get() {
         return sInstance;
     }
@@ -515,55 +519,29 @@ public class AvrcpTargetService extends ProfileService {
         mMediaPlayerList.playItem(playerId, nowPlaying, mediaId);
     }
 
-    private boolean hasVoiceCommunicationActive() {
-        boolean result = false;
-        List<AudioPlaybackConfiguration> configs;
-
-        if (mAudioManager == null) return false;
-        configs = mAudioManager.getActivePlaybackConfigurations();
-
-        for (AudioPlaybackConfiguration config : configs) {
-            if (config.isActive()
-                && config.getAudioAttributes().getUsage()
-                    == AudioAttributes.USAGE_VOICE_COMMUNICATION) {
-                Log.d(TAG, "hasVoiceCommunicationActive find config = " + config);
-                result = true;
-                break;
-            }
-        }
-        return result;
-    }
-
     /** Informs {@link AudioManager} of an incoming key event from a remote device. */
-    void sendMediaKeyEvent(int key, boolean pushed) {
+    void sendMediaKeyEvent(BluetoothDevice device, int key, boolean pushed) {
         MediaPlayerWrapper activePlayer = mMediaPlayerList.getActivePlayer();
 
-        MediaPlayerWrapper addressedPlayer = mMediaPlayerList.getAddressedPlayer();
-        // A/V controls should be sent to the addressed player.
-        // We don't have a way to set a media player as the active session so we
-        // keep the active device playing until we receive a PLAY event for the
-        // addressed player. Other events will still be broadcasted to active player.
-        if (addressedPlayer != null
-                && KeyEvent.KEYCODE_MEDIA_PLAY == AvrcpPassthrough.toKeyCode(key)
-                && activePlayer != addressedPlayer) {
-            addressedPlayer.playCurrent();
-            return;
-        }
+        boolean voiceCommunicationActive = isVoiceCommunicationActive();
+        int keyCode = AvrcpPassthrough.toKeyCode(key);
 
-        BluetoothDevice activeDevice = getA2dpActiveDevice();
-        mMediaKeyEventLogger.logd(
-                TAG,
+        String keyEventLog =
                 "sendMediaKeyEvent:"
                         + " device="
-                        + activeDevice
+                        + device
                         + " key="
-                        + key
+                        + KeyEvent.keyCodeToString(keyCode)
                         + " pushed="
                         + pushed
                         + " to "
-                        + (activePlayer == null ? null : activePlayer.getPackageName()));
+                        + (activePlayer == null ? null : activePlayer.getPackageName())
+                        + " voice active="
+                        + voiceCommunicationActive
+                        + " internal active player is "
+                        + (activePlayer == null ? null : activePlayer.getPackageName());
+        mMediaKeyEventLogger.logd(TAG, keyEventLog);
 
-        int keyCode = AvrcpPassthrough.toKeyCode(key);
         PlayStatus status;
         if (activePlayer != null) {
             status = PlayStatus.fromPlaybackState(activePlayer.getPlaybackState(),
@@ -572,24 +550,60 @@ public class AvrcpTargetService extends ProfileService {
             status = getPlayState();
         }
         boolean musicActive = mAudioManager.isMusicActive();
+        // Some devices will send a play event upon SCO disconnection, resulting in music starting
+        // even if the call is still ongoing. As this is a BT specific issue we handle it here.
         if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
-            && (hasVoiceCommunicationActive()
+            && (voiceCommunicationActive
                 || (status.state == PlayStatus.PLAYING && musicActive))) {
-            mMediaKeyEventLogger.logw(TAG,
+            Log.w(TAG,
                 "Ignore passthrough play during voice communication or music playing");
             return;
         }
         if (keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
             && status.state != PlayStatus.PLAYING
             && !musicActive) {
-            mMediaKeyEventLogger.logw(TAG,
+            Log.w(TAG,
                 "Ignore passthrough pause during music not playing");
+            return;
+        }
+
+        // A/V controls should be sent to the addressed player.
+        // We don't have a way to set a media player as the active session so we
+        // keep the active device playing until we receive a PLAY event for the
+        // addressed player. Other events will still be broadcasted to active player.
+        // Note: some devices will only send the event when the button is released and some
+        // will only send the event when the button is pressed, so we can't filter it here.
+        MediaPlayerWrapper addressedPlayer = mMediaPlayerList.getAddressedPlayer();
+        if (addressedPlayer != null
+                && KeyEvent.KEYCODE_MEDIA_PLAY == keyCode
+                && activePlayer != addressedPlayer) {
+            Log.d(
+                    TAG,
+                    "Sending play event directly to addressed player: "
+                            + addressedPlayer.getPackageName());
+            addressedPlayer.playCurrent();
+            return;
+        }
+
+        Log.d(TAG, "KeyEvent dispatched to AudioManager");
+
+        if (isA2dpConnectionForbidden(device)) {
+            Log.e(TAG, "Ignore passthrough key as media profiles disabled");
             return;
         }
 
         int action = pushed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP;
         KeyEvent event = new KeyEvent(action, keyCode);
         mAudioManager.dispatchMediaKeyEvent(event);
+    }
+
+    /** Returns {@code true} if A2DP connection policy is forbidden. */
+    private boolean isA2dpConnectionForbidden(BluetoothDevice device) {
+        return BluetoothProfile.CONNECTION_POLICY_FORBIDDEN
+                == mAdapterService
+                        .getA2dpService()
+                        .map(a2dp -> a2dp.getConnectionPolicy(device))
+                        .orElse(BluetoothProfile.CONNECTION_POLICY_UNKNOWN);
     }
 
     /**
@@ -658,6 +672,19 @@ public class AvrcpTargetService extends ProfileService {
 
             if (!Objects.equals(currentMetadata.title, newMetadata.title)
                     || !Objects.equals(currentMetadata.artist, newMetadata.artist)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isVoiceCommunicationActive() {
+        for (AudioPlaybackConfiguration audioConfig :
+                mAudioManager.getActivePlaybackConfigurations()) {
+            if (audioConfig.getAudioAttributes().getUsage()
+                            == AudioAttributes.USAGE_VOICE_COMMUNICATION
+                    && audioConfig.isActive()) {
+                Log.d(TAG, "Voice active playback found: " + audioConfig);
                 return true;
             }
         }

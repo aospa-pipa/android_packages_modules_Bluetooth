@@ -56,38 +56,11 @@ flag {
 }
 
 flag {
-    name: "rpa_offload_to_bt_controller"
-    namespace: "bluetooth"
-    description: "Offload LE RPA rotation to BT controller. go/rpa-offload-to-bt-controller"
-    bug: "378398874"
-}
-
-flag {
     name: "directed_advertising_api"
     namespace: "bluetooth"
     is_exported: true
     description: "Add new API for directed advertising"
     bug: "378230500"
-}
-
-flag {
-    name: "configure_scan_on_resume"
-    namespace: "bluetooth"
-    description: "Configure scan paramters when start scanning from onResume"
-    bug: "383436218"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "unregister_gatt_client_disconnected"
-    namespace: "bluetooth"
-    description: "Unregister gatt client when disconneted to prevent client leaks"
-    bug: "380388092"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -115,16 +88,6 @@ flag {
     namespace: "bluetooth"
     description: "Start discovery again when service change indication arrives."
     bug: "400828637"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "le_disconnect_notification_handling"
-    namespace: "bluetooth"
-    description: "Fix LE link disconnection notification to stack's upper layers"
-    bug: "403433488"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -163,16 +126,6 @@ flag {
     namespace: "bluetooth"
     description: "Update bond state check in IRK scan to cover all identity address types."
     bug: "406905829"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "gatt_reuse_discovering_client"
-    namespace: "bluetooth"
-    description: "Reuse discovering GATT client on service change indication"
-    bug: "407060739"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -288,6 +241,66 @@ flag {
     namespace: "bluetooth"
     description: "Match other filters along with device address when we use original address."
     bug: "425250980"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "get_svc_uuids_bugfix"
+    namespace: "bluetooth"
+    description: "Bug fixes for the flag get_svc_uuids_from_ble_adv_data"
+    bug: "428792613"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "prevent_adding_both_pseudo_and_identity_addr"
+    namespace: "bluetooth"
+    description: "Prevent adding both pseudo and identity address to the accept list."
+    bug: "428800297"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "remove_address_cache_from_ble_scanner"
+    namespace: "bluetooth"
+    description: "Fix the case where device name is not updated when pairing failed."
+    bug: "432614634"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "broadcast_transport_type_on_reset"
+    namespace: "bluetooth"
+    description: "Broadcast the transport type on BT reset as part of ACL_DISCONNECTED."
+    bug: "433990971"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "update_cod_if_missing"
+    namespace: "bluetooth"
+    description: "Update CoD on incoming connection for the bonded devices if it is missing."
+    bug: "435690191"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "l2c_not_cancel_timeout"
+    namespace: "bluetooth"
+    description: "Do not cancel timeout alarm if l2cap is connecting"
+    bug: "436736160"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

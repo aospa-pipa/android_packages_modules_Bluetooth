@@ -20,6 +20,8 @@
 #include <android_bluetooth_sysprop.h>
 #include <base/strings/string_number_conversions.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 #include <stdio.h>
 
@@ -60,8 +62,6 @@
 #include "osi/include/properties.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/l2cap_interface.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 using bluetooth::hci::kIsoCigPhy1M;
 using bluetooth::hci::kIsoCigPhy2M;
@@ -563,6 +563,8 @@ DeviceConnectState LeAudioDevice::GetConnectionState(void) {
   return connection_state_;
 }
 
+SubrateState LeAudioDevice::GetSubrateState(void) { return subrate_state_; }
+
 void LeAudioDevice::SetSubrateState(SubrateState state) {
   log::debug("{}, {} --> {}", address_, bluetooth::common::ToString(subrate_state_),
              bluetooth::common::ToString(state));
@@ -744,10 +746,27 @@ struct ase* LeAudioDevice::GetNextActiveAseWithDifferentDirection(struct ase* ba
   return &(*iter);
 }
 
+struct ase* LeAudioDevice::GetAseWaitingForDataPathByConnHandle(uint16_t conn_handle) {
+  auto iter = std::find_if(ases_.begin(), ases_.end(), [conn_handle](const auto& ase) {
+    log::verbose("ase_id: {}, active: {}, data: {} cis state {}, cis_conn_handle: {}", ase.id,
+                 ase.active, bluetooth::common::ToString(ase.data_path_state),
+                 bluetooth::common::ToString(ase.cis_state), ase.cis_conn_hdl);
+
+    return ase.active && (ase.data_path_state == DataPathState::CONFIGURING) &&
+           (ase.cis_state == CisState::CONNECTED) && (ase.cis_conn_hdl == conn_handle);
+  });
+
+  return (iter == ases_.end()) ? nullptr : &(*iter);
+}
+
 struct ase* LeAudioDevice::GetFirstActiveAseByCisAndDataPathState(CisState cis_state,
                                                                   DataPathState data_path_state) {
-  auto iter =
-          std::find_if(ases_.begin(), ases_.end(), [cis_state, data_path_state](const auto& ase) {
+  auto iter = std::find_if(
+          ases_.begin(), ases_.end(), [cis_state, data_path_state, this](const auto& ase) {
+            log::verbose("{}, ase_id: {}, active: {}, data: {} cis state {}", address_, ase.id,
+                         ase.active, bluetooth::common::ToString(ase.data_path_state),
+                         bluetooth::common::ToString(ase.cis_state));
+
             return ase.active && (ase.data_path_state == data_path_state) &&
                    (ase.cis_state == cis_state);
           });
@@ -845,7 +864,7 @@ BidirectionalPair<struct ase*> LeAudioDevice::GetAsesByCisId(uint8_t cis_id) {
 
 uint8_t LeAudioDevice::GetActiveEnabledDirections(void) {
   uint8_t enabled_directions = 0;
-  for (const auto ase : ases_) {
+  for (const auto& ase : ases_) {
     if (!ase.active) {
       continue;
     }
@@ -860,7 +879,7 @@ uint8_t LeAudioDevice::GetActiveEnabledDirections(void) {
 
 uint8_t LeAudioDevice::GetActiveQoSConfiguredDirections(void) {
   uint8_t qos_configured_directions = 0;
-  for (const auto ase : ases_) {
+  for (const auto& ase : ases_) {
     if (!ase.active) {
       continue;
     }
@@ -1095,7 +1114,7 @@ bool LeAudioDevice::HaveAllActiveAsesCisEst(void) const {
 
 bool LeAudioDevice::HaveAnyCisConnected(void) {
   /* Pending and Disconnecting is considered as connected in this function */
-  for (auto const ase : ases_) {
+  for (auto const& ase : ases_) {
     if (ase.cis_state == CisState::CONNECTED || ase.cis_state == CisState::CONNECTING ||
         ase.cis_state == CisState::DISCONNECTING) {
       return true;
@@ -1116,10 +1135,10 @@ uint8_t LeAudioDevice::GetSupportedAudioChannelCounts(uint8_t direction) const {
     /* Get PAC records from tuple as second element from tuple */
     auto& pac_recs = std::get<1>(pac_tuple);
 
-    for (const auto pac : pac_recs) {
-      if (!utils::IsCodecUsingLtvFormat(pac.codec_id) &&
-          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe &&
-          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX) {
+    for (const auto& pac : pac_recs) { // DEBUG TEST!!!
+      if (!utils::IsCodecUsingLtvFormat(pac.codec_id) && // DEBUG TEST!!!
+          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLe && // DEBUG TEST!!!
+          pac.codec_id.vendor_codec_id != types::kLeAudioCodingFormatAptxLeX) { // DEBUG TEST!!!
         log::warn(" {} Unknown codec PAC record for codec: {}", address_,
                   bluetooth::common::ToString(pac.codec_id));
         continue;
@@ -1198,9 +1217,9 @@ uint8_t LeAudioDevice::GetPhyBitmask(void) const {
 void LeAudioDevice::PrintDebugState(void) {
   std::stringstream debug_str;
 
-  debug_str << " Address: " << address_ << ", " << bluetooth::common::ToString(connection_state_)
-            << ", conn_id: " << +conn_id_ << ", mtu: " << +mtu_
-            << ", num_of_ase: " << static_cast<int>(ases_.size());
+  debug_str << " Address: " << address_.ToRedactedStringForLogging() << ", "
+            << bluetooth::common::ToString(connection_state_) << ", conn_id: " << +conn_id_
+            << ", mtu: " << +mtu_ << ", num_of_ase: " << static_cast<int>(ases_.size());
 
   if (ases_.size() > 0) {
     debug_str << "\n  == ASEs == ";
@@ -1600,21 +1619,13 @@ void LeAudioDevice::StartConnSubrate() {
   if (curr_conn_interval > LeConnectionParameters::GetMaxConnIntervalLeIsoAggressive() ||
       curr_conn_interval < LeConnectionParameters::GetMinConnIntervalLeIsoAggressive()) {
     log::verbose("Curr_conn_interval {}", curr_conn_interval);
-    if (subrate_state_ == SubrateState::DISABLED) {
-      stack::l2cap::get_interface().L2CA_UpdateBleConnParams(
-              address_, LeConnectionParameters::GetMinConnIntervalLeIsoAggressive(),
-              LeConnectionParameters::GetMaxConnIntervalLeIsoAggressive(),
-              BTM_BLE_CONN_PERIPHERAL_LATENCY_DEF, BTM_BLE_CONN_TIMEOUT_DEF, 0, 0);
-      stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
-      SetSubrateState(SubrateState::PENDING_ENABLING_CONN_UPDATE);
-      return;
-    } else if (subrate_state_ == SubrateState::PENDING_ENABLING_CONN_UPDATE_COMPLETE) {
-      log::error(
-              "Pending on the subrate update, but the connection interval is incorrect. "
-              "Reset the state");
-      StopConnSubrate();
-      return;
-    }
+    stack::l2cap::get_interface().L2CA_UpdateBleConnParams(
+            address_, LeConnectionParameters::GetMinConnIntervalLeIsoAggressive(),
+            LeConnectionParameters::GetMaxConnIntervalLeIsoAggressive(),
+            BTM_BLE_CONN_PERIPHERAL_LATENCY_DEF, BTM_BLE_CONN_TIMEOUT_DEF, 0, 0);
+    stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
+    SetSubrateState(SubrateState::PENDING_ENABLING_CONN_UPDATE);
+    return;
   }
 
   uint32_t max_subrate =
@@ -1644,9 +1655,9 @@ void LeAudioDevice::StartConnSubrate() {
     return;
   }
 
+  stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
   stack::l2cap::get_interface().L2CA_SubrateRequest(address_, min_subrate, max_subrate, 0,
                                                     cont_number, supervision_timeout);
-  stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
   SetSubrateState(SubrateState::PENDING_ENABLING_SUBRATE_UPDATE);
 }
 
@@ -1815,7 +1826,7 @@ void LeAudioDevices::Dump(std::stringstream& stream, int group_id) const {
     if (device->group_id_ == group_id) {
       device->Dump(stream);
 
-      stream << "\tAddress: " << device->address_ << "\n";
+      stream << "\tAddress: " << device->address_.ToRedactedStringForLogging() << "\n";
       device->DumpPacsDebugState(stream);
       stream << "\n";
     }

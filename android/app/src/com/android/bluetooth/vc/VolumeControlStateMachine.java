@@ -33,6 +33,7 @@ import android.os.Message;
 import android.util.Log;
 
 import com.android.bluetooth.btservice.ProfileService;
+import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -136,6 +137,10 @@ class VolumeControlStateMachine extends StateMachine {
                     log("Connecting to " + mDevice);
                     if (!mNativeInterface.connectVolumeControl(mDevice)) {
                         Log.e(TAG, "Disconnected: error connecting to " + mDevice);
+                        break;
+                    }
+                    if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
+                        transitionTo(mConnecting);
                         break;
                     }
                     if (mService.okToConnect(mDevice)) {
@@ -243,7 +248,13 @@ class VolumeControlStateMachine extends StateMachine {
                             + messageWhatToString(message.what));
 
             switch (message.what) {
-                case MESSAGE_CONNECT -> deferMessage(message);
+                case MESSAGE_CONNECT -> {
+                    if (Flags.ignoreMultipleConnectRequestInBtServices()) {
+                        Log.w(TAG, "Connecting: CONNECT ignored: " + mDevice);
+                    } else {
+                        deferMessage(message);
+                    }
+                }
                 case MESSAGE_CONNECT_TIMEOUT -> {
                     Log.w(TAG, "Connecting connection timeout: " + mDevice);
                     mNativeInterface.disconnectVolumeControl(mDevice);
@@ -348,7 +359,28 @@ class VolumeControlStateMachine extends StateMachine {
                             + messageWhatToString(message.what));
 
             switch (message.what) {
-                case MESSAGE_CONNECT, MESSAGE_DISCONNECT -> deferMessage(message);
+                case MESSAGE_CONNECT -> {
+                    if (Flags.ignoreMultipleConnectRequestInBtServices()) {
+                        if (!hasDeferredMessages(MESSAGE_CONNECT)) {
+                            deferMessage(message);
+                        } else {
+                            log("Connect already scheduled for " + mDevice);
+                        }
+                    } else {
+                        deferMessage(message);
+                    }
+                }
+                case MESSAGE_DISCONNECT -> {
+                    if (Flags.ignoreMultipleConnectRequestInBtServices()) {
+                        log("Disconnect is ongoing for " + mDevice);
+                        if (hasDeferredMessages(MESSAGE_CONNECT)) {
+                            log("Removing scheduled connect for " + mDevice);
+                            removeDeferredMessages(MESSAGE_CONNECT);
+                        }
+                    } else {
+                        deferMessage(message);
+                    }
+                }
                 case MESSAGE_CONNECT_TIMEOUT -> {
                     Log.w(TAG, "Disconnecting connection timeout: " + mDevice);
                     mNativeInterface.disconnectVolumeControl(mDevice);

@@ -36,7 +36,6 @@ import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.os.SystemProperties;
 import android.util.ArraySet;
 import android.util.Log;
@@ -321,7 +320,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     return;
                 }
                 // Activate A2DP if audio mode is normal or HFP is not supported or enabled.
-                if (mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET)
+                if (mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET)
                                 != CONNECTION_POLICY_ALLOWED
                         || mAudioMode == AudioManager.MODE_NORMAL) {
                     boolean a2dpMadeActive = setA2dpActiveDevice(device);
@@ -391,7 +390,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     return;
                 }
                 // Activate HFP if audio mode is not normal or A2DP is not supported or enabled.
-                if (mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
+                if (mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
                                 != CONNECTION_POLICY_ALLOWED
                         || mAudioMode != AudioManager.MODE_NORMAL) {
                     // Tries to make the device active for HFP
@@ -734,7 +733,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             } else {
                 if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
-                    Log.d(TAG, " set LE Audio in-active as new classic device become active ");
+                    Log.d(TAG, "Set LE Audio in-active as new classic device become active ");
                     setLeAudioActiveDevice(null, true);
                 }
             }
@@ -765,7 +764,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
                 if (!Objects.equals(mHfpActiveDevice, device)
                         && mHfpConnectedDevices.contains(device)
-                        && mDatabaseManager.getProfileConnectionPolicy(
+                        && mAdapterService.getProfileConnectionPolicy(
                                         device, BluetoothProfile.HEADSET)
                                 == CONNECTION_POLICY_ALLOWED) {
                     mClassicDeviceToBeActivated = device;
@@ -803,6 +802,18 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
                 updateLeAudioActiveDeviceIfDualMode(mHfpActiveDevice, device);
             } else {
+                /* mLeAudioActiveDevice may be updated due to next or previous device being
+                 * a dual mode one.
+                 */
+                if (Flags.admUnsetOthersOnHfpChanged()
+                        && mLeAudioActiveDevice != null
+                        && device != null
+                        && !mLeAudioActiveDevice.equals(device)) {
+                    /* HFP device becoming active is not dual mode and was not set as
+                     * active LE Audio device. Inactivate LE Audio device.
+                     */
+                    setLeAudioActiveDevice(null, true);
+                }
                 if (device != null && Utils.isDualModeAudioEnabled()
                      && !mAdapterService.isProfileSupported(device, BluetoothProfile.LE_AUDIO)) {
                     Log.d(TAG, " set LE Audio in-active as new classic device become active ");
@@ -836,8 +847,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
                 if (!Objects.equals(mA2dpActiveDevice, device)
                         && mA2dpConnectedDevices.contains(device)
-                        && mDatabaseManager.getProfileConnectionPolicy(
-                                        device, BluetoothProfile.A2DP)
+                        && mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.A2DP)
                                 == CONNECTION_POLICY_ALLOWED) {
                     mClassicDeviceToBeActivated = device;
                     setA2dpActiveDevice(device);
@@ -1069,19 +1079,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         resetState();
     }
 
-    /**
-     * Get the {@link Looper} for the handler thread. This is used in testing and helper objects
-     *
-     * @return {@link Looper} for the handler thread
-     */
-    @VisibleForTesting
-    public Looper getHandlerLooper() {
-        if (mHandler == null) {
-            return null;
-        }
-        return mHandler.getLooper();
-    }
-
     private void LoadDualModePoliciesfromLocalStorage() {
         Log.d(TAG, "LoadDualModePoliciesfromLocalStorage: ");
         Resources res = mAdapterService.getResources();
@@ -1141,7 +1138,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         Log.d(TAG,"Policy for context UNSEPCIFIED(default) Output Only Mode = "
             + profile_val_unspec[0] + ", Duplex Mode = " + profile_val_unspec[1]);
     }
-
     private boolean setA2dpActiveDevice(@NonNull BluetoothDevice device) {
         return setA2dpActiveDevice(device, false);
     }

@@ -38,6 +38,7 @@ import android.util.Log;
 import android.view.Display;
 
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
@@ -83,14 +84,13 @@ public class AdapterSuspend {
 
     private final AdapterService mAdapterService;
     private final AdapterNativeInterface mAdapterNativeInterface;
-
     private final DeviceStateManager mDeviceStateManager;
     private final PowerManager mPowerManager;
     private final AdapterSuspendStateMachine mSuspendStateMachine;
     private final DisplayManager mDisplayManager;
 
-    private boolean mDisconnectAclOnSuspend;
-    private boolean mScanModeNoneOnSuspend;
+    private final boolean mDisconnectAclOnSuspend;
+    private final boolean mScanModeNoneOnSuspend;
     private int mScanModeOnLastSuspend;
     private List<BluetoothDevice> mLastActiveAudioDevices = new ArrayList<>();
 
@@ -233,10 +233,15 @@ public class AdapterSuspend {
         long leMask = 0;
 
         mAllowWakeByHid = allowWakeByHid;
-        mScanModeOnLastSuspend = mAdapterService.getScanMode();
-        if (mScanModeNoneOnSuspend && mScanModeOnLastSuspend != SCAN_MODE_NONE) {
-            mAdapterService.setScanMode(SCAN_MODE_NONE, "handleSuspend");
+        if (mScanModeNoneOnSuspend) {
+            if (Flags.adapterSuspendDiscoverability()) {
+                mAdapterService.setSuspendState(true /* suspend */);
+            } else if (mScanModeOnLastSuspend != SCAN_MODE_NONE) {
+                mScanModeOnLastSuspend = mAdapterService.getScanMode();
+                mAdapterService.setScanMode(SCAN_MODE_NONE, "handleSuspend");
+            }
         }
+
         if (mDisconnectAclOnSuspend) {
             mAdapterService
                     .getLeAudioService()
@@ -278,8 +283,13 @@ public class AdapterSuspend {
                 mDisconnectProfileDevices.clear();
             }
         }
-        if (mScanModeNoneOnSuspend && (mAdapterService.getScanMode() != mScanModeOnLastSuspend)) {
-            mAdapterService.setScanMode(mScanModeOnLastSuspend, "handleResume");
+
+        if (mScanModeNoneOnSuspend) {
+            if (Flags.adapterSuspendDiscoverability()) {
+                mAdapterService.setSuspendState(false /* suspend */);
+            } else if (mAdapterService.getScanMode() != mScanModeOnLastSuspend) {
+                mAdapterService.setScanMode(mScanModeOnLastSuspend, "handleResume");
+            }
         }
     }
 
@@ -294,7 +304,7 @@ public class AdapterSuspend {
         for (int audioProfile : AUDIO_PROFILES) {
             List<BluetoothDevice> devices = mAdapterService.getActiveDevices(audioProfile);
             // getActiveDevices might return a list containing null elements. Filter them first.
-            devices = devices.stream().filter(d -> d != null).collect(Collectors.toList());
+            devices = devices.stream().filter(Objects::nonNull).collect(Collectors.toList());
             if (!devices.isEmpty()) {
                 mLastActiveAudioDevices = devices;
                 Log.i(
@@ -366,7 +376,6 @@ public class AdapterSuspend {
         writer.println(TAG);
         writer.println("  " + "Disconnect ACL on suspend: " + mDisconnectAclOnSuspend);
         writer.println("  " + "Set scan mode to none on suspend: " + mScanModeNoneOnSuspend);
-        writer.println("  " + "Scan mode on last suspend: " + mScanModeOnLastSuspend);
         writer.println();
         mSuspendStateMachine.dump(fd, writer, args);
     }

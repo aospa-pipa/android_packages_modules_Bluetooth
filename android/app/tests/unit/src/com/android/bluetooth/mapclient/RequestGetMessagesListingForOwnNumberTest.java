@@ -21,7 +21,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 
 import android.util.Log;
 
-import androidx.test.runner.AndroidJUnit4;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.bluetooth.ObexAppParameters;
 import com.android.bluetooth.map.BluetoothMapMessageListing;
@@ -90,7 +90,7 @@ public class RequestGetMessagesListingForOwnNumberTest {
          *     If {@code -1} or otherwise outside range, {@code folder} will not contain {@code
          *     targetElement}.
          */
-        public void createMessageFolder(
+        void createMessageFolder(
                 String folder,
                 int size,
                 BluetoothMapMessageListingElement fillerElements,
@@ -111,7 +111,7 @@ public class RequestGetMessagesListingForOwnNumberTest {
             }
         }
 
-        public InputStream getMessageListingAsInputStream(
+        InputStream getMessageListingAsInputStream(
                 String folder, int offset, int maxCount, byte msgTypeFilter) {
             List<BluetoothMapMessageListingElement> folderElements = mFolders.get(folder);
 

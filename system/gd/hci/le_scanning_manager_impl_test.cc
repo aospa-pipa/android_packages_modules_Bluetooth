@@ -608,7 +608,7 @@ TEST_F(LeScanningManagerAndroidHciTest, scan_filter_add_ad_type_test) {
 }
 
 TEST_F(LeScanningManagerAndroidHciTest, read_batch_scan_result) {
-  le_scanning_manager->BatchScanConifgStorage(100, 0, 95, 0x00);
+  le_scanning_manager->BatchScanConfigStorage(100, 0, 95, 0x00);
   sync_client_handler();
   ASSERT_EQ(OpCode::LE_BATCH_SCAN, test_hci_layer_->GetCommand().GetOpCode());
   test_hci_layer_->IncomingEvent(
@@ -798,11 +798,9 @@ TEST_F(LeScanningManagerExtendedTest, on_pause_on_resume_test) {
 
   // Ensure scan is resumed (enabled)
   test_le_address_manager_->client_->OnResume();
-  if (com::android::bluetooth::flags::configure_scan_on_resume()) {
-    ASSERT_EQ(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS, test_hci_layer_->GetCommand().GetOpCode());
-    test_hci_layer_->IncomingEvent(
-            LeSetExtendedScanParametersCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
-  }
+  ASSERT_EQ(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS, test_hci_layer_->GetCommand().GetOpCode());
+  test_hci_layer_->IncomingEvent(
+          LeSetExtendedScanParametersCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
   ASSERT_EQ(OpCode::LE_SET_EXTENDED_SCAN_ENABLE, test_hci_layer_->GetCommand().GetOpCode());
   test_hci_layer_->IncomingEvent(
           LeSetExtendedScanEnableCompleteBuilder::Create(uint8_t{1}, ErrorCode::SUCCESS));
@@ -868,7 +866,7 @@ TEST_F(LeScanningManagerExtendedTest, drop_insignificant_bytes_test) {
   }
   adv_data.push_back(name_data);
   for (int i = 0; i != 5; ++i) {
-    adv_data.push_back({});  // pad with a few insigificant zeros
+    adv_data.push_back({});  // pad with a few insignificant zeros
   }
   advertisement_report.advertising_data_ = adv_data;
 
@@ -882,7 +880,7 @@ TEST_F(LeScanningManagerExtendedTest, drop_insignificant_bytes_test) {
   }
   adv_data = {extra_data};
   for (int i = 0; i != 5; ++i) {
-    adv_data.push_back({});  // pad with a few insigificant zeros
+    adv_data.push_back({});  // pad with a few insignificant zeros
   }
   scan_response_report.advertising_data_ = adv_data;
 

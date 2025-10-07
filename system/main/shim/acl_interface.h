@@ -16,15 +16,16 @@
 
 #pragma once
 
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/hci_role.h>
+
 #include <cstdint>
 
 #include "hci/class_of_device.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/hci_error_code.h"
 #include "stack/include/hci_mode.h"
-#include "types/ble_address_with_type.h"
-#include "types/hci_role.h"
-#include "types/raw_address.h"
 
 namespace bluetooth {
 namespace shim {
@@ -82,6 +83,7 @@ typedef struct {
   void (*on_read_transmit_power_level_complete)(uint8_t transmit_power_level);
   void (*on_role_change)(tHCI_STATUS status, const RawAddress& bd_addr, tHCI_ROLE new_role);
   void (*on_role_discovery_complete)(tHCI_ROLE current_role);
+  void (*on_hardware_error)();
 } acl_classic_link_interface_t;
 
 typedef struct {

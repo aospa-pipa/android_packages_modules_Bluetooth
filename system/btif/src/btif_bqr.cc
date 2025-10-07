@@ -18,6 +18,7 @@
 
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -44,7 +45,6 @@
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
-#include "types/raw_address.h"
 
 namespace bluetooth {
 namespace bqr {
@@ -73,7 +73,7 @@ namespace {
 static std::recursive_mutex life_cycle_guard_;
 static common::PostableContext* to_bind_ = nullptr;
 std::atomic<bool> vse_callback_registered_{false};
-}
+}  // namespace
 
 void BqrVseSubEvt::ParseBqrLinkQualityEvt(uint8_t length, const uint8_t* p_param_buf) {
   if (length < kLinkQualityParamTotalLen) {
@@ -290,7 +290,7 @@ std::string BqrVseSubEvt::ToString() const {
      << ", OverFlow: " << std::to_string(bqr_link_quality_event_.buffer_overflow_bytes)
      << ", UndFlow: " << std::to_string(bqr_link_quality_event_.buffer_underflow_bytes);
   if (vendor_cap_supported_version >= kBqrVersion5_0) {
-    ss << ", RemoteDevAddr: " << bqr_link_quality_event_.bdaddr.ToColonSepHexString()
+    ss << ", RemoteDevAddr: " << bqr_link_quality_event_.bdaddr.ToRedactedStringForLogging()
        << ", CalFailedItems: " << std::to_string(bqr_link_quality_event_.cal_failed_item_count);
   }
   if (vendor_cap_supported_version >= kBqrIsoVersion) {
@@ -786,8 +786,6 @@ static void AddLinkQualityEventToQueue(uint8_t length, const uint8_t* p_link_qua
           p_bqr_event->bqr_link_quality_event_.no_rx_count,
           p_bqr_event->bqr_link_quality_event_.nak_count);
 
-  metrics::LogMetricBluetoothQualityReport(p_bqr_event->bqr_link_quality_event_);
-
   BluetoothQualityReportInterface* bqrItf = getBluetoothQualityReportInterface();
 
   if (bqrItf != NULL) {
@@ -820,6 +818,8 @@ static void AddLinkQualityEventToQueue(uint8_t length, const uint8_t* p_link_qua
     log::warn("failed to deliver BQR, bqrItf is NULL");
   }
 
+  metrics::LogMetricBluetoothQualityReport(bd_addr, p_bqr_event->bqr_link_quality_event_);
+
   kpBqrEventQueue.Enqueue(p_bqr_event.release());
 }
 
@@ -830,6 +830,9 @@ static void AddEnergyMonitorEventToQueue(uint8_t length, const uint8_t* p_energy
     log::warn("failed to parse BQR energy monitor event");
     return;
   }
+
+  metrics::LogMetricBluetoothEnergyMonitorReported(vendor_cap_supported_version,
+                                                   p_bqr_event->bqr_energy_monitor_event_);
 
   BluetoothQualityReportInterface* bqrItf = getBluetoothQualityReportInterface();
 
@@ -848,6 +851,9 @@ static void AddRFStatsEventToQueue(uint8_t length, const uint8_t* p_rf_stats_eve
     log::warn("failed to parse BQR RF stats event");
     return;
   }
+
+  metrics::LogMetricBluetoothRFStatsReported(vendor_cap_supported_version,
+                                             p_bqr_event->bqr_rf_stats_event_);
 
   BluetoothQualityReportInterface* bqrItf = getBluetoothQualityReportInterface();
 

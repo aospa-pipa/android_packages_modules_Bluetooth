@@ -49,18 +49,23 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
 
     @Override
     public ParcelFileDescriptor connectSocket(
-            BluetoothDevice device, int type, ParcelUuid uuid, int port, int flag) {
+            BluetoothDevice device,
+            int type,
+            ParcelUuid uuid,
+            int port,
+            int flag,
+            AttributionSource source) {
 
         String leDeviceAddr = null;
         enforceActiveUser();
 
-        if (!Utils.checkConnectPermissionForPreflight(mService)) {
+        if (!Utils.checkConnectPermissionForPreflight(mService, source)) {
             return null;
         }
 
         String brEdrAddress = Utils.getBrEdrAddress(device, mService);
 
-        if (type == BluetoothSocket.TYPE_L2CAP_LE) {
+        if (type == BluetoothSocket.TYPE_LE) {
           leDeviceAddr = mService.getIdentityAddress(device.getAddress());
           if (leDeviceAddr == null)
             leDeviceAddr = device.getAddress();
@@ -88,7 +93,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
                 mService.getNative()
                         .connectSocket(
                                 Utils.getBytesFromAddress(
-                                        type == BluetoothSocket.TYPE_L2CAP_LE
+                                        type == BluetoothSocket.TYPE_LE
                                                 ? leDeviceAddr
                                                 : brEdrAddress),
                                 type,
@@ -114,11 +119,12 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             String socketName,
             long hubId,
             long endpointId,
-            int maximumPacketSize) {
+            int maximumPacketSize,
+            AttributionSource source) {
 
         enforceActiveUser();
 
-        if (!Utils.checkConnectPermissionForPreflight(mService)) {
+        if (!Utils.checkConnectPermissionForPreflight(mService, source)) {
             return null;
         }
 
@@ -146,7 +152,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
                 mService.getNative()
                         .connectSocket(
                                 Utils.getBytesFromAddress(
-                                        type == BluetoothSocket.TYPE_L2CAP_LE
+                                        type == BluetoothSocket.TYPE_LE
                                                 ? device.getAddress()
                                                 : brEdrAddress),
                                 type,
@@ -163,11 +169,16 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
 
     @Override
     public ParcelFileDescriptor createSocketChannel(
-            int type, String serviceName, ParcelUuid uuid, int port, int flag) {
+            int type,
+            String serviceName,
+            ParcelUuid uuid,
+            int port,
+            int flag,
+            AttributionSource source) {
 
         enforceActiveUser();
 
-        if (!Utils.checkConnectPermissionForPreflight(mService)) {
+        if (!Utils.checkConnectPermissionForPreflight(mService, source)) {
             return null;
         }
 
@@ -211,11 +222,12 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             String socketName,
             long hubId,
             long endpointId,
-            int maximumPacketSize) {
+            int maximumPacketSize,
+            AttributionSource source) {
 
         enforceActiveUser();
 
-        if (!Utils.checkConnectPermissionForPreflight(mService)) {
+        if (!Utils.checkConnectPermissionForPreflight(mService, source)) {
             return null;
         }
 
@@ -264,10 +276,10 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
     }
 
     @Override
-    public void requestMaximumTxDataLength(BluetoothDevice device) {
+    public void requestMaximumTxDataLength(BluetoothDevice device, AttributionSource source) {
         enforceActiveUser();
 
-        if (!Utils.checkConnectPermissionForPreflight(mService)) {
+        if (!Utils.checkConnectPermissionForPreflight(mService, source)) {
             return;
         }
 

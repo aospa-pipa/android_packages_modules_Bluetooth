@@ -12,16 +12,6 @@ flag {
 }
 
 flag {
-    name: "bta_dm_disc_close_proper_conn_id"
-    namespace: "bluetooth"
-    description: "Make sure proper connection is closed when timeout happens"
-    bug: "399687217"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "sniff_offload_with_vsc_based_control"
     namespace: "bluetooth"
     description: "Feature to enable sniff offload with VSC based control"
@@ -33,6 +23,16 @@ flag {
     namespace: "bluetooth"
     description: "Send discovery complete if canceling RNR fails"
     bug: "424232101"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "gatt_discovery_is_non_opportunistic_client"
+    namespace: "bluetooth"
+    description: "Make GATT Discovery client Non oportunistic client"
+    bug: "436539073"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

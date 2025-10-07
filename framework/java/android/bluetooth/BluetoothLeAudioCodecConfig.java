@@ -448,30 +448,26 @@ public final class BluetoothLeAudioCodecConfig implements Parcelable {
      */
     @RequiresNoPermission
     public @NonNull String getCodecName() {
-        switch (mCodecType) {
-            case SOURCE_CODEC_TYPE_LC3:
-                return "LC3";
-            case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_LE:
-                return "APTX_ADAPTIVE_LEA";
-            case SOURCE_CODEC_TYPE_INVALID:
-                return "INVALID CODEC";
-            case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_R4:
-                return "APTX_ADAPTIVE_R4";
-            case SOURCE_CODEC_TYPE_DEFAULT:
-                return "DEFAULT";
-            default:
+        return switch (mCodecType) {
+            case SOURCE_CODEC_TYPE_LC3 -> "LC3";
+            case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_LE -> "APTX_ADAPTIVE_LEA";
+            case SOURCE_CODEC_TYPE_INVALID -> "INVALID CODEC";
+            case SOURCE_CODEC_TYPE_APTX_ADAPTIVE_R4 -> "APTX_ADAPTIVE_R4";
+            case SOURCE_CODEC_TYPE_DEFAULT -> "DEFAULT";
+            default -> {
                 if (Flags.leaudioAddOpusCodecType()) {
                     if (mCodecType == SOURCE_CODEC_TYPE_OPUS) {
-                        return "Opus";
+                        yield "Opus";
                     }
                 }
                 if (Flags.leaudioAddOpusHiResCodecTypeApi()) {
                     if (mCodecType == SOURCE_CODEC_TYPE_OPUS_HI_RES) {
-                        return "Opus Hi-Res";
+                        yield "Opus Hi-Res";
                     }
                 }
-        }
-        return "UNKNOWN CODEC(" + mCodecType + ")";
+                yield "UNKNOWN CODEC(" + mCodecType + ")";
+            }
+        };
     }
 
     /**

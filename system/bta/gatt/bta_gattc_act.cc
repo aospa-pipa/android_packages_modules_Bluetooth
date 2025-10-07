@@ -31,6 +31,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -54,8 +55,8 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_api.h"
-#include "types/raw_address.h"
 #include "internal_include/stack_config.h"
+
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -138,8 +139,6 @@ static void bta_gattc_enable() {
 /** Disable GATTC module by cleaning up all active connections and deregister
  * all application */
 void bta_gattc_disable() {
-  uint8_t i;
-
   log::verbose("");
 
   if (bta_gattc_cb.state != BTA_GATTC_STATE_ENABLED) {
@@ -264,7 +263,7 @@ void bta_gattc_deregister(tBTA_GATTC_RCB* p_clreg) {
     };
     bta_gattc_close(p_clcb.get(), &gattc_data);
   }
-  // deallocated clcbs will not be accessed. Let them be claened up.
+  // deallocated clcbs will not be accessed. Let them be cleaned up.
   bta_gattc_cleanup_clcb();
 }
 
@@ -750,8 +749,7 @@ static void bta_gattc_set_discover_st(tBTA_GATTC_SERV* p_srcb) {
     if (p_clcb->p_srcb != p_srcb) {
       continue;
     }
-    if (com::android::bluetooth::flags::gatt_reuse_discovering_client() &&
-        p_clcb->state == BTA_GATTC_DISCOVER_ST) {
+    if (p_clcb->state == BTA_GATTC_DISCOVER_ST) {
       /* do not reset state if already discovering */
       break;
     }
@@ -1560,22 +1558,16 @@ static bool bta_gattc_process_srvc_chg_ind(tCONN_ID conn_id, tBTA_GATTC_RCB* p_c
   if (++p_srcb->update_count == bta_gattc_num_reg_app()) {
     /* not an opened connection; or connection busy */
     /**
-     * if com::android::bluetooth::flags::gatt_reuse_discovering_client() is true,
-     * iterate through all clcbs in order to find and reuse a discovering client.
-     * If a discovering client is not found, an available clcb will be used to start
-     * discovery.
+     * Iterate through all clcbs in order to find and reuse a discovering client.
+     * If a discovering client is not found, an available clcb will be used to start discovery.
      */
     /* search for first available clcb and start discovery */
     if (p_clcb == NULL || (p_clcb && p_clcb->p_q_cmd != NULL)) {
       for (auto& p_clcb_i : bta_gattc_cb.clcb_set) {
         if (p_clcb_i->in_use && p_clcb_i->p_srcb == p_srcb && p_clcb_i->p_q_cmd == NULL) {
           p_clcb = p_clcb_i.get();
-          if (com::android::bluetooth::flags::gatt_reuse_discovering_client()) {
-            if (p_clcb_i->disc_active) {
-              log::info("will reuse disc_active client to ", p_srcb->server_bda);
-              break;
-            }
-          } else {
+          if (p_clcb_i->disc_active) {
+            log::info("will reuse disc_active client to ", p_srcb->server_bda);
             break;
           }
         }

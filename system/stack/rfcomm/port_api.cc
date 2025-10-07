@@ -27,6 +27,7 @@
 #include "stack/include/port_api.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -40,7 +41,6 @@
 #include "stack/include/btm_log_history.h"
 #include "stack/include/rfcdefs.h"
 #include "stack/rfcomm/rfc_int.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 
@@ -201,13 +201,11 @@ int RFCOMM_CreateConnectionWithSecurity(uint16_t uuid, uint8_t scn, bool is_serv
 
   // Set the optional configuration for future use when the server or client negotiates the
   // parameters with the peer device.
-  if (com::android::bluetooth::flags::socket_settings_api()) {
-    p_port->rfc_cfg_info = cfg;
-    // Update the local mtu with the optional configuration if set by the app
-    if (p_port->rfc_cfg_info.rx_mtu_present) {
-      p_port->mtu =
-              (p_port->rfc_cfg_info.rx_mtu < rfcomm_mtu) ? p_port->rfc_cfg_info.rx_mtu : rfcomm_mtu;
-    }
+  p_port->rfc_cfg_info = cfg;
+  // Update the local mtu with the optional configuration if set by the app
+  if (p_port->rfc_cfg_info.rx_mtu_present) {
+    p_port->mtu =
+            (p_port->rfc_cfg_info.rx_mtu < rfcomm_mtu) ? p_port->rfc_cfg_info.rx_mtu : rfcomm_mtu;
   }
 
   // Other states
@@ -474,8 +472,6 @@ int PORT_CheckConnection(uint16_t handle, RawAddress* bd_addr, uint16_t* p_lcid)
 }
 
 static const tPORT* get_port_from_mcb(const tRFC_MCB* multiplexer_cb) {
-  tPORT* p_port = nullptr;
-
   for (tPORT& port : rfc_cb.port.port) {
     if (port.rfc.p_mcb == multiplexer_cb) {
       return &port;
@@ -925,6 +921,10 @@ int PORT_WriteDataCO(uint16_t handle, int* p_len) {
   }
   int available = 0;
   // if(ioctl(fd, FIONREAD, &available) < 0)
+  if (p_port->p_data_co_callback == nullptr) {
+    log::error("p_data_co_callback is null for handle:{}", handle);
+    return (PORT_UNKNOWN_ERROR);
+  }
   if (!p_port->p_data_co_callback(handle, (uint8_t*)&available, sizeof(available),
                                   DATA_CO_CALLBACK_TYPE_OUTGOING_SIZE)) {
     log::error("p_data_co_callback DATA_CO_CALLBACK_TYPE_INCOMING_SIZE failed, available:{}",

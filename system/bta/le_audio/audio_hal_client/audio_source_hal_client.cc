@@ -98,6 +98,7 @@ public:
           const ::bluetooth::le_audio::broadcast_offload_config& config) override;
   void SuspendedForReconfiguration() override;
   void ReconfigurationComplete() override;
+  void StreamSuspended() override;
 
   void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
           int cig_id, int cis_id, const std::vector<uint8_t>& data) override;
@@ -116,6 +117,7 @@ public:
 
   bool OnResumeReq(bool start_media_task);
   bool OnSuspendReq();
+  bool OnAudioServerRestart();
   bool OnMetadataUpdateReq(const source_metadata_v7_t& source_metadata, DsaMode latency_mode);
   bool Acquire();
   void Release();
@@ -142,6 +144,7 @@ bool SourceImpl::Acquire() {
   auto sink_stream_cb = bluetooth::audio::le_audio::StreamCallbacks{
           .on_resume_ = std::bind(&SourceImpl::OnResumeReq, this, std::placeholders::_1),
           .on_suspend_ = std::bind(&SourceImpl::OnSuspendReq, this),
+          .on_audio_server_restart_ = std::bind(&SourceImpl::OnAudioServerRestart, this),
           .on_metadata_update_ = std::bind(&SourceImpl::OnMetadataUpdateReq, this,
                                            std::placeholders::_1, std::placeholders::_2),
           .on_sink_metadata_update_ =
@@ -251,7 +254,8 @@ void SourceImpl::SendAudioData() {
 bool SourceImpl::InitAudioSinkThread() {
   const std::string thread_name = is_broadcaster_ ? "bt_le_audio_broadcast_sink_worker_thread"
                                                   : "bt_le_audio_unicast_sink_worker_thread";
-  worker_thread_ = new bluetooth::common::MessageLoopThread(thread_name);
+  worker_thread_ = new bluetooth::common::MessageLoopThread(
+          thread_name, bluetooth::os::Thread::Priority::REAL_TIME);
 
   worker_thread_->StartUp();
   if (!worker_thread_->IsRunning()) {
@@ -278,7 +282,7 @@ void SourceImpl::StartAudioTicks() {
           worker_thread_, source_codec_config_.num_channels, source_codec_config_.sample_rate,
           source_codec_config_.bits_per_sample, source_codec_config_.data_interval_us);
   audio_timer_.SchedulePeriodic(
-          worker_thread_->GetWeakPtr(),
+          worker_thread_,
           base::BindRepeating(&SourceImpl::SendAudioData, weak_factory_.GetWeakPtr()),
           std::chrono::microseconds(source_codec_config_.data_interval_us));
 }
@@ -290,6 +294,25 @@ void SourceImpl::StopAudioTicks() {
     asrc_.reset(nullptr);
     wakelock_release();
   }
+}
+
+bool SourceImpl::OnAudioServerRestart() {
+  log::info("");
+  std::lock_guard<std::mutex> guard(audioSourceCallbacksMutex_);
+  if (audioSourceCallbacks_ == nullptr) {
+    log::error("audioSourceCallbacks_ not set");
+    return false;
+  }
+
+  bt_status_t status =
+          do_in_main_thread(base::BindOnce(&LeAudioSourceAudioHalClient::Callbacks::OnAudioServerRestart,
+                                           audioSourceCallbacks_->weak_factory_.GetWeakPtr()));
+  if (status == BT_STATUS_SUCCESS) {
+    return true;
+  }
+
+  log::error("do_in_main_thread err={}", status);
+  return false;
 }
 
 bool SourceImpl::OnSuspendReq() {
@@ -445,6 +468,16 @@ void SourceImpl::ReconfigurationComplete() {
 
   log::info("");
   halSinkInterface_->ReconfigurationComplete();
+}
+
+void SourceImpl::StreamSuspended() {
+  if ((halSinkInterface_ == nullptr) || (le_audio_sink_hal_state_ != HAL_STARTED)) {
+    log::error("Audio HAL Audio sink was not started!");
+    return;
+  }
+
+  log::info("");
+  halSinkInterface_->StreamSuspended();
 }
 
 void SourceImpl::CancelStreamingRequest() {

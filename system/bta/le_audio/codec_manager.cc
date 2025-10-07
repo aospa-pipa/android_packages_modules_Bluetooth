@@ -372,7 +372,7 @@ public:
           const types::BidirectionalPair<stream_parameters>& stream_params,
           types::LeAudioCodecId id,
           std::function<void(const stream_config& config, uint8_t direction)> update_receiver,
-          uint8_t remote_directions_to_update) {
+          uint8_t remote_directions_to_update, bool force_update) {
     if (GetCodecLocation() != bluetooth::le_audio::types::CodecLocation::ADSP) {
       return;
     }
@@ -388,7 +388,7 @@ public:
       }
 
       auto& stream_map = offloader_stream_maps.get(direction);
-      if (!stream_map.has_changed && !stream_map.is_initial) {
+      if (!force_update && !stream_map.has_changed && !stream_map.is_initial) {
         log::warn("unexpected call for direction {}, stream_map.has_changed {}", direction,
                   stream_map.has_changed, stream_map.is_initial);
         continue;
@@ -396,13 +396,6 @@ public:
       if (stream_params.get(direction).stream_config.stream_map.empty()) {
         log::warn("unexpected call, stream is empty for direction {}, ", direction);
         continue;
-      }
-      uint16_t delay = 0;
-      if (stream_params.get(direction).stream_config.peer_delay_ms != 0xFFFF) {
-        delay = stream_params.get(direction).stream_config.peer_delay_ms;
-      } else {
-        //Todo
-        delay = stream_params.get(direction).stream_config.peer_delay_ms;
       }
 
       auto unicast_cfg = stream_params.get(direction).stream_config;
@@ -415,6 +408,7 @@ public:
 
       update_receiver(unicast_cfg, direction);
       stream_map.is_initial = false;
+      stream_map.has_changed = false;
     }
   }
 
@@ -433,6 +427,11 @@ public:
   void UpdateSelectedCodecConfig(
           const ::bluetooth::le_audio::types::AudioSetConfiguration& audio_set_conf) const {
     if (GetCodecLocation() != bluetooth::le_audio::types::CodecLocation::ADSP) {
+      return;
+    }
+
+    if (!codec_provider_info_.has_value()) {
+      log::debug("Codec extensions not enabled");
       return;
     }
 
@@ -1064,6 +1063,9 @@ public:
     }
 
     auto& stream_map = offloader_stream_maps.get(direction);
+    if (!stream_map.streams_map_target.empty() || !stream_map.streams_map_current.empty()) {
+      stream_map.has_changed = true;
+    }
     stream_map.streams_map_target.clear();
     stream_map.streams_map_current.clear();
   }
@@ -1762,10 +1764,10 @@ void CodecManager::UpdateActiveAudioConfig(
         const types::BidirectionalPair<stream_parameters>& stream_params,
         types::LeAudioCodecId id,
         std::function<void(const stream_config& config, uint8_t direction)> update_receiver,
-        uint8_t remote_directions_to_update) {
+        uint8_t remote_directions_to_update, bool force_update) {
   if (pimpl_->IsRunning()) {
     pimpl_->codec_manager_impl_->UpdateActiveAudioConfig(stream_params, id, update_receiver,
-                                                         remote_directions_to_update);
+                                                         remote_directions_to_update, force_update);
   }
 }
 

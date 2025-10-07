@@ -37,14 +37,13 @@ import static android.bluetooth.BluetoothProfile.getProfileName;
 import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringConsumer;
 import static android.bluetooth.BluetoothUtils.logRemoteException;
 import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
-import static android.text.format.DateUtils.MINUTE_IN_MILLIS;
-import static android.text.format.DateUtils.SECOND_IN_MILLIS;
 
 import static com.android.bluetooth.Utils.getBytesFromAddress;
 import static com.android.bluetooth.Utils.isDualModeAudioEnabled;
 import static com.android.bluetooth.Utils.isPackageNameAccurate;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.Objects.requireNonNullElse;
 import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.NonNull;
@@ -151,8 +150,10 @@ import com.android.bluetooth.hfpclient.HeadsetClientService;
 import com.android.bluetooth.hid.HidDeviceService;
 import com.android.bluetooth.hid.HidHostService;
 import com.android.bluetooth.le_audio.LeAudioService;
+import com.android.bluetooth.le_scan.PeriodicScanNativeInterface;
 import com.android.bluetooth.le_scan.ScanController;
-import com.android.bluetooth.le_scan.ScanManager;
+import com.android.bluetooth.le_scan.ScanNativeInterface;
+import com.android.bluetooth.le_scan.ScanUtil;
 import com.android.bluetooth.map.BluetoothMapService;
 import com.android.bluetooth.mapclient.MapClientService;
 import com.android.bluetooth.mcp.McpService;
@@ -166,6 +167,7 @@ import com.android.bluetooth.sdp.SdpManager;
 import com.android.bluetooth.sdp.SdpManagerNativeInterface;
 import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.telephony.BluetoothInCallService;
+import com.android.bluetooth.util.DeviceConfigUtils;
 import com.android.bluetooth.vc.VolumeControlService;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -178,12 +180,7 @@ import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -300,6 +297,8 @@ public class AdapterService extends Service {
     private final BluetoothQualityReportNativeInterface mBluetoothQualityReportNativeInterface;
     private final BluetoothHciVendorSpecificNativeInterface
             mBluetoothHciVendorSpecificNativeInterface;
+    private final ScanNativeInterface mScanNativeInterface;
+    private final PeriodicScanNativeInterface mPeriodicScanNativeInterface;
     private final GattNativeInterface mGattNativeInterface;
     private final AdvertiseManagerNativeInterface mAdvertiseManagerNativeInterface;
     private final DistanceMeasurementNativeInterface mDistanceMeasurementNativeInterface;
@@ -309,11 +308,25 @@ public class AdapterService extends Service {
     private final ServiceFactory mServiceFactory; // TODO(b/422543753) Delete on flag cleanup
 
     private boolean mIsMediaProfileConnected;
+
+    @GuardedBy("mEnergyInfoLock")
+    private Instant mLastActivityReport = Instant.now();
+
+    @GuardedBy("mEnergyInfoLock")
     private int mStackReportedState;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mTxTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mRxTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mIdleTimeTotalMs;
+
+    @GuardedBy("mEnergyInfoLock")
     private long mEnergyUsedTotalVoltAmpSecMicro;
+
     private final HashSet<String> mLeAudioAllowDevices = new HashSet<>();
 
     /* List of pairs of gatt clients which controls AutoActiveMode on the device.*/
@@ -364,6 +377,11 @@ public class AdapterService extends Service {
 
     private volatile int mScanMode;
 
+    private boolean mSuspend = false;
+    private boolean mScanModeChangedDuringSuspend;
+    private String mScanModeChangedDuringSuspendFrom;
+    private int mScanModeAfterSuspend;
+
     // Report ID definition
     public enum BqrQualityReportId {
         QUALITY_REPORT_ID_MONITOR_MODE(0x01),
@@ -398,6 +416,8 @@ public class AdapterService extends Service {
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
     }
 
@@ -409,6 +429,8 @@ public class AdapterService extends Service {
             BluetoothKeystoreNativeInterface bluetoothKeystoreNativeInterface,
             BluetoothQualityReportNativeInterface bluetoothQualityReportNativeInterface,
             BluetoothHciVendorSpecificNativeInterface bluetoothHciVendorSpecificNativeInterface,
+            ScanNativeInterface scanNativeInterface,
+            PeriodicScanNativeInterface periodicScanNativeInterface,
             GattNativeInterface gattNativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
@@ -419,6 +441,8 @@ public class AdapterService extends Service {
                 bluetoothKeystoreNativeInterface,
                 bluetoothQualityReportNativeInterface,
                 bluetoothHciVendorSpecificNativeInterface,
+                scanNativeInterface,
+                periodicScanNativeInterface,
                 gattNativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
@@ -432,6 +456,8 @@ public class AdapterService extends Service {
             BluetoothKeystoreNativeInterface bluetoothKeystoreNativeInterface,
             BluetoothQualityReportNativeInterface bluetoothQualityReportNativeInterface,
             BluetoothHciVendorSpecificNativeInterface bluetoothHciVendorSpecificNativeInterface,
+            ScanNativeInterface scanNativeInterface,
+            PeriodicScanNativeInterface periodicScanNativeInterface,
             GattNativeInterface gattNativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
@@ -450,6 +476,8 @@ public class AdapterService extends Service {
                         () ->
                                 new BluetoothHciVendorSpecificNativeInterface(
                                         mBluetoothHciVendorSpecificDispatcher));
+        mScanNativeInterface = scanNativeInterface;
+        mPeriodicScanNativeInterface = periodicScanNativeInterface;
         mGattNativeInterface = gattNativeInterface;
         mAdvertiseManagerNativeInterface = advertiseManagerNativeInterface;
         mDistanceMeasurementNativeInterface = distanceMeasurementNativeInterface;
@@ -471,8 +499,7 @@ public class AdapterService extends Service {
                             return supplier.get();
                         });
         if (!mHandler.post(task)) {
-            Log.w(TAG, "Failed to post task to handler");
-            Log.d(TAG, Log.getStackTraceString(new Throwable()));
+            Log.w(TAG, "Failed to post task\n" + Log.getStackTraceString(new Throwable()));
             return defaultValue;
         }
         try {
@@ -594,9 +621,6 @@ public class AdapterService extends Service {
                                     && !Flags.onlyStartScanDuringBleOn())
                             && mRegisteredProfiles.size() == Config.getSupportedProfiles().length
                             && mRegisteredProfiles.size() == mRunningProfiles.size()) {
-                        if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                            mAdapterProperties.onBluetoothReady();
-                        }
                         setScanMode(SCAN_MODE_CONNECTABLE, "processProfileServiceStateChanged");
                         updateUuids();
                         mNativeInterface.getAdapterProperty(
@@ -930,19 +954,10 @@ public class AdapterService extends Service {
         Log.d(TAG, "init() instance = " + hciInstanceName);
 
         factoryResetIfNeeded();
-        if (Flags.factoryResetAtBluetoothStart()) {
-            try {
-                DataMigration.run(this);
-            } catch (Exception e) {
-                Log.e(TAG, "Migration failure: ", e);
-            }
-        }
-
-        if (!Flags.factoryResetAtBluetoothStart()) {
-            if (Flags.gattClearCacheOnFactoryReset()
-                    && BluetoothProperties.factory_reset().orElse(false)) {
-                clearStorage();
-            }
+        try {
+            DataMigration.run(this);
+        } catch (Exception e) {
+            Log.e(TAG, "Migration failure: ", e);
         }
 
         Config.init(this);
@@ -1067,9 +1082,6 @@ public class AdapterService extends Service {
     }
 
     private void factoryResetIfNeeded() {
-        if (!Flags.factoryResetAtBluetoothStart()) {
-            return;
-        }
         if (!BluetoothProperties.factory_reset().orElse(false)) {
             return;
         }
@@ -1078,17 +1090,8 @@ public class AdapterService extends Service {
         recursivelyDeleteDirectory(getDataDir(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluedroid/").toFile(), false);
         recursivelyDeleteDirectory(Paths.get("/data/misc/bluetooth/").toFile(), false);
-
-        if (Flags.factoryResetClearAdditionalData()) {
-            NotificationHelperService.factoryReset(getContentResolver());
-        }
+        NotificationHelperService.factoryReset(getContentResolver());
         Log.i(TAG, "factoryResetIfNeeded(): Completed");
-    }
-
-    /** Clear storage */
-    void clearStorage() {
-        deleteDirectoryContents("/data/misc/bluedroid/");
-        deleteDirectoryContents("/data/misc/bluetooth/");
     }
 
     void clearDiscoveringPackages() {
@@ -1161,7 +1164,8 @@ public class AdapterService extends Service {
 
     private void startScanController() {
         Log.i(TAG, "startScanController() called");
-        mScanController = new ScanController(this);
+        mScanController =
+                new ScanController(this, mScanNativeInterface, mPeriodicScanNativeInterface);
         mNativeInterface.enable();
     }
 
@@ -1174,19 +1178,24 @@ public class AdapterService extends Service {
         onProfileServiceStateChanged(mGattService, BluetoothAdapter.STATE_ON);
     }
 
+    void ssrCleanupCallback() {
+        Log.e(TAG, "Disabling the BluetoothInCallService component"+
+                " and kill the process to recover");
+        getApplicationContext().getPackageManager().setComponentEnabledSetting(
+            AdapterState.BLUETOOTH_INCALLSERVICE_COMPONENT,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP);
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
     void startProfileServices() {
         Log.d(TAG, "startProfileServices()");
-        if (Flags.callBluetoothReadyBeforeProfilesStart()) {
-            mAdapterProperties.onBluetoothReady();
-        }
+        mAdapterProperties.onBluetoothReady();
         final int[] supportedProfiles = Config.getSupportedProfiles();
         if (Flags.onlyStartScanDuringBleOn()) {
             // Scanning is always supported, started separately, and is not a profile service.
             // This will check other profile services.
             if (supportedProfiles.length == 0) {
-                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                    mAdapterProperties.onBluetoothReady();
-                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
@@ -1198,9 +1207,6 @@ public class AdapterService extends Service {
             // just move on to BREDR_STARTED. Note that configuring GATT to NOT supported will cause
             // adapter initialization failures
             if (supportedProfiles.length == 1 && supportedProfiles[0] == BluetoothProfile.GATT) {
-                if (!Flags.callBluetoothReadyBeforeProfilesStart()) {
-                    mAdapterProperties.onBluetoothReady();
-                }
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 updateUuids();
                 mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
@@ -1399,8 +1405,11 @@ public class AdapterService extends Service {
     private void stopScanController() {
         Log.i(TAG, "stopScanController() called");
         setScanMode(SCAN_MODE_NONE, "stopScanController");
-        mScanController.cleanup();
-        mScanController = null;
+        final var scanController = getBluetoothScanController();
+        if (scanController != null) {
+            mScanController = null;
+            scanController.cleanup();
+        }
         mNativeInterface.disable();
     }
 
@@ -1409,13 +1418,14 @@ public class AdapterService extends Service {
         setScanMode(SCAN_MODE_NONE, "stopGattProfileService");
 
         mStartedProfiles.remove(BluetoothProfile.GATT);
-        if (mGattService != null) {
-            mGattService.setAvailable(false);
-            onProfileServiceStateChanged(mGattService, BluetoothAdapter.STATE_OFF);
-            removeProfile(mGattService);
-            mGattService.cleanup();
-            mGattService.getBinder().ifPresent(ProfileService.IProfileServiceBinder::cleanup);
+        final var gattService = mGattService;
+        if (gattService != null) {
             mGattService = null;
+            gattService.setAvailable(false);
+            onProfileServiceStateChanged(gattService, BluetoothAdapter.STATE_OFF);
+            removeProfile(gattService);
+            gattService.cleanup();
+            gattService.getBinder().ifPresent(ProfileService.IProfileServiceBinder::cleanup);
         }
     }
 
@@ -1513,7 +1523,7 @@ public class AdapterService extends Service {
             mBluetoothKeystoreService.cleanup();
         }
 
-        mPhonePolicy.ifPresent(policy -> policy.cleanup());
+        mPhonePolicy.ifPresent(PhonePolicy::cleanup);
 
         mSilenceDeviceManager.cleanup();
 
@@ -1526,7 +1536,7 @@ public class AdapterService extends Service {
             mBluetoothSocketManagerBinder = null;
         }
 
-        if (Flags.adapterSuspendMgmt()) {
+        if (Flags.adapterSuspendMgmt() && mAdapterSuspend != null) {
             mAdapterSuspend.cleanup();
         }
 
@@ -1538,7 +1548,7 @@ public class AdapterService extends Service {
 
         mSystemServerCallbacks.kill();
 
-        mMetadataListeners.values().forEach(v -> v.kill());
+        mMetadataListeners.values().forEach(RemoteCallbackList::kill);
     }
 
     private void stopRfcommServerSockets() {
@@ -1726,6 +1736,11 @@ public class AdapterService extends Service {
 
         for (Map.Entry<BluetoothStateCallback, Executor> e : mLocalCallbacks.entrySet()) {
             e.getValue().execute(() -> e.getKey().onBluetoothStateChange(from, to));
+        }
+
+        if (Flags.onToBleOnViaOff()) {
+            // Nothing to do, as we are now guaranteed to go OFF before reaching a stable BLE_ON
+            return;
         }
 
         // Turn the Adapter all the way off if we are disabling and the snoop log setting changed.
@@ -2004,8 +2019,7 @@ public class AdapterService extends Service {
         return !mStartedProfiles.values().stream()
                 .anyMatch(
                         profile ->
-                                mDatabaseManager.getProfileConnectionPolicy(
-                                                device, profile.getProfileId())
+                                getProfileConnectionPolicy(device, profile.getProfileId())
                                         != CONNECTION_POLICY_UNKNOWN);
     }
 
@@ -2250,6 +2264,38 @@ public class AdapterService extends Service {
 
     boolean isAvailable() {
         return !mCleaningUp;
+    }
+
+    /**
+     * Wrapper to facilitate DatabaseManager migration see {@link
+     * DatabaseManager#setProfileConnectionPolicy}
+     */
+    public boolean setProfileConnectionPolicy(BluetoothDevice device, int profile, int policy) {
+        return mDatabaseManager.setProfileConnectionPolicy(device, profile, policy);
+    }
+
+    /**
+     * Wrapper to facilitate DatabaseManager migration see {@link
+     * DatabaseManager#getProfileConnectionPolicy}
+     */
+    public int getProfileConnectionPolicy(BluetoothDevice device, int profile) {
+        return mDatabaseManager.getProfileConnectionPolicy(device, profile);
+    }
+
+    /**
+     * Wrapper to facilitate DatabaseManager migration see {@link
+     * DatabaseManager#getKeyMissingCount}
+     */
+    public int getKeyMissingCount(BluetoothDevice device) {
+        return mDatabaseManager.getKeyMissingCount(device);
+    }
+
+    /**
+     * Wrapper to facilitate DatabaseManager migration see {@link
+     * DatabaseManager#updateKeyMissingCount}
+     */
+    public void updateKeyMissingCount(BluetoothDevice device, boolean isKeyMissingDetected) {
+        mDatabaseManager.updateKeyMissingCount(device, isKeyMissingDetected);
     }
 
     /**
@@ -3001,14 +3047,6 @@ public class AdapterService extends Service {
 
     private void addGattClientToControlAutoActiveMode(
             LeAudioService leAudio, int clientIf, BluetoothDevice device) {
-        if (!Flags.allowGattConnectFromTheAppsWithoutMakingLeaudioDeviceActive()) {
-            Log.i(
-                    TAG,
-                    "flag: allowGattConnectFromTheAppsWithoutMakingLeaudioDeviceActive is not"
-                            + " enabled");
-            return;
-        }
-
         /* When GATT client is connecting to LeAudio device, stack should not assume that
          * LeAudio device should be automatically connected to Audio Framework.
          * e.g. given LeAudio device might be busy with audio streaming from another device.
@@ -3051,7 +3089,7 @@ public class AdapterService extends Service {
                         + groupId);
 
         synchronized (mLeGattClientsControllingAutoActiveMode) {
-            Pair newPair = new Pair<>(clientIf, device);
+            Pair<Integer, BluetoothDevice> newPair = new Pair<>(clientIf, device);
             if (mLeGattClientsControllingAutoActiveMode.contains(newPair)) {
                 return;
             }
@@ -3085,9 +3123,7 @@ public class AdapterService extends Service {
     public void notifyDirectLeGattClientConnect(int clientIf, BluetoothDevice device) {
         getLeAudioService()
                 .ifPresent(
-                        leAudio -> {
-                            addGattClientToControlAutoActiveMode(leAudio, clientIf, device);
-                        });
+                        leAudio -> addGattClientToControlAutoActiveMode(leAudio, clientIf, device));
     }
 
     private void removeGattClientFromControlAutoActiveMode(
@@ -3113,12 +3149,10 @@ public class AdapterService extends Service {
         synchronized (mLeGattClientsControllingAutoActiveMode) {
             Log.d(
                     TAG,
-                    "removeGattClientFromControlAutoActiveMode: removing clientIf:"
-                            + clientIf
-                            + ", "
-                            + device
-                            + ", groupId: "
-                            + groupId);
+                    "removeGattClientFromControlAutoActiveMode: removing "
+                            + ("clientIf:" + clientIf)
+                            + ("device:" + device)
+                            + ("groupId:" + groupId));
 
             mLeGattClientsControllingAutoActiveMode.remove(new Pair<>(clientIf, device));
 
@@ -3476,9 +3510,7 @@ public class AdapterService extends Service {
         }
 
         if (Flags.identityToPseudoAddr()) {
-            device =
-                    Objects.requireNonNullElse(
-                            mRemoteDevices.getDevice(device.getAddress()), device);
+            device = requireNonNullElse(mRemoteDevices.getDevice(device.getAddress()), device);
         }
 
         // Checks if any profiles are enabled or disabled and if so, only connect enabled profiles
@@ -3781,12 +3813,10 @@ public class AdapterService extends Service {
     public void setPhonebookAccessPermission(BluetoothDevice device, int value) {
         Log.d(
                 TAG,
-                "setPhonebookAccessPermission device="
-                        + ((device == null) ? "null" : device.getAnonymizedAddress())
-                        + ", value="
-                        + value
-                        + ", callingUid="
-                        + Binder.getCallingUid());
+                "setPhonebookAccessPermission "
+                        + ("(device=" + ((device == null) ? "null" : device.getAnonymizedAddress()))
+                        + (", value=" + value)
+                        + (", callingUid=" + Binder.getCallingUid()));
         setDeviceAccessFromPrefs(device, value, PHONEBOOK_ACCESS_PERMISSION_PREFERENCE_FILE);
     }
 
@@ -3796,14 +3826,6 @@ public class AdapterService extends Service {
 
     public void setSimAccessPermission(BluetoothDevice device, int value) {
         setDeviceAccessFromPrefs(device, value, SIM_ACCESS_PERMISSION_PREFERENCE_FILE);
-    }
-
-    public boolean isRpaOffloadSupported() {
-        return mAdapterProperties.isRpaOffloadSupported();
-    }
-
-    public int getNumOfOffloadedIrkSupported() {
-        return mAdapterProperties.getNumOfOffloadedIrkSupported();
     }
 
     public int getNumOfOffloadedScanFilterSupported() {
@@ -3947,39 +3969,39 @@ public class AdapterService extends Service {
         }
     }
 
-    boolean factoryReset() {
-        if (Flags.factoryResetAtBluetoothStart()) {
-            throw new IllegalStateException("flag factoryResetAtBluetoothStart is enabled");
-        }
-        mDatabaseManager.factoryReset();
-
-        if (mBluetoothKeystoreService != null) {
-            mBluetoothKeystoreService.factoryReset();
-        }
-
-        if (mBtCompanionManager != null) {
-            mBtCompanionManager.factoryReset();
-        }
-
-        return mNativeInterface.factoryReset();
-    }
-
     int getScanMode() {
         return mScanMode;
     }
 
     boolean setScanMode(int mode, String from) {
-        mScanModeChanges.add(from + ": " + scanModeName(mode));
-        if (!mNativeInterface.setScanMode(convertScanModeToHal(mode))) {
+        if (mSuspend) {
+            Log.d(TAG, "Suspending. Don't broadcast scan mode and return early.");
+            mScanModeChangedDuringSuspend = true;
+            mScanModeChangedDuringSuspendFrom = from;
+            mScanModeAfterSuspend = mode;
+            return true;
+        }
+
+        if (!logAndSetScanModeNative(mode, from)) {
             return false;
         }
+
+        updateScanModeAndBroadcast(mode);
+        return true;
+    }
+
+    private boolean logAndSetScanModeNative(int mode, String from) {
+        mScanModeChanges.add(from + ": " + scanModeName(mode));
+        return mNativeInterface.setScanMode(convertScanModeToHal(mode));
+    }
+
+    private void updateScanModeAndBroadcast(int mode) {
         mScanMode = mode;
         Intent intent =
                 new Intent(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
                         .putExtra(BluetoothAdapter.EXTRA_SCAN_MODE, mScanMode)
                         .addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
-        sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastOptions().toBundle());
-        return true;
+        sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());
     }
 
     public Vendor getVendorIntf() {
@@ -4013,48 +4035,57 @@ public class AdapterService extends Service {
         return mVendor.isSplitA2DPSourceAPTXADAPTIVE();
     }
 
+    @GuardedBy("mEnergyInfoLock")
+    private BluetoothActivityEnergyInfo returnCurrentActivityInfo() {
+        final BluetoothActivityEnergyInfo info =
+                new BluetoothActivityEnergyInfo(
+                        SystemClock.elapsedRealtime(),
+                        mStackReportedState,
+                        mTxTimeTotalMs,
+                        mRxTimeTotalMs,
+                        mIdleTimeTotalMs,
+                        mEnergyUsedTotalVoltAmpSecMicro);
+
+        // Copy the traffic objects whose byte counts are > 0
+        final List<UidTraffic> result = new ArrayList<>();
+        for (int i = 0; i < mUidTraffic.size(); i++) {
+            final UidTraffic traffic = mUidTraffic.valueAt(i);
+            if (traffic.getTxBytes() != 0 || traffic.getRxBytes() != 0) {
+                result.add(traffic.clone());
+            }
+        }
+
+        info.setUidTraffic(result);
+
+        return info;
+    }
+
     BluetoothActivityEnergyInfo requestActivityInfo() {
         if (mAdapterProperties.getState() != BluetoothAdapter.STATE_ON
                 || !mAdapterProperties.isActivityAndEnergyReportingSupported()) {
             return null;
         }
 
-        // Pull the data. The callback will notify mEnergyInfoLock.
-        mNativeInterface.readEnergyInfo();
+        var now = Instant.now();
+        var staleThreshold = now.minusMillis(CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS);
+        var waitDeadline = now.plusMillis(CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS);
 
         synchronized (mEnergyInfoLock) {
-            long now = System.currentTimeMillis();
-            final long deadline = now + CONTROLLER_ENERGY_UPDATE_TIMEOUT_MILLIS;
-            while (now < deadline) {
+            // If activity info has just been requested, return the already saved data directly
+            if (mLastActivityReport.isAfter(staleThreshold)) {
+                return returnCurrentActivityInfo();
+            }
+            // Pull the live data. The callback will notify mEnergyInfoLock.
+            mNativeInterface.readEnergyInfo();
+            while (now.isBefore(waitDeadline)) {
                 try {
-                    mEnergyInfoLock.wait(deadline - now);
+                    mEnergyInfoLock.wait(Duration.between(now, waitDeadline).toMillis());
                     break;
                 } catch (InterruptedException e) {
-                    now = System.currentTimeMillis();
+                    now = Instant.now();
                 }
             }
-
-            final BluetoothActivityEnergyInfo info =
-                    new BluetoothActivityEnergyInfo(
-                            SystemClock.elapsedRealtime(),
-                            mStackReportedState,
-                            mTxTimeTotalMs,
-                            mRxTimeTotalMs,
-                            mIdleTimeTotalMs,
-                            mEnergyUsedTotalVoltAmpSecMicro);
-
-            // Copy the traffic objects whose byte counts are > 0
-            final List<UidTraffic> result = new ArrayList<>();
-            for (int i = 0; i < mUidTraffic.size(); i++) {
-                final UidTraffic traffic = mUidTraffic.valueAt(i);
-                if (traffic.getTxBytes() != 0 || traffic.getRxBytes() != 0) {
-                    result.add(traffic.clone());
-                }
-            }
-
-            info.setUidTraffic(result);
-
-            return info;
+            return returnCurrentActivityInfo();
         }
     }
 
@@ -4067,7 +4098,7 @@ public class AdapterService extends Service {
      *
      * @return {@code BluetoothStatusCodes.FEATURE_SUPPORTED} if supported
      */
-    public int getOffloadedTransportDiscoveryDataScanSupported() {
+    int getOffloadedTransportDiscoveryDataScanSupported() {
         if (mAdapterProperties.isOffloadedTransportDiscoveryDataScanSupported()) {
             return BluetoothStatusCodes.FEATURE_SUPPORTED;
         }
@@ -4075,7 +4106,8 @@ public class AdapterService extends Service {
     }
 
     IBinder getBluetoothGatt() {
-        return mGattService == null ? null : mGattService.getBinder().orElse(null);
+        final var gattService = mGattService;
+        return gattService == null ? null : gattService.getBinder().orElse(null);
     }
 
     public GattService getBluetoothGattService() {
@@ -4123,29 +4155,30 @@ public class AdapterService extends Service {
         return getStartedProfile(id).flatMap(ProfileService::getBinder).orElse(null);
     }
 
-    boolean isMediaProfileConnected() {
+    private boolean isMediaProfileConnected() {
         if (getA2dpService().map(a2dp -> a2dp.getConnectedDevices().size() > 0).orElse(false)) {
             Log.d(TAG, "isMediaProfileConnected. A2dp is connected");
             return true;
-        } else if (getHearingAidService()
+        }
+        if (getHearingAidService()
                 .map(hearingAid -> hearingAid.getConnectedDevices().size() > 0)
                 .orElse(false)) {
             Log.d(TAG, "isMediaProfileConnected. HearingAid is connected");
             return true;
-        } else if (getLeAudioService()
+        }
+        if (getLeAudioService()
                 .map(leAudio -> leAudio.getConnectedDevices().size() > 0)
                 .orElse(false)) {
             Log.d(TAG, "isMediaProfileConnected. LeAudio is connected");
             return true;
-        } else {
-            Log.d(
-                    TAG,
-                    "isMediaProfileConnected: no Media connected."
-                            + (" A2dp=" + getA2dpService())
-                            + (" HearingAid=" + getHearingAidService())
-                            + (" LeAudio=" + getLeAudioService()));
-            return false;
         }
+        Log.d(
+                TAG,
+                "isMediaProfileConnected: no Media connected."
+                        + (" A2dp=" + getA2dpService())
+                        + (" HearingAid=" + getHearingAidService())
+                        + (" LeAudio=" + getLeAudioService()));
+        return false;
     }
 
     List<BluetoothDevice> getConnectedMediaDevices(int profile) {
@@ -4202,9 +4235,11 @@ public class AdapterService extends Service {
      */
     public void notifyProfileConnectionStateChangeToScan(int profile, int fromState, int toState) {
         final var scanController = getBluetoothScanController();
-        if (scanController != null) {
-            scanController.notifyProfileConnectionStateChange(profile, fromState, toState);
-        }
+        if (scanController == null) return;
+        scanController.doOnScanThread(
+                () -> {
+                    scanController.notifyProfileConnectionStateChange(profile, fromState, toState);
+                });
     }
 
     /**
@@ -4220,9 +4255,6 @@ public class AdapterService extends Service {
                         policy.profileConnectionStateChanged(profile, device, fromState, toState));
         if (Flags.adapterSuspendMgmt()) {
             mAdapterSuspend.profileConnectionStateChanged(profile, device, fromState, toState);
-        }
-        if (!Flags.onewayMediaProfile()) {
-            return;
         }
         boolean mediaConnected = isMediaProfileConnected();
         if (mIsMediaProfileConnected != mediaConnected) {
@@ -4288,16 +4320,6 @@ public class AdapterService extends Service {
             case SCAN_MODE_CONNECTABLE -> AbstractionLayer.BT_SCAN_MODE_CONNECTABLE;
             case SCAN_MODE_CONNECTABLE_DISCOVERABLE ->
                     AbstractionLayer.BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE;
-            default -> -1;
-        };
-    }
-
-    static int convertScanModeFromHal(int mode) {
-        return switch (mode) {
-            case AbstractionLayer.BT_SCAN_MODE_NONE -> SCAN_MODE_NONE;
-            case AbstractionLayer.BT_SCAN_MODE_CONNECTABLE -> SCAN_MODE_CONNECTABLE;
-            case AbstractionLayer.BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE ->
-                    SCAN_MODE_CONNECTABLE_DISCOVERABLE;
             default -> -1;
         };
     }
@@ -4401,6 +4423,7 @@ public class AdapterService extends Service {
                     existingTraffic.addTxBytes(traffic.getTxBytes());
                 }
             }
+            mLastActivityReport = Instant.now();
             mEnergyInfoLock.notifyAll();
         }
     }
@@ -4503,7 +4526,7 @@ public class AdapterService extends Service {
             return;
         }
 
-        if (Flags.adapterSuspendMgmt()) {
+        if (Flags.adapterSuspendMgmt() && mAdapterSuspend != null) {
             mAdapterSuspend.dump(fd, writer, args);
         }
 
@@ -4537,21 +4560,21 @@ public class AdapterService extends Service {
 
         mAdapterStateMachine.dump(fd, writer, args);
 
-        sb = new StringBuilder();
+        final var stringBuilder = new StringBuilder();
 
-        mSilenceDeviceManager.dump(sb);
-        mDatabaseManager.dump(sb);
+        mSilenceDeviceManager.dump(stringBuilder);
+        mDatabaseManager.dump(stringBuilder);
 
         for (ProfileService profile : mRegisteredProfiles) {
-            profile.dump(sb);
-        }
-        final var scanController = getBluetoothScanController();
-        if (scanController != null) {
-            scanController.dumpRegisterId(sb);
-            scanController.dump(sb);
+            profile.dump(stringBuilder);
         }
 
-        writer.write(sb.toString());
+        final var scanController = getBluetoothScanController();
+        if (scanController != null) {
+            scanController.forceRunSyncOnScanThread(() -> scanController.dump(stringBuilder));
+        }
+
+        writer.write(stringBuilder.toString());
 
         final int currentState = mAdapterProperties.getState();
         if (currentState == BluetoothAdapter.STATE_OFF
@@ -4595,34 +4618,29 @@ public class AdapterService extends Service {
     private int mScanQuotaCount = DeviceConfigListener.DEFAULT_SCAN_QUOTA_COUNT;
 
     @GuardedBy("mDeviceConfigLock")
-    private long mScanQuotaWindowMillis = DeviceConfigListener.DEFAULT_SCAN_QUOTA_WINDOW_MILLIS;
+    private Duration mScanQuotaWindow = DeviceConfigListener.DEFAULT_SCAN_QUOTA_WINDOW;
 
     @GuardedBy("mDeviceConfigLock")
-    private long mScanTimeoutMillis = DeviceConfigListener.DEFAULT_SCAN_TIMEOUT_MILLIS;
+    private Duration mScanTimeout = DeviceConfigListener.DEFAULT_SCAN_TIMEOUT;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScanUpgradeDurationMillis =
-            DeviceConfigListener.DEFAULT_SCAN_UPGRADE_DURATION_MILLIS;
+    private Duration mScanUpgradeDuration = DeviceConfigListener.DEFAULT_SCAN_UPGRADE_DURATION;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScanDowngradeDurationMillis =
-            DeviceConfigListener.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS;
+    private Duration mScanDowngradeDuration =
+            DeviceConfigListener.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScreenOffLowPowerWindowMillis =
-            ScanManager.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW_MS;
+    private Duration mScreenOffLowPowerWindow = ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScreenOffLowPowerIntervalMillis =
-            ScanManager.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL_MS;
+    private Duration mScreenOffLowPowerInterval = ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScreenOffBalancedWindowMillis =
-            ScanManager.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW_MS;
+    private Duration mScreenOffBalancedWindow = ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW;
 
     @GuardedBy("mDeviceConfigLock")
-    private int mScreenOffBalancedIntervalMillis =
-            ScanManager.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL_MS;
+    private Duration mScreenOffBalancedInterval = ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL;
 
     @GuardedBy("mDeviceConfigLock")
     private String mLeAudioAllowList;
@@ -4652,59 +4670,59 @@ public class AdapterService extends Service {
         }
     }
 
-    /** Returns scan quota window in millis. */
-    public long getScanQuotaWindowMillis() {
+    /** Returns scan quota window. */
+    public Duration getScanQuotaWindow() {
         synchronized (mDeviceConfigLock) {
-            return mScanQuotaWindowMillis;
+            return mScanQuotaWindow;
         }
     }
 
-    /** Returns scan timeout in millis. */
-    public long getScanTimeoutMillis() {
+    /** Returns scan timeout. */
+    public Duration getScanTimeout() {
         synchronized (mDeviceConfigLock) {
-            return mScanTimeoutMillis;
+            return mScanTimeout;
         }
     }
 
-    /** Returns scan upgrade duration in millis. */
-    public int getScanUpgradeDurationMillis() {
+    /** Returns scan upgrade duration. */
+    public Duration getScanUpgradeDuration() {
         synchronized (mDeviceConfigLock) {
-            return mScanUpgradeDurationMillis;
+            return mScanUpgradeDuration;
         }
     }
 
-    /** Returns scan downgrade duration in millis. */
-    public int getScanDowngradeDurationMillis() {
+    /** Returns scan downgrade duration. */
+    public Duration getScanDowngradeDuration() {
         synchronized (mDeviceConfigLock) {
-            return mScanDowngradeDurationMillis;
+            return mScanDowngradeDuration;
         }
     }
 
-    /** Returns SCREEN_OFF_BALANCED scan window in millis. */
-    public int getScreenOffBalancedWindowMillis() {
+    /** Returns SCREEN_OFF low power scan window. */
+    public Duration getScreenOffLowPowerWindow() {
         synchronized (mDeviceConfigLock) {
-            return mScreenOffBalancedWindowMillis;
+            return mScreenOffLowPowerWindow;
         }
     }
 
-    /** Returns SCREEN_OFF_BALANCED scan interval in millis. */
-    public int getScreenOffBalancedIntervalMillis() {
+    /** Returns SCREEN_OFF low power scan interval. */
+    public Duration getScreenOffLowPowerInterval() {
         synchronized (mDeviceConfigLock) {
-            return mScreenOffBalancedIntervalMillis;
+            return mScreenOffLowPowerInterval;
         }
     }
 
-    /** Returns SCREEN_OFF low power scan window in millis. */
-    public int getScreenOffLowPowerWindowMillis() {
+    /** Returns SCREEN_OFF_BALANCED scan window. */
+    public Duration getScreenOffBalancedWindow() {
         synchronized (mDeviceConfigLock) {
-            return mScreenOffLowPowerWindowMillis;
+            return mScreenOffBalancedWindow;
         }
     }
 
-    /** Returns SCREEN_OFF low power scan interval in millis. */
-    public int getScreenOffLowPowerIntervalMillis() {
+    /** Returns SCREEN_OFF_BALANCED scan interval. */
+    public Duration getScreenOffBalancedInterval() {
         synchronized (mDeviceConfigLock) {
-            return mScreenOffLowPowerIntervalMillis;
+            return mScreenOffBalancedInterval;
         }
     }
 
@@ -4738,17 +4756,17 @@ public class AdapterService extends Service {
                 "⊈0016AAFE40/00FFFFFFF0,⊆0016AAFE/00FFFFFF,⊆00FF4C0002/00FFFFFFFF";
 
         private static final int DEFAULT_SCAN_QUOTA_COUNT = 5;
-        private static final long DEFAULT_SCAN_QUOTA_WINDOW_MILLIS = 30 * SECOND_IN_MILLIS;
+        private static final Duration DEFAULT_SCAN_QUOTA_WINDOW = Duration.ofSeconds(30);
 
         @VisibleForTesting
-        public static final long DEFAULT_SCAN_TIMEOUT_MILLIS = 10 * MINUTE_IN_MILLIS;
+        public static final Duration DEFAULT_SCAN_TIMEOUT = Duration.ofMinutes(10);
 
         @VisibleForTesting
-        public static final int DEFAULT_SCAN_UPGRADE_DURATION_MILLIS = (int) SECOND_IN_MILLIS * 6;
+        public static final Duration DEFAULT_SCAN_UPGRADE_DURATION = Duration.ofSeconds(6);
 
         @VisibleForTesting
-        public static final int DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS =
-                (int) SECOND_IN_MILLIS * 6;
+        public static final Duration DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING =
+                Duration.ofSeconds(6);
 
         public void start() {
             DeviceConfig.addOnPropertiesChangedListener(
@@ -4772,34 +4790,42 @@ public class AdapterService extends Service {
                                         LOCATION_DENYLIST_ADVERTISING_DATA,
                                         DEFAULT_LOCATION_DENYLIST_ADVERTISING_DATA));
                 mScanQuotaCount = properties.getInt(SCAN_QUOTA_COUNT, DEFAULT_SCAN_QUOTA_COUNT);
-                mScanQuotaWindowMillis =
-                        properties.getLong(
-                                SCAN_QUOTA_WINDOW_MILLIS, DEFAULT_SCAN_QUOTA_WINDOW_MILLIS);
-                mScanTimeoutMillis =
-                        properties.getLong(SCAN_TIMEOUT_MILLIS, DEFAULT_SCAN_TIMEOUT_MILLIS);
-                mScanUpgradeDurationMillis =
-                        properties.getInt(
-                                SCAN_UPGRADE_DURATION_MILLIS, DEFAULT_SCAN_UPGRADE_DURATION_MILLIS);
-                mScanDowngradeDurationMillis =
-                        properties.getInt(
+                mScanQuotaWindow =
+                        DeviceConfigUtils.getDuration(
+                                properties, SCAN_QUOTA_WINDOW_MILLIS, DEFAULT_SCAN_QUOTA_WINDOW);
+                mScanTimeout =
+                        DeviceConfigUtils.getDuration(
+                                properties, SCAN_TIMEOUT_MILLIS, DEFAULT_SCAN_TIMEOUT);
+                mScanUpgradeDuration =
+                        DeviceConfigUtils.getDuration(
+                                properties,
+                                SCAN_UPGRADE_DURATION_MILLIS,
+                                DEFAULT_SCAN_UPGRADE_DURATION);
+                mScanDowngradeDuration =
+                        DeviceConfigUtils.getDuration(
+                                properties,
                                 SCAN_DOWNGRADE_DURATION_MILLIS,
-                                DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING_MILLIS);
-                mScreenOffLowPowerWindowMillis =
-                        properties.getInt(
+                                DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING);
+                mScreenOffLowPowerWindow =
+                        DeviceConfigUtils.getDuration(
+                                properties,
                                 SCREEN_OFF_LOW_POWER_WINDOW_MILLIS,
-                                ScanManager.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW_MS);
-                mScreenOffLowPowerIntervalMillis =
-                        properties.getInt(
+                                ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW);
+                mScreenOffLowPowerInterval =
+                        DeviceConfigUtils.getDuration(
+                                properties,
                                 SCREEN_OFF_LOW_POWER_INTERVAL_MILLIS,
-                                ScanManager.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL_MS);
-                mScreenOffBalancedWindowMillis =
-                        properties.getInt(
+                                ScanUtil.SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL);
+                mScreenOffBalancedWindow =
+                        DeviceConfigUtils.getDuration(
+                                properties,
                                 SCREEN_OFF_BALANCED_WINDOW_MILLIS,
-                                ScanManager.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW_MS);
-                mScreenOffBalancedIntervalMillis =
-                        properties.getInt(
+                                ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_WINDOW);
+                mScreenOffBalancedInterval =
+                        DeviceConfigUtils.getDuration(
+                                properties,
                                 SCREEN_OFF_BALANCED_INTERVAL_MILLIS,
-                                ScanManager.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL_MS);
+                                ScanUtil.SCAN_MODE_SCREEN_OFF_BALANCED_INTERVAL);
                 mLeAudioAllowList = properties.getString(LE_AUDIO_ALLOW_LIST, "");
 
                 if (!mLeAudioAllowList.isEmpty()) {
@@ -4912,14 +4938,14 @@ public class AdapterService extends Service {
      * @param device Bluetooth device to be checked for audio policy support
      * @return int status of the remote support for audio policy feature
      */
-    public int isRequestAudioPolicyAsSinkSupported(BluetoothDevice device) {
-        return getHeadsetClientService()
-                .map(headsetClient -> headsetClient.getAudioPolicyRemoteSupported(device))
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "No audio transport connected");
-                            return BluetoothStatusCodes.FEATURE_NOT_CONFIGURED;
-                        });
+    int isRequestAudioPolicyAsSinkSupported(BluetoothDevice device) {
+        var headsetClient = getHeadsetClientService();
+        if (headsetClient.isEmpty()) {
+            Log.e(TAG, "No audio transport connected");
+            return BluetoothStatusCodes.FEATURE_NOT_CONFIGURED;
+        } else {
+            return headsetClient.get().getAudioPolicyRemoteSupported(device);
+        }
     }
 
     /**
@@ -4928,29 +4954,26 @@ public class AdapterService extends Service {
      * @param device Bluetooth device to be set policy for
      * @return int result status for requestAudioPolicyAsSink API
      */
-    public int requestAudioPolicyAsSink(BluetoothDevice device, BluetoothSinkAudioPolicy policies) {
+    int requestAudioPolicyAsSink(BluetoothDevice device, BluetoothSinkAudioPolicy policies) {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp == null) {
             return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
         }
 
-        return getHeadsetClientService()
-                .map(
-                        headsetClient -> {
-                            if (isRequestAudioPolicyAsSinkSupported(device)
-                                    != BluetoothStatusCodes.FEATURE_SUPPORTED) {
-                                throw new UnsupportedOperationException(
-                                        "Request Audio Policy As Sink not supported");
-                            }
-                            deviceProp.setHfAudioPolicyForRemoteAg(policies);
-                            headsetClient.setAudioPolicy(device, policies);
-                            return BluetoothStatusCodes.SUCCESS;
-                        })
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "HeadsetClient not connected");
-                            return BluetoothStatusCodes.ERROR_PROFILE_NOT_CONNECTED;
-                        });
+        var headsetClient = getHeadsetClientService();
+        if (headsetClient.isEmpty()) {
+            Log.e(TAG, "HeadsetClient not connected");
+            return BluetoothStatusCodes.ERROR_PROFILE_NOT_CONNECTED;
+        } else {
+            if (isRequestAudioPolicyAsSinkSupported(device)
+                    != BluetoothStatusCodes.FEATURE_SUPPORTED) {
+                throw new UnsupportedOperationException(
+                        "Request Audio Policy As Sink not supported");
+            }
+            deviceProp.setHfAudioPolicyForRemoteAg(policies);
+            headsetClient.get().setAudioPolicy(device, policies);
+            return BluetoothStatusCodes.SUCCESS;
+        }
     }
 
     /**
@@ -4965,13 +4988,12 @@ public class AdapterService extends Service {
             return null;
         }
 
-        return getHeadsetClientService()
-                .map(headsetClient -> deviceProp.getHfAudioPolicyForRemoteAg())
-                .orElseGet(
-                        () -> {
-                            Log.e(TAG, "HeadsetClient not connected");
-                            return null;
-                        });
+        if (getHeadsetClientService().isEmpty()) {
+            Log.e(TAG, "HeadsetClient not connected");
+            return null;
+        } else {
+            return deviceProp.getHfAudioPolicyForRemoteAg();
+        }
     }
 
     /**
@@ -5103,43 +5125,6 @@ public class AdapterService extends Service {
        Log.d(TAG, "isDelayA2dpDiscDevice: matched: " + matched);
        return matched;
     }
-
-    private static void deleteDirectoryContents(String dirPath) {
-        Path directoryPath = Paths.get(dirPath);
-        try {
-            Files.walkFileTree(
-                    directoryPath,
-                    new SimpleFileVisitor<Path>() {
-                        @Override
-                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                throws IOException {
-                            Files.delete(file);
-                            return FileVisitResult.CONTINUE;
-                        }
-
-                        @Override
-                        public FileVisitResult postVisitDirectory(Path dir, IOException ex)
-                                throws IOException {
-                            if (ex != null) {
-                                Log.e(TAG, "Error happened while removing contents. ", ex);
-                            }
-
-                            if (!dir.equals(directoryPath)) {
-                                try {
-                                    Files.delete(dir);
-                                } catch (Exception e) {
-                                    Log.e(TAG, "Error happened while removing directory: ", e);
-                                }
-                            }
-                            return FileVisitResult.CONTINUE;
-                        }
-                    });
-            Log.i(TAG, "deleteDirectoryContents() completed. Path: " + dirPath);
-        } catch (Exception e) {
-            Log.e(TAG, "Error happened while removing contents: ", e);
-        }
-    }
-
     /** Get the number of the supported offloaded LE COC sockets. */
     public int getNumberOfSupportedOffloadedLeCocSockets() {
         return mAdapterProperties.getNumberOfSupportedOffloadedLeCocSockets();
@@ -5192,5 +5177,31 @@ public class AdapterService extends Service {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         return (deviceProp != null)
                 && (deviceProp.getConnectionHandle(transport) != BluetoothDevice.ERROR);
+    }
+
+    void setSuspendState(boolean suspend) {
+        if (mSuspend == suspend) {
+            return;
+        }
+
+        mSuspend = suspend;
+        if (suspend) {
+            // When suspending set scan to NONE to minimize power usage. Don't broadcast this
+            // event change to minimize disturbance to other apps. It will be recovered on resume.
+            mScanModeChangedDuringSuspend = false;
+            mScanModeChangedDuringSuspendFrom = "";
+            mScanModeAfterSuspend = mScanMode;
+            logAndSetScanModeNative(SCAN_MODE_NONE, "handleSuspend");
+        } else {
+            // When resuming, always call setScanMode since the actual mode might be updated
+            // in the native layer and not propagated up. However only broadcast when
+            // someone demands a change when we're suspending.
+            if (logAndSetScanModeNative(
+                    mScanModeAfterSuspend, "handleResume " + mScanModeChangedDuringSuspendFrom)) {
+                if (mScanModeChangedDuringSuspend) {
+                    updateScanModeAndBroadcast(mScanModeAfterSuspend);
+                }
+            }
+        }
     }
 }

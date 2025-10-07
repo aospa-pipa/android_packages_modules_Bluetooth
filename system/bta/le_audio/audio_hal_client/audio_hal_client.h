@@ -172,6 +172,7 @@ public:
   virtual void ReconfigurationComplete() = 0;
   virtual void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
                int cig_id, int cis_id, const std::vector<uint8_t>& data) = 0;
+  virtual void StreamSuspended() = 0;
 
   static std::unique_ptr<LeAudioSinkAudioHalClient> AcquireUnicast();
   static void DebugDump(int fd);
@@ -191,6 +192,7 @@ public:
     virtual ~Callbacks() = default;
     virtual void OnAudioDataReady(const std::vector<uint8_t>& data) = 0;
     virtual void OnAudioSuspend(void) = 0;
+    virtual void OnAudioServerRestart(void) = 0;
     virtual void OnAudioResume(void) = 0;
     virtual void OnAudioMetadataUpdate(
             const std::vector<struct playback_track_metadata_v7> source_metadata,
@@ -217,6 +219,7 @@ public:
   virtual void ReconfigurationComplete() = 0;
   virtual void UpdateMetadataChanged(::bluetooth::le_audio::types::AseState& state,
                int cig_id, int cis_id, const std::vector<uint8_t>& data) = 0;
+  virtual void StreamSuspended() = 0;
 
   static std::unique_ptr<LeAudioSourceAudioHalClient> AcquireUnicast();
   static std::unique_ptr<LeAudioSourceAudioHalClient> AcquireBroadcast();

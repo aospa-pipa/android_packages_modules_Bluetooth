@@ -26,6 +26,7 @@
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/metrics/os_metrics.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -52,7 +53,6 @@
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/smp_status.h"
-#include "types/raw_address.h"
 
 #define SMP_PAIRING_REQ_SIZE 7
 #define SMP_CONFIRM_CMD_SIZE (OCTET16_LEN + 1)
@@ -435,6 +435,7 @@ void smp_rsp_timeout(void* /* data */) {
  * Returns          void
  *
  ******************************************************************************/
+/* TODO(b/436319185): Remove when the flag conclude_le_pairing_immediately is shipped */
 void smp_delayed_auth_complete_timeout(void* /* data */) {
   /*
    * Waited for potential pair failure. Send SMP_AUTH_CMPL_EVT if
@@ -1417,9 +1418,9 @@ void smp_collect_local_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
   RawAddress bda;
   uint8_t* p = le_addr;
 
-  log::verbose("addr:{}", p_cb->pairing_bda);
-
   BTM_ReadConnectionAddr(p_cb->pairing_bda, bda, &addr_type, true);
+  log::debug("pairing_addr:{}, bda:{}, addr_type:{}", p_cb->pairing_bda, bda, addr_type);
+
   BDADDR_TO_STREAM(p, bda);
   UINT8_TO_STREAM(p, addr_type);
 }
@@ -1439,12 +1440,11 @@ void smp_collect_peer_ble_address(uint8_t* le_addr, tSMP_CB* p_cb) {
   RawAddress bda;
   uint8_t* p = le_addr;
 
-  log::verbose("addr:{}", p_cb->pairing_bda);
-
   if (!BTM_ReadRemoteConnectionAddr(p_cb->pairing_bda, bda, &addr_type, true)) {
-    log::error("can not collect peer le addr information for unknown device");
+    log::error("can not collect peer le addr information for unknown device {}", p_cb->pairing_bda);
     return;
   }
+  log::verbose("p_cb->pairing_bda:{}, bda:{}, addr_type:{}", p_cb->pairing_bda, bda, addr_type);
 
   BDADDR_TO_STREAM(p, bda);
   UINT8_TO_STREAM(p, addr_type);

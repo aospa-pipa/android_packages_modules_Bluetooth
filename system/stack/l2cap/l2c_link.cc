@@ -26,6 +26,8 @@
 #define LOG_TAG "l2c_link"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -48,8 +50,6 @@
 #include "stack/include/l2cap_hci_link_interface.h"
 #include "stack/include/l2cap_security_interface.h"
 #include "stack/l2cap/l2c_int.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 #include "stack/gatt/gatt_int.h"
 
 using namespace bluetooth;
@@ -182,7 +182,6 @@ void l2c_link_hci_conn_comp(tHCI_STATUS status, uint16_t handle, const RawAddres
 void l2c_link_sec_comp(RawAddress p_bda, tBT_TRANSPORT transport, void* p_ref_data,
                        tBTM_STATUS btm_status) {
   tL2C_CCB* p_ccb;
-  tL2C_CCB* p_next_ccb;
 
   log::debug("btm_status={}, BD_ADDR={}, transport={}", btm_status_text(btm_status), p_bda,
              bt_transport_text(transport));

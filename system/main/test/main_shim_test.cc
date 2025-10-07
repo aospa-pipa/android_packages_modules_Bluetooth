@@ -15,6 +15,9 @@
  */
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/hci_role.h>
 #include <fcntl.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -62,14 +65,11 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/hci_error_code.h"
+#include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_int.h"
 #include "test/common/jni_thread.h"
-#include "test/common/main_handler.h"
 #include "test/common/mock_functions.h"
 #include "test/mock/mock_main_shim_entry.h"
-#include "types/ble_address_with_type.h"
-#include "types/hci_role.h"
-#include "types/raw_address.h"
 
 using ::testing::_;
 
@@ -187,6 +187,7 @@ shim::acl_interface_t acl_interface{
         .link.classic.on_read_transmit_power_level_complete = nullptr,
         .link.classic.on_role_change = nullptr,
         .link.classic.on_role_discovery_complete = nullptr,
+        .link.classic.on_hardware_error = nullptr,
 
         .link.le.on_connection_update = nullptr,
         .link.le.on_parameter_update_request = nullptr,

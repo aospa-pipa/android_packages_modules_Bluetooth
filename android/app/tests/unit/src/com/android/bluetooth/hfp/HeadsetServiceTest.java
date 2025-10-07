@@ -22,8 +22,7 @@ import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_UNKNOWN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
-import static android.media.audio.Flags.FLAG_DEPRECATE_STREAM_BT_SCO;
-import static android.media.audio.Flags.FLAG_UNIFY_ABSOLUTE_VOLUME_MANAGEMENT;
+import static android.platform.test.flag.junit.DeviceFlagsValueProvider.createCheckFlagsRule;
 
 import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.android.bluetooth.TestUtils.mockGetRemoteDevice;
@@ -64,11 +63,13 @@ import android.os.ParcelUuid;
 import android.os.RemoteException;
 import android.os.SystemClock;
 import android.platform.test.annotations.EnableFlags;
+import android.platform.test.annotations.RequiresFlagsEnabled;
+import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.SetFlagsRule;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.runner.AndroidJUnit4;
 
 import com.android.bluetooth.TestUtils;
 import com.android.bluetooth.btservice.ActiveDeviceManager;
@@ -99,6 +100,7 @@ import java.util.Set;
 public class HeadsetServiceTest {
     @Rule public final MockitoRule mMockitoRule = new MockitoRule();
     @Rule public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
+    @Rule public final CheckFlagsRule mCheckFlagsRule = createCheckFlagsRule();
 
     @Spy private HeadsetObjectsFactory mObjectsFactory = HeadsetObjectsFactory.getInstance();
 
@@ -188,11 +190,8 @@ public class HeadsetServiceTest {
                         })
                 .when(mObjectsFactory)
                 .makeStateMachine(any(), any(), any(), any(), any(), any());
-        doReturn(mSystemInterface).when(mObjectsFactory).makeSystemInterface(any(), any(), any());
-        mHeadsetService = new HeadsetService(mAdapterService, mNativeInterface);
+        mHeadsetService = new HeadsetService(mAdapterService, mNativeInterface, mSystemInterface);
         mHeadsetService.setAvailable(true);
-        verify(mObjectsFactory)
-                .makeSystemInterface(eq(mAdapterService), eq(mHeadsetService), any());
         mHeadsetService.setForceScoAudio(true);
     }
 
@@ -262,7 +261,7 @@ public class HeadsetServiceTest {
      */
     @Test
     public void testConnectDevice_connectDeviceBelowLimit() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -386,7 +385,7 @@ public class HeadsetServiceTest {
     @Test
     public void testConnectDevice_connectDeviceAboveLimit() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 0; i < MAX_HEADSET_CONNECTIONS; ++i) {
@@ -452,7 +451,7 @@ public class HeadsetServiceTest {
      */
     @Test
     public void testConnectAudio_withOneDevice() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -510,7 +509,7 @@ public class HeadsetServiceTest {
     @Test
     public void testConnectAudio_withMultipleDevices() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 0; i < MAX_HEADSET_CONNECTIONS; ++i) {
@@ -602,7 +601,7 @@ public class HeadsetServiceTest {
     @Test
     public void testConnectAudio_connectTwoAudioChannelsShouldFail() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 0; i < MAX_HEADSET_CONNECTIONS; ++i) {
@@ -688,7 +687,7 @@ public class HeadsetServiceTest {
     @Test
     public void testConnectAudio_firstConnectedAudioDevice() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         doAnswer(
@@ -770,7 +769,7 @@ public class HeadsetServiceTest {
      */
     @Test
     public void testConnectAudio_deviceDisconnected() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -839,7 +838,7 @@ public class HeadsetServiceTest {
         HeadsetCallState headsetCallState =
                 new HeadsetCallState(
                         0, 0, HeadsetHalConstants.CALL_STATE_IDLE, TEST_PHONE_NUMBER, 128, "");
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -933,7 +932,7 @@ public class HeadsetServiceTest {
                 new HeadsetCallState(
                         1, 0, HeadsetHalConstants.CALL_STATE_ALERTING, TEST_PHONE_NUMBER, 128, "");
         final ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 0; i < MAX_HEADSET_CONNECTIONS; ++i) {
@@ -1008,7 +1007,7 @@ public class HeadsetServiceTest {
     /** Verifies that all CLCC responses are sent to the connected device. */
     @Test
     public void testClccResponse_withOneDeviceConnected() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1036,7 +1035,7 @@ public class HeadsetServiceTest {
     @Test
     @EnableFlags(Flags.FLAG_SEND_OK_CLCC_BEFORE_SLC)
     public void testClccResponse_withOneDeviceConnecting() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1067,7 +1066,7 @@ public class HeadsetServiceTest {
     @Test
     public void testClccResponse_withMultipleDevicesConnected() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 2; i >= 0; i--) {
@@ -1104,7 +1103,7 @@ public class HeadsetServiceTest {
     @EnableFlags(Flags.FLAG_SEND_OK_CLCC_BEFORE_SLC)
     public void testClccResponse_withMultipleDevicesConnecting() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 2; i >= 0; i--) {
@@ -1136,7 +1135,7 @@ public class HeadsetServiceTest {
     /** Test that whether active device been removed after enable silence mode */
     @Test
     public void testSetSilenceMode() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1173,7 +1172,7 @@ public class HeadsetServiceTest {
     /** Test that whether active device been removed after enable silence mode */
     @Test
     public void testSetActiveDevice_AudioNotAllowed() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1207,17 +1206,15 @@ public class HeadsetServiceTest {
                 .thenReturn(null);
 
         // No connected device
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager)).isEmpty();
+        assertThat(mHeadsetService.getFallbackCandidates()).isEmpty();
 
         // One connected device
         addConnectedDeviceHelper(deviceA);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager))
-                .containsExactly(deviceA);
+        assertThat(mHeadsetService.getFallbackCandidates()).containsExactly(deviceA);
 
         // Two connected devices
         addConnectedDeviceHelper(deviceB);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager))
-                .containsExactly(deviceA, deviceB);
+        assertThat(mHeadsetService.getFallbackCandidates()).containsExactly(deviceA, deviceB);
     }
 
     @Test
@@ -1226,19 +1223,20 @@ public class HeadsetServiceTest {
         BluetoothDevice deviceRegular = getTestDevice(1);
 
         // Make deviceWatch a watch
-        when(mDatabaseManager.getCustomMeta(deviceWatch, BluetoothDevice.METADATA_DEVICE_TYPE))
-                .thenReturn(BluetoothDevice.DEVICE_TYPE_WATCH.getBytes());
-        when(mDatabaseManager.getCustomMeta(deviceRegular, BluetoothDevice.METADATA_DEVICE_TYPE))
-                .thenReturn(null);
+        doReturn(BluetoothDevice.DEVICE_TYPE_WATCH.getBytes())
+                .when(mAdapterService)
+                .getMetadata(deviceWatch, BluetoothDevice.METADATA_DEVICE_TYPE);
+        doReturn(null)
+                .when(mAdapterService)
+                .getMetadata(deviceRegular, BluetoothDevice.METADATA_DEVICE_TYPE);
 
         // Has a connected watch device
         addConnectedDeviceHelper(deviceWatch);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager)).isEmpty();
+        assertThat(mHeadsetService.getFallbackCandidates()).isEmpty();
 
         // Two connected devices with one watch
         addConnectedDeviceHelper(deviceRegular);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager))
-                .containsExactly(deviceRegular);
+        assertThat(mHeadsetService.getFallbackCandidates()).containsExactly(deviceRegular);
     }
 
     @Test
@@ -1254,17 +1252,16 @@ public class HeadsetServiceTest {
 
         // Has a connected watch device
         addConnectedDeviceHelper(deviceWatch);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager)).isEmpty();
+        assertThat(mHeadsetService.getFallbackCandidates()).isEmpty();
 
         // Two connected devices with one watch
         addConnectedDeviceHelper(deviceRegular);
-        assertThat(mHeadsetService.getFallbackCandidates(mDatabaseManager))
-                .containsExactly(deviceRegular);
+        assertThat(mHeadsetService.getFallbackCandidates()).containsExactly(deviceRegular);
     }
 
     @Test
     public void testConnectDeviceNotAllowedInbandRingPolicy_InbandRingStatus() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1302,7 +1299,7 @@ public class HeadsetServiceTest {
 
     @Test
     public void testIncomingCallDeviceConnect_InbandRingStatus() {
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1324,7 +1321,7 @@ public class HeadsetServiceTest {
     @Test
     public void testIncomingCallWithDeviceAudioConnected() {
         ArrayList<BluetoothDevice> connectedDevices = new ArrayList<>();
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         for (int i = 2; i >= 0; i--) {
@@ -1346,10 +1343,13 @@ public class HeadsetServiceTest {
     }
 
     @Test
-    @EnableFlags({FLAG_UNIFY_ABSOLUTE_VOLUME_MANAGEMENT, FLAG_DEPRECATE_STREAM_BT_SCO})
+    @RequiresFlagsEnabled({
+        android.media.audio.Flags.FLAG_UNIFY_ABSOLUTE_VOLUME_MANAGEMENT,
+        android.media.audio.Flags.FLAG_DEPRECATE_STREAM_BT_SCO
+    })
     public void testVolumeChange_sendsMessageToStateMachine() {
         int volumeIndex = 7; // sample value used for testing volume change
-        when(mDatabaseManager.getProfileConnectionPolicy(
+        when(mAdapterService.getProfileConnectionPolicy(
                         any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         mCurrentDevice = getTestDevice(0);
@@ -1376,7 +1376,47 @@ public class HeadsetServiceTest {
                 ArgumentCaptor.forClass(
                         AudioDeviceVolumeManager.OnAudioDeviceVolumeChangedListener.class);
         verify(mAudioDeviceVolumeManager)
-                .setDeviceAbsoluteVolumeBehavior(any(), any(), any(), callback.capture());
+                .setDeviceAbsoluteMultiVolumeBehavior(any(), any(), any(), callback.capture());
+
+        callback.getValue().onAudioDeviceVolumeChanged(attributes, volumeInfo);
+        verify(mStateMachines.get(mCurrentDevice))
+                .sendMessage(eq(HeadsetStateMachine.SCO_VOLUME_CHANGED), eq(volumeIndex));
+    }
+
+    @Test
+    @RequiresFlagsEnabled({
+        android.media.audio.Flags.FLAG_UNIFY_ABSOLUTE_VOLUME_MANAGEMENT,
+    })
+    public void testVolumeChangeAssistant_sendsMessageToStateMachine() {
+        int volumeIndex = 7; // sample value used for testing volume change
+        when(mAdapterService.getProfileConnectionPolicy(
+                        any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
+                .thenReturn(CONNECTION_POLICY_UNKNOWN);
+        mCurrentDevice = getTestDevice(0);
+        assertThat(mHeadsetService.connect(mCurrentDevice)).isTrue();
+        when(mStateMachines.get(mCurrentDevice).getDevice()).thenReturn(mCurrentDevice);
+        when(mStateMachines.get(mCurrentDevice).getConnectionState()).thenReturn(STATE_CONNECTED);
+        when(mStateMachines.get(mCurrentDevice).getConnectingTimestampMs())
+                .thenReturn(SystemClock.uptimeMillis());
+        assertThat(mHeadsetService.getConnectedDevices()).containsExactly(mCurrentDevice);
+        mHeadsetService.onConnectionStateChangedFromStateMachine(
+                mCurrentDevice, STATE_DISCONNECTED, STATE_CONNECTED);
+        mHeadsetService.setActiveDevice(mCurrentDevice);
+
+        AudioDeviceAttributes attributes =
+                new AudioDeviceAttributes(
+                        AudioDeviceAttributes.ROLE_OUTPUT,
+                        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                        mCurrentDevice.getAddress());
+        VolumeInfo volumeInfo =
+                new VolumeInfo.Builder(AudioManager.STREAM_ASSISTANT)
+                        .setVolumeIndex(volumeIndex)
+                        .build();
+        ArgumentCaptor<AudioDeviceVolumeManager.OnAudioDeviceVolumeChangedListener> callback =
+                ArgumentCaptor.forClass(
+                        AudioDeviceVolumeManager.OnAudioDeviceVolumeChangedListener.class);
+        verify(mAudioDeviceVolumeManager)
+                .setDeviceAbsoluteMultiVolumeBehavior(any(), any(), any(), callback.capture());
 
         callback.getValue().onAudioDeviceVolumeChanged(attributes, volumeInfo);
         verify(mStateMachines.get(mCurrentDevice))
@@ -1385,8 +1425,7 @@ public class HeadsetServiceTest {
 
     private void addConnectedDeviceHelper(BluetoothDevice device) {
         mCurrentDevice = device;
-        when(mDatabaseManager.getProfileConnectionPolicy(
-                        any(BluetoothDevice.class), eq(BluetoothProfile.HEADSET)))
+        when(mAdapterService.getProfileConnectionPolicy(any(), eq(BluetoothProfile.HEADSET)))
                 .thenReturn(CONNECTION_POLICY_UNKNOWN);
         assertThat(mHeadsetService.connect(device)).isTrue();
         when(mStateMachines.get(device).getDevice()).thenReturn(device);
@@ -1397,18 +1436,18 @@ public class HeadsetServiceTest {
         assertThat(mHeadsetService.getConnectedDevices()).contains(device);
     }
 
-    /*
-     *  Helper function to test okToAcceptConnection() method
+    /**
+     * Helper function to test okToAcceptConnection() method
      *
-     *  @param device test device
-     *  @param bondState bond state value, could be invalid
-     *  @param priority value, could be invalid, could be invalid
-     *  @param expected expected result from okToAcceptConnection()
+     * @param device test device
+     * @param bondState bond state value, could be invalid
+     * @param priority value, could be invalid, could be invalid
+     * @param expected expected result from okToAcceptConnection()
      */
     private void testOkToAcceptConnectionCase(
             BluetoothDevice device, int bondState, int priority, boolean expected) {
         doReturn(bondState).when(mAdapterService).getBondState(device);
-        when(mDatabaseManager.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET))
+        when(mAdapterService.getProfileConnectionPolicy(device, BluetoothProfile.HEADSET))
                 .thenReturn(priority);
         assertThat(mHeadsetService.okToAcceptConnection(device, false)).isEqualTo(expected);
     }

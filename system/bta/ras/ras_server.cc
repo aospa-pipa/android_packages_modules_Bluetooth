@@ -21,6 +21,9 @@
 #include <base/functional/bind.h>
 #include <base/functional/callback.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 
 #include <algorithm>
@@ -43,9 +46,6 @@
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/main_thread.h"
-#include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 using namespace ::ras;
@@ -479,7 +479,6 @@ public:
     uint16_t write_req_handle = p_data->req_data.p_data->write_req.handle;
     uint16_t len = p_data->req_data.p_data->write_req.len;
     bool need_rsp = p_data->req_data.p_data->write_req.need_rsp;
-    RawAddress remote_bda = p_data->req_data.remote_bda;
     log::info("conn_id:{}, write_req_handle:0x{:04x}, need_rsp{}, len:{}", conn_id,
               write_req_handle, need_rsp, len);
 

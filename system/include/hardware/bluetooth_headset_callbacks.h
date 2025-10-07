@@ -16,7 +16,9 @@
 
 #pragma once
 
-#include "types/raw_address.h"
+#include <bluetooth/types/address.h>
+
+#include "bt_hf.h"
 
 #include "bt_hf.h"
 

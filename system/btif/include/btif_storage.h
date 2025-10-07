@@ -23,6 +23,9 @@
 #ifndef SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 #define SYSTEM_BTIF_INCLUDE_BTIF_STORAGE_H_
 
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <hardware/bluetooth.h>
 
@@ -32,9 +35,6 @@
 #include "stack/include/bt_device_type.h"
 #include "stack/include/bt_octets.h"
 #include "stack/include/btm_sec_api_types.h"
-#include "types/ble_address_with_type.h"
-#include "types/bt_transport.h"
-#include "types/raw_address.h"
 
 /*******************************************************************************
  *  Constants & Macros
@@ -181,7 +181,7 @@ bt_status_t btif_storage_remove_bonded_device(const RawAddress* remote_bd_addr);
  * Function         btif_storage_load_le_devices
  *
  * Description      BTIF storage API - Loads all LE-only and Dual Mode devices
- *                  from NVRAM. This API invokes the adaper_properties_cb.
+ *                  from NVRAM. This API invokes the adapter_properties_cb.
  *                  It also invokes invoke_address_consolidate_cb
  *                  to consolidate each Dual Mode device and
  *                  invoke_le_address_associate_cb to associate each LE-only
@@ -196,7 +196,7 @@ void btif_storage_load_le_devices(void);
  *
  * Description      BTIF storage API - Loads all the bonded devices from NVRAM
  *                  and adds to the BTA.
- *                  Additionally, this API also invokes the adaper_properties_cb
+ *                  Additionally, this API also invokes the adapter_properties_cb
  *                  and remote_device_properties_cb for each of the bonded
  *                  devices.
  *
@@ -351,12 +351,12 @@ void btif_storage_remove_enc_key_material(const RawAddress* remote_bd_addr);
 
 /*******************************************************************************
  *
- * Function         btif_storage_is_retricted_device
+ * Function         btif_storage_is_restricted_device
  *
  * Description      BTIF storage API - checks if this device is a restricted
  *                  device
  *
- * Returns          true  if the device is labled as restricted
+ * Returns          true  if the device is labeled as restricted
  *                  false otherwise
  *
  ******************************************************************************/
@@ -432,7 +432,7 @@ bt_status_t btif_storage_remove_hidd(RawAddress* remote_bd_addr);
 
 // Gets the device name for a given Bluetooth address |bd_addr|.
 // The device name (if found) is stored in |name|.
-// Returns true if the device name is found, othervise false.
+// Returns true if the device name is found, otherwise false.
 // Note: |name| should point to a buffer that can store string of length
 // |BD_NAME_LEN|.
 bool btif_storage_get_stored_remote_name(const RawAddress& bd_addr, char* name);

@@ -19,6 +19,8 @@
 #include <base/location.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/bluetooth_event.h>
+#include <bluetooth/types/address.h>
+#include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 #include <time.h>
 
@@ -66,8 +68,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/btm_log_history.h"
 #include "stack/include/main_thread.h"
-#include "types/ble_address_with_type.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth;
 using ::bluetooth::os::WakelockManager;
@@ -85,7 +85,6 @@ public:
     return ss.str();
   }
 
-  std::string ToStringForLogging() const { return ToString(); }
   std::string ToRedactedStringForLogging() const {
     std::stringstream ss;
     ss << address_.ToRedactedStringForLogging() << "[" << FilterAcceptListAddressTypeText(type_)
@@ -1085,8 +1084,27 @@ struct shim::Acl::impl {
 
   void clear_acceptlist() { GetAclManagerLe()->ClearFilterAcceptList(); }
 
-  void SetSystemSuspendState(bool suspended) {
-    GetAclManagerLe()->SetSystemSuspendState(suspended);
+  void check_for_orphaned_acl_connections(std::promise<bool> promise) {
+    for (const auto& connection : handle_to_classic_connection_map_) {
+      log::error("Orphaned classic ACL handle:0x{:04x} bd_addr:{} created:{}",
+                 connection.second->Handle(), connection.second->GetRemoteAddress(),
+                 common::StringFormatTimeWithMilliseconds(kConnectionDescriptorTimeFormat,
+                                                          connection.second->GetCreationTime()));
+    }
+
+    for (const auto& connection : handle_to_le_connection_map_) {
+      log::error("Orphaned le ACL handle:0x{:04x} bd_addr:{} created:{}",
+                 connection.second->Handle(), connection.second->GetRemoteAddressWithType(),
+                 common::StringFormatTimeWithMilliseconds(kConnectionDescriptorTimeFormat,
+                                                          connection.second->GetCreationTime()));
+    }
+
+    promise.set_value(!handle_to_classic_connection_map_.empty() ||
+                      !handle_to_le_connection_map_.empty());
+  }
+
+  void SetSystemSuspendState(bool suspended, std::promise<void> promise) {
+    GetAclManagerLe()->SetSystemSuspendState(suspended, std::move(promise));
   }
 
   void DumpConnectionHistory() const {
@@ -1236,6 +1254,14 @@ shim::Acl::~Acl() {
 }
 
 bool shim::Acl::CheckForOrphanedAclConnections() const {
+  if (com::android::bluetooth::flags::fix_race_in_orphaned_acls()) {
+    std::promise<bool> promise;
+    auto future = promise.get_future();
+    handler_->CallOn(pimpl_.get(), &Acl::impl::check_for_orphaned_acl_connections,
+                     std::move(promise));
+    return future.get();
+  }
+
   bool orphaned_acl_connections = false;
 
   if (!pimpl_->handle_to_classic_connection_map_.empty()) {
@@ -1609,5 +1635,8 @@ void shim::Acl::SetSystemSuspendState(bool suspended) {
       pimpl_->wakeup_wakelock_.release();
     }
   }
-  handler_->CallOn(pimpl_.get(), &Acl::impl::SetSystemSuspendState, suspended);
+  std::promise<void> promise;
+  auto future = promise.get_future();
+  handler_->CallOn(pimpl_.get(), &Acl::impl::SetSystemSuspendState, suspended, std::move(promise));
+  future.wait();
 }

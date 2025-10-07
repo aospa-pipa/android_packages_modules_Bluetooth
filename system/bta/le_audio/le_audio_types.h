@@ -197,6 +197,7 @@ constexpr uint8_t kLeAudioCodecFrameDur10000us = 0x01;
 constexpr uint8_t kLeAudioCodecFrameDur15000us = 0x02;
 
 /* Audio Allocations */
+constexpr uint32_t kLeAudioLocationUninitialized = 0xFFFFFFFF;
 constexpr uint32_t kLeAudioLocationMonoAudio = 0x00000000;
 constexpr uint32_t kLeAudioLocationFrontLeft = 0x00000001;
 constexpr uint32_t kLeAudioLocationFrontRight = 0x00000002;
@@ -698,7 +699,10 @@ struct LeAudioCoreCodecConfig {
   }
 
   /** Channel count per CIS or BIS */
-  uint8_t GetChannelCountPerIsoStream(void) const { return allocated_channel_count; }
+  uint8_t GetChannelCountPerIsoStream(void) const {
+    log::debug("allocated_channel_count: {}", allocated_channel_count);
+    return allocated_channel_count;
+  }
 
   uint16_t CalculateMaxSduSize() const {
     return GetChannelCountPerIsoStream() * octets_per_codec_frame.value_or(0) *

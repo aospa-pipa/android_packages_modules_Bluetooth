@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,12 +94,8 @@ struct Stack::impl {
                                 acl_manager_.GetLeAddressManager(), &acl_manager_),
         distance_measurement_manager_(handler, &hci_layer_, &controller_, &acl_manager_,
                                       &ranging_hal_) {
-#ifndef TARGET_FLOSS
-    if (com::android::bluetooth::flags::socket_settings_api()) {  // Added with aosp/3286716
-      socket_hal_ = std::make_unique<hal::SocketHalImpl>();
-      lpp_offload_manager_ = std::make_unique<lpp::LppOffloadManager>(handler, socket_hal_.get());
-    }
-#endif
+    socket_hal_ = std::make_unique<hal::SocketHalImpl>();
+    lpp_offload_manager_ = std::make_unique<lpp::LppOffloadManager>(handler, socket_hal_.get());
   }
 
   // TODO: Remove this constructor once the flag (same_handler_for_all_modules) is fully rolled out.
@@ -128,13 +124,9 @@ struct Stack::impl {
                                 acl_manager_.GetLeAddressManager(), &acl_manager_),
         distance_measurement_manager_(new os::Handler(thread), &hci_layer_, &controller_,
                                       &acl_manager_, &ranging_hal_) {
-#ifndef TARGET_FLOSS
-    if (com::android::bluetooth::flags::socket_settings_api()) {  // Added with aosp/3286716
-      socket_hal_ = std::make_unique<hal::SocketHalImpl>();
-      lpp_offload_manager_ =
-              std::make_unique<lpp::LppOffloadManager>(new os::Handler(thread), socket_hal_.get());
-    }
-#endif
+    socket_hal_ = std::make_unique<hal::SocketHalImpl>();
+    lpp_offload_manager_ =
+            std::make_unique<lpp::LppOffloadManager>(new os::Handler(thread), socket_hal_.get());
   }
 
   ~impl() {
@@ -203,12 +195,12 @@ void Stack::StartEverything() {
   log::info("init_status == {}", int(init_status));
 
   if (init_status != std::future_status::ready) {
-    /* Crash stuck thread and print it's stack trace, so that we know why starartup is taking too
+    /* Crash stuck thread and print it's stack trace, so that we know why startup is taking too
      * long */
     management_thread_->Abort();
 
     /* Crashed thread should take whole stack with it, but main thread is being executed
-     * simulteanously. This sleep ensures that main thread doesn't execute any logic below, and
+     * simultaneously. This sleep ensures that main thread doesn't execute any logic below, and
      * nicely dies with rest of stack.  */
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 
@@ -378,6 +370,7 @@ void Stack::Dump(int fd, std::promise<void> promise) const {
             [](int fd, std::promise<void> promise) {
               bluetooth::shim::GetController()->Dump(fd);
               bluetooth::shim::GetAclManagerLe()->Dump(fd);
+              bluetooth::shim::GetAdvertising()->Dump(fd);
               bluetooth::os::WakelockManager::Get().Dump(fd);
               bluetooth::shim::GetSnoopLogger()->DumpSnoozLogToFile();
               promise.set_value();

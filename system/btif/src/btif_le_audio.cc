@@ -18,6 +18,7 @@
 #include "btif_le_audio.h"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <hardware/bt_le_audio.h>
 
 #include <atomic>
@@ -28,8 +29,8 @@
 #include "bta_le_audio_api.h"
 #include "btif_common.h"
 #include "btif_profile_storage.h"
-#include "types/raw_address.h"
 #include "stack/include/main_thread.h"
+
 
 using base::Bind;
 using base::Unretained;

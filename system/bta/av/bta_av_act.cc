@@ -26,6 +26,7 @@
 #define LOG_TAG "bluetooth-a2dp"
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstddef>
@@ -64,7 +65,6 @@
 #include "stack/include/sdp_api.h"
 #include "stack/include/sdp_status.h"
 #include "stack/sdp/sdp_discovery_db.h"
-#include "types/raw_address.h"
 
 using namespace bluetooth::legacy::stack::sdp;
 using namespace bluetooth;
@@ -385,6 +385,12 @@ uint8_t bta_av_rc_create(tBTA_AV_CB* p_cb, tAVCT_ROLE role, uint8_t shdl, uint8_
 
   if (AVRC_Open(&rc_handle, &ccb, bda) != AVRC_SUCCESS) {
     DEVICE_IOT_CONFIG_ADDR_INT_ADD_ONE(bda, IOT_CONF_KEY_AVRCP_CONN_FAIL_COUNT);
+    return BTA_AV_RC_HANDLE_NONE;
+  }
+
+  if (rc_handle != BTA_AV_RC_HANDLE_NONE && rc_handle >= BTA_AV_NUM_RCB) {
+    log::error("rc_handle out of bounds: {}. Closing AVRC.", rc_handle);
+    AVRC_Close(rc_handle);
     return BTA_AV_RC_HANDLE_NONE;
   }
 
@@ -2091,6 +2097,11 @@ static void bta_av_rc_disc_done_all(tBTA_AV_DATA* /* p_data */) {
       p_cb->disc = 0;
       return;
     }
+  }
+
+  if (rc_handle != BTA_AV_RC_HANDLE_NONE && rc_handle >= BTA_AV_NUM_RCB) {
+    log::error("rc_handle out of bounds: {}", rc_handle);
+    return;
   }
 
   log::verbose("rc_handle {}", rc_handle);
