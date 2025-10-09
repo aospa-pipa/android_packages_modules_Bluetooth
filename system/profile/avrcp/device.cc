@@ -1078,7 +1078,8 @@ void Device::GetPlayStatusResponse(uint8_t label, PlayStatus status) {
     status.state = PlayState::REV_SEEK;
   }
   auto response = GetPlayStatusResponseBuilder::MakeBuilder(
-          status.duration, status.position, IsActive() ? status.state : PlayState::PAUSED);
+          status.duration, status.position, (IsActive() &&
+          bluetooth::headset::IsCallIdle()) ? status.state : PlayState::PAUSED);
   send_message(label, false, std::move(response));
 }
 
