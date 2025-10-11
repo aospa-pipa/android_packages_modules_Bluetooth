@@ -70,7 +70,7 @@ final class BondStateMachine extends StateMachine {
     static final int CANCEL_BOND = 2;
     static final int REMOVE_BOND = 3;
     static final int BONDING_STATE_CHANGE = 4;
-    static final int SSP_REQUEST = 5;
+    static final int PAIRING_REQUEST = 5; // Pairing authorization request from native
     static final int PIN_REQUEST = 6;
     static final int UUID_UPDATE = 10;
     static final int BONDED_INTENT_DELAY = 11;
@@ -135,12 +135,11 @@ final class BondStateMachine extends StateMachine {
     private class StableState extends State {
         @Override
         public void enter() {
-            infoLog("StableState(): Entering Off State");
+            debugLog("StableState(): Entering Off State");
         }
 
         @Override
         public synchronized boolean processMessage(Message msg) {
-
             BluetoothDevice dev = (BluetoothDevice) msg.obj;
 
             switch (msg.what) {
@@ -151,28 +150,25 @@ final class BondStateMachine extends StateMachine {
                     would fail. Check the busy status of BTIF instead, and wait with starting
                     the bond. */
                     if (mAdapterService.getNative().pairingIsBusy()) {
-                        short retry_no =
+                        short retryCount =
                                 (msg.getData() != null)
                                         ? msg.getData().getShort(DELAY_RETRY_COUNT)
                                         : 0;
-                        Log.d(
-                                TAG,
-                                "Delay CREATE_BOND because native is busy - attempt no "
-                                        + retry_no);
+                        debugLog("CREATE_BOND: Native is busy - attempt no:" + retryCount);
 
-                        if (retry_no < DELAY_MAX_RETRIES) {
-                            retry_no++;
+                        if (retryCount < DELAY_MAX_RETRIES) {
+                            retryCount++;
 
-                            Message new_msg = obtainMessage();
-                            new_msg.copyFrom(msg);
+                            Message retryMsg = obtainMessage();
+                            retryMsg.copyFrom(msg);
 
-                            if (new_msg.getData() == null) {
+                            if (retryMsg.getData() == null) {
                                 Bundle bundle = new Bundle();
-                                new_msg.setData(bundle);
+                                retryMsg.setData(bundle);
                             }
-                            new_msg.getData().putShort(DELAY_RETRY_COUNT, retry_no);
+                            retryMsg.getData().putShort(DELAY_RETRY_COUNT, retryCount);
 
-                            sendMessageDelayed(new_msg, BOND_RETRY_DELAY_MS);
+                            sendMessageDelayed(retryMsg, BOND_RETRY_DELAY_MS);
                             return true;
                         } else {
                             MetricsLogger.getInstance()
@@ -181,7 +177,9 @@ final class BondStateMachine extends StateMachine {
                                             BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__EVENT_TYPE__BOND_RETRY,
                                             BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__FAIL,
                                             0);
-                            Log.w(TAG, "Native was busy - the bond will most likely fail!");
+                            warnLog(
+                                    "CREATE_BOND: Native was busy - the bond will most likely"
+                                            + " fail!");
                         }
                     }
 
@@ -208,9 +206,8 @@ final class BondStateMachine extends StateMachine {
                         /* if the link key was deleted by the stack */
                         sendIntent(dev, newState, 0, false);
                     } else {
-                        Log.e(
-                                TAG,
-                                "In stable state, received invalid newState: "
+                        warnLog(
+                                "BONDING_STATE_CHANGE: In stable state, received invalid newState: "
                                         + bondStateToString(newState));
                     }
                     break;
@@ -240,7 +237,7 @@ final class BondStateMachine extends StateMachine {
                     break;
                 case CANCEL_BOND:
                 default:
-                    Log.e(TAG, "Received unhandled state: " + msg.what);
+                    errorLog("Received unhandled message in StableState: " + msg.what);
                     return false;
             }
             return true;
@@ -252,7 +249,7 @@ final class BondStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            infoLog("Entering PendingCommandState State");
+            debugLog("Entering PendingCommandState State");
         }
 
         @Override
@@ -264,7 +261,7 @@ final class BondStateMachine extends StateMachine {
             if ((mDevices.contains(dev) || mPendingBondedDevices.contains(dev))
                     && msg.what != CANCEL_BOND
                     && msg.what != BONDING_STATE_CHANGE
-                    && msg.what != SSP_REQUEST
+                    && msg.what != PAIRING_REQUEST
                     && msg.what != PIN_REQUEST) {
                 deferMessage(msg);
                 return true;
@@ -315,9 +312,9 @@ final class BondStateMachine extends StateMachine {
                         result = true;
                     }
                 }
-                case SSP_REQUEST -> {
+                case PAIRING_REQUEST -> {
                     if (devProp == null) {
-                        errorLog("devProp is null, maybe the device is disconnected");
+                        warnLog("PAIRING_REQUEST: devProp is null, maybe " + dev + " disconnected");
                         break;
                     }
 
@@ -327,17 +324,16 @@ final class BondStateMachine extends StateMachine {
                             (msg.getData() != null)
                                     ? msg.getData().getByte(DISPLAY_PASSKEY) == 1 /* 1 == true */
                                     : false;
-                    sendDisplayPinIntent(
+                    sendPairingRequestIntent(
                             devProp.getDevice(),
                             displayPasskey ? Optional.of(passkey) : Optional.empty(),
                             variant);
                 }
                 case PIN_REQUEST -> {
                     if (devProp == null) {
-                        errorLog("devProp is null, maybe the device is disconnected");
+                        warnLog("PIN_REQUEST: devProp is null, maybe " + dev + " disconnected");
                         break;
                     }
-
                     int btDeviceClass =
                             new BluetoothClass(mRemoteDevices.getBluetoothClass(dev))
                                     .getDeviceClass();
@@ -352,7 +348,7 @@ final class BondStateMachine extends StateMachine {
                         // Generate a variable 6-digit PIN in range of 100000-999999
                         // This is not truly random but good enough.
                         int pin = 100000 + (int) Math.floor((Math.random() * (999999 - 100000)));
-                        sendDisplayPinIntent(
+                        sendPairingRequestIntent(
                                 devProp.getDevice(),
                                 Optional.of(pin),
                                 BluetoothDevice.PAIRING_VARIANT_DISPLAY_PIN);
@@ -360,14 +356,14 @@ final class BondStateMachine extends StateMachine {
                     }
 
                     if (msg.arg2 == 1) { // Minimum 16 digit pin required here
-                        sendDisplayPinIntent(
+                        sendPairingRequestIntent(
                                 devProp.getDevice(),
                                 Optional.empty(),
                                 BluetoothDevice.PAIRING_VARIANT_PIN_16_DIGITS);
                     } else {
                         // In PIN_REQUEST, there is no passkey to display.So do not send the
                         // EXTRA_PAIRING_KEY type in the intent
-                        sendDisplayPinIntent(
+                        sendPairingRequestIntent(
                                 devProp.getDevice(),
                                 Optional.empty(),
                                 BluetoothDevice.PAIRING_VARIANT_PIN);
@@ -384,7 +380,7 @@ final class BondStateMachine extends StateMachine {
                     }
                 }
                 default -> {
-                    Log.e(TAG, "Received unhandled event:" + msg.what);
+                    errorLog("Received unhandled event in PendingCommandState:" + msg.what);
                     return false;
                 }
             }
@@ -396,39 +392,44 @@ final class BondStateMachine extends StateMachine {
     }
 
     private boolean cancelBond(BluetoothDevice dev) {
-        if (mRemoteDevices.getBondState(dev) == BluetoothDevice.BOND_BONDING) {
-            byte[] addr = Utils.getByteAddress(dev);
-            if (!mAdapterService.getNative().cancelBond(addr)) {
-                Log.e(TAG, "Unexpected error while cancelling bond:" + dev);
-            } else {
-                return true;
-            }
+        if (mRemoteDevices.getBondState(dev) != BluetoothDevice.BOND_BONDING) {
+            warnLog(
+                    "cancelBond: "
+                            + dev
+                            + " is not in bonding state, state: "
+                            + bondStateToString(mRemoteDevices.getBondState(dev)));
+            return false;
         }
-        return false;
+
+        if (!mAdapterService.getNative().cancelBond(Utils.getByteAddress(dev))) {
+            warnLog("cancelBond: Unexpected error while cancelling bond:" + dev);
+            return false;
+        }
+
+        return true;
     }
 
     private boolean removeBond(BluetoothDevice dev, boolean transition) {
         DeviceProperties devProp = mRemoteDevices.getDeviceProperties(dev);
-        if (devProp != null && devProp.getBondState() == BluetoothDevice.BOND_BONDED) {
-            byte[] addr = Utils.getByteAddress(dev);
-            if (!mAdapterService.getNative().removeBond(addr)) {
-                Log.e(TAG, "Unexpected error while removing bond:" + dev);
-            } else {
-                if (transition) {
-                    transitionTo(mPendingCommandState);
-                }
-                return true;
-            }
+        if (devProp == null) {
+            warnLog("removeBond: " + dev + " is unknown device");
+            return false;
         }
 
-        Log.w(
-                TAG,
-                dev
-                        + " cannot be removed since "
-                        + ((devProp == null)
-                                ? "properties are empty"
-                                : "bond state is " + devProp.getBondState()));
-        return false;
+        if (devProp.getBondState() == BluetoothDevice.BOND_NONE) {
+            warnLog("removeBond: " + dev + " is not bonded");
+            return false;
+        }
+
+        if (!mAdapterService.getNative().removeBond(Utils.getByteAddress(dev))) {
+            warnLog("removeBond: Unexpected error while removing " + dev);
+            return false;
+        }
+
+        if (transition) {
+            transitionTo(mPendingCommandState);
+        }
+        return true;
     }
 
     private boolean createBond(
@@ -437,79 +438,90 @@ final class BondStateMachine extends StateMachine {
             OobData remoteP192Data,
             OobData remoteP256Data,
             boolean transition) {
-        if (mRemoteDevices.getBondState(dev) == BluetoothDevice.BOND_NONE) {
-            infoLog("Bond address is:" + dev + ", transport is: " + transport);
-            byte[] addr = Utils.getByteAddress(dev);
-            int addrType = dev.getAddressType();
-            boolean result;
-            // If we have some data
-            if (remoteP192Data != null || remoteP256Data != null) {
-                BluetoothStatsLog.write(
-                        BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
-                        mAdapterService.obfuscateAddress(dev),
-                        transport,
-                        mRemoteDevices.getType(dev),
-                        BluetoothDevice.BOND_BONDING,
-                        BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_START_PAIRING_OOB,
-                        BluetoothProtoEnums.UNBOND_REASON_UNKNOWN,
-                        mAdapterService.getMetricId(dev));
-                result =
-                        mAdapterService
-                                .getNative()
-                                .createBondOutOfBand(
-                                        addr, transport, remoteP192Data, remoteP256Data);
-            } else {
-                BluetoothStatsLog.write(
-                        BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
-                        mAdapterService.obfuscateAddress(dev),
-                        transport,
-                        mRemoteDevices.getType(dev),
-                        BluetoothDevice.BOND_BONDING,
-                        BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_START_PAIRING,
-                        BluetoothProtoEnums.UNBOND_REASON_UNKNOWN,
-                        mAdapterService.getMetricId(dev));
-                result = mAdapterService.getNative().createBond(addr, addrType, transport);
-            }
-            BluetoothStatsLog.write(
-                    BluetoothStatsLog.BLUETOOTH_DEVICE_NAME_REPORTED,
-                    mAdapterService.getMetricId(dev),
-                    mRemoteDevices.getName(dev));
+        int bondState = mRemoteDevices.getBondState(dev);
+        if (bondState != BluetoothDevice.BOND_NONE) {
+            warnLog(
+                    "createBond: "
+                            + dev
+                            + " already in "
+                            + bondStateToString(bondState)
+                            + " state");
+            return false;
+        }
+
+        debugLog("createBond: " + dev + ", transport: " + transport);
+        byte[] addr = Utils.getByteAddress(dev);
+        int addrType = dev.getAddressType();
+        boolean initiated;
+
+        if (remoteP192Data != null || remoteP256Data != null) {
             BluetoothStatsLog.write(
                     BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
                     mAdapterService.obfuscateAddress(dev),
                     transport,
                     mRemoteDevices.getType(dev),
                     BluetoothDevice.BOND_BONDING,
-                    remoteP192Data == null && remoteP256Data == null
-                            ? BluetoothProtoEnums.BOND_SUB_STATE_UNKNOWN
-                            : BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_OOB_DATA_PROVIDED,
-                    BluetoothProtoEnums.UNBOND_REASON_UNKNOWN);
+                    BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_START_PAIRING_OOB,
+                    BluetoothProtoEnums.UNBOND_REASON_UNKNOWN,
+                    mAdapterService.getMetricId(dev));
 
-            if (!result) {
-                BluetoothStatsLog.write(
-                        BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
-                        mAdapterService.obfuscateAddress(dev),
-                        transport,
-                        mRemoteDevices.getType(dev),
-                        BluetoothDevice.BOND_NONE,
-                        BluetoothProtoEnums.BOND_SUB_STATE_UNKNOWN,
-                        BluetoothDevice.UNBOND_REASON_REPEATED_ATTEMPTS);
-                // Using UNBOND_REASON_REMOVED for legacy reason
-                sendIntent(
-                        dev,
-                        BluetoothDevice.BOND_NONE,
-                        BluetoothDevice.UNBOND_REASON_REMOVED,
-                        false);
-                return false;
-            } else if (transition) {
-                transitionTo(mPendingCommandState);
-            }
-            return true;
+            initiated =
+                    mAdapterService
+                            .getNative()
+                            .createBondOutOfBand(addr, transport, remoteP192Data, remoteP256Data);
+        } else {
+            BluetoothStatsLog.write(
+                    BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
+                    mAdapterService.obfuscateAddress(dev),
+                    transport,
+                    mRemoteDevices.getType(dev),
+                    BluetoothDevice.BOND_BONDING,
+                    BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_START_PAIRING,
+                    BluetoothProtoEnums.UNBOND_REASON_UNKNOWN,
+                    mAdapterService.getMetricId(dev));
+
+            initiated = mAdapterService.getNative().createBond(addr, addrType, transport);
         }
-        return false;
+
+        BluetoothStatsLog.write(
+                BluetoothStatsLog.BLUETOOTH_DEVICE_NAME_REPORTED,
+                mAdapterService.getMetricId(dev),
+                mRemoteDevices.getName(dev));
+        BluetoothStatsLog.write(
+                BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
+                mAdapterService.obfuscateAddress(dev),
+                transport,
+                mRemoteDevices.getType(dev),
+                BluetoothDevice.BOND_BONDING,
+                remoteP192Data == null && remoteP256Data == null
+                        ? BluetoothProtoEnums.BOND_SUB_STATE_UNKNOWN
+                        : BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_OOB_DATA_PROVIDED,
+                BluetoothProtoEnums.UNBOND_REASON_UNKNOWN);
+
+        if (!initiated) {
+            warnLog("createBond: Failed to initiate pairing for " + dev);
+            BluetoothStatsLog.write(
+                    BluetoothStatsLog.BLUETOOTH_BOND_STATE_CHANGED,
+                    mAdapterService.obfuscateAddress(dev),
+                    transport,
+                    mRemoteDevices.getType(dev),
+                    BluetoothDevice.BOND_NONE,
+                    BluetoothProtoEnums.BOND_SUB_STATE_UNKNOWN,
+                    BluetoothDevice.UNBOND_REASON_REPEATED_ATTEMPTS);
+
+            // Using UNBOND_REASON_REMOVED for legacy reason
+            sendIntent(
+                    dev, BluetoothDevice.BOND_NONE, BluetoothDevice.UNBOND_REASON_REMOVED, false);
+            return false;
+        }
+
+        if (transition) {
+            transitionTo(mPendingCommandState);
+        }
+        return true;
     }
 
-    private void sendDisplayPinIntent(
+    private void sendPairingRequestIntent(
             BluetoothDevice device, Optional<Integer> maybePin, int variant) {
         Intent intent = new Intent(BluetoothDevice.ACTION_PAIRING_REQUEST);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
@@ -518,7 +530,11 @@ final class BondStateMachine extends StateMachine {
         intent.setFlags(Intent.FLAG_RECEIVER_FOREGROUND);
         // Workaround for Android Auto until pre-accepting pairing requests is added.
         intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        Log.i(TAG, "sendDisplayPinIntent: device=" + device + ", variant=" + variant);
+        infoLog(
+                "sendPairingRequestIntent: ACTION_PAIRING_REQUEST device="
+                        + device
+                        + ", variant="
+                        + variant);
         mAdapterService.sendOrderedBroadcast(
                 intent,
                 BLUETOOTH_CONNECT,
@@ -538,7 +554,7 @@ final class BondStateMachine extends StateMachine {
         if (newState != BluetoothDevice.BOND_NONE
                 && newState != BluetoothDevice.BOND_BONDING
                 && newState != BluetoothDevice.BOND_BONDED) {
-            infoLog("Invalid bond state " + newState);
+            warnLog("sendIntent: " + bondStateToString(newState));
             return;
         }
 
@@ -547,19 +563,21 @@ final class BondStateMachine extends StateMachine {
         if (devProp != null) {
             oldState = devProp.getBondState();
         }
+
         if (isTriggerFromDelayMessage
                 && (oldState != BluetoothDevice.BOND_BONDED
                         || newState != BluetoothDevice.BOND_BONDED
                         || !mPendingBondedDevices.contains(device))) {
-            infoLog(
-                    "Invalid state when doing delay send bonded intent, oldState: "
-                            + oldState
+            warnLog(
+                    "sendIntent: Invalid state in delayed bonded intent, oldState: "
+                            + bondStateToString(oldState)
                             + ", newState: "
-                            + newState
+                            + bondStateToString(newState)
                             + ", in PendingBondedDevices list? "
                             + mPendingBondedDevices.contains(device));
             return;
         }
+
         if (mPendingBondedDevices.contains(device)) {
             mPendingBondedDevices.remove(device);
             if (oldState == BluetoothDevice.BOND_BONDED) {
@@ -572,6 +590,7 @@ final class BondStateMachine extends StateMachine {
                 throw new IllegalArgumentException("Invalid old state " + oldState);
             }
         }
+
         if (oldState == newState) {
             return;
         }
@@ -597,7 +616,7 @@ final class BondStateMachine extends StateMachine {
                 && newState == BluetoothDevice.BOND_BONDED
                 && devProp != null
                 && devProp.getUuids() == null) {
-            infoLog(device + " is bonded, wait for SDP complete to broadcast bonded intent");
+            debugLog("sendIntent: " + device + " is bonded, wait for service discovery");
             if (!mPendingBondedDevices.contains(device)) {
                 mPendingBondedDevices.add(device);
                 Message msg = obtainMessage(BONDED_INTENT_DELAY);
@@ -629,7 +648,7 @@ final class BondStateMachine extends StateMachine {
                     intent, UserHandle.ALL, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
         }
         infoLog(
-                "Bond State Change Intent:"
+                "sendIntent: ACTION_BOND_STATE_CHANGED - Bond State Change Intent:"
                         + device
                         + " "
                         + bondStateToString(oldState)
@@ -641,10 +660,9 @@ final class BondStateMachine extends StateMachine {
         BluetoothDevice device = mRemoteDevices.getDevice(address);
 
         if (device == null) {
-            infoLog("No record of the device:" + device);
-            // This device will be added as part of the BONDING_STATE_CHANGE intent processing
-            // in sendIntent above
+            // This device will be added before sending ACTION_BONDING_STATE_CHANGE intent
             device = mAdapter.getRemoteDevice(Utils.getAddressStringFromByte(address));
+            debugLog("bondStateChangeCallback: Unknown device:" + device);
         }
 
         infoLog(
@@ -653,7 +671,7 @@ final class BondStateMachine extends StateMachine {
                         + " Address: "
                         + device
                         + " newState: "
-                        + newState
+                        + bondStateToString(newState)
                         + " hciReason: "
                         + hciReason);
 
@@ -673,13 +691,6 @@ final class BondStateMachine extends StateMachine {
     }
 
     void sspRequestCallback(byte[] address, int pairingVariant, int passkey) {
-        infoLog(
-                "sspRequestCallback: "
-                        + Utils.getRedactedAddressStringFromByte(address)
-                        + " pairingVariant "
-                        + pairingVariant
-                        + " passkey: "
-                        + (Build.isDebuggable() ? passkey : "******"));
         int variant;
         boolean displayPasskey = false;
         switch (pairingVariant) {
@@ -688,7 +699,8 @@ final class BondStateMachine extends StateMachine {
                 displayPasskey = true;
             }
 
-            case AbstractionLayer.BT_SSP_VARIANT_CONSENT ->
+            case AbstractionLayer.BT_SSP_VARIANT_CONSENT,
+                    AbstractionLayer.BT_SSP_VARIANT_PARTICIPATION ->
                     variant = BluetoothDevice.PAIRING_VARIANT_CONSENT;
 
             case AbstractionLayer.BT_SSP_VARIANT_PASSKEY_ENTRY ->
@@ -700,15 +712,28 @@ final class BondStateMachine extends StateMachine {
             }
 
             default -> {
-                errorLog("SSP Pairing variant not present");
+                errorLog(
+                        "sspRequestCallback: Unknown pairing variant("
+                                + pairingVariant
+                                + ") for "
+                                + Utils.getRedactedAddressStringFromByte(address));
                 return;
             }
         }
+
+        debugLog(
+                "sspRequestCallback: "
+                        + Utils.getRedactedAddressStringFromByte(address)
+                        + " pairingVariant "
+                        + pairingVariant
+                        + " passkey: "
+                        + (Build.isDebuggable() ? passkey : "******"));
+
         BluetoothDevice device = mRemoteDevices.getDevice(address);
         if (device == null) {
-            warnLog("Device is not known for:" + Utils.getRedactedAddressStringFromByte(address));
             mRemoteDevices.addDeviceProperties(address);
             device = requireNonNull(mRemoteDevices.getDevice(address));
+            warnLog("sspRequestCallback: Unknown device:" + device);
         }
 
         BluetoothStatsLog.write(
@@ -720,7 +745,7 @@ final class BondStateMachine extends StateMachine {
                 BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_SSP_REQUESTED,
                 0);
 
-        Message msg = obtainMessage(SSP_REQUEST);
+        Message msg = obtainMessage(PAIRING_REQUEST);
         msg.obj = device;
         if (displayPasskey) {
             msg.arg1 = passkey;
@@ -750,7 +775,7 @@ final class BondStateMachine extends StateMachine {
                 BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_PIN_REQUESTED,
                 0);
 
-        infoLog("pinRequestCallback: " + bdDevice + " cod:" + new BluetoothClass(cod));
+        debugLog("pinRequestCallback: " + bdDevice + " cod:" + new BluetoothClass(cod));
 
         Message msg = obtainMessage(PIN_REQUEST);
         msg.obj = bdDevice;
@@ -825,6 +850,10 @@ final class BondStateMachine extends StateMachine {
         } else if (state == BluetoothDevice.BOND_BONDED) {
             return "BOND_BONDED";
         } else return "UNKNOWN(" + state + ")";
+    }
+
+    private static void debugLog(String msg) {
+        Log.d(TAG, msg);
     }
 
     private static void infoLog(String msg) {

@@ -50,7 +50,6 @@ import static java.util.Objects.requireNonNullElseGet;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
-import android.annotation.SuppressLint;
 import android.app.AppOpsManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -391,7 +390,7 @@ public class AdapterService extends Service {
         public int getValue() {
             return mValue;
         }
-    };
+    }
 
     // Keep a constructor for ActivityThread.handleCreateService
     AdapterService() {
@@ -930,7 +929,6 @@ public class AdapterService extends Service {
         mAdapterStateMachine.sendMessage(AdapterState.USER_TURN_OFF);
     }
 
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     private void init(String hciInstanceName) {
         Log.d(TAG, "init() instance = " + hciInstanceName);
 
@@ -1090,7 +1088,6 @@ public class AdapterService extends Service {
         BluetoothSap.invalidateBluetoothGetConnectionStateCache();
     }
 
-    @RequiresPermission(BLUETOOTH_CONNECT)
     void bringUpBle() {
         Log.d(TAG, "bleOnProcessStart()");
 
@@ -1403,7 +1400,6 @@ public class AdapterService extends Service {
         mIsMediaProfileConnected = false;
     }
 
-    @RequiresPermission(BLUETOOTH_CONNECT)
     void cleanup() {
         Log.i(TAG, "cleanup()");
         if (mCleaningUp) {
@@ -1514,7 +1510,7 @@ public class AdapterService extends Service {
      * @param timeoutMillis timeout set by the app
      */
     public void logL2capcocServerConnection(
-            BluetoothDevice device,
+            @Nullable BluetoothDevice device,
             int port,
             boolean isSecured,
             int result,
@@ -3073,9 +3069,9 @@ public class AdapterService extends Service {
     public void notifyGattClientConnectFailed(int clientIf, BluetoothDevice device) {
         getLeAudioService()
                 .ifPresent(
-                        leAudio -> {
-                            removeGattClientFromControlAutoActiveMode(leAudio, clientIf, device);
-                        });
+                        leAudio ->
+                                removeGattClientFromControlAutoActiveMode(
+                                        leAudio, clientIf, device));
     }
 
     /**
@@ -3087,9 +3083,9 @@ public class AdapterService extends Service {
     public void notifyGattClientDisconnect(int clientIf, BluetoothDevice device) {
         getLeAudioService()
                 .ifPresent(
-                        leAudio -> {
-                            removeGattClientFromControlAutoActiveMode(leAudio, clientIf, device);
-                        });
+                        leAudio ->
+                                removeGattClientFromControlAutoActiveMode(
+                                        leAudio, clientIf, device));
     }
 
     public int getConnectionState(BluetoothDevice device) {
@@ -3987,12 +3983,6 @@ public class AdapterService extends Service {
         return mGattService == null ? null : mGattService.getDistanceMeasurement();
     }
 
-    void unregAllGattClient() {
-        if (mGattService != null) {
-            mGattService.unregAll();
-        }
-    }
-
     IBinder getProfile(int id) {
         if (getState() == BluetoothAdapter.STATE_TURNING_ON) {
             return null;
@@ -4105,9 +4095,9 @@ public class AdapterService extends Service {
         final var scanController = getBluetoothScanController();
         if (scanController == null) return;
         scanController.doOnScanThread(
-                () -> {
-                    scanController.notifyProfileConnectionStateChange(profile, fromState, toState);
-                });
+                () ->
+                        scanController.notifyProfileConnectionStateChange(
+                                profile, fromState, toState));
     }
 
     /**

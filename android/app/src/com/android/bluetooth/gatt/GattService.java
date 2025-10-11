@@ -213,6 +213,7 @@ public class GattService extends ProfileService {
     private final ActivityManager mActivityManager;
     private final PackageManager mPackageManager;
     private final CompanionDeviceManager mCompanionDeviceManager;
+    private final GattNativeCallback mNativeCallback;
     private final GattNativeInterface mNativeInterface;
     private final HandlerThread mHandlerThread;
     private final AdvertiseManager mAdvertiseManager;
@@ -228,6 +229,7 @@ public class GattService extends ProfileService {
             CompanionDeviceManager companionDeviceManager) {
         this(
                 adapterService,
+                null,
                 nativeInterface,
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
@@ -241,6 +243,7 @@ public class GattService extends ProfileService {
     @VisibleForTesting
     GattService(
             AdapterService adapterService,
+            GattNativeCallback nativeCallback,
             GattNativeInterface nativeInterface,
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
@@ -261,9 +264,12 @@ public class GattService extends ProfileService {
         Settings.Global.putInt(
                 getContentResolver(), "bluetooth_sanitized_exposure_notification_supported", 1);
 
+        mNativeCallback =
+                requireNonNullElseGet(
+                        nativeCallback, () -> new GattNativeCallback(mAdapterService, this));
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new GattNativeInterface(mAdapterService, this));
+                        nativeInterface, () -> new GattNativeInterface(mNativeCallback));
         mNativeInterface.init();
 
         // Create a thread to handle LE operations
@@ -298,9 +304,7 @@ public class GattService extends ProfileService {
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_low_max_subrate.config",
                             SUBRATE_LOW_MODE_SUBRATE_MAX_DEFAULT),
-                    SystemProperties.getInt(
-                            "bluetooth.ble.client.subrate_mode_low_latency.config",
-                            SUBRATE_LOW_MODE_LATENCY_DEFAULT),
+                    SUBRATE_LOW_MODE_LATENCY_DEFAULT,
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_low_cont_number.config",
                             SUBRATE_LOW_MODE_CONT_NUM_DEFAULT),
@@ -313,9 +317,7 @@ public class GattService extends ProfileService {
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_balanced_max_subrate.config",
                             SUBRATE_BALANCED_MODE_SUBRATE_MAX_DEFAULT),
-                    SystemProperties.getInt(
-                            "bluetooth.ble.client.subrate_mode_balanced_latency.config",
-                            SUBRATE_BALANCED_MODE_LATENCY_DEFAULT),
+                    SUBRATE_BALANCED_MODE_LATENCY_DEFAULT,
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_balanced_cont_number.config",
                             SUBRATE_BALANCED_MODE_CONT_NUM_DEFAULT),
@@ -328,9 +330,7 @@ public class GattService extends ProfileService {
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_high_max_subrate.config",
                             SUBRATE_HIGH_MODE_SUBRATE_MAX_DEFAULT),
-                    SystemProperties.getInt(
-                            "bluetooth.ble.client.subrate_mode_high_latency.config",
-                            SUBRATE_HIGH_MODE_LATENCY_DEFAULT),
+                    SUBRATE_HIGH_MODE_LATENCY_DEFAULT,
                     SystemProperties.getInt(
                             "bluetooth.ble.client.subrate_mode_high_cont_number.config",
                             SUBRATE_HIGH_MODE_CONT_NUM_DEFAULT),
@@ -1067,7 +1067,10 @@ public class GattService extends ProfileService {
                             BluetoothStatsLog.BLUETOOTH_CROSS_LAYER_EVENT_REPORTED__STATE__END,
                             source.getUid());
         }
-        mClientMap.remove(clientIf, reason);
+        if (mClientMap.remove(clientIf, reason) == null) {
+            Log.w(TAG, "failed to remove client - clientIf=" + clientIf);
+            return;
+        }
         mNativeInterface.gattClientUnregisterApp(clientIf);
     }
 
@@ -3112,31 +3115,4 @@ public class GattService extends ProfileService {
         Log.d(TAG, builder.toString());
         return db;
     }
-
-    /**************************************************************************
-     * GATT Test functions
-     *************************************************************************/
-    void gattTestCommand(
-            int command, UUID uuid1, String bda1, int p1, int p2, int p3, int p4, int p5) {
-        if (bda1 == null) {
-            bda1 = "00:00:00:00:00:00";
-        }
-        if (uuid1 != null) {
-            mNativeInterface.gattTest(
-                    command,
-                    uuid1.getLeastSignificantBits(),
-                    uuid1.getMostSignificantBits(),
-                    bda1,
-                    p1,
-                    p2,
-                    p3,
-                    p4,
-                    p5);
-        } else {
-            mNativeInterface.gattTest(command, 0, 0, bda1, p1, p2, p3, p4, p5);
-        }
-    }
-
-    private native void gattSubrateRequestNative(int clientIf, String address, int subrateMin,
-            int subrateMax, int maxLatency, int contNumber, int supervisionTimeout);
 }

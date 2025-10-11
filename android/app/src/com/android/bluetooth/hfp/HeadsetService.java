@@ -305,7 +305,7 @@ public class HeadsetService extends ConnectableProfile {
     }
 
     @Override
-    public IProfileServiceBinder initBinder() {
+    protected IProfileServiceBinder initBinder() {
         return new HeadsetServiceBinder(this);
     }
 
