@@ -23,6 +23,8 @@
  *
  ******************************************************************************/
 
+#include <com_android_bluetooth_flags.h>
+
 #include <cstdint>
 
 #include "bta/dm/bta_dm_int.h"
@@ -74,11 +76,11 @@ const tBTA_DM_CFG bta_dm_cfg = {
 /* Reduce Idle timeout value due to intermediate timer */
 #ifndef BTA_JVS_IDLE_TO_SNIFF_DELAY_MS
 #define BTA_JVS_IDLE_TO_SNIFF_DELAY_MS \
-  BTA_FTS_OPS_IDLE_TO_SNIFF_DELAY_MS - BTA_JV_IDLE_TIMEOUT * 1000
+  BTA_FTS_OPS_IDLE_TO_SNIFF_DELAY_MS - BTA_JV_PM_IDLE_TIMEOUT_MS
 #endif
 
 #ifndef BTA_JVC_IDLE_TO_SNIFF_DELAY_MS
-#define BTA_JVC_IDLE_TO_SNIFF_DELAY_MS 5000 - BTA_JV_IDLE_TIMEOUT * 1000
+#define BTA_JVC_IDLE_TO_SNIFF_DELAY_MS 5000 - BTA_JV_PM_IDLE_TIMEOUT_MS
 #endif
 
 /* First element is always for SYS:
@@ -139,6 +141,14 @@ tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC* get_bta_dm_pm_spec() {
                                           BTA_FTS_OPS_IDLE_TO_SNIFF_DELAY_MS));
   static uint16_t ftc_idle_to_sniff_delay_ms = uint16_t(osi_property_get_int32(
           "bluetooth.bta_ftc_idle_to_sniff_delay_ms.config", BTA_FTC_IDLE_TO_SNIFF_DELAY_MS));
+
+  if (com::android::bluetooth::flags::delay_jv_pm_idle()) {
+    // Before this triggered, we've waited
+    fts_ops_idle_to_sniff_delay_ms =
+            std::max(0, fts_ops_idle_to_sniff_delay_ms - BTA_JV_PM_IDLE_TIMEOUT_MS);
+    ftc_idle_to_sniff_delay_ms =
+            std::max(0, ftc_idle_to_sniff_delay_ms - BTA_JV_PM_IDLE_TIMEOUT_MS);
+  }
 
   static tBTA_DM_PM_TYPE_QUALIFIER tBTA_DM_PM_SPEC bta_dm_pm_spec[BTA_DM_NUM_PM_SPEC] = {
           /* AG : 0 */

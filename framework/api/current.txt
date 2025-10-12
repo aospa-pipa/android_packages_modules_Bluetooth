@@ -1219,6 +1219,29 @@ package android.bluetooth {
     method @IntRange(from=1, to=16) public int getKeySize();
   }
 
+  public interface IBluetoothDun extends android.os.IInterface {
+    method public boolean disconnect(android.bluetooth.BluetoothDevice) throws android.os.RemoteException;
+    method public java.util.List<android.bluetooth.BluetoothDevice> getConnectedDevices() throws android.os.RemoteException;
+    method public int getConnectionState(android.bluetooth.BluetoothDevice) throws android.os.RemoteException;
+    method public java.util.List<android.bluetooth.BluetoothDevice> getDevicesMatchingConnectionStates(int[]) throws android.os.RemoteException;
+  }
+
+  public static class IBluetoothDun.Default implements android.bluetooth.IBluetoothDun {
+    ctor public IBluetoothDun.Default();
+    method public android.os.IBinder asBinder();
+    method public boolean disconnect(android.bluetooth.BluetoothDevice) throws android.os.RemoteException;
+    method public java.util.List<android.bluetooth.BluetoothDevice> getConnectedDevices() throws android.os.RemoteException;
+    method public int getConnectionState(android.bluetooth.BluetoothDevice) throws android.os.RemoteException;
+    method public java.util.List<android.bluetooth.BluetoothDevice> getDevicesMatchingConnectionStates(int[]) throws android.os.RemoteException;
+  }
+
+  public abstract static class IBluetoothDun.Stub extends android.os.Binder implements android.bluetooth.IBluetoothDun {
+    ctor public IBluetoothDun.Stub();
+    method public android.os.IBinder asBinder();
+    method public static android.bluetooth.IBluetoothDun asInterface(android.os.IBinder);
+    method public boolean onTransact(int, android.os.Parcel, android.os.Parcel, int) throws android.os.RemoteException;
+  }
+
 }
 
 package android.bluetooth.le {

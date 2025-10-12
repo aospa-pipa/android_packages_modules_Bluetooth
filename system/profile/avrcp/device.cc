@@ -939,29 +939,20 @@ void Device::PlaybackStatusNotificationResponse(uint8_t label, bool interim, Pla
     return;
   }
 
-  log::verbose("last_play_status_.state: {}", last_play_status_.state);
+  log::verbose("last playstate: {}, new playstate: {}, interim: {}", last_play_status_.state,
+               state_to_send, interim);
+
+  // If the state has changed after the last changed event and before the interim, send the last
+  // state as interim and the new state as changed.
   if (interim && last_play_status_.state != state_to_send &&
       (last_play_status_.state == PlayState::PAUSED ||
        last_play_status_.state == PlayState::PLAYING)) {
-    log::verbose("playback Status has changed from last playstatus response");
-    auto lastresponse =
-       RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
-         interim, last_play_status_.state);
+    log::verbose("Sending interim with last state and changed with new state");
+    auto lastresponse = RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
+            interim, last_play_status_.state);
     send_message_cb_.Run(label, false, std::move(lastresponse));
-
-    last_play_status_.state = state_to_send;
-
-    log::verbose("Send new playback Status CHANGED");
-    auto newresponse =
-        RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
-            false, IsActive() ? state_to_send : PlayState::PAUSED);
-    send_message_cb_.Run(label, false, std::move(newresponse));
-
-    active_labels_.erase(label);
-    play_status_changed_ = Notification(false, 0);
-    return;
+    interim = false;
   }
-
   last_play_status_.state = state_to_send;
 
   auto response = RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
@@ -1078,7 +1069,8 @@ void Device::GetPlayStatusResponse(uint8_t label, PlayStatus status) {
     status.state = PlayState::REV_SEEK;
   }
   auto response = GetPlayStatusResponseBuilder::MakeBuilder(
-          status.duration, status.position, IsActive() ? status.state : PlayState::PAUSED);
+          status.duration, status.position, (IsActive() &&
+          bluetooth::headset::IsCallIdle()) ? status.state : PlayState::PAUSED);
   send_message(label, false, std::move(response));
 }
 
