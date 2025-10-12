@@ -123,6 +123,8 @@ public class HidHostService extends ConnectableProfile {
 
     public static final int STATE_ACCEPTING = STATE_DISCONNECTING + 1;
 
+    private static final int BTHH_ERR_TOD_UNSPT = 10; // Remote device not supported
+
     public HidHostService(AdapterService adapterService) {
         this(adapterService, null);
     }
@@ -140,7 +142,7 @@ public class HidHostService extends ConnectableProfile {
     }
 
     @Override
-    public IProfileServiceBinder initBinder() {
+    protected IProfileServiceBinder initBinder() {
         return new HidHostServiceBinder(this);
     }
 
@@ -516,6 +518,8 @@ public class HidHostService extends ConnectableProfile {
         BluetoothDevice device = mAdapterService.getDeviceFromByte((byte[]) msg.obj);
         int transport = msg.arg1;
         int state = msg.arg2;
+        Bundle data = msg.getData();
+        int status = data.getInt(BluetoothHidHost.EXTRA_STATUS);
         int prevState = getState(device, transport);
 
         InputDevice inputDevice = mInputDevices.get(device);
@@ -541,6 +545,17 @@ public class HidHostService extends ConnectableProfile {
             }
         }
 
+        if (Flags.hidDontReconnectOnUhidTimeout()
+                && state == STATE_DISCONNECTED
+                && status == BTHH_ERR_TOD_UNSPT) {
+            Log.w(
+                    TAG,
+                    "handleMessageConnectStateChanged: Disabling HID connection for unsupported"
+                            + " device "
+                            + device);
+            setConnectionPolicy(device, CONNECTION_POLICY_FORBIDDEN);
+        }
+
         if (transport != getTransport(device)) {
             Log.w(
                     TAG,
@@ -558,7 +573,8 @@ public class HidHostService extends ConnectableProfile {
                         + (" device=" + device)
                         + (" transport=" + transport)
                         + (" newState=" + state)
-                        + (" prevState=" + prevState));
+                        + (" prevState=" + prevState)
+                        + (" status=" + status));
 
         // Process connection
         if (prevState == STATE_DISCONNECTED && state == STATE_CONNECTED) {
@@ -952,11 +968,15 @@ public class HidHostService extends ConnectableProfile {
         mHandler.sendMessage(msg);
     }
 
-    void onConnectStateChanged(byte[] address, int addressType, int transport, int state) {
+    void onConnectStateChanged(
+            byte[] address, int addressType, int transport, int state, int status) {
         Log.d(TAG, "onConnectStateChanged: state=" + state);
         Message msg = mHandler.obtainMessage(MESSAGE_CONNECT_STATE_CHANGED, address);
         msg.arg1 = transport;
         msg.arg2 = state;
+        Bundle data = new Bundle();
+        data.putInt(BluetoothHidHost.EXTRA_STATUS, status);
+        msg.setData(data);
         mHandler.sendMessage(msg);
     }
 

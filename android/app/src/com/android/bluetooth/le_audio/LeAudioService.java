@@ -55,7 +55,6 @@ import android.bluetooth.IBluetoothLeAudio;
 import android.bluetooth.IBluetoothLeAudioCallback;
 import android.bluetooth.IBluetoothLeBroadcastCallback;
 import android.bluetooth.IBluetoothVolumeControl;
-import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.IScannerCallback;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
@@ -90,6 +89,7 @@ import android.annotation.NonNull;
 import com.android.bluetooth.BluetoothEventLogger;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.bass_client.BassClientService;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.Config;
 import com.android.bluetooth.btservice.ConnectableProfile;
@@ -242,8 +242,6 @@ public class LeAudioService extends ConnectableProfile {
     @GuardedBy("mLeAudioCallbacks")
     final RemoteCallbackList<IBluetoothLeAudioCallback> mLeAudioCallbacks =
             new RemoteCallbackList<>();
-
-    BluetoothLeScanner mAudioServersScanner;
 
     public LeAudioService(AdapterService adapterService) {
         this(adapterService, null, null, null);
@@ -751,7 +749,6 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         mScanCallback.stopBackgroundScan();
-        mAudioServersScanner = null;
 
         // Don't wait for async call with INACTIVE group status, clean active
         // device for active group.
@@ -2219,9 +2216,9 @@ public class LeAudioService extends ConnectableProfile {
             mScannerId = SCANNER_INITIALIZING;
             final var scanController = mAdapterService.getBluetoothScanController();
             scanController.doOnScanThread(
-                    () -> {
-                        scanController.registerScannerInternal(this, null, getAttributionSource());
-                    });
+                    () ->
+                            scanController.registerScannerInternal(
+                                    this, null, getAttributionSource()));
         }
 
         synchronized void stopBackgroundScan() {
@@ -3929,16 +3926,18 @@ public class LeAudioService extends ConnectableProfile {
                             notifyUnicastCodecConfigChanged(
                                     groupId, prepareCodecStatusForTheApi(status)));
 
-            /* For LC3 codec, the sample frequency change does not have to be notified to Audio Framework, as this is
-             * internal change done in Bluetooth which is internally synced with Audio HAL over Bluetooth Audio HAL.
-             * For other codecs we might want to to still notify Audio Manager e.g. for high res codecs.
+            /* For LC3 codec, the sample frequency change does not have to be notified to Audio
+             * Framework, as this is internal change done in Bluetooth which is internally synced
+             * with Audio HAL over Bluetooth Audio HAL. For other codecs we might want to to still
+             * notify Audio Manager e.g. for high res codecs.
              */
             if (descriptor.isActive()
                     && (codecTypeHasChanged
                             || (!isUsingLc3(descriptor.mCodecStatus)
                                     && (outputCodecOrFreqChanged || inputCodecOrFreqChanged)))) {
                 /* Audio framework needs to be notified so it get new codec config.
-                 * Note: this mostlikely will trigger device TearDown and Setup which will impact Bluetooth Audio Session
+                 * Note: this most likely will trigger device TearDown and Setup which will impact
+                 * Bluetooth Audio Session.
                  */
                 // Commenting this AF update as it causes blip in speaker->ble tranistion.
                 /*notifyAudioFrameworkForCodecConfigUpdate(
@@ -4272,9 +4271,7 @@ public class LeAudioService extends ConnectableProfile {
                         if (!leaudioBroadcastRemoveSinkMetadataOnSwitchToLocal()) {
                             // Stop Broadcast Monitoring in case that was some actions on external
                             // broadcast
-                            if (bassClient.isPresent()) {
-                                bassClient.get().stopBroadcastMonitoring();
-                            }
+                            bassClient.ifPresent(BassClientService::stopBroadcastMonitoring);
                         }
                         return;
                     }
@@ -4286,9 +4283,7 @@ public class LeAudioService extends ConnectableProfile {
                                             broadcastId,
                                             BluetoothStatusCodes.REASON_LOCAL_STACK_REQUEST));
 
-                    if (bassClient.isPresent()) {
-                        bassClient.get().cacheSuspendingSources(broadcastId);
-                    }
+                    bassClient.ifPresent(bass -> bass.cacheSuspendingSources(broadcastId));
 
                     if (mIsBroadcastPausedFromOutside) {
                         mIsBroadcastPausedFromOutside = false;
@@ -4318,9 +4313,8 @@ public class LeAudioService extends ConnectableProfile {
                     }
 
                     if (previousState == LeAudioStackEvent.BROADCAST_STATE_PAUSED) {
-                        if (bassClient.isPresent()) {
-                            bassClient.get().resumeReceiversSourceSynchronization();
-                        }
+                        bassClient.ifPresent(
+                                BassClientService::resumeReceiversSourceSynchronization);
                     }
                     if (mBroadcastIdPendingStop.isPresent()) {
                         Log.d(TAG, "mBroadcastIdPendingStop exist, Stop pending broadcast");
@@ -4332,9 +4326,8 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             // Notify broadcast assistant
-            if (bassClient.isPresent()) {
-                bassClient.get().notifyBroadcastStateChanged(descriptor.mState, broadcastId);
-            }
+            bassClient.ifPresent(
+                    bass -> bass.notifyBroadcastStateChanged(descriptor.mState, broadcastId));
         } else if (stackEvent.type == LeAudioStackEvent.EVENT_TYPE_BROADCAST_METADATA_CHANGED) {
             int broadcastId = stackEvent.valueInt1;
             if (stackEvent.broadcastMetadata == null) {
