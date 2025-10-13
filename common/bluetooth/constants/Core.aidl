@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.bluetooth.btservice;
+package bluetooth.constants;
 
-import android.annotation.NonNull;
-import android.annotation.Nullable;
-
-record DiscoveringPackage(
-        @NonNull String packageName, @Nullable String permission, boolean hasDisavowedLocation) {}
+/**
+* Set of constants we can find in BT Core specification to be shared between native and Java.
+* @hide
+*/
+@JavaDerive(toString = true)
+@Backing(type="int")
+enum Core {
+    /** GATT max attribute length (Bluetooth Core Specification 6.1 Volume 3, Part F, section 3.2.9) */
+    GATT_MAX_ATTR_LEN = 512,
+}

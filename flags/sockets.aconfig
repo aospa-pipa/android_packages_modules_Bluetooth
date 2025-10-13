@@ -2,26 +2,10 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "unix_file_socket_creation_failure"
-    is_exported: true
-    namespace: "bluetooth"
-    description: "New socket exception code for better logging and error handling"
-    bug: "318886332"
-}
-
-flag {
     name: "bt_socket_api_l2cap_cid"
     namespace: "bluetooth"
     description: "New socket API to get L2CAP channel ID"
     bug: "326351678"
-    is_exported: true
-}
-
-flag {
-    name: "bt_offload_socket_api"
-    namespace: "bluetooth"
-    description: "New socket API to create offload socket"
-    bug: "367419086"
     is_exported: true
 }
 
@@ -33,14 +17,6 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
-}
-
-flag {
-    name: "socket_settings_api"
-    namespace: "bluetooth"
-    description: "Adds new socket settings interface which allows creation of encryption only socket"
-    bug: "374358112"
-    is_exported: true
 }
 
 flag {
@@ -68,16 +44,6 @@ flag {
     namespace: "bluetooth"
     description: "invalidate hci handle associated with lcb on acl removal"
     bug: "394329150"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "disconnect_acls_by_bredr_disabled"
-    namespace: "bluetooth"
-    description: "Fix ACL Link still connected even BREDR is disabled"
-    bug: "391263869"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

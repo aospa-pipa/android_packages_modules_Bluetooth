@@ -34,9 +34,9 @@ import static android.bluetooth.le.ScanSettings.SCAN_MODE_SCREEN_OFF;
 import static android.bluetooth.le.ScanSettings.SCAN_MODE_SCREEN_OFF_BALANCED;
 
 import static com.android.bluetooth.TestUtils.mockGetSystemService;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_TIMEOUT;
-import static com.android.bluetooth.btservice.AdapterService.DeviceConfigListener.DEFAULT_SCAN_UPGRADE_DURATION;
+import static com.android.bluetooth.le_scan.ScanUtil.DEFAULT_SCAN_DOWNGRADE_DURATION_BT_CONNECTING;
+import static com.android.bluetooth.le_scan.ScanUtil.DEFAULT_SCAN_TIMEOUT;
+import static com.android.bluetooth.le_scan.ScanUtil.DEFAULT_SCAN_UPGRADE_DURATION;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_INTERVAL_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_WINDOW_MS;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_LATENCY_INTERVAL_MS;
@@ -252,14 +252,7 @@ public class ScanManagerTest {
         mScanReportDelay = DEFAULT_BATCH_SCAN_REPORT_DELAY_MS;
         final int appUid = 1234;
         mMockAppScanStats =
-                spy(
-                        new AppScanStats(
-                                TEST_APP_NAME,
-                                null,
-                                appUid,
-                                mAdapterService,
-                                mScanController,
-                                mTimeProvider));
+                spy(new AppScanStats(TEST_APP_NAME, null, appUid, mAdapterService, mTimeProvider));
     }
 
     @After
@@ -1115,7 +1108,7 @@ public class ScanManagerTest {
             assertThat(mScanManager.getRegularScanQueue()).doesNotContain(client);
             assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
             assertThat(mScanManager.getBatchScanQueue()).contains(client);
-            assertThat(mScanManager.getBatchScanParams().scanMode()).isEqualTo(expectedScanMode);
+            assertThat(mScanManager.getBatchScanParams().getScanMode()).isEqualTo(expectedScanMode);
         }
     }
 
@@ -1145,13 +1138,13 @@ public class ScanManagerTest {
             startScan(client);
             assertThat(mScanManager.getRegularScanQueue()).doesNotContain(client);
             assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
-            assertThat(mScanManager.getBatchScanParams().scanMode()).isEqualTo(expectedScanMode);
+            assertThat(mScanManager.getBatchScanParams().getScanMode()).isEqualTo(expectedScanMode);
             // Turn on screen
             setScreenOn(true);
             assertThat(mScanManager.getRegularScanQueue()).doesNotContain(client);
             assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
             assertThat(mScanManager.getBatchScanQueue()).contains(client);
-            assertThat(mScanManager.getBatchScanParams().scanMode()).isEqualTo(expectedScanMode);
+            assertThat(mScanManager.getBatchScanParams().getScanMode()).isEqualTo(expectedScanMode);
         }
     }
 
@@ -1222,7 +1215,7 @@ public class ScanManagerTest {
                     assertThat(mScanManager.getRegularScanQueue()).doesNotContain(client);
                     assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
                     assertThat(mScanManager.getBatchScanQueue()).contains(client);
-                    assertThat(mScanManager.getBatchScanParams().scanMode())
+                    assertThat(mScanManager.getBatchScanParams().getScanMode())
                             .isEqualTo(expectedScanMode);
                     // Turn on screen
                     setScreenOn(true);
@@ -1236,7 +1229,7 @@ public class ScanManagerTest {
                     assertThat(mScanManager.getRegularScanQueue()).doesNotContain(client);
                     assertThat(mScanManager.getSuspendedScanQueue()).doesNotContain(client);
                     assertThat(mScanManager.getBatchScanQueue()).contains(client);
-                    assertThat(mScanManager.getBatchScanParams().scanMode())
+                    assertThat(mScanManager.getBatchScanParams().getScanMode())
                             .isEqualTo(expectedScanMode);
                 });
     }
@@ -1321,14 +1314,7 @@ public class ScanManagerTest {
             // Create app scan stats for the app
             final int appUid = 1234;
             AppScanStats appScanStats =
-                    spy(
-                            new AppScanStats(
-                                    APP_NAME,
-                                    source,
-                                    appUid,
-                                    mAdapterService,
-                                    mScanController,
-                                    mTimeProvider));
+                    spy(new AppScanStats(APP_NAME, source, appUid, mAdapterService, mTimeProvider));
             // Set app importance as Foreground Service for the stats
             appScanStats.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
             // Create scan client for the app, which also records scan start
@@ -1398,14 +1384,7 @@ public class ScanManagerTest {
         // Create app scan stats for the first app
         final int appUid1 = 12341;
         AppScanStats appScanStats1 =
-                spy(
-                        new AppScanStats(
-                                APP_NAME_1,
-                                source1,
-                                appUid1,
-                                mAdapterService,
-                                mScanController,
-                                mTimeProvider));
+                spy(new AppScanStats(APP_NAME_1, source1, appUid1, mAdapterService, mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats1.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the first app
@@ -1423,14 +1402,7 @@ public class ScanManagerTest {
         // Create app scan stats for the second app
         final int appUid2 = 12342;
         AppScanStats appScanStats2 =
-                spy(
-                        new AppScanStats(
-                                APP_NAME_2,
-                                source2,
-                                appUid2,
-                                mAdapterService,
-                                mScanController,
-                                mTimeProvider));
+                spy(new AppScanStats(APP_NAME_2, source2, appUid2, mAdapterService, mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats2.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the second app
@@ -1464,14 +1436,7 @@ public class ScanManagerTest {
         // Create app scan stats for the third app
         final int appUid3 = 12343;
         AppScanStats appScanStats3 =
-                spy(
-                        new AppScanStats(
-                                APP_NAME_3,
-                                source3,
-                                appUid3,
-                                mAdapterService,
-                                mScanController,
-                                mTimeProvider));
+                spy(new AppScanStats(APP_NAME_3, source3, appUid3, mAdapterService, mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats3.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the third app
@@ -1506,14 +1471,7 @@ public class ScanManagerTest {
         // Create app scan stats for the fourth app
         final int appUid4 = 12344;
         AppScanStats appScanStats4 =
-                spy(
-                        new AppScanStats(
-                                APP_NAME_4,
-                                source4,
-                                appUid4,
-                                mAdapterService,
-                                mScanController,
-                                mTimeProvider));
+                spy(new AppScanStats(APP_NAME_4, source4, appUid4, mAdapterService, mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats4.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the fourth app
@@ -1584,7 +1542,9 @@ public class ScanManagerTest {
                         eq(
                                 BluetoothStatsLog
                                         .LE_APP_SCAN_STATE_CHANGED__LE_SCAN_TYPE__SCAN_TYPE_REGULAR),
-                        eq(AppScanStats.convertScanMode(mostAggressiveClient.getScanModeApp())),
+                        eq(
+                                ScanMetricsReporter.convertScanMode(
+                                        mostAggressiveClient.getScanModeApp())),
                         eq(SCAN_MODE_SCREEN_OFF_LOW_POWER_INTERVAL.toMillis()),
                         eq(SCAN_MODE_SCREEN_OFF_LOW_POWER_WINDOW.toMillis()),
                         eq(false),
