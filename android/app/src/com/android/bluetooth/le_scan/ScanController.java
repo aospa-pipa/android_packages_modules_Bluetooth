@@ -109,8 +109,8 @@ public class ScanController {
 
     private final PendingIntent.CancelListener mScanIntentCancelListener =
             intent -> {
-                Log.d(TAG, "scanning PendingIntent canceled");
-                stopScan(intent);
+                Log.d(TAG, "onCanceled(): Scanning PendingIntent canceled");
+                doOnScanThread(() -> stopScan(intent));
             };
 
     private final Map<Integer, Integer> mFilterIndexToMsftAdvMonitorMap = new HashMap<>();
@@ -283,13 +283,15 @@ public class ScanController {
 
     /** onDisplayChanged notifies ScanManager when the screen status changes. */
     public void onDisplayChanged(boolean screenOn) {
-        Log.d(TAG, "onDisplayChanged() screen on: " + screenOn);
+        enforceScanThread();
+        Log.d(TAG, "onDisplayChanged(): Screen on=" + screenOn);
         mScanManager.onDisplayChanged(screenOn);
     }
 
     /** onSystemSuspendChanged notifies ScanSuspendManager when the system suspends and resumes. */
     public void onSystemSuspendChanged(boolean suspended) {
-        Log.d(TAG, "onSystemSuspendChanged() suspended: " + suspended);
+        enforceScanThread();
+        Log.d(TAG, "onSystemSuspendChanged(): Suspended=" + suspended);
         mScanSuspendManager.onSystemSuspendChanged(suspended);
     }
 
@@ -1185,7 +1187,7 @@ public class ScanController {
         final var uuid = UUID.randomUUID();
         Log.d(TAG, "registerScanner(): uid=" + uid + ", appName=" + appName + ", uuid=" + uuid);
         mScannerMap.addWithCallback(
-                uid, appName, uuid, source, workSource, callback, mAdapterService, this);
+                uid, appName, uuid, source, workSource, callback, mAdapterService);
         mScanManager.registerScanner(uuid);
     }
 
@@ -1339,12 +1341,7 @@ public class ScanController {
         final int uid = Flags.scanControllerThread() ? source.getUid() : Binder.getCallingUid();
         ScannerApp app =
                 mScannerMap.addWithPendingIntent(
-                        uuid,
-                        UserHandle.getUserHandleForUid(uid),
-                        source,
-                        piInfo,
-                        mAdapterService,
-                        this);
+                        uuid, UserHandle.getUserHandleForUid(uid), source, piInfo, mAdapterService);
         mAppOps.checkPackage(uid, callingPackage);
         app.setEligibleForSanitizedExposureNotification(
                 callingPackage.equals(mExposureNotificationPackage));
@@ -1521,14 +1518,16 @@ public class ScanController {
         public void binderDied() {
             Log.d(
                     TAG,
-                    "Binder is dead - unregistering scanner -"
-                            + (" packageName=" + mPackageName)
-                            + (", scannerId=" + mScannerId));
-
-            ScanClient client = findScanClientById(mScannerId);
-            if (client != null) {
-                handleDeadScanClient(client);
-            }
+                    "binderDied(): "
+                            + ("Unregistering scanner for=" + mPackageName)
+                            + (" with scannerId=" + mScannerId));
+            doOnScanThread(
+                    () -> {
+                        ScanClient client = findScanClientById(mScannerId);
+                        if (client != null) {
+                            handleDeadScanClient(client);
+                        }
+                    });
         }
     }
 

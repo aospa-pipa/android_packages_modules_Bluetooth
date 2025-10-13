@@ -2595,4 +2595,12 @@ void jniGetMethodsOrDie(JNIEnv* env, const char* className, const JNIJavaMethod*
 
   env->DeleteLocalRef(clazz);
 }
+
+jfieldID getNativeCallbackField(JNIEnv* env, const char* className) {
+  jclass jniNativeInterfaceClass = env->FindClass(className);
+  jfieldID field = env->GetFieldID(jniNativeInterfaceClass, "nativeCallback",
+                                   "Lcom/android/bluetooth/profile/NativeCallback;");
+  env->DeleteLocalRef(jniNativeInterfaceClass);
+  return field;
+}
 }  // namespace android

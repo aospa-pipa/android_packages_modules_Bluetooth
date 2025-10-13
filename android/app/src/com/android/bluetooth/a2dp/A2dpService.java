@@ -872,7 +872,7 @@ public class A2dpService extends ConnectableProfile {
      *     OptionalCodecsSupportStatus#OPTIONAL_CODECS_SUPPORT_UNKNOWN}.
      */
     public @OptionalCodecsSupportStatus int getSupportsOptionalCodecs(BluetoothDevice device) {
-        return mDatabaseManager.getA2dpSupportsOptionalCodecs(device);
+        return getDatabaseManager().getA2dpSupportsOptionalCodecs(device);
     }
 
     public void setSupportsOptionalCodecs(BluetoothDevice device, boolean doesSupport) {
@@ -880,7 +880,7 @@ public class A2dpService extends ConnectableProfile {
                 doesSupport
                         ? BluetoothA2dp.OPTIONAL_CODECS_SUPPORTED
                         : BluetoothA2dp.OPTIONAL_CODECS_NOT_SUPPORTED;
-        mDatabaseManager.setA2dpSupportsOptionalCodecs(device, value);
+        getDatabaseManager().setA2dpSupportsOptionalCodecs(device, value);
     }
 
     /**
@@ -893,7 +893,7 @@ public class A2dpService extends ConnectableProfile {
      *     OptionalCodecsPreferenceStatus#OPTIONAL_CODECS_PREF_UNKNOWN}.
      */
     public @OptionalCodecsPreferenceStatus int getOptionalCodecsEnabled(BluetoothDevice device) {
-        return mDatabaseManager.getA2dpOptionalCodecsEnabled(device);
+        return getDatabaseManager().getA2dpOptionalCodecsEnabled(device);
     }
 
     /**
@@ -913,7 +913,7 @@ public class A2dpService extends ConnectableProfile {
             Log.w(TAG, "Unexpected value passed to setOptionalCodecsEnabled:" + value);
             return;
         }
-        mDatabaseManager.setA2dpOptionalCodecsEnabled(device, value);
+        getDatabaseManager().setA2dpOptionalCodecsEnabled(device, value);
     }
 
     /**
@@ -1396,7 +1396,7 @@ public class A2dpService extends ConnectableProfile {
             A2dpConnectedDevice.remove(getActiveDevice());
         }
 
-        return mDatabaseManager.getMostRecentlyConnectedDevicesInList(A2dpConnectedDevice);
+        return getDatabaseManager().getMostRecentlyConnectedDevicesInList(A2dpConnectedDevice);
     }
 
     @Override

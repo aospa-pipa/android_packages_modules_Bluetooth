@@ -48,7 +48,6 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.flags.Flags;
-import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,7 +82,6 @@ public class DistanceMeasurementManager {
     private final AdapterService mAdapterService;
     private final HandlerThread mHandlerThread;
     private final Handler mHandler;
-    private final DistanceMeasurementNativeCallback mNativeCallback;
     private final DistanceMeasurementNativeInterface mNativeInterface;
     private final DistanceMeasurementBinder mDistanceMeasurementBinder;
     private final ConcurrentHashMap<String, CopyOnWriteArraySet<DistanceMeasurementTracker>>
@@ -96,15 +94,6 @@ public class DistanceMeasurementManager {
 
     DistanceMeasurementManager(
             AdapterService adapterService,
-            DistanceMeasurementNativeInterface nativeInterface,
-            Looper looper) {
-        this(adapterService, null, nativeInterface, looper);
-    }
-
-    @VisibleForTesting
-    DistanceMeasurementManager(
-            AdapterService adapterService,
-            DistanceMeasurementNativeCallback nativeCallback,
             DistanceMeasurementNativeInterface nativeInterface,
             Looper looper) {
         mAdapterService = adapterService;
@@ -124,13 +113,11 @@ public class DistanceMeasurementManager {
             mHandler = new Handler(mHandlerThread.getLooper());
         }
 
-        mNativeCallback =
-                requireNonNullElseGet(
-                        nativeCallback, () -> new DistanceMeasurementNativeCallback(this));
+        var nativeCallback = new DistanceMeasurementNativeCallback(this);
         mNativeInterface =
                 requireNonNullElseGet(
                         nativeInterface,
-                        () -> new DistanceMeasurementNativeInterface(mNativeCallback));
+                        () -> new DistanceMeasurementNativeInterface(nativeCallback));
         mNativeInterface.init();
         mDistanceMeasurementBinder = new DistanceMeasurementBinder(adapterService, this);
         mHasChannelSoundingFeature =

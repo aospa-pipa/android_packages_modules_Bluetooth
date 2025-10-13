@@ -37,7 +37,6 @@ import static com.android.bluetooth.flags.Flags.leaudioIntentBroadcastInStateMac
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
-import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothLeAudio;
@@ -84,6 +83,7 @@ import android.sysprop.BluetoothProperties;
 import android.util.Log;
 import android.util.Pair;
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 
 
 import com.android.bluetooth.BluetoothEventLogger;
@@ -113,7 +113,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
@@ -869,17 +868,6 @@ public class LeAudioService extends ConnectableProfile {
 
     @VisibleForTesting
     int getAudioDeviceGroupVolume(int groupId) {
-        if (Flags.vcpOnMainLooper()) {
-            int defaultValue = IBluetoothVolumeControl.VOLUME_CONTROL_UNKNOWN_VOLUME;
-            return mAdapterService
-                    .getVolumeControlService()
-                    .map(
-                            vcs ->
-                                    vcs.syncPost(
-                                            v -> v.getAudioDeviceGroupVolume(groupId),
-                                            defaultValue))
-                    .orElse(defaultValue);
-        }
         final var volumeControl = mAdapterService.getVolumeControlService();
         if (volumeControl.isEmpty()) {
             return IBluetoothVolumeControl.VOLUME_CONTROL_UNKNOWN_VOLUME;
@@ -912,7 +900,7 @@ public class LeAudioService extends ConnectableProfile {
 
     private void setDefaultBroadcastToUnicastFallbackGroup() {
         List<BluetoothDevice> mostRecentDevices =
-                mDatabaseManager.getMostRecentlyConnectedDevices();
+                getDatabaseManager().getMostRecentlyConnectedDevices();
         List<BluetoothDevice> connectedDevices = getConnectedDevices();
         int targetGroupId = LE_AUDIO_GROUP_ID_INVALID;
         int targetDeviceIdx = -1;
@@ -2598,23 +2586,7 @@ public class LeAudioService extends ConnectableProfile {
              * When adding new device, wait with notification until AudioManager is ready
              * with adding the device.
              */
-            if (!Flags.vcpOnMainLooper() || Looper.getMainLooper().isCurrentThread()) {
-                // Remove thread check when LeAudio is moved on the main thread
-                notifyActiveDeviceChanged(null);
-            } else {
-                Utils.enforceMainLooperIsNotUsed();
-                var future = new CompletableFuture<Void>();
-                mHandler.post(
-                        () -> {
-                            notifyActiveDeviceChanged(null);
-                            future.complete(null);
-                        });
-                try {
-                    future.get();
-                } catch (Exception e) {
-                    Log.wtf(TAG, "Can't execute notifyActiveDeviceChanged on main thread", e);
-                }
-            }
+            notifyActiveDeviceChanged(null);
         }
 
         return mActiveAudioOutDevice != null || mActiveAudioInDevice != null;
@@ -3714,7 +3686,6 @@ public class LeAudioService extends ConnectableProfile {
         return false;
     }
 
-    // Suppressed since this is part of a local process
     @SuppressLint("AndroidFrameworkRequiresPermission")
     void messageFromNative(LeAudioStackEvent stackEvent) {
         Log.d(TAG, "Message from native: " + stackEvent);
@@ -4936,11 +4907,7 @@ public class LeAudioService extends ConnectableProfile {
 
         final var vcs = mAdapterService.getVolumeControlService();
         if (vcs.isPresent() && Utils.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
-            if (Flags.vcpOnMainLooper()) {
-                vcs.get().syncPost(v -> v.setConnectionPolicy(device, connectionPolicy));
-            } else {
-                vcs.get().setConnectionPolicy(device, connectionPolicy);
-            }
+            vcs.get().setConnectionPolicy(device, connectionPolicy);
         }
 
         final var hapClient = mAdapterService.getHapClientService();
@@ -5186,11 +5153,7 @@ public class LeAudioService extends ConnectableProfile {
         } else {
             groupForVolume = currentlyActiveGroupId;
         }
-        if (Flags.vcpOnMainLooper()) {
-            vcs.get().syncPost(v -> v.setGroupVolume(groupForVolume, volume));
-        } else {
-            vcs.get().setGroupVolume(groupForVolume, volume);
-        }
+        vcs.get().setGroupVolume(groupForVolume, volume);
     }
 
     public void registerCallback(IBluetoothLeAudioCallback callback) {
@@ -5838,13 +5801,13 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             if (input_configs.size() > 0) {
-                mDatabaseManager.setLeAudioUnicastInputCodecPreferenceList(
-                        entry.getKey(), input_configs);
+                getDatabaseManager()
+                        .setLeAudioUnicastInputCodecPreferenceList(entry.getKey(), input_configs);
             }
 
             if (output_configs.size() > 0) {
-                mDatabaseManager.setLeAudioUnicastOutputCodecPreferenceList(
-                        entry.getKey(), output_configs);
+                getDatabaseManager()
+                        .setLeAudioUnicastOutputCodecPreferenceList(entry.getKey(), output_configs);
             }
         }
     }
@@ -5868,9 +5831,9 @@ public class LeAudioService extends ConnectableProfile {
             }
 
             List<BluetoothLeAudioCodecConfig> output_configs =
-                    mDatabaseManager.getLeAudioUnicastOutputCodecPreferenceList(entry.getKey());
+                    getDatabaseManager().getLeAudioUnicastOutputCodecPreferenceList(entry.getKey());
             List<BluetoothLeAudioCodecConfig> input_configs =
-                    mDatabaseManager.getLeAudioUnicastInputCodecPreferenceList(entry.getKey());
+                    getDatabaseManager().getLeAudioUnicastInputCodecPreferenceList(entry.getKey());
 
             if (input_configs != null && output_configs != null) {
                 Log.d(

@@ -733,7 +733,8 @@ static uint16_t bta_jv_allocate_l2cap_classic_psm() {
 /** Obtain a free SCN (Server Channel Number) (RFCOMM channel or L2CAP PSM) */
 void bta_jv_get_channel_id(tBTA_JV_CONN_TYPE type /* One of BTA_JV_CONN_TYPE_ */,
                            int32_t channel /* optionally request a specific channel */,
-                           uint32_t l2cap_socket_id, uint32_t rfcomm_slot_id) {
+                           uint32_t l2cap_socket_id, uint32_t rfcomm_slot_id,
+                           uint32_t lecoc_fixed_psm_slots) {
   uint16_t psm = 0;
 
   switch (type) {
@@ -766,7 +767,7 @@ void bta_jv_get_channel_id(tBTA_JV_CONN_TYPE type /* One of BTA_JV_CONN_TYPE_ */
       }
       break;
     case tBTA_JV_CONN_TYPE::L2CAP_LE:
-      psm = stack::l2cap::get_interface().L2CA_AllocateLePSM();
+      psm = stack::l2cap::get_interface().L2CA_AllocateLePSM(lecoc_fixed_psm_slots);
       if (psm == 0) {
         log::error("Error: No free LE PSM available");
       }

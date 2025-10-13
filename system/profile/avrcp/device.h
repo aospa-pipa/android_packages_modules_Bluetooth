@@ -402,6 +402,8 @@ private:
 
   int8_t volume_ = -1;
   std::optional<int8_t> pending_volume_ = {};
+
+  bool pending_track_changed_ = false;
   bool fast_forwarding_ = false;
   bool fast_rewinding_  = false;
 };
