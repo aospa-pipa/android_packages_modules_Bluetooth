@@ -18,21 +18,20 @@ package com.android.bluetooth.le_scan;
 
 import static java.util.Objects.requireNonNull;
 
-import java.lang.annotation.Native;
+import com.android.bluetooth.profile.NativeInterface;
 
-public class ScanNativeInterface {
-
-    @Native private final ScanNativeCallback mNativeCallback;
+public class ScanNativeInterface extends NativeInterface<ScanNativeCallback> {
 
     ScanNativeInterface(ScanNativeCallback nativeCallback) {
-        mNativeCallback = requireNonNull(nativeCallback);
+        super(requireNonNull(nativeCallback));
     }
 
     void init() {
         initializeNative();
     }
 
-    void cleanup() {
+    @Override
+    public void cleanup() {
         cleanupNative();
     }
 
@@ -61,9 +60,6 @@ public class ScanNativeInterface {
             int clientId, ScanFilterQueue.Entry[] entries, int filterIndex);
 
     private native void scanFilterParamAddNative(FilterParams filtValue);
-
-    // Note this effectively remove scan filters for ALL clients.
-    private native void scanFilterParamClearAllNative(int clientIf);
 
     private native void scanFilterParamDeleteNative(int clientIf, int filtIndex);
 
@@ -146,12 +142,6 @@ public class ScanNativeInterface {
     /** Add BLE scan filter parameters */
     void scanFilterParamAdd(FilterParams filtValue) {
         scanFilterParamAddNative(filtValue);
-    }
-
-    /** Clear all BLE scan filter parameters */
-    // Note this effectively remove scan filters for ALL clients.
-    void scanFilterParamClearAll(int clientIf) {
-        scanFilterParamClearAllNative(clientIf);
     }
 
     /** Delete BLE scan filter parameters */

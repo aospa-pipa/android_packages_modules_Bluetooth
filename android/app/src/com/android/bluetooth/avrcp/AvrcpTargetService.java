@@ -190,7 +190,10 @@ public class AvrcpTargetService extends ProfileService {
                             + queue);
             mCurrentData = data;
 
-            mNativeInterface.sendMediaUpdate(metadata, state, queue);
+            // Only send an update when one of the states was updated.
+            if (metadata || state || queue) {
+                mNativeInterface.sendMediaUpdate(metadata, state, queue);
+            }
         }
 
         @Override
@@ -411,7 +414,7 @@ public class AvrcpTargetService extends ProfileService {
             }
 
             // Always store the current item from the queue last so we know the image is in storage
-            if (currentTrack != null) {
+            if (currentTrack != null && currentTrack.image != null) {
                 currentTrack.image.setImageHandle(
                         mAvrcpCoverArtService.storeImage(currentTrack.image));
             }

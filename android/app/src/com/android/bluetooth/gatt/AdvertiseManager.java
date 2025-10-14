@@ -89,9 +89,10 @@ public class AdvertiseManager {
         Log.d(TAG, "advertise manager created");
         mAdapterService = adapterService;
         mGattService = gattService;
+        var nativeCallback = new AdvertiseManagerNativeCallback(this);
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new AdvertiseManagerNativeInterface(this));
+                        nativeInterface, () -> new AdvertiseManagerNativeInterface(nativeCallback));
         mAdvertiserMap = advertiserMap;
         mActivityManager = mAdapterService.getSystemService(ActivityManager.class);
         mNativeInterface.init();
@@ -183,6 +184,7 @@ public class AdvertiseManager {
             Log.i(TAG, "onAdvertisingSetStarted() - no callback found for regId " + regId);
             // Advertising set was stopped before it was properly registered.
             mAdvertiseSuspendManager.onAdvertisingSetStarted(regId, advertiserId, status);
+            mAdvertiseSuspendManager.onStopAdvertisingSet(advertiserId);
             mNativeInterface.stopAdvertisingSet(advertiserId);
             return;
         }

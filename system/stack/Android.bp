@@ -1131,7 +1131,10 @@ cc_test {
     ],
     srcs: [
         ":TestCommonMockFunctions",
+        ":TestCommonStackConfig",
+        ":TestMockBtif",
         ":TestMockMainShim",
+        ":TestMockStackA2dp",
         ":TestMockStackArbiter",
         ":TestMockStackBtm",
         ":TestMockStackConnMgr",
@@ -1459,6 +1462,7 @@ cc_test {
     srcs: [
         ":LegacyStackSdp",
         ":TestCommonMockFunctions",
+        ":TestCommonStackConfig",
         ":TestCommonSyncMainHandler",
         ":TestMockBta",
         ":TestMockBtif",

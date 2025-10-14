@@ -173,7 +173,7 @@ public final class BluetoothLeScanner {
             conditional = true)
     public void startScan(
             List<ScanFilter> filters, ScanSettings settings, final ScanCallback callback) {
-        startScan(filters, settings, null, callback, /* callbackIntent= */ null);
+        startScan(filters, settings, /* workSource */ null, callback, /* callbackIntent= */ null);
     }
 
     /**
@@ -225,8 +225,8 @@ public final class BluetoothLeScanner {
         return startScan(
                 filters,
                 settings != null ? settings : new ScanSettings.Builder().build(),
-                null,
-                null,
+                /* workSource */ null,
+                /* callback */ null,
                 callbackIntent);
     }
 
@@ -300,7 +300,7 @@ public final class BluetoothLeScanner {
             ScanSettings settings,
             final WorkSource workSource,
             final ScanCallback callback) {
-        startScan(filters, settings, workSource, callback, null);
+        startScan(filters, settings, workSource, callback, /* callbackIntent= */ null);
     }
 
     @RequiresPermission(
@@ -517,14 +517,18 @@ public final class BluetoothLeScanner {
         // methods that provide a WorkSource, such as `startScanFromSource()`, are already annotated
         // with this permission. This suppression avoids propagating the conditional requirement to
         // Public API methods that do not use a WorkSource.
-        @SuppressLint("AndroidFrameworkRequiresPermission")
+        @SuppressLint({
+            "AndroidFrameworkRequiresPermission",
+            "IncorrectRequiresPermissionPropagation"
+        })
         @SuppressWarnings("WaitNotInLoop") // TODO(b/314811467)
         void startRegistration() {
             synchronized (this) {
                 // Scan stopped.
                 if (mScannerId == -1 || mScannerId == -2) return;
                 try {
-                    mBluetoothScan.registerScanner(this, mWorkSource, mAttributionSource);
+                    mBluetoothScan.registerScanner(
+                            this, mSettings, mFilters, mWorkSource, mAttributionSource);
                     wait(REGISTRATION_CALLBACK_TIMEOUT_MILLIS);
                 } catch (InterruptedException | RemoteException e) {
                     Log.e(TAG, "application registration exception", e);
