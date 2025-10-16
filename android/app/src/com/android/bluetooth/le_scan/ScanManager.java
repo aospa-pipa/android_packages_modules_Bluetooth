@@ -26,7 +26,6 @@ import static com.android.bluetooth.le_scan.ScanUtil.ACTION_REFRESH_BATCHED_SCAN
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_RESULT_TYPE_FULL;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_RESULT_TYPE_TRUNCATED;
 import static com.android.bluetooth.le_scan.ScanUtil.clearAutoBatchScanClient;
-import static com.android.bluetooth.le_scan.ScanUtil.isAllMatchesAutoBatchScanClient;
 import static com.android.bluetooth.le_scan.ScanUtil.isAutoBatchScanClientEnabled;
 import static com.android.bluetooth.le_scan.ScanUtil.isBatchClient;
 import static com.android.bluetooth.le_scan.ScanUtil.isDowngradedScanClient;
@@ -127,11 +126,6 @@ class ScanManager {
     // Timeout for each controller operation.
     private static final int OPERATION_TIME_OUT_MILLIS = 500;
     private static final int MAX_IS_UID_FOREGROUND_MAP_SIZE = 500;
-
-    // Delivery mode defined in bt stack.
-    private static final int DELIVERY_MODE_IMMEDIATE = 0;
-    private static final int DELIVERY_MODE_ON_FOUND_LOST = 1;
-    private static final int DELIVERY_MODE_BATCH = 2;
 
     private static final int ALL_PASS_FILTER_INDEX_REGULAR_SCAN = 1;
     private static final int ALL_PASS_FILTER_INDEX_BATCH_SCAN = 2;
@@ -316,8 +310,7 @@ class ScanManager {
         mAdapterService.registerReceiver(mLocationReceiver, locationIntentFilter);
         mBatchScanThrottler = new BatchScanThrottler(timeProvider, mScreenOn);
 
-        Log.d(TAG, "MSFT - IsSupported? " + mIsMsftSupported);
-        Log.d(TAG, "MSFT - UseFiltering? " + mUseMsftFiltering);
+        Log.d(TAG, "MSFT: isSupported=" + mIsMsftSupported + ", useFiltering=" + mUseMsftFiltering);
     }
 
     void cleanup() {
@@ -1236,7 +1229,7 @@ class ScanManager {
             int scanInterval1m = ScanUtil.scanInterval(mAdapterService, client1m);
             int scanWindowCoded = ScanUtil.scanWindow(mAdapterService, clientCoded);
             int scanIntervalCoded = ScanUtil.scanInterval(mAdapterService, clientCoded);
-            mNativeInterface.scan(false);
+            mNativeInterface.scan(false, "configureRegularScanParams");
             if (!mScanController.getScanRadioStats().recordScanRadioStop()) {
                 Log.w(TAG, "There is no scan radio to stop");
             }
@@ -1259,7 +1252,7 @@ class ScanManager {
                     scanIntervalCoded,
                     scanWindowCoded,
                     scanPhyMask);
-            mNativeInterface.scan(true);
+            mNativeInterface.scan(true, "configureRegularScanParams");
             recordScanRadioStart(client1m, clientCoded, newScanSetting1m, newScanSettingCoded);
         } else {
             Log.d(TAG, "configureRegularScanParams() - queue empty, scan stopped");
@@ -1335,8 +1328,7 @@ class ScanManager {
         // Start scan native only for the first client.
         if (numRegularScanClients() == 1
                 && client.getSettings().getScanMode() != ScanSettings.SCAN_MODE_OPPORTUNISTIC) {
-            Log.d(TAG, "start scanNative from startRegularScan()");
-            mNativeInterface.scan(true);
+            mNativeInterface.scan(true, "startRegularScan");
         }
     }
 
@@ -1464,8 +1456,8 @@ class ScanManager {
         if (client == null) {
             return;
         }
-        int deliveryMode = getDeliveryMode(client);
-        if (deliveryMode == DELIVERY_MODE_ON_FOUND_LOST) {
+        int deliveryMode = ScanUtil.deliveryMode(client);
+        if (deliveryMode == ScanUtil.DELIVERY_MODE_ON_FOUND_LOST) {
             // Decrement the count of trackable advertisements in use
             int entriesToFreePerFilter = getNumOfTrackingAdvertisements(client.getSettings());
             for (int i = 0; i < client.getFilters().size(); i++) {
@@ -1481,8 +1473,7 @@ class ScanManager {
         }
         mRegularScanClients.remove(client);
         if (numRegularScanClients() == 0) {
-            Log.d(TAG, "stop scanNative");
-            mNativeInterface.scan(false);
+            mNativeInterface.scan(false, "stopRegularScan");
             if (!mScanController.getScanRadioStats().recordScanRadioStop()) {
                 Log.w(TAG, "There is no scan radio to stop");
             }
@@ -1523,8 +1514,7 @@ class ScanManager {
         // The scan should continue for background scans
         configureRegularScanParams();
         if (numRegularScanClients() == 0) {
-            Log.d(TAG, "stop scanNative");
-            mNativeInterface.scan(false);
+            mNativeInterface.scan(false, "regularScanTimeout");
             if (!mScanController.getScanRadioStats().recordScanRadioStop()) {
                 Log.w(TAG, "There is no scan radio to stop");
             }
@@ -1579,7 +1569,7 @@ class ScanManager {
     // Otherwise offload all filters to hardware and enable all filters.
     private void configureScanFilters(ScanClient client) {
         int scannerId = client.getScannerId();
-        int deliveryMode = getDeliveryMode(client);
+        int deliveryMode = ScanUtil.deliveryMode(client);
         int trackEntries = 0;
 
         // Do not add any filters set by opportunistic scan clients
@@ -1597,7 +1587,7 @@ class ScanManager {
 
         if (shouldUseAllPassFilter(client)) {
             int filterIndex =
-                    (deliveryMode == DELIVERY_MODE_BATCH)
+                    (deliveryMode == ScanUtil.DELIVERY_MODE_BATCH)
                             ? ALL_PASS_FILTER_INDEX_BATCH_SCAN
                             : ALL_PASS_FILTER_INDEX_REGULAR_SCAN;
             resetCountDownLatch();
@@ -1617,7 +1607,7 @@ class ScanManager {
                 waitForCallback();
 
                 resetCountDownLatch();
-                if (deliveryMode == DELIVERY_MODE_ON_FOUND_LOST) {
+                if (deliveryMode == ScanUtil.DELIVERY_MODE_ON_FOUND_LOST) {
                     trackEntries = getNumOfTrackingAdvertisements(client.getSettings());
                     if (!manageAllocationOfTrackingAdvertisement(trackEntries, true)) {
                         Log.e(
@@ -1652,7 +1642,7 @@ class ScanManager {
             return true;
         }
 
-        if (deliveryMode == DELIVERY_MODE_BATCH) {
+        if (deliveryMode == ScanUtil.DELIVERY_MODE_BATCH) {
             mAllPassBatchClients.add(client.getScannerId());
             return mAllPassBatchClients.size() == 1;
         } else {
@@ -1743,7 +1733,7 @@ class ScanManager {
             int featureSelection,
             int filterIndex,
             int numOfTrackingEntries) {
-        int deliveryMode = getDeliveryMode(client);
+        int deliveryMode = ScanUtil.deliveryMode(client);
         int rssiThreshold = Byte.MIN_VALUE;
         ScanSettings settings = client.getSettings();
         if (Flags.rssiScanFilter()) {
@@ -1777,43 +1767,6 @@ class ScanManager {
                         onFoundCount,
                         numOfTrackingEntries);
         mNativeInterface.scanFilterParamAdd(filtValue);
-    }
-
-    // Get delivery mode based on scan settings.
-    private static int getDeliveryMode(ScanClient client) {
-        if (client == null) {
-            Log.d(TAG, "getDeliveryMode(): Client is null, defaulting to DELIVERY_MODE_IMMEDIATE");
-            return DELIVERY_MODE_IMMEDIATE;
-        }
-        final var settings = client.getSettings();
-        if ((settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_FIRST_MATCH) != 0
-                || (settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_MATCH_LOST) != 0) {
-            Log.d(
-                    TAG,
-                    "getDeliveryMode(): Callback type is CALLBACK_TYPE_FIRST_MATCH OR"
-                            + " CALLBACK_TYPE_MATCH_LOST, using DELIVERY_MODE_ON_FOUND_LOST");
-            return DELIVERY_MODE_ON_FOUND_LOST;
-        }
-        if (isAllMatchesAutoBatchScanClient(client)) {
-            final boolean isEnabled = isAutoBatchScanClientEnabled(client);
-            final int mode = isEnabled ? DELIVERY_MODE_BATCH : DELIVERY_MODE_IMMEDIATE;
-            Log.d(
-                    TAG,
-                    "getDeliveryMode(): Client is auto-batch (enabled="
-                            + isEnabled
-                            + "), using delivery mode "
-                            + (isEnabled ? "DELIVERY_MODE_BATCH" : "DELIVERY_MODE_IMMEDIATE"));
-            return mode;
-        }
-        final long delay = settings.getReportDelayMillis();
-        final int mode = delay == 0 ? DELIVERY_MODE_IMMEDIATE : DELIVERY_MODE_BATCH;
-        Log.d(
-                TAG,
-                "getDeliveryMode(): Using report delay ("
-                        + delay
-                        + "ms) to set delivery mode to "
-                        + ((delay == 0) ? "DELIVERY_MODE_IMMEDIATE" : "DELIVERY_MODE_BATCH"));
-        return mode;
     }
 
     @VisibleForTesting
@@ -1987,9 +1940,9 @@ class ScanManager {
             // Restart scanning, since enabling/disabling may have changed
             // the filter policy
             Log.d(TAG, "Restarting MSFT scan");
-            mNativeInterface.scan(false);
+            mNativeInterface.scan(false, "updateScanMsft");
             if (numRegularScanClients() > 0) {
-                mNativeInterface.scan(true);
+                mNativeInterface.scan(true, "updateScanMsft");
             }
         }
     }

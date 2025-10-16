@@ -50,13 +50,13 @@
 #include "audio_hal_interface/le_audio_software.h"
 #include "bt_types.h"
 #include "bta/csis/csis_types.h"
+#include "bta/include/bta_vaps_server_api.h"
 #include "bta_csis_api.h"
 #include "bta_gatt_api.h"
 #include "bta_gatt_queue.h"
 #include "bta_groups.h"
 #include "bta_le_audio_api.h"
 #include "bta_le_audio_broadcaster_api.h"
-#include "bta/include/bta_vaps_server_api.h"
 #include "btif/include/btif_profile_storage.h"
 #include "btm_api_types.h"
 #include "btm_ble_api_types.h"
@@ -389,7 +389,7 @@ public:
 
   LeAudioClientImpl(bluetooth::le_audio::LeAudioClientCallbacks* callbacks,
                     LeAudioGroupStateMachine::Callbacks* state_machine_callbacks,
-                    base::Closure initCb)
+                    base::OnceClosure initCb)
       : gatt_if_(0),
         callbacks_(callbacks),
         active_group_id_(bluetooth::groups::kGroupUnknown),
@@ -432,16 +432,16 @@ public:
 
     BTA_GATTC_AppRegister(
             "le_audio", le_audio_gattc_callback,
-            base::Bind(
-                    [](base::Closure initCb, uint8_t client_id, uint8_t status) {
+            base::BindOnce(
+                    [](base::OnceClosure initCb, uint8_t client_id, uint8_t status) {
                       if (status != GATT_SUCCESS) {
                         log::error("Can't start LeAudio profile - no gatt clients left!");
                         return;
                       }
                       instance->gatt_if_ = client_id;
-                      initCb.Run();
+                      std::move(initCb).Run();
                     },
-                    initCb),
+                    std::move(initCb)),
             true);
 
     DeviceGroups::Initialize(device_group_callbacks);
@@ -1485,8 +1485,8 @@ public:
   }
 
   void UpdateCodecConfigPreferenceToHal(
-          const bluetooth::le_audio::btle_audio_codec_config_t *input_codec_config,
-          const bluetooth::le_audio::btle_audio_codec_config_t *output_codec_config) {
+          const bluetooth::le_audio::btle_audio_codec_config_t* input_codec_config,
+          const bluetooth::le_audio::btle_audio_codec_config_t* output_codec_config) {
     if (false/*!com_android_bluetooth_flags_le_audio_update_config_preference_to_hal()*/) {
       log::warn(
               "SetCodecPriority skipped due to flag not set: "
@@ -2494,9 +2494,8 @@ public:
         log::error("Connecting  {} when not bonded", address);
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
         bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
-          0, address,
-          ConnectionState::CONNECTED,
-          bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_UNBONDED_DEV);
+                0, address, ConnectionState::CONNECTED,
+                bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_UNBONDED_DEV);
         return;
       }
       leAudioDevices_.Add(address, DeviceConnectState::CONNECTING_BY_USER);
@@ -2517,9 +2516,8 @@ public:
                     leAudioDevice->group_id_);
           callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
           bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
-            leAudioDevice->group_id_, address,
-            ConnectionState::CONNECTED,
-            bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_DISABLING_GROUP);
+                  leAudioDevice->group_id_, address, ConnectionState::CONNECTED,
+                  bluetooth::le_audio::ConnectionStatus::FAILED_CONNECT_DISABLING_GROUP);
           return;
         }
       }
@@ -3140,39 +3138,38 @@ public:
     // Unlock when ASE is in streaming or timeout to unlock the ble connection parameters
     // if current conn interval is greater than aggressive parameters, no need to lock
     uint16_t currConnInterval =
-        stack::l2cap::get_interface().L2CA_GetBleConnInterval(leAudioDevice->address_);
+            stack::l2cap::get_interface().L2CA_GetBleConnInterval(leAudioDevice->address_);
     if (currConnInterval > LeConnectionParameters::GetMaxConnIntervalAggressive()) {
       return;
     }
-    log::info("{}, lock conn params for conn/stream and unlock when streaming or timeout,"
-              ", current conn interval={}",
-              leAudioDevice->address_, currConnInterval);
+    log::info(
+            "{}, lock conn params for conn/stream and unlock when streaming or timeout,"
+            ", current conn interval={}",
+            leAudioDevice->address_, currConnInterval);
     if (!alarm_is_scheduled(leAudioDevice->update_to_relaxed_conn_interval_timer)) {
       stack::l2cap::get_interface().L2CA_LockBleConnParamsForProfileConnection(
-          leAudioDevice->address_, true);
+              leAudioDevice->address_, true);
       // After locking the parameters, update with the relaxed value,
       // but this updating will be blocked and save the relaxed value.
       // Then timeout will update the parameters to the relaxed.
       stack::l2cap::get_interface().L2CA_UpdateBleConnParams(
-          leAudioDevice->address_,
-          LeConnectionParameters::GetMinConnIntervalRelaxed(),
-          LeConnectionParameters::GetMaxConnIntervalRelaxed(),
-          BTM_BLE_CONN_PERIPHERAL_LATENCY_DEF,
-          BTM_BLE_CONN_TIMEOUT_DEF, 0, 0);
+              leAudioDevice->address_, LeConnectionParameters::GetMinConnIntervalRelaxed(),
+              LeConnectionParameters::GetMaxConnIntervalRelaxed(),
+              BTM_BLE_CONN_PERIPHERAL_LATENCY_DEF, BTM_BLE_CONN_TIMEOUT_DEF, 0, 0);
 
       alarm_set_on_mloop(
-          leAudioDevice->update_to_relaxed_conn_interval_timer,
-          kAudioUpdateRelaxedConnIntervalTimeoutMs,
-          [](void* data) {
-              LeAudioDevice *leaDev = (LeAudioDevice *)data;
-              if (leaDev != nullptr) {
-                log::info("address {}, update_to_relaxed_conn_interval_timer timeout",
-                    leaDev->address_);
-                stack::l2cap::get_interface().L2CA_LockBleConnParamsForProfileConnection(
-                        leaDev->address_, false);
-              }
-          },
-          leAudioDevice);
+              leAudioDevice->update_to_relaxed_conn_interval_timer,
+              kAudioUpdateRelaxedConnIntervalTimeoutMs,
+              [](void* data) {
+                LeAudioDevice* leaDev = (LeAudioDevice*)data;
+                if (leaDev != nullptr) {
+                  log::info("address {}, update_to_relaxed_conn_interval_timer timeout",
+                            leaDev->address_);
+                  stack::l2cap::get_interface().L2CA_LockBleConnParamsForProfileConnection(
+                          leaDev->address_, false);
+                }
+              },
+              leAudioDevice);
     }
   }
 
@@ -3185,7 +3182,7 @@ public:
     while (leAudioDevice) {
       if (alarm_is_scheduled(leAudioDevice->update_to_relaxed_conn_interval_timer)) {
         uint16_t currConnInterval =
-            stack::l2cap::get_interface().L2CA_GetBleConnInterval(leAudioDevice->address_);
+                stack::l2cap::get_interface().L2CA_GetBleConnInterval(leAudioDevice->address_);
         log::info("{}, unlock conn params for conn/stream, current conn interval={}.",
                   leAudioDevice->address_, currConnInterval);
         alarm_cancel(leAudioDevice->update_to_relaxed_conn_interval_timer);
@@ -3195,8 +3192,8 @@ public:
                   leAudioDevice->address_, currConnInterval, currConnInterval,
                   BTM_BLE_CONN_PERIPHERAL_LATENCY_DEF, BTM_BLE_CONN_TIMEOUT_DEF, 0, 0);
         }
-        stack::l2cap::get_interface().
-          L2CA_LockBleConnParamsForProfileConnection(leAudioDevice->address_, false);
+        stack::l2cap::get_interface().L2CA_LockBleConnParamsForProfileConnection(
+                leAudioDevice->address_, false);
       }
       leAudioDevice = group->GetNextDevice(leAudioDevice);
     };
@@ -4403,7 +4400,7 @@ public:
     for (auto direction : {bluetooth::le_audio::types::kLeAudioDirectionSink,
                            bluetooth::le_audio::types::kLeAudioDirectionSource}) {
       log::info("Looking for requirements: {} - {}", stream_conf->conf->name,
-                (direction == 1 ? "snk" : "src"));
+                direction == 1 ? "snk" : "src");
       const auto& pacs = (direction == bluetooth::le_audio::types::kLeAudioDirectionSink)
                                  ? leAudioDevice->snk_pacs_
                                  : leAudioDevice->src_pacs_;
@@ -6372,16 +6369,11 @@ public:
     if (available_remote_contexts.any()) {
       LeAudioContextType context_priority_list[] = {
               /* Highest priority first */
-              LeAudioContextType::CONVERSATIONAL,
-              LeAudioContextType::RINGTONE,
-              LeAudioContextType::LIVE,
-              LeAudioContextType::VOICEASSISTANTS,
-              LeAudioContextType::GAME,
-              LeAudioContextType::MEDIA,
-              LeAudioContextType::EMERGENCYALARM,
-              LeAudioContextType::ALERTS,
-              LeAudioContextType::INSTRUCTIONAL,
-              LeAudioContextType::NOTIFICATIONS,
+              LeAudioContextType::CONVERSATIONAL, LeAudioContextType::RINGTONE,
+              LeAudioContextType::LIVE,           LeAudioContextType::VOICEASSISTANTS,
+              LeAudioContextType::GAME,           LeAudioContextType::MEDIA,
+              LeAudioContextType::EMERGENCYALARM, LeAudioContextType::ALERTS,
+              LeAudioContextType::INSTRUCTIONAL,  LeAudioContextType::NOTIFICATIONS,
               LeAudioContextType::SOUNDEFFECTS,
       };
       for (auto ct : context_priority_list) {
@@ -7338,7 +7330,7 @@ public:
       }
 
       OnGattReadRspStatic(conn_id, status, hdl, len, ptr,
-                          ((index == (handles.num_attr - 1)) ? data : nullptr));
+                          (index == (handles.num_attr - 1)) ? data : nullptr);
 
       position += len + 2; /* skip the length of data */
       index++;
@@ -7953,7 +7945,7 @@ public:
               log::info(" audio sender: NotifyVaSessionStarted");
               if (group) {
                 bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
-                    GetGroupDevices(group->group_id_), true);
+                        GetGroupDevices(group->group_id_), true);
               }
             }
           }
@@ -7976,7 +7968,7 @@ public:
               log::info(" audio receiver: NotifyVaSessionStarted");
               if (group) {
                 bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
-                    GetGroupDevices(group->group_id_), true);
+                        GetGroupDevices(group->group_id_), true);
               }
             }
           }
@@ -8202,7 +8194,7 @@ public:
             log::info(" Status Idle: NotifyVaSessionStopped");
             if (group) {
               bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
-                  GetGroupDevices(group->group_id_), true);
+                      GetGroupDevices(group->group_id_), true);
             }
           } else {
             auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
@@ -8210,7 +8202,7 @@ public:
               log::info(" Status Idle: NotifyVaSessionStopped");
               if (group) {
                 bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
-                    GetGroupDevices(group->group_id_), true);
+                        GetGroupDevices(group->group_id_), true);
               }
             }
           }
@@ -8944,8 +8936,8 @@ LeAudioClient* LeAudioClient::Get() {
 
 /* Initializer of main le audio implementation class and its instance */
 void LeAudioClient::Initialize(
-        bluetooth::le_audio::LeAudioClientCallbacks* callbacks_, base::Closure initCb,
-        base::Callback<bool()> hal_2_1_verifier,
+        bluetooth::le_audio::LeAudioClientCallbacks* callbacks_, base::OnceClosure initCb,
+        base::OnceCallback<bool()> hal_2_1_verifier,
         const std::vector<bluetooth::le_audio::btle_audio_codec_config_t>& offloading_preference) {
   std::scoped_lock<std::mutex> lock(instance_mutex);
   if (instance) {
@@ -8972,7 +8964,7 @@ void LeAudioClient::Initialize(
   stateMachineVscHciCallback = &stateMachineVscHciCallbackImpl;
   device_group_callbacks = &deviceGroupsCallbacksImpl;
   aclClientCallbacks = &aclClientCallbacksImpl;
-  instance = new LeAudioClientImpl(callbacks_, stateMachineCallbacks, initCb);
+  instance = new LeAudioClientImpl(callbacks_, stateMachineCallbacks, std::move(initCb));
 
   get_btm_client_interface().lifecycle.ACL_RegisterClient(aclClientCallbacks);
 
