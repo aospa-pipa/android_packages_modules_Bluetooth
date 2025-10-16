@@ -1555,6 +1555,20 @@ static bool bta_gattc_process_srvc_chg_ind(tCONN_ID conn_id, tBTA_GATTC_RCB* p_c
   log::info("{} service changed s_handle=0x{:x}, e_handle=0x{:x}", p_srcb->server_bda, s_handle,
             e_handle);
 
+  if (com::android::bluetooth::flags::ignore_service_change_indication()) {
+    char remote_name[BD_NAME_LEN] = "";
+    btif_storage_get_stored_remote_name(p_srcb->server_bda, remote_name);
+    if (interop_match_name(INTEROP_IGNORE_SERVICE_CHANGED_IND, remote_name)) {
+      if (GATTC_SendHandleValueConfirm(conn_id, p_notify->cid) != GATT_SUCCESS) {
+        log::warn("Unable to send GATT client handle value confirmation conn_id:{} cid:{}", conn_id,
+                  p_notify->cid);
+      }
+
+      log::warn("ignore service changed ind");
+      return true;
+    }
+  }
+
   if (com::android::bluetooth::flags::gatt_offload_api()) {
     GATTC_InformServiceChangedIndication(p_srcb->server_bda);
   }

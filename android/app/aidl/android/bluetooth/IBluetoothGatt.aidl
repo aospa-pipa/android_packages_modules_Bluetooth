@@ -59,10 +59,9 @@ import android.bluetooth.IBluetoothGattServerCallback;
 import android.bluetooth.GattOffloadSession;
 import android.content.AttributionSource;
 import android.os.ParcelUuid;
-/**
- * API for interacting with BLE / GATT
- * @hide
- */
+
+/** Binder method for GATT interaction */
+@JavaPassthrough(annotation="@android.annotation.Hide")
 interface IBluetoothGatt {
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     void startService();
