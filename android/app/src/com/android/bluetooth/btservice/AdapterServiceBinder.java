@@ -468,28 +468,8 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return false;
         }
 
-        Log.i(TAG, "removeBond: device=" + device + ", from " + getUidPidString());
-
-        DeviceProperties deviceProp = service.getRemoteDevices().getDeviceProperties(device);
-        if (deviceProp == null || deviceProp.getBondState() != BluetoothDevice.BOND_BONDED) {
-            Log.w(
-                    TAG,
-                    device
-                            + " cannot be removed since "
-                            + ((deviceProp == null)
-                                    ? "properties are empty"
-                                    : "bond state is " + deviceProp.getBondState()));
-            return false;
-        }
         service.logUserBondResponse(device, false, source);
-        service.getBondAttemptCallerInfo().remove(device.getAddress());
-        service.getPhonePolicy().ifPresent(policy -> policy.onRemoveBondRequest(device));
-        deviceProp.setBondingInitiatedLocally(false);
-
-        Message msg = service.getBondStateMachine().obtainMessage(BondStateMachine.REMOVE_BOND);
-        msg.obj = device;
-        service.getBondStateMachine().sendMessage(msg);
-        return true;
+        return service.removeBond(device);
     }
 
     @Override
@@ -904,49 +884,6 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 "setPin: device=" + device + ", accept=" + accept + ", from " + getUidPidString());
         return service.getNative()
                 .pinReply(getBytesFromAddress(device.getAddress()), accept, len, pinCode);
-    }
-
-    @Override
-    public boolean setPasskey(
-            BluetoothDevice device,
-            boolean accept,
-            int len,
-            byte[] passkey,
-            AttributionSource source) {
-        requireNonNull(device);
-        AdapterService service = getService();
-        if (service == null
-                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "setPasskey")
-                || !checkConnectPermissionForDataDelivery(service, source, TAG, "setPasskey")) {
-            return false;
-        }
-
-        DeviceProperties deviceProp = service.getRemoteDevices().getDeviceProperties(device);
-        if (deviceProp == null || !deviceProp.isBonding()) {
-            Log.e(TAG, "setPasskey: device=" + device + ", not bonding");
-            return false;
-        }
-        if (passkey.length != len) {
-            android.util.EventLog.writeEvent(
-                    0x534e4554, "139287605", -1, "Passkey length mismatch");
-            return false;
-        }
-        service.logUserBondResponse(device, accept, source);
-        Log.i(
-                TAG,
-                "setPasskey: device="
-                        + device
-                        + ", accept="
-                        + accept
-                        + ", from "
-                        + getUidPidString());
-
-        return service.getNative()
-                .sspReply(
-                        getBytesFromAddress(device.getAddress()),
-                        AbstractionLayer.BT_SSP_VARIANT_PASSKEY_ENTRY,
-                        accept,
-                        Utils.byteArrayToInt(passkey));
     }
 
     @Override

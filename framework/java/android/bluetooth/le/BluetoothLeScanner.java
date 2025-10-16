@@ -22,6 +22,7 @@ import static android.Manifest.permission.UPDATE_DEVICE_STATS;
 
 import static java.util.Objects.requireNonNull;
 
+import android.annotation.Hide;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
@@ -93,11 +94,8 @@ public final class BluetoothLeScanner {
     private final Handler mHandler;
     private final Map<ScanCallback, BleScanCallbackWrapper> mLeScanClients;
 
-    /**
-     * Use {@link BluetoothAdapter#getBluetoothLeScanner()} instead.
-     *
-     * @hide
-     */
+    /** Use {@link BluetoothAdapter#getBluetoothLeScanner()} instead. */
+    @Hide
     public BluetoothLeScanner(BluetoothAdapter bluetoothAdapter) {
         mBluetoothAdapter = requireNonNull(bluetoothAdapter);
         mAttributionSource = mBluetoothAdapter.getAttributionSource();
@@ -245,8 +243,8 @@ public final class BluetoothLeScanner {
      * @param workSource {@link WorkSource} identifying the application(s) for which to blame for
      *     the scan.
      * @param callback Callback used to deliver scan results.
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
@@ -285,8 +283,8 @@ public final class BluetoothLeScanner {
      * @param workSource {@link WorkSource} identifying the application(s) for which to blame for
      *     the scan.
      * @param callback Callback used to deliver scan results.
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothScanPermission
@@ -457,8 +455,8 @@ public final class BluetoothLeScanner {
      * Start truncated scan.
      *
      * @removed this is not used anywhere
-     * @hide
      */
+    @Hide
     @Deprecated
     @SystemApi
     @RequiresBluetoothScanPermission
@@ -471,11 +469,8 @@ public final class BluetoothLeScanner {
         Log.wtf(TAG, "startTruncatedScan is deprecated and not supported; Will be removed soon");
     }
 
-    /**
-     * Cleans up scan clients. Should be called when bluetooth is down.
-     *
-     * @hide
-     */
+    /** Cleans up scan clients. Should be called when bluetooth is down. */
+    @Hide
     @RequiresNoPermission
     public void cleanup() {
         mLeScanClients.clear();
@@ -623,11 +618,8 @@ public final class BluetoothLeScanner {
             }
         }
 
-        /**
-         * Callback reporting an LE scan result.
-         *
-         * @hide
-         */
+        /** Callback reporting an LE scan result. */
+        @Hide
         @Override
         public void onScanResult(final ScanResult scanResult) {
             Attributable.setAttributionSource(scanResult, mAttributionSource);
