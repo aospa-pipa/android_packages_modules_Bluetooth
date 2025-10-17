@@ -100,8 +100,8 @@ bool LeAudioClient::IsLeAudioClientInIdle(void) {
   return false;
 }
 void LeAudioClient::Initialize(bluetooth::le_audio::LeAudioClientCallbacks* /* callbacks_ */,
-                               base::Closure /* initCb */,
-                               base::Callback<bool()> /* hal_2_1_verifier */,
+                               base::OnceClosure /* initCb */,
+                               base::OnceCallback<bool()> /* hal_2_1_verifier */,
                                const std::vector<bluetooth::le_audio::btle_audio_codec_config_t>&
                                /* offloading_preference */) {
   inc_func_call_count(__func__);

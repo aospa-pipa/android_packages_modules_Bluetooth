@@ -26,6 +26,7 @@ import static android.bluetooth.BluetoothUtils.isValidDevice;
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.FlaggedApi;
+import android.annotation.Hide;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -126,9 +127,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *   <li>{@link BluetoothDevice#EXTRA_DEVICE} - The remote device. It can be null if no device
      *       is active.
      * </ul>
-     *
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
@@ -234,47 +234,25 @@ public final class BluetoothHeadset implements BluetoothProfile {
     /** A vendor-specific command for unsolicited result code. */
     public static final String VENDOR_RESULT_CODE_COMMAND_ANDROID = "+ANDROID";
 
-    /**
-     * A vendor-specific command for unsolicited result code.
-     *
-     * @hide
-     */
-    public static final String VENDOR_RESULT_CODE_COMMAND_MOTOROLA = "+MOTOROLA";
+    /** A vendor-specific command for unsolicited result code. */
+    @Hide public static final String VENDOR_RESULT_CODE_COMMAND_MOTOROLA = "+MOTOROLA";
 
-    /**
-     * A vendor-specific AT command
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XAPL = "+XAPL";
+    /** A vendor-specific AT command */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XAPL = "+XAPL";
 
-    /**
-     * A vendor-specific AT command
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_IPHONEACCEV = "+IPHONEACCEV";
+    /** A vendor-specific AT command */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_IPHONEACCEV = "+IPHONEACCEV";
 
     /**
      * Battery level indicator associated with {@link #VENDOR_SPECIFIC_HEADSET_EVENT_IPHONEACCEV}
-     *
-     * @hide
      */
-    public static final int VENDOR_SPECIFIC_HEADSET_EVENT_IPHONEACCEV_BATTERY_LEVEL = 1;
+    @Hide public static final int VENDOR_SPECIFIC_HEADSET_EVENT_IPHONEACCEV_BATTERY_LEVEL = 1;
 
-    /**
-     * A vendor-specific AT command
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT = "+XEVENT";
+    /** A vendor-specific AT command */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT = "+XEVENT";
 
-    /**
-     * Battery level indicator associated with {@link #VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT}
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT_BATTERY_LEVEL = "BATTERY";
+    /** Battery level indicator associated with {@link #VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT} */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_XEVENT_BATTERY_LEVEL = "BATTERY";
 
     /**
      * Headset state when SCO audio is disconnecting.
@@ -283,34 +261,20 @@ public final class BluetoothHeadset implements BluetoothProfile {
      */
     public static final int STATE_AUDIO_DISCONNECTING = 13;
 
-    /**
-     * A vendor-specific AT command that asks for the information about device manufacturer.
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMI = "+CGMI";
+    /** A vendor-specific AT command that asks for the information about device manufacturer. */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMI = "+CGMI";
 
-    /**
-     * A vendor-specific AT command that asks for the information about the model of the device.
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMM = "+CGMM";
+    /** A vendor-specific AT command that asks for the information about the model of the device. */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMM = "+CGMM";
 
     /**
      * A vendor-specific AT command that asks for the revision information, for Android we will
      * return the OS version and build number.
-     *
-     * @hide
      */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMR = "+CGMR";
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGMR = "+CGMR";
 
-    /**
-     * A vendor-specific AT command that asks for the device's serial number.
-     *
-     * @hide
-     */
-    public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGSN = "+CGSN";
+    /** A vendor-specific AT command that asks for the device's serial number. */
+    @Hide public static final String VENDOR_SPECIFIC_HEADSET_EVENT_CGSN = "+CGSN";
 
     /**
      * Headset state when SCO audio is not connected. This state can be one of {@link #EXTRA_STATE}
@@ -402,9 +366,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * are given an assigned number. Below shows the assigned number of Indicator added so far -
      * Enhanced Safety - 1, Valid Values: 0 - Disabled, 1 - Enabled - Battery Level - 2, Valid
      * Values: 0~100 - Remaining level of Battery
-     *
-     * @hide
      */
+    @Hide
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
@@ -416,18 +379,16 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * A int extra field in {@link #ACTION_HF_INDICATORS_VALUE_CHANGED} intents that contains the
      * assigned number of the headset indicator as defined by Bluetooth SIG that is being sent.
      * Value range is 0-65535 as defined in HFP 1.7
-     *
-     * @hide
      */
+    @Hide
     public static final String EXTRA_HF_INDICATORS_IND_ID =
             "android.bluetooth.headset.extra.HF_INDICATORS_IND_ID";
 
     /**
      * A int extra field in {@link #ACTION_HF_INDICATORS_VALUE_CHANGED} intents that contains the
      * value of the Headset indicator that is being sent.
-     *
-     * @hide
      */
+    @Hide
     public static final String EXTRA_HF_INDICATORS_IND_VALUE =
             "android.bluetooth.headset.extra.HF_INDICATORS_IND_VALUE";
 
@@ -448,22 +409,21 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * Close the connection to the backing service. Other public functions of BluetoothHeadset will
      * return default error results once close() has been called. Multiple invocations of close()
      * are ok.
-     *
-     * @hide
      */
+    @Hide
     @UnsupportedAppUsage
     public void close() {
         mAdapter.closeProfileProxy(this);
     }
 
-    /** @hide */
+    @Hide
     @Override
     @RequiresNoPermission
     public void onServiceConnected(IBinder service) {
         mService = IBluetoothHeadset.Stub.asInterface(service);
     }
 
-    /** @hide */
+    @Hide
     @Override
     @RequiresNoPermission
     public void onServiceDisconnected() {
@@ -474,14 +434,14 @@ public final class BluetoothHeadset implements BluetoothProfile {
         return mService;
     }
 
-    /** @hide */
+    @Hide
     @Override
     @RequiresNoPermission
     public BluetoothAdapter getAdapter() {
         return mAdapter;
     }
 
-    /** @hide */
+    @Hide
     @Override
     @SuppressWarnings("Finalize") // empty finalize for api signature
     protected void finalize() throws Throwable {
@@ -502,8 +462,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *
      * @param device Remote Bluetooth Device
      * @return false on immediate error, true otherwise
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
@@ -544,8 +504,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *
      * @param device Remote Bluetooth Device
      * @return false on immediate error, true otherwise
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
@@ -646,8 +606,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @param device Paired bluetooth device
      * @param connectionPolicy is the connection policy to set to for this profile
      * @return true if connectionPolicy is set, false on error
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -683,8 +643,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *
      * @param device Bluetooth device
      * @return connection policy of the device
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
@@ -851,7 +811,7 @@ public final class BluetoothHeadset implements BluetoothProfile {
         return false;
     }
 
-    /** @hide */
+    @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -868,8 +828,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @param device is the Bluetooth device for which the audio state is being queried
      * @return the audio state of the device or an error code
      * @throws NullPointerException if the device is null
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -894,7 +854,7 @@ public final class BluetoothHeadset implements BluetoothProfile {
         return BluetoothHeadset.STATE_AUDIO_DISCONNECTED;
     }
 
-    /** @hide */
+    @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -905,7 +865,7 @@ public final class BluetoothHeadset implements BluetoothProfile {
             })
     public @interface SetAudioRouteAllowedReturnValues {}
 
-    /** @hide */
+    @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -925,8 +885,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @param allowed {@code true} if the profile can reroute audio, {@code false} otherwise.
      * @return {@link BluetoothStatusCodes#SUCCESS} upon successful setting, otherwise an error
      *     code.
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -958,8 +918,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @return {@link BluetoothStatusCodes#ALLOWED} if audio routing is allowed, {@link
      *     BluetoothStatusCodes#NOT_ALLOWED} if audio routing is not allowed, or an error code if an
      *     error occurs. see {@link #setAudioRouteAllowed(boolean)}.
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -993,8 +953,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *
      * @param forced Whether or not SCO audio connection should be forced: True to force SCO audio
      *     False to use SCO audio in normal manner
-     * @hide
      */
+    @Hide
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public void setForceScoAudio(boolean forced) {
@@ -1012,7 +972,7 @@ public final class BluetoothHeadset implements BluetoothProfile {
         }
     }
 
-    /** @hide */
+    @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -1041,8 +1001,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * audio connection.
      *
      * @return whether the connection was successfully initiated or an error code on failure
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1069,7 +1029,7 @@ public final class BluetoothHeadset implements BluetoothProfile {
         return BluetoothStatusCodes.ERROR_UNKNOWN;
     }
 
-    /** @hide */
+    @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
             value = {
@@ -1091,8 +1051,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * #STATE_AUDIO_DISCONNECTED}.
      *
      * @return whether the disconnection was initiated successfully or an error code on failure
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1135,8 +1095,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *     idle (connecting or connected) - virtual call has already started - there is no active
      *     device - a Telecom managed call is going on - binder is dead or Bluetooth is disabled or
      *     other error
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
@@ -1171,8 +1131,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      *
      * @return true if successful, false if one of the following case applies - virtual voice call
      *     is not started or has ended - binder is dead or Bluetooth is disabled or other error
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
@@ -1254,8 +1214,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @param device Remote Bluetooth Device, could be null if phone call audio should not be
      *     streamed to a headset
      * @return false on immediate error, true otherwise
-     * @hide
      */
+    @Hide
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1286,8 +1246,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * Get the connected device that is active.
      *
      * @return the connected device that is active or null if no device is active.
-     * @hide
      */
+    @Hide
     @UnsupportedAppUsage(trackingBug = 171933273)
     @Nullable
     @RequiresLegacyBluetoothPermission
@@ -1315,8 +1275,8 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * active connection.
      *
      * @return true if in-band ringing is enabled, false if in-band ringing is disabled
-     * @hide
      */
+    @Hide
     @SystemApi
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission

@@ -359,6 +359,9 @@ typedef enum {
   // Som A2DP sink devices don't respond SDP request during A2DP reconnection
   INTEROP_A2DP_SKIP_SDP_DURING_RECONNECTION,
 
+  // After receiving the service changed ind, ignore the subsequent operation.
+  INTEROP_IGNORE_SERVICE_CHANGED_IND,
+
   INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
 
   // Some devices response slowly after setting non zero latency.
@@ -392,6 +395,10 @@ typedef enum {
 
   // Some HOGP devices requires notifications to be enabled on reconnection.
   INTEROP_ENABLE_REMOTE_NOTIFICATIONS,
+
+  // For remote devices with BD_ADDR starting CA:1A:EE
+  // disables stack's 'wait for LE service discovery' logic if LE advertising cannot be established.
+  INTEROP_SKIP_WAIT_FOR_LE_SERVICE_SEARCH,
 
   END_OF_INTEROP_LIST
 } interop_feature_t;

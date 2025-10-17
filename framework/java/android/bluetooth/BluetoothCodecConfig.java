@@ -18,6 +18,7 @@ package android.bluetooth;
 
 import static android.bluetooth.BluetoothUtils.formatSimple;
 
+import android.annotation.Hide;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -42,7 +43,7 @@ import java.util.Objects;
  * @see BluetoothA2dp
  */
 public final class BluetoothCodecConfig implements Parcelable {
-    /** @hide */
+    @Hide
     @IntDef(
             prefix = "SOURCE_CODEC_TYPE_",
             value = {
@@ -149,7 +150,7 @@ public final class BluetoothCodecConfig implements Parcelable {
     @SuppressLint("UnflaggedApi")
     public static final int SOURCE_CODEC_TYPE_CELT = 10;
 
-    /** @hide */
+    @Hide
     @IntDef(
             prefix = "CODEC_PRIORITY_",
             value = {CODEC_PRIORITY_DISABLED, CODEC_PRIORITY_DEFAULT, CODEC_PRIORITY_HIGHEST})
@@ -167,7 +168,7 @@ public final class BluetoothCodecConfig implements Parcelable {
     /** Codec priority highest. Used to indicate the highest priority a codec can have. */
     public static final int CODEC_PRIORITY_HIGHEST = 1000 * 1000;
 
-    /** @hide */
+    @Hide
     @IntDef(
             prefix = "SAMPLE_RATE_",
             value = {
@@ -215,7 +216,7 @@ public final class BluetoothCodecConfig implements Parcelable {
     @SuppressLint("UnflaggedApi")
     public static final int SAMPLE_RATE_8000 = 0x1 << 9;
 
-    /** @hide */
+    @Hide
     @IntDef(
             prefix = "BITS_PER_SAMPLE_",
             value = {
@@ -239,7 +240,7 @@ public final class BluetoothCodecConfig implements Parcelable {
     /** Codec bits per sample 32. */
     public static final int BITS_PER_SAMPLE_32 = 0x1 << 2;
 
-    /** @hide */
+    @Hide
     @IntDef(
             prefix = "CHANNEL_MODE_",
             value = {CHANNEL_MODE_NONE, CHANNEL_MODE_MONO, CHANNEL_MODE_STEREO})
@@ -280,8 +281,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      * @param codecSpecific2 the specific value 2
      * @param codecSpecific3 the specific value 3
      * @param codecSpecific4 the specific value 4 values to 0.
-     * @hide
      */
+    @Hide
     @UnsupportedAppUsage
     public BluetoothCodecConfig(
             @SourceCodecType int codecType,
@@ -317,8 +318,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      * @param codecSpecific2 the specific value 2
      * @param codecSpecific3 the specific value 3
      * @param codecSpecific4 the specific value 4 values to 0.
-     * @hide
      */
+    @Hide
     public BluetoothCodecConfig(
             @Nullable BluetoothCodecType codecType,
             @CodecPriority int codecPriority,
@@ -350,8 +351,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      * BluetoothCodecConfig#CHANNEL_MODE_NONE}, and all the codec specific values to 0.
      *
      * @param codecType the source codec type
-     * @hide
      */
+    @Hide
     public BluetoothCodecConfig(@SourceCodecType int codecType) {
         this(
                 BluetoothCodecType.createFromType(codecType),
@@ -507,10 +508,6 @@ public final class BluetoothCodecConfig implements Parcelable {
                 + "}";
     }
 
-    /**
-     * @return 0
-     * @hide
-     */
     @Override
     public int describeContents() {
         return 0;
@@ -532,7 +529,6 @@ public final class BluetoothCodecConfig implements Parcelable {
      *
      * @param out The Parcel in which the object should be written
      * @param flags Additional flags about how the object should be written
-     * @hide
      */
     @Override
     public void writeToParcel(Parcel out, int flags) {
@@ -552,11 +548,8 @@ public final class BluetoothCodecConfig implements Parcelable {
         out.writeLong(mCodecSpecific4);
     }
 
-    /**
-     * Returns the codec name converted to {@link String}.
-     *
-     * @hide
-     */
+    /** Returns the codec name converted to {@link String}. */
+    @Hide
     @RequiresNoPermission
     public static @NonNull String getCodecName(@SourceCodecType int codecType) {
         return switch (codecType) {
@@ -622,8 +615,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      * priority.
      *
      * @param codecPriority the priority this codec should have
-     * @hide
      */
+    @Hide
     @RequiresNoPermission
     public void setCodecPriority(@CodecPriority int codecPriority) {
         mCodecPriority = codecPriority;
@@ -755,37 +748,28 @@ public final class BluetoothCodecConfig implements Parcelable {
      *
      * @param valueSet the value set presented by a bitmask
      * @return {@code true} if the valueSet contains zero or single bit, {@code false} otherwise
-     * @hide
      */
+    @Hide
     private static boolean hasSingleBit(int valueSet) {
         return (valueSet == 0 || (valueSet & (valueSet - 1)) == 0);
     }
 
-    /**
-     * Returns whether the object contains none or single sample rate.
-     *
-     * @hide
-     */
+    /** Returns whether the object contains none or single sample rate. */
+    @Hide
     @RequiresNoPermission
     public boolean hasSingleSampleRate() {
         return hasSingleBit(mSampleRate);
     }
 
-    /**
-     * Returns whether the object contains none or single bits per sample.
-     *
-     * @hide
-     */
+    /** Returns whether the object contains none or single bits per sample. */
+    @Hide
     @RequiresNoPermission
     public boolean hasSingleBitsPerSample() {
         return hasSingleBit(mBitsPerSample);
     }
 
-    /**
-     * Returns whether the object contains none or single channel mode.
-     *
-     * @hide
-     */
+    /** Returns whether the object contains none or single channel mode. */
+    @Hide
     @RequiresNoPermission
     public boolean hasSingleChannelMode() {
         return hasSingleBit(mChannelMode);
@@ -796,8 +780,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      *
      * @param other the codec config to compare against
      * @return {@code true} if the audio feeding parameters are same, {@code false} otherwise
-     * @hide
      */
+    @Hide
     @RequiresNoPermission
     public boolean sameAudioFeedingParameters(BluetoothCodecConfig other) {
         return (other != null
@@ -812,8 +796,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      *
      * @param other the codec config to compare against
      * @return {@code true} if the audio feeding parameters are similar, {@code false} otherwise
-     * @hide
      */
+    @Hide
     @RequiresNoPermission
     public boolean similarCodecFeedingParameters(BluetoothCodecConfig other) {
         if (other == null || !Objects.equals(mCodecType, other.mCodecType)) {
@@ -851,8 +835,8 @@ public final class BluetoothCodecConfig implements Parcelable {
      *
      * @param other the codec config to compare against
      * @return {@code true} if the codec specific parameters are the same, {@code false} otherwise
-     * @hide
      */
+    @Hide
     @RequiresNoPermission
     public boolean sameCodecSpecificParameters(BluetoothCodecConfig other) {
         if (other == null && !Objects.equals(mCodecType, other.mCodecType)) {
@@ -902,7 +886,7 @@ public final class BluetoothCodecConfig implements Parcelable {
          *
          * @param codecType of this codec
          * @return the same Builder instance
-         * @deprecated use {@link BluetoothCodecType} instead
+         * @deprecated use {@link #setExtendedCodecType} instead
          */
         @Deprecated
         @RequiresNoPermission
