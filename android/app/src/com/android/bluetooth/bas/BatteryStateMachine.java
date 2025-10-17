@@ -41,7 +41,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
-import com.android.bluetooth.btservice.ProfileService;
+import com.android.bluetooth.profile.ProfileService;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -185,11 +185,11 @@ public class BatteryStateMachine extends StateMachine {
                 mDevice.connectGatt(
                         mService,
                         /* autoConnect= */ false,
-                        mGattCallback,
                         TRANSPORT_LE,
                         /* opportunistic= */ true,
                         PHY_LE_1M_MASK | PHY_LE_2M_MASK,
-                        getHandler());
+                        getHandler(),
+                        mGattCallback);
         return mBluetoothGatt != null;
     }
 

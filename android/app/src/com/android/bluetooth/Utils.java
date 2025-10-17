@@ -81,7 +81,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.graphics.Insets;
 
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ProfileService;
+import com.android.bluetooth.profile.ProfileService;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;

@@ -27,8 +27,11 @@ import android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_POWER
 import android.bluetooth.le.ScanSettings.SCAN_MODE_OPPORTUNISTIC
 import android.bluetooth.le.ScanSettings.SCAN_MODE_SCREEN_OFF
 import android.bluetooth.le.ScanSettings.SCAN_MODE_SCREEN_OFF_BALANCED
+import android.provider.Settings
 import android.util.Log
 import com.android.bluetooth.Utils
+import com.android.bluetooth.Utils.millsToUnit
+import com.android.bluetooth.btservice.AdapterService
 import java.time.Instant
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
@@ -63,6 +66,21 @@ object ScanUtil {
     const val SCAN_RESULT_TYPE_FULL = 2
     const val SCAN_RESULT_TYPE_BOTH = 3
 
+    private const val ONFOUND_SIGHTINGS_AGGRESSIVE = 1
+    private const val ONFOUND_SIGHTINGS_STICKY = 4
+
+    // Onfound/onlost for scan settings
+    private const val MATCH_MODE_AGGRESSIVE_TIMEOUT_FACTOR = 1
+
+    private const val MATCH_MODE_STICKY_TIMEOUT_FACTOR = 3
+    private const val ONLOST_FACTOR = 2
+    private const val ONLOST_ONFOUND_BASE_TIMEOUT_MS = 500
+
+    // Delivery mode defined in bt stack.
+    private const val DELIVERY_MODE_IMMEDIATE = 0
+    const val DELIVERY_MODE_ON_FOUND_LOST = 1
+    const val DELIVERY_MODE_BATCH = 2
+
     // The default floor value for LE batch scan report delays greater than 0
     const val DEFAULT_REPORT_DELAY_FLOOR_MS = 5000L
 
@@ -76,8 +94,166 @@ object ScanUtil {
     const val WEIGHT_BALANCED = 25
     const val WEIGHT_LOW_LATENCY = 100
 
+    @JvmStatic fun findById(clients: Set<ScanClient>, id: Int) = clients.find { it.scannerId == id }
+
     @JvmStatic
     fun appNameOrUnknown(appName: String?, uid: Int) = appName ?: "Unknown App (UID: $uid)"
+
+    @JvmStatic
+    fun hasScanResultPermission(adapterService: AdapterService, client: ScanClient) =
+        when {
+            // Bypass permission check for internal clients
+            client.isInternalClient ||
+                client.hasNetworkSettingsPermission ||
+                client.hasNetworkSetupWizardPermission ||
+                client.hasScanWithoutLocationPermission ||
+                client.hasDisavowedLocation -> true
+            else ->
+                client.hasLocationPermission &&
+                    !Utils.blockedByLocationOff(adapterService, client.userHandle)
+        }
+
+    // Convert scanWindow and scanInterval from ms to LE scan units(0.625ms)
+    @JvmStatic
+    fun scanWindow(adapterService: AdapterService, client: ScanClient?) =
+        if (client == null) 0 else millsToUnit(windowMillis(adapterService, client.settings))
+
+    @JvmStatic
+    fun scanInterval(adapterService: AdapterService, client: ScanClient?) =
+        if (client == null) 0 else millsToUnit(intervalMillis(adapterService, client.settings))
+
+    @JvmStatic
+    fun windowMillis(adapterService: AdapterService, settings: ScanSettings) =
+        when (settings.scanMode) {
+            SCAN_MODE_LOW_LATENCY ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_LATENCY_WINDOW_MS,
+                    SCAN_MODE_LOW_LATENCY_WINDOW_MS,
+                )
+            SCAN_MODE_BALANCED,
+            SCAN_MODE_AMBIENT_DISCOVERY ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_BALANCED_WINDOW_MS,
+                    SCAN_MODE_BALANCED_WINDOW_MS,
+                )
+            SCAN_MODE_LOW_POWER ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_POWER_WINDOW_MS,
+                    SCAN_MODE_LOW_POWER_WINDOW_MS,
+                )
+            SCAN_MODE_SCREEN_OFF -> adapterService.screenOffLowPowerWindow.toMillis().toInt()
+            SCAN_MODE_SCREEN_OFF_BALANCED ->
+                adapterService.screenOffBalancedWindow.toMillis().toInt()
+            else ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_POWER_WINDOW_MS,
+                    SCAN_MODE_LOW_POWER_WINDOW_MS,
+                )
+        }
+
+    @JvmStatic
+    fun intervalMillis(adapterService: AdapterService, settings: ScanSettings) =
+        when (settings.scanMode) {
+            SCAN_MODE_LOW_LATENCY ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_LATENCY_INTERVAL_MS,
+                    SCAN_MODE_LOW_LATENCY_INTERVAL_MS,
+                )
+
+            SCAN_MODE_BALANCED,
+            SCAN_MODE_AMBIENT_DISCOVERY ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_BALANCED_INTERVAL_MS,
+                    SCAN_MODE_BALANCED_INTERVAL_MS,
+                )
+            SCAN_MODE_LOW_POWER ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_POWER_INTERVAL_MS,
+                    SCAN_MODE_LOW_POWER_INTERVAL_MS,
+                )
+            SCAN_MODE_SCREEN_OFF -> adapterService.screenOffLowPowerInterval.toMillis().toInt()
+            SCAN_MODE_SCREEN_OFF_BALANCED ->
+                adapterService.screenOffBalancedInterval.toMillis().toInt()
+            else ->
+                Settings.Global.getInt(
+                    adapterService.contentResolver,
+                    Settings.Global.BLE_SCAN_LOW_POWER_INTERVAL_MS,
+                    SCAN_MODE_LOW_POWER_INTERVAL_MS,
+                )
+        }
+
+    @JvmStatic
+    fun scanPhyMask(usePhy1m: Boolean, usePhyCoded: Boolean): Int {
+        var phy = 0
+        if (usePhy1m) {
+            phy = phy or BluetoothDevice.PHY_LE_1M_MASK
+        }
+        if (usePhyCoded) {
+            phy = phy or BluetoothDevice.PHY_LE_CODED_MASK
+        }
+        return phy
+    }
+
+    @JvmStatic
+    fun onFoundOnLostTimeoutMillis(settings: ScanSettings, onFound: Boolean): Int {
+        val timeout = ONLOST_ONFOUND_BASE_TIMEOUT_MS
+
+        var factor =
+            if (settings.matchMode == ScanSettings.MATCH_MODE_AGGRESSIVE) {
+                MATCH_MODE_AGGRESSIVE_TIMEOUT_FACTOR
+            } else {
+                MATCH_MODE_STICKY_TIMEOUT_FACTOR
+            }
+
+        if (!onFound) {
+            factor *= ONLOST_FACTOR
+        }
+
+        return timeout * factor
+    }
+
+    @JvmStatic
+    fun onFoundOnLostSightings(settings: ScanSettings) =
+        when (settings.matchMode) {
+            ScanSettings.MATCH_MODE_AGGRESSIVE -> ONFOUND_SIGHTINGS_AGGRESSIVE
+            else -> ONFOUND_SIGHTINGS_STICKY
+        }
+
+    @JvmStatic
+    fun deliveryMode(client: ScanClient?): Int {
+        val header = "deliveryMode($client):"
+        return when {
+            client == null -> {
+                Log.d(TAG, "$header Client is null, defaulting to DELIVERY_MODE_IMMEDIATE")
+                DELIVERY_MODE_IMMEDIATE
+            }
+            (client.settings.callbackType and ScanSettings.CALLBACK_TYPE_FIRST_MATCH) != 0 ||
+                (client.settings.callbackType and ScanSettings.CALLBACK_TYPE_MATCH_LOST) != 0 -> {
+                val types = "CALLBACK_TYPE_FIRST_MATCH OR CALLBACK_TYPE_MATCH_LOST"
+                Log.d(TAG, "$header Callback type is $types, using DELIVERY_MODE_ON_FOUND_LOST")
+                DELIVERY_MODE_ON_FOUND_LOST
+            }
+            isAllMatchesAutoBatchScanClient(client) -> {
+                val enabled = isAutoBatchScanClientEnabled(client)
+                val mode = if (enabled) "DELIVERY_MODE_BATCH" else "DELIVERY_MODE_IMMEDIATE"
+                Log.d(TAG, "$header Client is auto-batch (enabled=$enabled), using $mode")
+                if (enabled) DELIVERY_MODE_BATCH else DELIVERY_MODE_IMMEDIATE
+            }
+            else -> {
+                val delay = client.settings.reportDelayMillis
+                val mode = if (delay == 0L) "DELIVERY_MODE_IMMEDIATE" else "DELIVERY_MODE_BATCH"
+                Log.d(TAG, "$header Using report delay (${delay}ms) to set delivery mode to $mode")
+                if (delay == 0L) DELIVERY_MODE_IMMEDIATE else DELIVERY_MODE_BATCH
+            }
+        }
+    }
 
     @JvmStatic
     fun minScanMode(oldScanMode: Int, newScanMode: Int) =
@@ -344,11 +520,11 @@ object ScanUtil {
         }
 
         sb.append("\n    LE scans               ")
-            .append("(started/stopped)                                   : ")
+            .append("(Started/Stopped)                                   : ")
         sb.append("$mScansStarted / $mScansStopped")
 
         sb.append("\n    Scan time(ms)          ")
-            .append("(active/suspend/total)                              : ")
+            .append("(Active/Suspend/Total)                              : ")
         sb.append("$totalActiveTime / $totalSuspendTime / $totalScanTime")
 
         sb.append("\n    Scan time per mode(ms) ")
@@ -364,8 +540,9 @@ object ScanUtil {
         sb.append("\n    Score ")
             .append("                                                                     : $score")
 
-        sb.append("\n    Total number of results")
-            .append("                                                    : $mResults")
+        val results = mResultsScreenOff + mResultsScreenOn
+        sb.append("\n    Number of results      (ScreenOff/ScreenOn/Total)")
+            .append("                          : $mResultsScreenOff / $mResultsScreenOn / $results")
 
         if (mScheduledBatchAlarmCount > 0) {
             sb.append("\n    Number of batch alarms scheduled")
@@ -418,7 +595,9 @@ object ScanUtil {
         if (mIsFilterScan) sb.append("(Filter) ")
         if (ongoing && mIsSuspended) sb.append("(Suspended) ")
 
-        sb.append("Results: $mResults | id: ($mScannerId) | ")
+        val results = mResultsScreenOff + mResultsScreenOn
+        sb.append("Results: ($mResultsScreenOff / $mResultsScreenOn / $results) | ")
+            .append("id: ($mScannerId) | ")
 
         mAttributionTag?.let { sb.append("[$it] | ") }
 

@@ -34,7 +34,8 @@ import android.util.Log;
 
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.ConnectableProfile;
-import com.android.bluetooth.btservice.ProfileService;
+import com.android.bluetooth.profile.ProfileService;
+import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -74,9 +75,11 @@ public class A2dpSinkService extends ConnectableProfile {
     A2dpSinkService(
             AdapterService adapterService, A2dpSinkNativeInterface nativeInterface, Looper looper) {
         super(BluetoothProfile.A2DP_SINK, requireNonNull(adapterService));
+        var nativeCallback = new A2dpSinkNativeCallback(mAdapterService, this);
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new A2dpSinkNativeInterface(mAdapterService, this));
+                        nativeInterface,
+                        () -> new A2dpSinkNativeInterface(nativeCallback, mAdapterService));
         mLooper = looper;
         mMaxConnectedAudioDevices = mAdapterService.getMaxConnectedAudioDevices();
         mNativeInterface.init(mMaxConnectedAudioDevices);

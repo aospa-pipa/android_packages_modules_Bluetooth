@@ -17,7 +17,6 @@
 package com.android.bluetooth.btservice;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
-import static android.Manifest.permission.BLUETOOTH_SCAN;
 import static android.bluetooth.BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_AUTO;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_BREDR;
@@ -74,7 +73,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /** Remote device manager. This class is currently mostly used for HF and AG remote devices. */
 public class RemoteDevices {
@@ -85,7 +83,7 @@ public class RemoteDevices {
 
     private final AdapterService mAdapterService;
     private final BluetoothAdapter mAdapter;
-    private final ArrayList<BluetoothDevice> mSdpTracker;
+    private final ArrayList<BluetoothDevice> mSdpTracker = new ArrayList<>();
     private final Object mObject = new Object();
 
     private static final int UUID_INTENT_DELAY = 6000;
@@ -94,8 +92,10 @@ public class RemoteDevices {
     private static final int MESSAGE_UUID_STATUS_TIMEOUT = 1;
     private static final String LOG_SOURCE_DIS = "DIS";
 
-    private final LinkedHashMap<String, DeviceProperties> mDevices;
-    private final HashMap<String, String> mAddressMap; // Identity address to pseudo address map
+    private final LinkedHashMap<String, DeviceProperties> mDevices =
+            new LinkedHashMap<>(MAX_DEVICE_QUEUE_SIZE);
+    private final HashMap<String, String> mAddressMap =
+            new HashMap<>(); // Identity address to pseudo address map
     private final WatchConnectionStateListener mWatchConnectionStateListener;
 
     /**
@@ -156,9 +156,6 @@ public class RemoteDevices {
     RemoteDevices(AdapterService service, Looper looper) {
         mAdapterService = service;
         mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
-        mSdpTracker = new ArrayList<>();
-        mDevices = new LinkedHashMap<>(MAX_DEVICE_QUEUE_SIZE);
-        mAddressMap = new HashMap<>();
         mHandler = new RemoteDevicesHandler(looper);
         mMainHandler = new Handler(Looper.getMainLooper());
         mWatchConnectionStateListener = new WatchConnectionStateListener(mAdapterService, looper);
@@ -927,7 +924,12 @@ public class RemoteDevices {
 
         void setBatteryLevelFromBatteryService(int batteryLevel) {
             synchronized (mObject) {
-                if (Flags.consistentBatteryLevel() && batteryLevel != BATTERY_LEVEL_UNKNOWN) {
+                // Preserve the last battery level to prevent
+                // battery level fluctuation between BAS and HFP.
+                // We can safely reset it if there is no HFP.
+                if (Flags.consistentBatteryLevel()
+                        && (batteryLevel != BATTERY_LEVEL_UNKNOWN
+                                || mBatteryLevelFromHfp == BATTERY_LEVEL_UNKNOWN)) {
                     mLastBatteryLevelFromBatteryService = batteryLevel;
                 }
                 mBatteryLevelFromBatteryService = batteryLevel;
@@ -1598,7 +1600,9 @@ public class RemoteDevices {
                     .getBatteryService()
                     .filter(battery -> transport == TRANSPORT_LE)
                     .ifPresent(battery -> battery.connectIfPossible(device));
-            mAdapterService.updatePhonePolicyOnAclConnect(device);
+            if (!Flags.mainlineBetaStorage()) {
+                mAdapterService.updatePhonePolicyOnAclConnect(device);
+            }
             SecurityLog.writeEvent(
                     SecurityLog.TAG_BLUETOOTH_CONNECTION,
                     Utils.getLoggableAddress(device), /* success */
@@ -1849,7 +1853,11 @@ public class RemoteDevices {
             }
 
             Log.w(TAG, "Removing " + device + " on behalf of: " + Arrays.toString(packages));
-            device.removeBond();
+            if (Flags.mainlineBetaStorage()) {
+                mAdapterService.syncPost(() -> mAdapterService.removeBond(device), false);
+            } else {
+                mAdapterService.removeBond(device);
+            }
         }
 
         mAdapterService.sendOrderedBroadcast(
