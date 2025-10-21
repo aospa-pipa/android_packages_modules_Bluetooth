@@ -847,7 +847,8 @@ public class LeAudioService extends ConnectableProfile {
              */
             if (isBroadcastReadyToBeReActivated()
                     && previousRecordingMode
-                    && (getActiveGroupId() == LE_AUDIO_GROUP_ID_INVALID)) {
+                    && (getActiveGroupId() == LE_AUDIO_GROUP_ID_INVALID)
+                    && mBroadcastIdDeactivatedForUnicastTransition.isPresent()) {
                 stopBroadcast(mBroadcastIdDeactivatedForUnicastTransition.get());
                 mBroadcastIdDeactivatedForUnicastTransition = Optional.empty();
                 return;
