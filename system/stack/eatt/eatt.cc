@@ -181,6 +181,9 @@ void EattExtension::FreeGattResources(const RawAddress& bd_addr) {
 }
 
 bool EattExtension::IsOutstandingMsgInSendQueue(const RawAddress& bd_addr) {
+  if (!pimpl_->eatt_impl_) {
+    return false;  // EATT not running, no outstanding messages
+  }
   return pimpl_->eatt_impl_->is_outstanding_msg_in_send_queue(bd_addr);
 }
 
