@@ -4384,7 +4384,10 @@ public class LeAudioService extends ConnectableProfile {
             /* skip removing unicast active device
             if (mAwaitingBroadcastCreateResponse && !areAllGroupsInNotActiveState()) {
                 Log.i(TAG, "Unicast group is active, deactivate due to pending broadcast");
-
+                if (!leaudioUseAudioRecordingListener()) {
+                    mIsSinkStreamMonitorModeEnabled = true;
+                    mNativeInterface.setUnicastMonitorMode(LeAudioStackEvent.DIRECTION_SINK, true);
+                }
                 removeActiveDevice(true);
             }
             */
