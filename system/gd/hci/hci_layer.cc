@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "com_android_bluetooth_flags.h"
 #include "common/bind.h"
 #include "common/stop_watch.h"
 #include "hal/hci_hal.h"
@@ -39,7 +40,6 @@
 #include "osi/include/stack_power_telemetry.h"
 #include "packet/raw_builder.h"
 #include "storage/storage_module.h"
-#include "com_android_bluetooth_flags.h"
 
 #define SIGKILL 9
 
@@ -299,6 +299,24 @@ struct HciLayer::impl {
               std::move(response_view));
     }
 
+
+    // Although UNKNOWN_CONNECTION might be a controller issue in some command status, we treat it
+    // as a disconnect event to maintain consistent connection state between stack and controller
+    // since there might not be further HCI Disconnect Event after this status event.
+    // Currently only do this on LE_READ_REMOTE_FEATURES because it is the only one we know that
+    // would return UNKNOWN_CONNECTION in some cases.
+    if (op_code == OpCode::LE_READ_REMOTE_FEATURES && is_status && status_view.IsValid() &&
+        status_view.GetStatus() == ErrorCode::UNKNOWN_CONNECTION) {
+      auto& command_view = *command_queue_.front().command_view;
+      auto le_read_features_view = bluetooth::hci::LeReadRemoteFeaturesView::Create(
+              LeConnectionManagementCommandView::Create(AclCommandView::Create(command_view)));
+      if (le_read_features_view.IsValid()) {
+        uint16_t handle = le_read_features_view.GetConnectionHandle();
+        module_.Disconnect(handle, ErrorCode::UNKNOWN_CONNECTION);
+      }
+    }
+
+
     command_queue_.pop_front();
     waiting_command_ = OpCode::NONE;
     if (hci_timeout_alarm_ != nullptr) {
@@ -333,7 +351,8 @@ struct HciLayer::impl {
 #endif
 
     common::StopWatch::DumpStopWatchLog();
-    log::error("Timed out waiting for {} for {}ms", OpCodeText(op_code), getHciTimeoutMs().count());
+    log::error("Timed out waiting for {} for {}ms, which was armed at: {}", OpCodeText(op_code),
+               getHciTimeoutMs().count(), hci_timeout_alarm_->GetArmedTime());
 
     // Dynamically increase timeout if applicable.
     {
@@ -360,8 +379,8 @@ struct HciLayer::impl {
     log::error("Flushing #{} waiting commands", command_queue_.size());
     for (auto& command : command_queue_) {
       log::debug("Flushing command: opcode:{}, waiting for: {}",
-                 OpCodeText(command.command_view->GetOpCode()),
-                 std::to_string(static_cast<uint8_t>(command.waiting_for_)));
+                 command.command_view ? OpCodeText(command.command_view->GetOpCode()) : "??",
+                 static_cast<int>(command.waiting_for_));
     }
 
     // Clear any waiting commands (there is an abort coming anyway)
@@ -450,7 +469,12 @@ struct HciLayer::impl {
   }
 
   void unregister_le_event(SubeventCode event) {
-    le_event_handlers_.erase(le_event_handlers_.find(event));
+    auto it = le_event_handlers_.find(event);
+    if (it == le_event_handlers_.end()) {
+      log::warn("Can not unregister a non-existent handler for {}", SubeventCodeText(event));
+      return;
+    }
+    le_event_handlers_.erase(it);
   }
 
   void register_vs_event(VseSubeventCode event,
@@ -461,7 +485,12 @@ struct HciLayer::impl {
   }
 
   void unregister_vs_event(VseSubeventCode event) {
-    vs_event_handlers_.erase(vs_event_handlers_.find(event));
+    auto it = vs_event_handlers_.find(event);
+    if (it == vs_event_handlers_.end()) {
+      log::warn("Can not unregister a non-existent handler for {}", VseSubeventCodeText(event));
+      return;
+    }
+    vs_event_handlers_.erase(it);
   }
 
   void register_vs_event_default(ContextualCallback<void(VendorSpecificEventView)> handler) {
@@ -1097,7 +1126,7 @@ HciLayer::~HciLayer() {
   impl_->hal_->unregisterIncomingPacketCallback();
   delete hal_callbacks_;
 
-  if(com::android::bluetooth::flags::fix_event_handler_reg_and_dereg()) {
+  if (com_android_bluetooth_flags_fix_event_handler_reg_and_dereg()) {
     StopWithNoHalDependencies();
   }
 

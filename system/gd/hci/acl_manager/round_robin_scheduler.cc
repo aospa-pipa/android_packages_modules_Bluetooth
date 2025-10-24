@@ -45,7 +45,7 @@ RoundRobinScheduler::RoundRobinScheduler(os::Handler* handler, Controller& contr
 RoundRobinScheduler::~RoundRobinScheduler() {
   unregister_all_connections();
   controller_.UnregisterCompletedAclPacketsCallback();
-  if (!com::android::bluetooth::flags::same_handler_for_all_modules()) {
+  if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
     handler_->Clear();
     handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
     delete handler_;
@@ -80,14 +80,10 @@ void RoundRobinScheduler::Unregister(uint16_t handle) {
   log::info("unregistering acl_queue handle={}, sent_packets={}", handle,
             acl_queue_handler.number_of_sent_packets_);
 
-  bool credits_reclaimed_from_zero = acl_queue_handler.number_of_sent_packets_ > 0;
-
   // Reclaim outstanding packets
   if (acl_queue_handler.connection_type_ == ConnectionType::CLASSIC) {
-    credits_reclaimed_from_zero &= (acl_packet_credits_ == 0);
     acl_packet_credits_ += acl_queue_handler.number_of_sent_packets_;
   } else {
-    credits_reclaimed_from_zero &= (le_acl_packet_credits_ == 0);
     le_acl_packet_credits_ += acl_queue_handler.number_of_sent_packets_;
   }
   acl_queue_handler.number_of_sent_packets_ = 0;
@@ -99,8 +95,10 @@ void RoundRobinScheduler::Unregister(uint16_t handle) {
   acl_queue_handlers_.erase(handle);
   starting_point_ = acl_queue_handlers_.begin();
 
-  // Restart sending packets if we got acl credits
-  if (credits_reclaimed_from_zero) {
+  log::info("unregistering enqueue_registered_={}, acl_queue_handlers_.size={}",
+            enqueue_registered_.load(), acl_queue_handlers_.size());
+  // Restart sending packets if have other ACL handlers
+  if (!enqueue_registered_.load() && !acl_queue_handlers_.empty()) {
     start_round_robin();
   }
 }

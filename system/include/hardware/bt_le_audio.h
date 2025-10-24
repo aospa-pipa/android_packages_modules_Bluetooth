@@ -152,9 +152,9 @@ typedef enum {
   LE_AUDIO_CODEC_INDEX_SOURCE_LC3 = 0,
   LE_AUDIO_CODEC_INDEX_SOURCE_OPUS = 1,
   LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES = 2,
-  LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LE = 10002,
-  LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX = 10003,
-  LE_AUDIO_CODEC_INDEX_SOURCE_DEFAULT = 10004,
+  LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LE = 3,
+  LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX = 4,
+  LE_AUDIO_CODEC_INDEX_SOURCE_DEFAULT = 5,
   LE_AUDIO_CODEC_INDEX_SOURCE_INVALID = 1000 * 1000,
 } btle_audio_codec_index_t;
 
@@ -480,6 +480,9 @@ public:
   /* Set allowed to stream context */
   virtual void SetGroupAllowedContextMask(int group_id, int sink_context_types,
                                           int source_context_types) = 0;
+
+  /* Confirm group is active */
+  virtual void GroupConfirmActive(int group_id) = 0;
 };
 
 /* Represents the broadcast source state. */

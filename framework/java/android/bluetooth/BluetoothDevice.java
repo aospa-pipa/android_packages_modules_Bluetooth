@@ -390,7 +390,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             conditional = true)
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
     @BroadcastBehavior(protectedBroadcast = true)
-    @FlaggedApi(Flags.FLAG_KEY_MISSING_PUBLIC)
     public static final String ACTION_KEY_MISSING = "android.bluetooth.device.action.KEY_MISSING";
 
     /**
@@ -408,7 +407,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * <p>Always contains the extra field {@link #EXTRA_ENCRYPTION_ALGORITHM}
      */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     @SuppressLint("ActionValue")
     @RequiresPermission(BLUETOOTH_CONNECT)
     @SdkConstant(SdkConstantType.BROADCAST_INTENT_ACTION)
@@ -725,7 +723,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * Used as an int extra field in {@link #ACTION_ENCRYPTION_CHANGE} intents as the size of the
      * encryption key, in number of bytes. i.e. value of 16 means 16-byte, or 128 bit key size.
      */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     @SuppressLint("ActionValue")
     public static final String EXTRA_KEY_SIZE = "android.bluetooth.device.extra.KEY_SIZE";
 
@@ -736,7 +733,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * <p>Possible values are: {@link #ENCRYPTION_ALGORITHM_NONE}, {@link #ENCRYPTION_ALGORITHM_E0},
      * {@link #ENCRYPTION_ALGORITHM_AES}, {@link #ENCRYPTION_ALGORITHM_UNKNOWN}.
      */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     @SuppressLint("ActionValue")
     public static final String EXTRA_ENCRYPTION_ALGORITHM =
             "android.bluetooth.device.extra.EXTRA_ENCRYPTION_ALGORITHM";
@@ -755,15 +751,12 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     public @interface EncryptionAlgorithm {}
 
     /** Indicates that link was not encrypted using any algorithm */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     public static final int ENCRYPTION_ALGORITHM_NONE = 0;
 
     /** Indicates link was encrypted using E0 algorithm */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     public static final int ENCRYPTION_ALGORITHM_E0 = 1;
 
     /** Indicates link was encrypted using AES algorithm */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     public static final int ENCRYPTION_ALGORITHM_AES = 2;
 
     /** Indicates link was encrypted using unknown algorithm */
@@ -775,7 +768,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * value as returned from controller in "HCI Encryption Change event" i.e. value of 0 means
      * success.
      */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     @SuppressLint("ActionValue")
     public static final String EXTRA_ENCRYPTION_STATUS =
             "android.bluetooth.device.extra.ENCRYPTION_STATUS";
@@ -784,7 +776,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * Used as a boolean extra field in {@link #ACTION_ENCRYPTION_CHANGE} intent. false mean
      * encryption is OFF, true means encryption is ON
      */
-    @FlaggedApi(Flags.FLAG_ENCRYPTION_CHANGE_BROADCAST)
     @SuppressLint("ActionValue")
     public static final String EXTRA_ENCRYPTION_ENABLED =
             "android.bluetooth.device.extra.ENCRYPTION_ENABLED";
@@ -1182,9 +1173,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_SUPPORT_METADATA_DEVICE_TYPES_APIS)
-    @SystemApi
-    public static final String DEVICE_TYPE_SPEAKER = "Speaker";
+    @SystemApi public static final String DEVICE_TYPE_SPEAKER = "Speaker";
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1192,9 +1181,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_SUPPORT_METADATA_DEVICE_TYPES_APIS)
-    @SystemApi
-    public static final String DEVICE_TYPE_HEADSET = "Headset";
+    @SystemApi public static final String DEVICE_TYPE_HEADSET = "Headset";
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1202,9 +1189,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_SUPPORT_METADATA_DEVICE_TYPES_APIS)
-    @SystemApi
-    public static final String DEVICE_TYPE_CARKIT = "Carkit";
+    @SystemApi public static final String DEVICE_TYPE_CARKIT = "Carkit";
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1212,9 +1197,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_SUPPORT_METADATA_DEVICE_TYPES_APIS)
-    @SystemApi
-    public static final String DEVICE_TYPE_HEARING_AID = "HearingAid";
+    @SystemApi public static final String DEVICE_TYPE_HEARING_AID = "HearingAid";
 
     /**
      * Broadcast Action: This intent is used to broadcast the {@link UUID} wrapped as a {@link
@@ -4148,7 +4131,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *     address.
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_METADATA_API_MICROPHONE_FOR_CALL_ENABLED)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
@@ -4184,7 +4166,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *     otherwise.
      * @hide
      */
-    @FlaggedApi(Flags.FLAG_METADATA_API_MICROPHONE_FOR_CALL_ENABLED)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})

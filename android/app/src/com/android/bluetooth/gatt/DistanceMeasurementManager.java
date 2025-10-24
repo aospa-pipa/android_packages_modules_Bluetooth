@@ -120,14 +120,10 @@ public class DistanceMeasurementManager {
                         nativeInterface, () -> new DistanceMeasurementNativeInterface(this));
         mNativeInterface.init();
         mDistanceMeasurementBinder = new DistanceMeasurementBinder(adapterService, this);
-        if (Flags.channelSounding25q2Apis()) {
-            mHasChannelSoundingFeature =
-                    adapterService
-                            .getPackageManager()
-                            .hasSystemFeature(FEATURE_BLUETOOTH_LE_CHANNEL_SOUNDING);
-        } else {
-            mHasChannelSoundingFeature = true;
-        }
+        mHasChannelSoundingFeature =
+                adapterService
+                        .getPackageManager()
+                        .hasSystemFeature(FEATURE_BLUETOOTH_LE_CHANNEL_SOUNDING);
         if(mHasChannelSoundingFeature) {}
         postOnDistanceMeasurementThread(
                 () -> {
@@ -293,7 +289,7 @@ public class DistanceMeasurementManager {
 			params.getSightType(),
 			params.getLocationType(),
 			params.getCsSecurityLevel(),
-			tracker.mFrequency,tracker.mInterval);
+			tracker.mFrequency,tracker.mDuration);
         mNativeInterface.startDistanceMeasurement(
                 tracker.mAppUid,
                 tracker.mIdentityAddress,

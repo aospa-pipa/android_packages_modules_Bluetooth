@@ -52,16 +52,6 @@ flag {
 }
 
 flag {
-    name: "auto_transport_pairing"
-    namespace: "bluetooth"
-    description: "Fix transport selection for auto transport pairing"
-    bug: "398329326"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "reset_security_flags_on_pairing_failure"
     namespace: "bluetooth"
     description: "Reset security flags on pairing failure"
@@ -304,6 +294,36 @@ flag {
     namespace: "bluetooth"
     description: "Don't accept new bond request when bonding"
     bug: "439861848"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "modify_dev_rec_in_main_thread"
+    namespace: "bluetooth"
+    description: "Modify BTM device record list only in main thread"
+    bug: "444243832"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "device_record_wipe_ranking"
+    namespace: "bluetooth"
+    description: "New ranking for wiping oldest device record"
+    bug: "444268274"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "btm_le_pairing_state_reset"
+    namespace: "bluetooth"
+    description: "Reset BTM pairing state when LE pairing concludes"
+    bug: "444741056"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

@@ -117,7 +117,7 @@ struct codec_manager_impl {
 public:
   codec_manager_impl() {
     offload_enable_ = osi_property_get_bool("ro.bluetooth.leaudio_offload.supported", false) &&
-                      !osi_property_get_bool("persist.bluetooth.leaudio_offload.disabled", true);
+                      !osi_property_get_bool("persist.bluetooth.leaudio_offload.disabled", false);
     if (offload_enable_ == false) {
       log::info("offload disabled");
       return;
@@ -442,7 +442,7 @@ public:
       return;
     }
 
-    if (!com::android::bluetooth::flags::leaudio_add_opus_hi_res_codec_type()) {
+    if (!com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()) {
       log::verbose("Skipped due to disabled `leaudio_add_opus_hi_res_codec_type` flag.");
       return;
     }

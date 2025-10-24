@@ -34,6 +34,9 @@ bool gatt_act_connect(tGATT_REG* /* p_reg */, const RawAddress& /* bd_addr */,
   inc_func_call_count(__func__);
   return false;
 }
+void gatt_force_disconnect(tGATT_TCB* /* p_tcb */, std::string /* comment */) {
+  inc_func_call_count(__func__);
+}
 bool gatt_disconnect(tGATT_TCB* /* p_tcb */) {
   inc_func_call_count(__func__);
   return false;
@@ -79,3 +82,5 @@ void gatt_update_app_use_link_flag(tGATT_IF /* gatt_if */, tGATT_TCB* /* p_tcb *
 }
 
 void gatt_tcb_dump(int /* fd */) { inc_func_call_count(__func__); }
+
+void gatt_offload_sessions_dump(int /* fd */) { inc_func_call_count(__func__); }

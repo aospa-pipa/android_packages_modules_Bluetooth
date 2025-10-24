@@ -49,6 +49,8 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
 import static android.bluetooth.BluetoothProfile.getConnectionStateName;
 
+import static com.android.bluetooth.flags.Flags.leaudioIntentBroadcastInStateMachineCleanup;
+
 import android.bluetooth.BluetoothDevice;
 import android.os.Looper;
 import android.os.Message;
@@ -63,6 +65,7 @@ import com.android.internal.util.StateMachine;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.time.Duration;
 import java.util.Scanner;
 
 final class LeAudioStateMachine extends StateMachine {
@@ -71,9 +74,9 @@ final class LeAudioStateMachine extends StateMachine {
     static final int CONNECT = 1;
     static final int DISCONNECT = 2;
     static final int STACK_EVENT = 101;
-    private static final int CONNECT_TIMEOUT = 201;
+    private static final int MESSAGE_CONNECT_TIMEOUT = 201;
 
-    @VisibleForTesting static int sConnectTimeoutMs = 30000; // 30s
+    @VisibleForTesting static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
 
     private final Disconnected mDisconnected;
     private final Connecting mConnecting;
@@ -115,6 +118,13 @@ final class LeAudioStateMachine extends StateMachine {
 
     public void doQuit() {
         log("doQuit for device " + mDevice);
+        if (leaudioIntentBroadcastInStateMachineCleanup()
+                && mConnectionState != STATE_DISCONNECTED
+                && mLastConnectionState != -1) {
+            // Broadcast CONNECTION_STATE_CHANGED when state machine is turned off while
+            // the device is connected
+            broadcastConnectionState(STATE_DISCONNECTED, mConnectionState);
+        }
         quitNow();
     }
 
@@ -245,7 +255,7 @@ final class LeAudioStateMachine extends StateMachine {
                             + mDevice
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
-            sendMessageDelayed(CONNECT_TIMEOUT, sConnectTimeoutMs);
+            sendMessageDelayed(MESSAGE_CONNECT_TIMEOUT, CONNECT_TIMEOUT.toMillis());
             mConnectionState = STATE_CONNECTING;
             broadcastConnectionState(STATE_CONNECTING, mLastConnectionState);
         }
@@ -258,7 +268,7 @@ final class LeAudioStateMachine extends StateMachine {
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
             mLastConnectionState = STATE_CONNECTING;
-            removeMessages(CONNECT_TIMEOUT);
+            removeMessages(MESSAGE_CONNECT_TIMEOUT);
         }
 
         @Override
@@ -281,7 +291,7 @@ final class LeAudioStateMachine extends StateMachine {
                         }
                     }
                 }
-                case CONNECT_TIMEOUT -> {
+                case MESSAGE_CONNECT_TIMEOUT -> {
                     Log.w(TAG, "Connecting connection timeout: " + mDevice);
                     mNativeInterface.disconnectLeAudio(mDevice);
                     LeAudioStackEvent disconnectEvent =
@@ -343,7 +353,7 @@ final class LeAudioStateMachine extends StateMachine {
                             + mDevice
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
-            sendMessageDelayed(CONNECT_TIMEOUT, sConnectTimeoutMs);
+            sendMessageDelayed(MESSAGE_CONNECT_TIMEOUT, CONNECT_TIMEOUT.toMillis());
             mConnectionState = STATE_DISCONNECTING;
             broadcastConnectionState(STATE_DISCONNECTING, mLastConnectionState);
         }
@@ -356,7 +366,7 @@ final class LeAudioStateMachine extends StateMachine {
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
             mLastConnectionState = STATE_DISCONNECTING;
-            removeMessages(CONNECT_TIMEOUT);
+            removeMessages(MESSAGE_CONNECT_TIMEOUT);
         }
 
         @Override
@@ -379,7 +389,7 @@ final class LeAudioStateMachine extends StateMachine {
                         deferMessage(message);
                     }
                 }
-                case CONNECT_TIMEOUT -> {
+                case MESSAGE_CONNECT_TIMEOUT -> {
                     Log.w(TAG, "Disconnecting connection timeout: " + mDevice);
                     mNativeInterface.disconnectLeAudio(mDevice);
                     LeAudioStackEvent disconnectEvent =
@@ -558,7 +568,7 @@ final class LeAudioStateMachine extends StateMachine {
             case CONNECT -> "CONNECT";
             case DISCONNECT -> "DISCONNECT";
             case STACK_EVENT -> "STACK_EVENT";
-            case CONNECT_TIMEOUT -> "CONNECT_TIMEOUT";
+            case MESSAGE_CONNECT_TIMEOUT -> "CONNECT_TIMEOUT";
             default -> Integer.toString(what);
         };
     }

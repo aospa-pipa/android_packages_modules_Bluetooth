@@ -363,9 +363,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     log::debug("address {}, resultMeters {}", cs_requester_trackers_[connection_handle].address,
                ranging_result.result_meters_);
     uint64_t elapsedRealtimeNanos = ::android::elapsedRealtimeNano();
-    if (is_hal_v2()) {
-      elapsedRealtimeNanos = ranging_result.elapsed_timestamp_nanos_;
-    }
+    log::warn("elapsedRealtimeNanos: {}, resultMeters: {}", elapsedRealtimeNanos, ranging_result.result_meters_);
     distance_measurement_callbacks_->OnDistanceMeasurementResult(
             cs_requester_trackers_[connection_handle].address, ranging_result.result_meters_ * 100,
             ranging_result.error_meters_ * 100, kInvalidAzimuthAngleDegree,
@@ -403,7 +401,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   ~impl() {
     stop();
-    if (!com::android::bluetooth::flags::same_handler_for_all_modules()) {
+    if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
       handler_->Clear();
       handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
       delete handler_;
@@ -411,7 +409,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
   }
 
   void stop() {
-    if (com::android::bluetooth::flags::fix_event_handler_reg_and_dereg()) {
+    if (com_android_bluetooth_flags_fix_event_handler_reg_and_dereg()) {
       hci_layer_->ReleaseDistanceMeasurementInterface();
     }
 
@@ -739,10 +737,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
   void handle_conn_interval_updated(const Address& address, uint16_t connection_handle,
                                     uint16_t conn_interval) {
-    if (!com::android::bluetooth::flags::channel_sounding_25q2_apis()) {
-      log::debug("connection interval is not required.");
-      return;
-    }
     auto it = cs_requester_trackers_.find(connection_handle);
     if (it == cs_requester_trackers_.end()) {
       log::warn("can't find tracker for 0x{:04x}, address - {} ", connection_handle, address);
@@ -1826,10 +1820,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     }
   }
 
-  bool is_hal_v2() const {
-    return com::android::bluetooth::flags::channel_sounding_25q2_apis() &&
-           ranging_hal_->GetRangingHalVersion() == hal::V_2;
-  }
+  bool is_hal_v2() const { return ranging_hal_->GetRangingHalVersion() == hal::V_2; }
 
   void on_cs_subevent(LeMetaEventView event) {
     if (!event.IsValid()) {

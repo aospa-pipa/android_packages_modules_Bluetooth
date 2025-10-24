@@ -47,6 +47,7 @@
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/gatt_api.h"
+#include "stack/include/hci_error_code.h"
 #include "stack/include/l2cap_acl_interface.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
@@ -156,6 +157,10 @@ void gatt_init(void) {
   gatt_profile_db_init();
 
   EattExtension::GetInstance()->Start();
+
+  if (com::android::bluetooth::flags::gatt_offload_api() && !gatt_offload_init()) {
+    log::warn("error initializing gatt offload");
+  }
 }
 
 /*******************************************************************************
@@ -235,6 +240,37 @@ static bool gatt_connect(const RawAddress& rem_bda, tBLE_ADDR_TYPE addr_type, tG
 
   p_tcb->att_lcid = L2CAP_ATT_CID;
   return connection_manager::direct_connect_add(gatt_if, rem_bda, addr_type, false);
+}
+
+/*******************************************************************************
+ *
+ * Function         gatt_force_disconnect
+ *
+ * Description      This function is called to forcefully disconnect a device.
+ *
+ * Parameter        p_tcb: pointer to the TCB to disconnect.
+ *                  comment: disconnection reason
+ *
+ ******************************************************************************/
+void gatt_force_disconnect(tGATT_TCB* p_tcb, std::string comment) {
+  log::verbose("");
+
+  if (!p_tcb) {
+    log::warn("Unable to disconnect an unknown device");
+    return;
+  }
+
+  if (gatt_get_ch_state(p_tcb) == GATT_CH_OPEN) {
+    gatt_set_ch_state(p_tcb, GATT_CH_CLOSING);
+  }
+
+  auto hci_handle =
+          get_btm_client_interface().peer.BTM_GetHCIConnHandle(p_tcb->peer_bda, p_tcb->transport);
+  if (hci_handle == HCI_INVALID_HANDLE) {
+    log::warn("Unable to disconnect - no handle");
+  } else {
+    acl_disconnect_from_handle(hci_handle, HCI_ERR_PEER_USER, comment);
+  }
 }
 
 /*******************************************************************************
@@ -387,7 +423,7 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb, bool is_a
     }
   } else {
     if (p_tcb->app_hold_link.empty()) {
-      if (com::android::bluetooth::flags::gatt_discovery_is_non_opportunistic_client() &&
+      if (com_android_bluetooth_flags_gatt_discovery_is_non_opportunistic_client() &&
           p_tcb->transport == BT_TRANSPORT_LE) {
         tHCI_ROLE role;
         auto status = get_btm_client_interface().link_policy.BTM_GetRole(p_tcb->peer_bda,
@@ -399,6 +435,9 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb, bool is_a
                   p_tcb->peer_bda);
           return;
         }
+      }
+      if (com::android::bluetooth::flags::gatt_offload_api()) {
+        gatt_offload_clear_sessions_by_conn_id(gatt_create_conn_id(p_tcb->tcb_idx, gatt_if));
       }
       // acl link is connected but no application needs to use the link
       if (p_tcb->att_lcid == L2CAP_ATT_CID && is_valid_handle) {

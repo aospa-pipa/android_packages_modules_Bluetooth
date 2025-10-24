@@ -170,6 +170,7 @@ cc_library_static {
         "gatt/gatt_cl.cc",
         "gatt/gatt_db.cc",
         "gatt/gatt_main.cc",
+        "gatt/gatt_offload.cc",
         "gatt/gatt_sr.cc",
         "gatt/gatt_sr_hash.cc",
         "gatt/gatt_utils.cc",
@@ -341,7 +342,7 @@ cc_fuzz {
         "fuzzers/sdp_fuzzer.cc",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_hci_pdl",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
@@ -399,7 +400,7 @@ cc_defaults {
         "server_configurable_flags",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libaconfig_storage_read_api_cc",
         "libbluetooth_core_rs_bridge",
         "libbluetooth_crypto_toolbox",
@@ -458,11 +459,12 @@ cc_fuzz {
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
+        "libcrypto",
         "libstatssocket",
         "server_configurable_flags",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_core_rs_bridge",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd",
@@ -518,7 +520,7 @@ cc_defaults {
         "server_configurable_flags",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd",
         "libbluetooth_hci_pdl",
@@ -634,7 +636,7 @@ cc_defaults {
         "server_configurable_flags",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbase",
         "libbluetooth_hci_pdl",
         "libbluetooth_l2cap_pdl",
@@ -688,7 +690,7 @@ cc_defaults {
         ":TestMockStackHcic",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_hci_pdl",
         "libbluetooth_l2cap_pdl",
         "libbluetooth_log",
@@ -1133,6 +1135,7 @@ cc_test {
         ":TestMockStackArbiter",
         ":TestMockStackBtm",
         ":TestMockStackConnMgr",
+        ":TestMockStackGattOffload",
         ":TestMockStackSdp",
         "gatt/gatt_utils.cc",
         "test/common/mock_eatt.cc",
@@ -1465,6 +1468,7 @@ cc_test {
         ":TestMockStackA2dp",
         ":TestMockStackBtm",
         ":TestMockStackConnMgr",
+        ":TestMockStackGattOffload",
         ":TestMockStackL2cap",
         "gatt/gatt_db.cc",
         "gatt/gatt_sr_hash.cc",
@@ -2011,6 +2015,7 @@ cc_test {
         ":TestMockStackAcl",
         ":TestMockStackBtm",
         ":TestMockStackGap",
+        ":TestMockStackGattOffload",
         ":TestMockStackL2cap",
         ":TestMockStackSdp",
         ":TestMockStackSmp",
@@ -2127,7 +2132,7 @@ cc_test {
     ],
     static_libs: [
         "bluetooth_constants-cpp",
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_gd",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
@@ -2220,7 +2225,7 @@ cc_test {
     ],
     static_libs: [
         "bluetooth_constants-cpp",
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_core_rs_bridge",
         "libbluetooth_gd",
         "libbluetooth_hci_pdl",

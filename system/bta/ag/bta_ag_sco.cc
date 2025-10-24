@@ -239,7 +239,7 @@ static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
     /* Restore settings */
     if (bta_ag_cb.sco.p_curr_scb->inuse_codec == tBTA_AG_UUID_CODEC::UUID_CODEC_MSBC ||
         bta_ag_cb.sco.p_curr_scb->inuse_codec == tBTA_AG_UUID_CODEC::UUID_CODEC_LC3 || aptx_voice ||
-        (com::android::bluetooth::flags::fix_hfp_qual_1_9() &&
+        (com_android_bluetooth_flags_fix_hfp_qual_1_9() &&
          bta_ag_cb.sco.p_curr_scb->inuse_codec == tBTA_AG_UUID_CODEC::UUID_CODEC_CVSD &&
          bta_ag_cb.sco.p_curr_scb->codec_cvsd_settings != BTA_AG_SCO_CVSD_SETTINGS_S1)) {
       /* Bypass vendor specific and voice settings if enhanced eSCO supported */
@@ -252,11 +252,11 @@ static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
        * 'Safe setting' first. If T1 also fails, try CVSD
        * same operations for LC3 settings */
       if (bta_ag_sco_is_opening(bta_ag_cb.sco.p_curr_scb) &&
-          (!com::android::bluetooth::flags::fix_hfp_qual_1_9() || bta_ag_cb.sco.is_local)) {
+          (!com_android_bluetooth_flags_fix_hfp_qual_1_9() || bta_ag_cb.sco.is_local)) {
         /* Don't bother to edit |p_curr_scb->state| because it is in
          * |BTA_AG_OPEN_ST|, which has the same value as |BTA_AG_SCO_CODEC_ST|
          */
-        if (!com::android::bluetooth::flags::fix_hfp_qual_1_9()) {
+        if (!com_android_bluetooth_flags_fix_hfp_qual_1_9()) {
           bta_ag_cb.sco.p_curr_scb->state = (tBTA_AG_STATE)BTA_AG_SCO_CODEC_ST;
         }
         if (bta_ag_cb.sco.p_curr_scb->inuse_codec == tBTA_AG_UUID_CODEC::UUID_CODEC_LC3) {
@@ -289,10 +289,10 @@ static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
         }
       }
     } else if (bta_ag_sco_is_opening(bta_ag_cb.sco.p_curr_scb) &&
-               (!com::android::bluetooth::flags::fix_hfp_qual_1_9() || bta_ag_cb.sco.is_local)) {
+               (!com_android_bluetooth_flags_fix_hfp_qual_1_9() || bta_ag_cb.sco.is_local)) {
        if (bta_ag_cb.sco.p_curr_scb->retransmission_effort_retries == 0) {
          bta_ag_cb.sco.p_curr_scb->retransmission_effort_retries++;
-         if (!com::android::bluetooth::flags::fix_hfp_qual_1_9()) {
+         if (!com_android_bluetooth_flags_fix_hfp_qual_1_9()) {
            bta_ag_cb.sco.p_curr_scb->state = (tBTA_AG_STATE)BTA_AG_SCO_CODEC_ST;
          }
          log::warn("eSCO/SCO failed to open, retry with retransmission_effort");
@@ -523,7 +523,7 @@ void bta_ag_create_sco(tBTA_AG_SCB* p_scb, bool is_orig) {
       params = esco_parameters_for_codec(ESCO_CODEC_MSBC_T1, offload);
     }
   } else {
-    if (com::android::bluetooth::flags::fix_hfp_qual_1_9() &&
+    if (com_android_bluetooth_flags_fix_hfp_qual_1_9() &&
         p_scb->codec_cvsd_settings == BTA_AG_SCO_CVSD_SETTINGS_S1) {
       params = esco_parameters_for_codec(ESCO_CODEC_CVSD_S1, offload);
     } else {
@@ -622,7 +622,7 @@ static void updateCodecParametersFromProviderInfo(tBTA_AG_UUID_CODEC esco_codec,
     if (!sco_config_it->second.useControllerCodec) {
       log::debug("use DSP Codec instead of controller codec");
 
-      if (com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+      if (com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
         params.input_coding_format.coding_format = ESCO_CODING_FORMAT_TRANSPNT;
         params.output_coding_format.coding_format = ESCO_CODING_FORMAT_TRANSPNT;
         params.transmit_coding_format.coding_format = ESCO_CODING_FORMAT_TRANSPNT;
@@ -654,6 +654,18 @@ static void bta_ag_codec_negotiation_timer_cback(void* data) {
   bool is_blacklisted = interop_match_addr(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr);
   /* Announce that codec negotiation failed. */
   bta_ag_sco_codec_nego(p_scb, false);
+
+  // CancelStreamingRequest before callback is sent to java layer
+  if (bta_ag_is_sco_managed_by_audio()) {
+    if (hfp_software_datapath_enabled) {
+      if (hfp_encode_interface) {
+        hfp_encode_interface->CancelStreamingRequest();
+        hfp_decode_interface->CancelStreamingRequest();
+      }
+    } else {
+      hfp_offload_interface->CancelStreamingRequest();
+    }
+  }
   // add the device to blacklisting to disable codec negotiation
   if (is_blacklisted == false) {
     log::verbose("blacklisting device {} for codec negotiation",
@@ -663,6 +675,7 @@ static void bta_ag_codec_negotiation_timer_cback(void* data) {
     log::verbose("dev {} is already blacklisted for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
   }
+
   /* call app callback */
   bta_ag_cback_sco(p_scb, BTA_AG_AUDIO_CLOSE_EVT);
 }
@@ -715,7 +728,7 @@ void bta_ag_codec_negotiate(tBTA_AG_SCB* p_scb) {
   // if remote supports codec negotiation or AptX voice codec
   if (((p_scb->codec_updated || p_scb->codec_fallback) && (p_scb->features & BTA_AG_FEAT_CODEC) &&
        (p_scb->peer_features & BTA_AG_PEER_FEAT_CODEC)) ||
-      (aptx_voice && (com::android::bluetooth::flags::qc_aptx_codec_negotiation() &&
+      (aptx_voice && (com_android_bluetooth_flags_qc_aptx_codec_negotiation() &&
                       (p_scb->peer_codecs & BTA_AG_SCO_APTX_SWB_SETTINGS_Q0_MASK)))) {
     log::info("Starting codec negotiation");
     /* Change the power mode to Active until SCO open is completed. */
@@ -732,7 +745,7 @@ void bta_ag_codec_negotiate(tBTA_AG_SCB* p_scb) {
       /* Send +QCS to the peer */
       bta_ag_send_qcs(p_scb);
     } else {
-      if (aptx_voice && (com::android::bluetooth::flags::qc_aptx_codec_negotiation() &&
+      if (aptx_voice && (com_android_bluetooth_flags_qc_aptx_codec_negotiation() &&
                          (p_scb->peer_codecs & BTA_AG_SCO_APTX_SWB_SETTINGS_Q0_MASK))) {
         p_scb->sco_codec = BTM_SCO_CODEC_MSBC;
         p_scb->is_aptx_swb_codec = false;
@@ -849,7 +862,7 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           /* remove listening connection */
           bta_ag_remove_sco(p_scb, false);
 
-          if (!com::android::bluetooth::flags::sco_state_machine_update_in_codec_state() &&
+          if (!com_android_bluetooth_flags_sco_state_machine_update_in_codec_state() &&
               p_scb == p_sco->p_curr_scb) {
             p_sco->p_curr_scb = nullptr;
           }
@@ -858,7 +871,7 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           if (!bta_ag_other_scb_open(p_scb)) {
             p_sco->state = BTA_AG_SCO_SHUTDOWN_ST;
           } else {
-            if (com::android::bluetooth::flags::sco_state_machine_update_in_codec_state()) {
+            if (com_android_bluetooth_flags_sco_state_machine_update_in_codec_state()) {
               if (p_scb == p_sco->p_curr_scb) {
                 /* If SCO disconnected during codec negotiation, just go back to listening to allow
                  * SCO reconnection */
@@ -873,7 +886,7 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           break;
 
         case BTA_AG_SCO_CLOSE_E:
-          if (com::android::bluetooth::flags::sco_state_machine_update_in_codec_state()) {
+          if (com_android_bluetooth_flags_sco_state_machine_update_in_codec_state()) {
             if (p_scb == p_sco->p_curr_scb) {
               /* sco open is not started yet. just go back to listening */
               p_sco->state = BTA_AG_SCO_LISTEN_ST;
@@ -924,7 +937,7 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
           break;
 
         case BTA_AG_SCO_SHUTDOWN_E:
-          if (com::android::bluetooth::flags::sco_state_machine_cleanup()) {
+          if (com_android_bluetooth_flags_sco_state_machine_cleanup()) {
             /* remove listening connection */
             bta_ag_remove_sco(p_scb, false);
 
@@ -1569,17 +1582,17 @@ void bta_ag_sco_conn_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
   /* codec_fallback is set when AG is initiator and connection failed for mSBC.
    * OR if codec is msbc and T2 settings failed, then retry Safe T1 settings
    * same operations for LC3 settings */
-  if (p_scb->svc_conn && (p_scb->codec_fallback ||
-                          (p_scb->sco_codec == BTM_SCO_CODEC_MSBC &&
-                           p_scb->codec_msbc_settings == BTA_AG_SCO_MSBC_SETTINGS_T1) ||
-                          (p_scb->sco_codec == BTM_SCO_CODEC_LC3 &&
-                           p_scb->codec_lc3_settings == BTA_AG_SCO_LC3_SETTINGS_T1) ||
-                          (p_scb->retransmission_effort_retries == 1)||
-                          aptx_voice ||
-                          (com::android::bluetooth::flags::fix_hfp_qual_1_9() &&
-                           p_scb->sco_codec == BTM_SCO_CODEC_CVSD &&
-                           p_scb->codec_cvsd_settings == BTA_AG_SCO_CVSD_SETTINGS_S1 &&
-                           p_scb->trying_cvsd_safe_settings))) {
+  if (p_scb->svc_conn &&
+      (p_scb->codec_fallback ||
+       (p_scb->sco_codec == BTM_SCO_CODEC_MSBC &&
+        p_scb->codec_msbc_settings == BTA_AG_SCO_MSBC_SETTINGS_T1) ||
+       (p_scb->sco_codec == BTM_SCO_CODEC_LC3 &&
+        p_scb->codec_lc3_settings == BTA_AG_SCO_LC3_SETTINGS_T1) ||
+       (p_scb->retransmission_effort_retries == 1) ||
+       aptx_voice ||
+       (com_android_bluetooth_flags_fix_hfp_qual_1_9() && p_scb->sco_codec == BTM_SCO_CODEC_CVSD &&
+        p_scb->codec_cvsd_settings == BTA_AG_SCO_CVSD_SETTINGS_S1 &&
+        p_scb->trying_cvsd_safe_settings))) {
     bta_ag_sco_event(p_scb, BTA_AG_SCO_REOPEN_E);
   } else {
     /* Indicate if the closing of audio is because of transfer */
@@ -1680,7 +1693,7 @@ bool bta_ag_get_sco_offload_enabled() { return hfp_hal_interface::get_offload_en
 
 bool bta_ag_get_wbs_supported() {
   if (bta_ag_is_sco_managed_by_audio() &&
-      com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+      com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
     return sco_config_map.contains(tBTA_AG_UUID_CODEC::UUID_CODEC_MSBC);
   } else {
     return hfp_hal_interface::get_wbs_supported();
@@ -1689,7 +1702,7 @@ bool bta_ag_get_wbs_supported() {
 
 bool bta_ag_get_swb_supported() {
   if (bta_ag_is_sco_managed_by_audio() &&
-      com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+      com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
     return sco_config_map.contains(tBTA_AG_UUID_CODEC::UUID_CODEC_LC3);
   } else {
     return hfp_hal_interface::get_swb_supported();
@@ -1760,7 +1773,7 @@ void bta_ag_api_set_active_device(const RawAddress& new_active_device) {
   // hfp_encode/decode/offload_interface are expected to be initialized in
   // bta_ag_init_hfp_client_interface, earlier than calls to set active device.
   if (bta_ag_is_sco_managed_by_audio() &&
-      com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal() &&
+      com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal() &&
       active_device_addr.IsEmpty()) {
     if (hfp_software_datapath_enabled) {
       if (hfp_encode_interface && hfp_decode_interface) {
@@ -1775,7 +1788,7 @@ void bta_ag_api_set_active_device(const RawAddress& new_active_device) {
   }
 
   if (bta_ag_is_sco_managed_by_audio() &&
-      !com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+      !com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
     // Initialize and start HFP software data path
     if (!hfp_client_interface) {
       hfp_client_interface = HfpInterface::Get();
@@ -1823,7 +1836,7 @@ void bta_ag_api_set_active_device(const RawAddress& new_active_device) {
 }
 
 void bta_ag_release_hfp_client_interface() {
-  if (!com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+  if (!com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
     return;
   }
   sco_config_map = {};
@@ -1847,7 +1860,7 @@ void bta_ag_release_hfp_client_interface() {
 
 void bta_ag_init_hfp_client_interface() {
   if (!bta_ag_is_sco_managed_by_audio() ||
-      !com::android::bluetooth::flags::sco_managed_by_audio_remove_hfp_hal()) {
+      !com_android_bluetooth_flags_sco_managed_by_audio_remove_hfp_hal()) {
     return;
   }
 

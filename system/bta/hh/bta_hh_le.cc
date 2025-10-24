@@ -96,6 +96,24 @@ static bool bta_hh_le_iso_data_callback(const RawAddress& addr, uint16_t cis_con
                                         uint8_t* data, uint16_t size, uint32_t timestamp);
 
 static const char* bta_hh_le_rpt_name[4] = {"UNKNOWN", "INPUT", "OUTPUT", "FEATURE"};
+static void bta_hh_le_gatt_read_cb(tCONN_ID conn_id, tGATT_STATUS status, uint16_t handle,
+                                      uint16_t len, const uint8_t* value, void* data) {
+  if (status != GATT_SUCCESS) {
+    log::error("read_cb: status != GATT_SUCCESS");
+    return;
+  }
+  if (*value == GATT_CLT_CONFIG_NONE) {
+    GATT_WRITE_OP_CB bta_hh_le_gatt_write_cb = [](uint16_t /*conn_id*/, tGATT_STATUS status,
+                uint16_t /*handle*/, uint16_t /*len*/, const uint8_t* value, void* /*data*/){
+      log::info("write_cb: Status:{}", status);
+    };
+    vector<uint8_t> val(2);
+    uint8_t* ptr = val.data();
+    UINT16_TO_STREAM(ptr, GATT_CLT_CONFIG_NOTIFICATION);
+    BtaGattQueue::WriteDescriptor(conn_id, handle, std::move(val), GATT_WRITE,
+                                                   bta_hh_le_gatt_write_cb, nullptr);
+  }
+}
 
 /*******************************************************************************
  *
@@ -638,6 +656,17 @@ static void bta_hh_le_open_cmpl(tBTA_HH_DEV_CB* p_cb) {
                                          p_cb->dscp_info.product_id)) {
       BTA_GATTC_ConfigureMTU(p_cb->conn_id, GATT_MAX_MTU_SIZE);
     }
+    if (interop_match_name(INTEROP_ENABLE_REMOTE_NOTIFICATIONS, "FeiZhiWee")) {
+      tBTA_HH_LE_RPT* p_rpt = &p_cb->hid_srvc.report[0];
+      const gatt::Descriptor* p_desc = find_descriptor_by_short_uuid(p_cb->conn_id,
+                                           p_rpt->char_inst_id, GATT_UUID_CHAR_CLIENT_CONFIG);
+      if (!p_desc) return;
+      BtaGattQueue::ReadDescriptor(p_cb->conn_id, p_desc->handle,
+                        [](tCONN_ID conn_id, tGATT_STATUS status, uint16_t handle,
+                                    uint16_t len, uint8_t* value, void* user_data) {
+                        bta_hh_le_gatt_read_cb(conn_id, status, handle, len, value, user_data);
+                        }, p_cb);
+   }
   }
 }
 
@@ -1131,7 +1160,7 @@ static void bta_hh_start_security_(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* /* 
 }
 
 void bta_hh_start_security(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_buf) {
-  if (!com::android::bluetooth::flags::hogp_encryption_collision()) {
+  if (!com_android_bluetooth_flags_hogp_encryption_collision()) {
     bta_hh_start_security_(p_cb, p_buf);
     return;
   }
@@ -1179,6 +1208,8 @@ void bta_hh_gatt_open(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_buf) {
   if (p_data->status == GATT_SUCCESS) {
     p_cb->hid_handle = bta_hh_le_get_le_dev_hdl(p_cb->index);
     if (p_cb->hid_handle == BTA_HH_IDX_INVALID) {
+      log::warn("Invalid HID handle, closing connection {}, conn_id={}", p_cb->link_spec,
+                p_data->conn_id);
       p_cb->conn_id = p_data->conn_id;
       bta_hh_le_api_disc_act(p_cb);
       return;

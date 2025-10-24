@@ -389,7 +389,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
       break;
     // RFCOMM connected or failed to connect
     case BTA_AG_OPEN_EVT:
-      if (com::android::bluetooth::flags::fix_hfp_rfcomm_collision_state_machine_error() &&
+      if (com_android_bluetooth_flags_fix_hfp_rfcomm_collision_state_machine_error() &&
           p_data->open.status != BTA_AG_SUCCESS) {
         RawAddress current_bda = p_data->open.bd_addr;  // Get address from event data
 
@@ -604,8 +604,18 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
     /* Java needs to send OK/ERROR for these commands */
     case BTA_AG_AT_BLDN_EVT:
     case BTA_AG_AT_D_EVT:
-      bt_hf_callbacks->DialCallCallback((event == BTA_AG_AT_D_EVT) ? p_data->val.str : (char*)"",
-                                        &btif_hf_cb[idx].connected_bda);
+      if (com_android_bluetooth_flags_check_call_state_atd()) {
+        if (btif_hf_cb[idx].call_setup_state == BTHF_CALL_STATE_IDLE) {
+          bt_hf_callbacks->DialCallCallback(
+                  (event == BTA_AG_AT_D_EVT) ? p_data->val.str : (char*)"",
+                  &btif_hf_cb[idx].connected_bda);
+        } else {
+          send_at_result(BTA_AG_OK_ERROR, BTA_AG_ERR_OP_NOT_ALLOWED, idx);
+        }
+      } else {
+        bt_hf_callbacks->DialCallCallback((event == BTA_AG_AT_D_EVT) ? p_data->val.str : (char*)"",
+                                          &btif_hf_cb[idx].connected_bda);
+      }
       break;
 
     case BTA_AG_AT_CHUP_EVT:

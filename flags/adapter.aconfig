@@ -9,6 +9,16 @@ flag {
 }
 
 flag {
+    name: "unify_timeout_property"
+    namespace: "bluetooth"
+    description: "Unify the various timeout in the stack to allow slower hardware to still boot"
+    bug: "441576259"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "adapter_suspend_mgmt"
     namespace: "bluetooth"
     description: "Configure the BT adapter in a suspend state to avoid unexpected wake-up"
@@ -66,6 +76,16 @@ flag {
 }
 
 flag {
+    name: "get_profile_oneway"
+    namespace: "bluetooth"
+    description: "do not block calling thread when fetching profiles"
+    bug: "438829357"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "return_correct_ble_state"
     namespace: "bluetooth"
     description: "Return correct BLE state from bluetooth adapter"
@@ -94,13 +114,6 @@ flag {
 }
 
 flag {
-    name: "adapter_service_profiles_use_optional"
-    namespace: "bluetooth"
-    description: "Add optional getters for all profiles in [Bluetooth]AdapterService"
-    bug: "422543753"
-}
-
-flag {
     name: "ignore_multiple_connect_request_in_bt_services"
     namespace: "bluetooth"
     description: "Ignore multiple connect request in BT Services"
@@ -110,3 +123,12 @@ flag {
     }
 }
 
+flag {
+    name: "consistent_battery_level"
+    namespace: "bluetooth"
+    description: "Do not reset battey level from BAS to prevent battey level fluctuation"
+    bug: "442696675"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

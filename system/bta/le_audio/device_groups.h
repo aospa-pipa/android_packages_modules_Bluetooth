@@ -130,6 +130,7 @@ public:
         target_state_(types::AseState::BTA_LE_AUDIO_ASE_STATE_IDLE),
         current_state_(types::AseState::BTA_LE_AUDIO_ASE_STATE_IDLE),
         in_transition_(false),
+        active_confirmed_(false),
         suspended_for_reconfig_(false), streaming_pending_target_state_(false) {
 #ifdef __ANDROID__
     // 22 maps to BluetoothProfile#LE_AUDIO
@@ -151,6 +152,7 @@ public:
   void RemoveNode(const std::shared_ptr<LeAudioDevice>& leAudioDevice);
   bool IsEmpty(void) const;
   bool IsAnyDeviceConnected(void) const;
+  bool IsAnyDeviceDisconnecting(void) const;
   int Size(void) const;
   int DesiredSize(void) const;
   int NumOfConnected() const;
@@ -299,6 +301,15 @@ public:
       in_transition_ = false;
       log::info("In transition flag cleared");
     }
+  }
+
+  inline void SetActiveConfirmed(bool value) {
+    log::debug("group_id: {}, active_confirmed_ -> {}", group_id_, value);
+    active_confirmed_ = value;
+  }
+  bool IsActiveConfirmed(void) const {
+    log::debug("group_id: {}, active_confirmed_ -> {}", group_id_, active_confirmed_);
+    return active_confirmed_;
   }
 
   inline types::AseState GetTargetState(void) const {
@@ -555,6 +566,7 @@ private:
   types::AseState current_state_;
   bool in_transition_;
   std::vector<std::weak_ptr<LeAudioDevice>> leAudioDevices_;
+  bool active_confirmed_;
   bool suspended_for_reconfig_;
   uint8_t reconfig_start_pending_directions_;
   bool streaming_pending_target_state_;

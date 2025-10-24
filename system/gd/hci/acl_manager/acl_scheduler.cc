@@ -70,7 +70,7 @@ struct AclScheduler::impl {
         outgoing_entry_.reset();
         handle_outgoing_connection();
         // Check if incoming request also exists for this address
-        if (com::android::bluetooth::flags::acl_fix_in_and_out_connection_reqs() &&
+        if (com_android_bluetooth_flags_acl_fix_in_and_out_connection_reqs() &&
             incoming_connecting_address_set_.find(address) !=
                     incoming_connecting_address_set_.end()) {
           log::warn("Incoming connection request also exists for {}", address);
@@ -184,7 +184,7 @@ struct AclScheduler::impl {
 
   void Stop() {
     stopped_ = true;
-    if(!com::android::bluetooth::flags::same_handler_for_all_modules()) {
+    if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
       handler_->Clear();
       handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
       delete handler_;
@@ -210,6 +210,57 @@ private:
     return incoming_connecting_address_set_.empty() && !outgoing_entry_.has_value();
   }
 
+  std::stringstream log_queue_entry(const QueueEntry& entry) {
+    std::stringstream ss;
+    if (const RemoteNameRequestQueueEntry* peek =
+                std::get_if<RemoteNameRequestQueueEntry>(&entry)) {
+      ss << "RNR to " << peek->address.ToRedactedStringForLogging();
+    } else if (const AclCreateConnectionQueueEntry* peek =
+                       std::get_if<AclCreateConnectionQueueEntry>(&entry)) {
+      ss << "ACL connection to " << peek->address.ToRedactedStringForLogging();
+    } else {
+      ss << "Unknown entry type";
+    }
+    return ss;
+  }
+
+  inline void log_try_dequeue_next_operation() {
+    log::info(
+            "Could not send next operation postponed to next iteration, stopped: {}, "
+            "pending_outgoing_operations_ is_empty: "
+            "{}, outgoing_entry_ has_value: {}, incoming_connecting_address_set_ is_empty: {}",
+            stopped_, pending_outgoing_operations_.empty(), outgoing_entry_.has_value(),
+            incoming_connecting_address_set_.empty());
+
+
+    // log the contents of the pending_outgoing_operations_
+    if (!pending_outgoing_operations_.empty()) {
+      std::stringstream log_message;
+      log_message << "Pending Outgoing Operations: ";
+      for (const auto& entry : pending_outgoing_operations_) {
+        log_message << log_queue_entry(entry).str() << ", ";
+      }
+      log::info("{}", log_message.str());
+    }
+
+
+    // Aggregate contents of the incoming_connecting_address_set_
+    if (!incoming_connecting_address_set_.empty()) {
+      std::stringstream log_message;
+      log_message << "Incoming Connections from: ";
+      for (const auto& address : incoming_connecting_address_set_) {
+        log_message << address.ToRedactedStringForLogging() << ", ";
+      }
+      log::info("{}", log_message.str());
+    }
+
+
+    // Aggregate contents of the outgoing_entry_
+    if (outgoing_entry_.has_value()) {
+      log::info("Current Outgoing Entry: {}", log_queue_entry(outgoing_entry_.value()).str());
+    }
+  }
+
   void try_dequeue_next_operation() {
     log::info("Enter, outgoing_entry_.has_value() : {}", outgoing_entry_.has_value());
     if (ready_to_send_next_operation()) {
@@ -230,6 +281,10 @@ private:
             outgoing_entry_ = std::move(entry);
         }
       }
+    }
+    else {
+      // log the reasons on why we're not sending the next operation
+      log_try_dequeue_next_operation();
     }
     log::info("Exit, outgoing_entry_.has_value() : {}", outgoing_entry_.has_value());
 

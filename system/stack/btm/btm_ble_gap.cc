@@ -590,7 +590,7 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
     btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type = BLE_ADDR_PUBLIC;
     /* This is a Floss only flag. Allow host use random address when privacy
      * mode is not enabled by setting the sysprop true */
-    if (com::android::bluetooth::flags::floss_separate_host_privacy_and_llprivacy()) {
+    if (com_android_bluetooth_flags_floss_separate_host_privacy_and_llprivacy()) {
       if (osi_property_get_bool(PROPERTY_BLE_PRIVACY_OWN_ADDRESS_ENABLED, privacy_mode)) {
         btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type = BLE_ADDR_RANDOM;
       }
@@ -603,7 +603,7 @@ bool BTM_BleConfigPrivacy(bool privacy_mode) {
     btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type = BLE_ADDR_RANDOM;
     /* This is a Floss only flag. Allow host use public address when privacy
      * mode is enabled by setting the sysprop false */
-    if (com::android::bluetooth::flags::floss_separate_host_privacy_and_llprivacy()) {
+    if (com_android_bluetooth_flags_floss_separate_host_privacy_and_llprivacy()) {
       /* use public address if own address privacy is false in sysprop */
       if (!osi_property_get_bool(PROPERTY_BLE_PRIVACY_OWN_ADDRESS_ENABLED, privacy_mode)) {
         btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type = BLE_ADDR_PUBLIC;
@@ -873,7 +873,7 @@ void btm_ble_periodic_adv_sync_established(uint8_t status, uint16_t sync_handle,
  *
  * Function        btm_ble_periodic_adv_report
  *
- * Description     This callback is received when controller estalishes sync
+ * Description     This callback is received when controller establishes sync
  *                 to a PA requested from host
  *
  ******************************************************************************/
@@ -976,7 +976,7 @@ static void msft_adv_mon_enable_cb(bool /* enable */, uint8_t status) {
 
 /* Update MSFT-based scan to align with active scan requirements */
 static void btm_ble_update_msft_scan(tBTM_BLE_SCAN_COND_OP action) {
-  if (!com::android::bluetooth::flags::le_scan_msft_support() ||
+  if (!com_android_bluetooth_flags_le_scan_msft_support() ||
       !osi_property_get_bool("bluetooth.core.le.use_msft_hci_ext", false) ||
       !scanner->IsMsftSupported()) {
     return;
@@ -1140,7 +1140,7 @@ tBTM_STATUS btm_ble_read_remote_name(const RawAddress& remote_bda, tBTM_NAME_CMP
 
   tINQ_DB_ENT* p_i = btm_inq_db_find(remote_bda);
   if (p_i && !ble_evt_type_is_connectable(p_i->inq_info.results.ble_evt_type)) {
-    if (com::android::bluetooth::flags::ble_rnr_when_connected() &&
+    if (com_android_bluetooth_flags_ble_rnr_when_connected() &&
         BTM_IsAclConnectionUp(remote_bda, BT_TRANSPORT_LE)) {
       log::verbose("name request to non-connectable device, but already connected");
     } else {
@@ -1650,9 +1650,9 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, tBLE_ADDR_TYPE addr_type,
   bool is_scan_resp = ble_evt_type_is_scan_resp(evt_type);
   bool is_legacy = ble_evt_type_is_legacy(evt_type);
 
-  // We might receive a legacy scan response without receving a ADV_IND
+  // We might receive a legacy scan response without receiving a ADV_IND
   // or ADV_SCAN_IND before. Only parsing the scan response data which
-  // has no ad flag, the device will be set to DUMO mode. The createbond
+  // has no ad flag, the device will be set to DUMO mode. The create bond
   // procedure will use the wrong device mode.
   // In such case no necessary to report scan response
   if (is_legacy && is_scan_resp && !cache.Exist(addr_type, bda)) {
@@ -1772,7 +1772,7 @@ void btm_ble_process_adv_pkt_cont(uint16_t evt_type, tBLE_ADDR_TYPE addr_type,
                        const_cast<uint8_t*>(adv_data.data()), adv_data.size());
   }
 
-  // Pass address up to GattService#onScanResult
+  // Pass address up to ScanController#onScanResult
   p_i->inq_info.results.original_bda = original_bda;
 
   tBTM_INQ_RESULTS_CB* p_obs_results_cb = btm_cb.ble_ctr_cb.p_obs_results_cb;

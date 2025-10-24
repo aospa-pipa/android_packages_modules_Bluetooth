@@ -360,6 +360,9 @@ public class BluetoothManagerServiceTest {
         mInOrder.verify(mContext).unbindService(any());
         verifyBleStateIntentSent(State.BLE_TURNING_ON, State.OFF);
 
+        mLooper.moveTimeForward(120_000);
+        discardMessage(MESSAGE_RESTART_BLUETOOTH_SERVICE); // verify recovery process is started
+
         endTest();
     }
 
@@ -1033,10 +1036,7 @@ public class BluetoothManagerServiceTest {
                 break;
             }
 
-            mLooper.moveTimeForward(delay - 50);
-            assertThat(mLooper.nextMessage()).isNull();
-            mLooper.moveTimeForward(50);
-
+            mLooper.moveTimeForward(delay);
             syncHandler(MESSAGE_RESTART_BLUETOOTH_SERVICE);
         }
 

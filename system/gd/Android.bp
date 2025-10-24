@@ -56,6 +56,7 @@ cc_defaults {
         },
         android: {
             srcs: [
+                "hal/gatt_hal_impl_android.cc",
                 "hal/hci_backend_aidl.cc",
                 "hal/hci_backend_hidl.cc",
                 "hal/hci_hal_impl_android.cc",
@@ -81,6 +82,7 @@ cc_defaults {
             ],
             whole_static_libs: [
                 "android.hardware.bluetooth-V1-ndk",
+                "android.hardware.bluetooth.gatt-V1-ndk",
                 "android.hardware.bluetooth.ranging-V2-ndk",
                 "android.hardware.bluetooth.socket-V1-ndk",
                 "android.hardware.contexthub-V4-ndk",
@@ -95,6 +97,7 @@ cc_defaults {
         "common/utils.cc",
         "hal/link_clocker.cc",
         "hal/snoop_logger.cc",
+        "hal/snoop_logger_file.cc",
         "hal/snoop_logger_socket.cc",
         "hal/snoop_logger_socket_thread.cc",
         "hal/snoop_logger_tracing.cc",
@@ -249,7 +252,7 @@ cc_library_static {
         "-DUSE_FAKE_TIMERS",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_types",
         "libbt-common",
         "libchrome",
@@ -474,7 +477,6 @@ cc_test {
         "hci/address_with_type_test.cc",
         "hci/class_of_device_unittest.cc",
         "hci/controller_impl_test.cc",
-        "hci/controller_impl_unittest.cc",
         "hci/distance_measurement_manager_impl_test.cc",
         "hci/hci_layer_fake.cc",
         "hci/hci_layer_test.cc",
@@ -602,7 +604,7 @@ cc_defaults {
         "packages/modules/Bluetooth/system",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd_fuzzing",
         "libbluetooth_log",
@@ -701,7 +703,7 @@ cc_benchmark {
         "os/thread_benchmark.cc",
     ],
     static_libs: [
-        "bluetooth_flags_c_lib",
+        "bluetooth_flags_c_lib_for_test",
         "libbase",
         "libbluetooth_gd",
         "libbluetooth_log",

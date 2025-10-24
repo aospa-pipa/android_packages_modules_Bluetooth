@@ -758,6 +758,9 @@ public:
       return;
     }
 
+    bluetooth::le_audio::send_vs_cmd(LTV_TYPE_STREAM_INDICATION,
+        0x04, std::vector<uint8_t>());
+
     /* All Ases should aim to achieve target state */
     SetTargetState(group, AseState::BTA_LE_AUDIO_ASE_STATE_IDLE);
 
@@ -1426,8 +1429,9 @@ public:
       return;
     }
 
-    log::debug("device: {}, group connected: {}, all active ase disconnected:: {}",
-               leAudioDevice->address_, group->IsAnyDeviceConnected(),
+    log::debug("device: {}, group connected: {}, group disconnecting: {}, "
+               "all active ase disconnected:: {}",leAudioDevice->address_,
+               group->IsAnyDeviceConnected(), group->IsAnyDeviceDisconnecting(),
                group->HaveAllCisesDisconnected());
 
     if (group->IsAnyDeviceConnected()) {
@@ -1444,6 +1448,15 @@ public:
 
       if (!group->IsInTransitionTo(AseState::BTA_LE_AUDIO_ASE_STATE_IDLE)) {
         /* do nothing if not transitioning to IDLE */
+        return;
+      }
+    } else if (group->IsAnyDeviceDisconnecting()) {
+      /* ACL of one of the device has been dropped
+       * and other devie is disconnecting.
+       */
+      if (!group->HaveAllCisesDisconnected()) {
+        /* some CISes are connected */
+        SendStreamingStatusCbIfNeeded(group);
         return;
       }
     }
@@ -1503,7 +1516,7 @@ public:
                  common::ToString(codec));
 
     } else {
-      if (com::android::bluetooth::flags::dsa_use_codec_extensibility()) {
+      if (com_android_bluetooth_flags_dsa_use_codec_extensibility()) {
         log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
       }
       switch (group->dsa_.mode) {
@@ -2131,7 +2144,7 @@ private:
                     param.sdu_itv_stom, param.max_trans_lat_stom, it->max_sdu_size_stom,
                     it->rtn_stom);
           } else {
-            if (com::android::bluetooth::flags::dsa_use_codec_extensibility()) {
+            if (com_android_bluetooth_flags_dsa_use_codec_extensibility()) {
               log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
             }
             param.sdu_itv_stom = bluetooth::le_audio::types::kLeAudioHeadtrackerSduItv;
@@ -2459,7 +2472,7 @@ private:
       return;
     }
 
-    if (!com::android::bluetooth::flags::leaudio_dynamic_data_path_change()) {
+    if (!com_android_bluetooth_flags_leaudio_dynamic_data_path_change()) {
       log::debug("Skipped due to leaudio_dynamic_data_path_change flag not being set.");
       return;
     }
@@ -2709,6 +2722,7 @@ private:
       case AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING: {
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_IDLE);
         ase->active = false;
+        ase->reconfigure = false;
         ase->configured_for_context_type =
                 bluetooth::le_audio::types::LeAudioContextType::UNINITIALIZED;
 
@@ -3158,6 +3172,7 @@ private:
       case AseState::BTA_LE_AUDIO_ASE_STATE_RELEASING:
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED);
         ase->active = false;
+        ase->reconfigure = false;
 
         if (!leAudioDevice->HaveAllActiveAsesSameState(
                     AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED)) {
@@ -3617,6 +3632,7 @@ private:
       } else {
         log::info("{}, ase: {} already in idle. Deactivate it", leAudioDevice->address_, ase->id);
         ase->active = false;
+        ase->reconfigure = false;
       }
     } while ((ase = leAudioDevice->GetNextActiveAse(ase)));
 
@@ -3782,7 +3798,7 @@ private:
         continue;
       }
 
-      if (com::android::bluetooth::flags::leaudio_dynamic_direction_opening() &&
+      if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening() &&
           ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
         log::info(
                 "Metadata for ase_id {} cannot be updated due to invalid ase state - see log above",
@@ -3857,7 +3873,7 @@ private:
 
     do {
       if (ase->direction == bluetooth::le_audio::types::kLeAudioDirectionSource) {
-        if (com::android::bluetooth::flags::leaudio_dynamic_direction_opening()) {
+        if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
           if (ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_ENABLING) {
             continue;
           }
@@ -4020,7 +4036,7 @@ private:
           group->SetStreamingMetadataContexts(streaming_audio_context.value(), ase->direction);
         }
 
-        if (com::android::bluetooth::flags::leaudio_dynamic_direction_opening()) {
+        if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
           if (!group->HasAllRequiredStreamingAses()) {
             log::info("More Ases to get in streaming state for group_id: {}", group->group_id_);
             return;

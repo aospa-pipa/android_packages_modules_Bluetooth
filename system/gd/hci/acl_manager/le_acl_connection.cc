@@ -46,13 +46,17 @@ public:
     }
   }
 
-#define SAVE_OR_CALL(f, ...)                                                                     \
-  if (client_handler_ == nullptr) {                                                              \
-    queued_callbacks_.emplace_back(common::BindOnce(&LeConnectionManagementCallbacks::f,         \
-                                                    common::Unretained(this), __VA_ARGS__));     \
-  } else {                                                                                       \
-    client_handler_->Post(common::BindOnce(&LeConnectionManagementCallbacks::f,                  \
-                                           common::Unretained(client_callbacks_), __VA_ARGS__)); \
+#define SAVE_OR_CALL(f, ...)                                                                       \
+  if (client_handler_ == nullptr) {                                                                \
+    queued_callbacks_.emplace_back(common::BindOnce(&LeConnectionManagementCallbacks::f,           \
+                                                    common::Unretained(this), __VA_ARGS__));       \
+  } else {                                                                                         \
+    if (client_callbacks_ != nullptr) {                                                            \
+      client_handler_->Post(common::BindOnce(&LeConnectionManagementCallbacks::f,                  \
+                                             common::Unretained(client_callbacks_), __VA_ARGS__)); \
+    } else {                                                                                       \
+      log::error("client_callbacks_ is null, can't post callback");                                \
+    }                                                                                              \
   }
 
   void OnConnectionUpdate(hci::ErrorCode hci_status, uint16_t conn_interval, uint16_t conn_latency,
@@ -187,7 +191,7 @@ void LeAclConnection::RegisterCallbacks(LeConnectionManagementCallbacks* callbac
 }
 
 void LeAclConnection::Disconnect(DisconnectReason reason) {
-  if (com::android::bluetooth::flags::dont_send_hci_disconnect_repeatedly()) {
+  if (com_android_bluetooth_flags_dont_send_hci_disconnect_repeatedly()) {
     if (is_disconnecting_) {
       log::info("Already disconnecting {}", remote_address_);
       return;

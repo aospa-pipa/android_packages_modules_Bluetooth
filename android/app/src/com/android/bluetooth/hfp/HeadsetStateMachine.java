@@ -23,7 +23,6 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTING;
-import static android.media.audio.Flags.deprecateStreamBtSco;
 
 import static java.util.Objects.requireNonNull;
 
@@ -53,6 +52,7 @@ import android.util.Log;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.btservice.InteropUtil;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.btservice.InteropUtil;
 import com.android.bluetooth.btservice.ProfileService;
@@ -103,6 +103,7 @@ class HeadsetStateMachine extends StateMachine {
     // message.obj is an intent AudioManager.ACTION_VOLUME_CHANGED
     // EXTRA_VOLUME_STREAM_TYPE is STREAM_BLUETOOTH_SCO/STREAM_VOICE_CALL
     static final int INTENT_SCO_VOLUME_CHANGED = 7;
+    static final int CLCC_RSP_AFTER_VOIP_CALL_END = 18;
     static final int INTENT_CONNECTION_ACCESS_REPLY = 8;
     static final int CALL_STATE_CHANGED = 9;
     static final int DEVICE_STATE_CHANGED = 10;
@@ -2161,7 +2162,7 @@ class HeadsetStateMachine extends StateMachine {
             boolean showVolume = android.os.SystemProperties.getBoolean(HFP_VOLUME_CONTROL_ENABLED, true);
             int flag = showVolume && (mCurrentState == mAudioOn) ? AudioManager.FLAG_SHOW_UI : 0;
             int volStream =
-                    deprecateStreamBtSco()
+                    android.media.audio.Flags.deprecateStreamBtSco()
                             ? AudioManager.STREAM_VOICE_CALL
                             : AudioManager.STREAM_BLUETOOTH_SCO;
             int currentVol = mSystemInterface.getAudioManager().getStreamVolume(volStream);
@@ -2600,6 +2601,12 @@ class HeadsetStateMachine extends StateMachine {
                 mNativeInterface.clccResponse(device, 1, 0, 0, 0, false, phoneNumber, type);
             }
             mNativeInterface.clccResponse(device, 0, 0, 0, 0, false, "", 0);
+        } else if (hasMessages(CLCC_RSP_AFTER_VOIP_CALL_END)) {
+            // This is an interop fix to send CLCC responses as few devices expect
+            // empty CLCC response after the VOIP call is terminated
+            Log.w(TAG, "processAtClcc: send OK response as VOIP call ended just now");
+            mNativeInterface.clccResponse(device, 0, 0, 0, 0, false, "", 0);
+            removeMessages(CLCC_RSP_AFTER_VOIP_CALL_END);
         } else {
             // In Telecom call, ask Telecom to send send remote phone number
             if (!mSystemInterface.listCurrentCalls(mHeadsetService)) {
@@ -2791,6 +2798,13 @@ class HeadsetStateMachine extends StateMachine {
                                 "Remove the active device because the active device policy after"
                                         + " connection is not allowed");
                         mHeadsetService.setActiveDevice(null);
+                    } else if (getHfpCallAudioPolicy().getActiveDevicePolicyAfterConnection()
+                                    == BluetoothSinkAudioPolicy.POLICY_ALLOWED
+                            && !mDevice.equals(mHeadsetService.getActiveDevice())) {
+                        Log.d( TAG,
+                            "Set the device as active because the active device policy after"
+                              + " connection is allowed");
+                        mHeadsetService.setActiveDevice(mDevice);
                     }
                 } else {
                     Log.w(TAG, "Invalid SinkAudioPolicy parameters!");
@@ -3174,13 +3188,14 @@ class HeadsetStateMachine extends StateMachine {
         return matched;
     }
 
-    boolean isDeviceBlacklistedForDelayingCLCCRespAfterVOIPCall() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
-            InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
-            mDevice.getAddress());
+    boolean isDeviceDenylistedForDelayingCLCCRespAfterVOIPCall() {
+        boolean matched =
+                InteropUtil.interopMatchAddrOrName(
+                        mAdapterService,
+                        InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
+                        mDevice.getAddress());
         return matched;
     }
-
     @Override
     protected void log(String msg) {
         super.log(msg);

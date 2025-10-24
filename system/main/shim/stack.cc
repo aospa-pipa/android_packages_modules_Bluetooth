@@ -30,6 +30,7 @@
 #include <signal.h>
 
 #include "common/strings.h"
+#include "hal/gatt_hal_impl.h"
 #include "hal/hci_hal_impl.h"
 #include "hal/link_clocker.h"
 #include "hal/ranging_hal_impl.h"
@@ -66,6 +67,16 @@ using ::bluetooth::os::Thread;
 using ::bluetooth::os::WakelockManager;
 
 namespace bluetooth {
+static std::chrono::milliseconds get_gd_stack_timeout_ms(bool is_start) {
+  log::assert_that(!com::android::bluetooth::flags::unify_timeout_property(),
+                   "unify_timeout_property is enabled");
+  auto gd_timeout = os::GetSystemPropertyUint32(
+          is_start ? "bluetooth.gd.start_timeout" : "bluetooth.gd.stop_timeout",
+          is_start ? 3000 : 5000);
+  return std::chrono::milliseconds(gd_timeout *
+                                   os::GetSystemPropertyUint32("ro.hw_timeout_multiplier", 1));
+}
+
 namespace shim {
 
 struct Stack::impl {
@@ -95,7 +106,9 @@ struct Stack::impl {
         distance_measurement_manager_(handler, &hci_layer_, &controller_, &acl_manager_,
                                       &ranging_hal_) {
     socket_hal_ = std::make_unique<hal::SocketHalImpl>();
-    lpp_offload_manager_ = std::make_unique<lpp::LppOffloadManager>(handler, socket_hal_.get());
+    gatt_hal_ = std::make_unique<hal::GattHalImpl>();
+    lpp_offload_manager_ =
+            std::make_unique<lpp::LppOffloadManager>(handler, socket_hal_.get(), gatt_hal_.get());
   }
 
   // TODO: Remove this constructor once the flag (same_handler_for_all_modules) is fully rolled out.
@@ -125,13 +138,18 @@ struct Stack::impl {
         distance_measurement_manager_(new os::Handler(thread), &hci_layer_, &controller_,
                                       &acl_manager_, &ranging_hal_) {
     socket_hal_ = std::make_unique<hal::SocketHalImpl>();
-    lpp_offload_manager_ =
-            std::make_unique<lpp::LppOffloadManager>(new os::Handler(thread), socket_hal_.get());
+    gatt_hal_ = std::make_unique<hal::GattHalImpl>();
+    lpp_offload_manager_ = std::make_unique<lpp::LppOffloadManager>(
+            new os::Handler(thread), socket_hal_.get(), gatt_hal_.get());
   }
 
   ~impl() {
     if (lpp_offload_manager_) {
       lpp_offload_manager_.reset();
+    }
+
+    if (gatt_hal_) {
+      gatt_hal_.reset();
     }
 
     if (socket_hal_) {
@@ -145,6 +163,7 @@ struct Stack::impl {
 #if TARGET_FLOSS
   sysprops::SyspropsModule sysprops_module_;
 #endif
+  std::unique_ptr<hal::GattHal> gatt_hal_ = nullptr;
   std::unique_ptr<hal::SocketHal> socket_hal_ = nullptr;
   std::unique_ptr<lpp::LppOffloadManager> lpp_offload_manager_ = nullptr;
   hal::LinkClocker link_clocker_;
@@ -189,8 +208,24 @@ void Stack::StartEverything() {
   auto future = promise.get_future();
   management_handler_->Post(
           common::BindOnce(&Stack::handle_start_up, common::Unretained(this), std::move(promise)));
-  auto init_status = future.wait_for(
-          std::chrono::milliseconds(get_gd_stack_timeout_ms(/* is_start = */ true)));
+
+  std::chrono::milliseconds start_timeout;
+  if (!com::android::bluetooth::flags::unify_timeout_property()) {
+    start_timeout = get_gd_stack_timeout_ms(/* is_start = */ true);
+  } else {
+    if (android::sysprop::bluetooth::Hardware::degraded_performance_mode().value_or(false) ||
+        os::GetSystemPropertyUint32("ro.hw_timeout_multiplier", 1) != 1) {
+      log::warn("Running in degraded performance mode due to slow hardware");
+      start_timeout = std::chrono::milliseconds(8000);
+    } else if (bluetooth::os::GetSystemPropertyUint32("ro.build.version.sdk", 99) < 37) {
+      start_timeout = std::chrono::milliseconds(
+              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 3000));
+    } else {
+      start_timeout = std::chrono::milliseconds(3000);
+    }
+  }
+
+  auto init_status = future.wait_for(start_timeout);
 
   log::info("init_status == {}", int(init_status));
 
@@ -241,7 +276,7 @@ void Stack::Stop() {
   //stop gd_stack_thread firstly, prevent race condition between gd_stack_thread and management_thread
   stack_thread_->Stop();
   stack_handler_->Clear();
-  if (com::android::bluetooth::flags::same_handler_for_all_modules()) {
+  if (com_android_bluetooth_flags_same_handler_for_all_modules()) {
     stack_handler_->WaitUntilStopped(bluetooth::kHandlerStopTimeout);
   }
   WakelockManager::Get().Acquire();
@@ -251,8 +286,16 @@ void Stack::Stop() {
   management_handler_->Post(
           common::BindOnce(&Stack::handle_shut_down, common::Unretained(this), std::move(promise)));
 
-  auto stop_status = future.wait_for(
-          std::chrono::milliseconds(get_gd_stack_timeout_ms(/* is_start = */ false)));
+  std::chrono::milliseconds stop_timeout;
+  if (com::android::bluetooth::flags::unify_timeout_property()) {
+    stop_timeout = std::chrono::milliseconds(12000);
+  } else {
+    stop_timeout = get_gd_stack_timeout_ms(/* is_start = */ true);
+  }
+
+  // This timeout is racing with the Kill from SystemServer, it should never fire here.
+  // The management_handler_ thread should be removed and this run synchronously instead
+  auto stop_status = future.wait_for(stop_timeout);
 
   WakelockManager::Get().Release();
   WakelockManager::Get().CleanUp();
@@ -382,7 +425,7 @@ void Stack::Dump(int fd, std::promise<void> promise) const {
 }
 
 void Stack::handle_start_up(std::promise<void> promise) {
-  if (!com::android::bluetooth::flags::same_handler_for_all_modules()) {
+  if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
     // Create a new handler for each module to remain consistent with the old implementation.
     pimpl_ = std::make_unique<Stack::impl>(stack_thread_);
   } else {
@@ -396,15 +439,5 @@ void Stack::handle_shut_down(std::promise<void> promise) {
   pimpl_.reset();
   promise.set_value();
 }
-
-std::chrono::milliseconds Stack::get_gd_stack_timeout_ms(bool is_start) {
-  auto gd_timeout = os::GetSystemPropertyUint32(
-          is_start ? "bluetooth.gd.start_timeout" : "bluetooth.gd.stop_timeout",
-          /* default_value = */ is_start ? 8000 : 5000);
-  return std::chrono::milliseconds(gd_timeout *
-                                   os::GetSystemPropertyUint32("ro.hw_timeout_multiplier",
-                                                               /* default_value = */ 1));
-}
-
 }  // namespace shim
 }  // namespace bluetooth

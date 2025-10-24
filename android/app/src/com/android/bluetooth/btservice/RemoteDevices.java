@@ -17,8 +17,8 @@
 package com.android.bluetooth.btservice;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
-import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.BLUETOOTH_SCAN;
+import static android.bluetooth.BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_AUTO;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_BREDR;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_LE;
@@ -59,7 +59,6 @@ import android.util.Log;
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.bas.BatteryService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfp.HeadsetHalConstants;
 import com.android.internal.annotations.VisibleForTesting;
@@ -75,7 +74,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -189,15 +187,6 @@ public class RemoteDevices {
                     }
                     return false;
                 };
-    }
-
-    // TODO(b/422543753) Delete on flag cleanup
-    Optional<BatteryService> getBatteryService() {
-        if (Flags.adapterServiceProfilesUseOptional()) {
-            return mAdapterService.getBatteryService();
-        } else {
-            return Optional.ofNullable(BatteryService.getBatteryService());
-        }
     }
 
     /**
@@ -418,6 +407,8 @@ public class RemoteDevices {
         private int mBondingInitiator;
         private int mBatteryLevelFromHfp = BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
         private int mBatteryLevelFromBatteryService = BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
+        // This is the cached battery level to handle temporary disconnection from BAS.
+        private int mLastBatteryLevelFromBatteryService = BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
         private boolean mIsCoordinatedSetMember;
         private int mAshaCapability;
         private int mAshaTruncatedHiSyncId;
@@ -923,9 +914,15 @@ public class RemoteDevices {
          */
         int getBatteryLevel() {
             synchronized (mObject) {
-                if (mBatteryLevelFromBatteryService != BluetoothDevice.BATTERY_LEVEL_UNKNOWN) {
+                if (mBatteryLevelFromBatteryService != BATTERY_LEVEL_UNKNOWN) {
                     return mBatteryLevelFromBatteryService;
                 }
+                // Returns one from BAS to prevent battery level fluctuation.
+                if (Flags.consistentBatteryLevel()
+                        && mLastBatteryLevelFromBatteryService != BATTERY_LEVEL_UNKNOWN) {
+                    return mLastBatteryLevelFromBatteryService;
+                }
+
                 return mBatteryLevelFromHfp;
             }
         }
@@ -951,13 +948,18 @@ public class RemoteDevices {
                     return;
                 }
                 mBatteryLevelFromHfp = batteryLevel;
+                // The battery level from HFP is changed, now HFP value is reliable.
+                if (Flags.consistentBatteryLevel()
+                        && mBatteryLevelFromBatteryService == BATTERY_LEVEL_UNKNOWN) {
+                    mLastBatteryLevelFromBatteryService = BATTERY_LEVEL_UNKNOWN;
+                }
             }
         }
 
         void setBatteryLevelFromBatteryService(int batteryLevel) {
             synchronized (mObject) {
-                if (mBatteryLevelFromBatteryService == batteryLevel) {
-                    return;
+                if (Flags.consistentBatteryLevel() && batteryLevel != BATTERY_LEVEL_UNKNOWN) {
+                    mLastBatteryLevelFromBatteryService = batteryLevel;
                 }
                 mBatteryLevelFromBatteryService = batteryLevel;
             }
@@ -976,9 +978,7 @@ public class RemoteDevices {
          * @param isCoordinatedSetMember the mIsCoordinatedSetMember to set
          */
         void setIsCoordinatedSetMember(boolean isCoordinatedSetMember) {
-            if ((mAdapterService.getSupportedProfilesBitMask()
-                            & (1 << BluetoothProfile.CSIP_SET_COORDINATOR))
-                    == 0) {
+            if (!Config.isProfileSupported(BluetoothProfile.CSIP_SET_COORDINATOR)) {
                 debugLog("CSIP is not supported");
                 return;
             }
@@ -1670,7 +1670,8 @@ public class RemoteDevices {
                     || state == BluetoothAdapter.STATE_BLE_TURNING_ON) {
                 intent = new Intent(BluetoothAdapter.ACTION_BLE_ACL_CONNECTED);
             }
-            getBatteryService()
+            mAdapterService
+                    .getBatteryService()
                     .filter(battery -> transport == TRANSPORT_LE)
                     .ifPresent(battery -> battery.connectIfPossible(device));
             mAdapterService.updatePhonePolicyOnAclConnect(device);
@@ -1708,7 +1709,8 @@ public class RemoteDevices {
             }
             // Reset battery level on complete disconnection
             if (mAdapterService.getConnectionState(device) == 0) {
-                getBatteryService()
+                mAdapterService
+                        .getBatteryService()
                         .filter(battery -> transport == TRANSPORT_LE)
                         .filter(battery -> battery.getConnectionState(device) != STATE_DISCONNECTED)
                         .ifPresent(battery -> battery.disconnect(device));
@@ -1918,36 +1920,15 @@ public class RemoteDevices {
             device.removeBond();
         }
 
-        if (Flags.keyMissingPublic()) {
-            mAdapterService.sendOrderedBroadcast(
-                    intent,
-                    BLUETOOTH_CONNECT,
-                    Utils.getTempBroadcastBundle(),
-                    null /* resultReceiver */,
-                    null /* scheduler */,
-                    Activity.RESULT_OK /* initialCode */,
-                    null /* initialData */,
-                    null /* initialExtras */);
-            return;
-        }
-
-        if (android.os.Flags.orderedBroadcastMultiplePermissions()) {
-            mAdapterService.sendOrderedBroadcastMultiplePermissions(
-                    intent,
-                    new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
-                    null /* receiverAppOp */,
-                    null /* resultReceiver */,
-                    null /* scheduler */,
-                    Activity.RESULT_OK /* initialCode */,
-                    null /* initialData */,
-                    null /* initialExtras */,
-                    Utils.getTempBroadcastBundle());
-        } else {
-            mAdapterService.sendBroadcastMultiplePermissions(
-                    intent,
-                    new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
-                    Utils.getTempBroadcastOptions());
-        }
+        mAdapterService.sendOrderedBroadcast(
+                intent,
+                BLUETOOTH_CONNECT,
+                Utils.getTempBroadcastBundle(),
+                null /* resultReceiver */,
+                null /* scheduler */,
+                Activity.RESULT_OK /* initialCode */,
+                null /* initialData */,
+                null /* initialExtras */);
     }
 
     void encryptionChangeCallback(
@@ -2019,9 +2000,7 @@ public class RemoteDevices {
                         .putExtra(BluetoothDevice.EXTRA_KEY_SIZE, keySize)
                         .putExtra(BluetoothDevice.EXTRA_ENCRYPTION_ALGORITHM, algorithm);
 
-        if (com.android.bluetooth.flags.Flags.encryptionChangeBroadcast()) {
-            mAdapterService.sendBroadcast(intent, BLUETOOTH_CONNECT);
-        }
+        mAdapterService.sendBroadcast(intent, BLUETOOTH_CONNECT);
     }
 
     void fetchUuids(BluetoothDevice device, int transport) {
@@ -2338,7 +2317,8 @@ public class RemoteDevices {
 
     @VisibleForTesting
     boolean hasBatteryService(BluetoothDevice device) {
-        return getBatteryService()
+        return mAdapterService
+                .getBatteryService()
                 .map(battery -> battery.getConnectionState(device) == STATE_CONNECTED)
                 .orElse(false);
     }

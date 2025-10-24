@@ -531,19 +531,21 @@ public:
     log::info("peer={} active_peer={}", peer_address, active_peer_);
 
     BtifAvPeer* peer = FindPeer(peer_address);
-
+    BtifAvPeer* active_peer = FindPeer(active_peer_);
     if (active_peer_ == peer_address) {
       peer_ready_promise.set_value();
       return true;  // Nothing has changed
     }
 
-    if (!peer_address.IsEmpty() && peer && (peer->IsSink() && AllowedToConnect(peer_address)) &&
-        peer->CheckFlags(BtifAvPeer::kFlagPendingStart)) {
-      log::error("Pending Start Response on  {}, Return Fail",
-                 peer_address.ToRedactedStringForLogging());
-      return false;
+    if (com_android_bluetooth_flags_a2dp_reject_sho_request()) {
+      if (!peer_address.IsEmpty() && peer && (peer->IsSink() && AllowedToConnect(peer_address)) &&
+          !active_peer_.IsEmpty() && active_peer &&
+          active_peer->CheckFlags(BtifAvPeer::kFlagPendingStart)) {
+        log::error("Pending Start Response on {}, Return Fail",
+                   peer_address.ToRedactedStringForLogging());
+        return false;
+      }
     }
-
     if (peer_address.IsEmpty()) {
       log::info("peer address is empty, shutdown the Audio source");
       if (!bta_av_co_set_active_source_peer(peer_address)) {
@@ -2691,7 +2693,7 @@ bool BtifAvStateMachine::StateStarted::ProcessEvent(uint32_t event, void* p_data
 
     case BTIF_AV_CONNECT_REQ_EVT: {
       log::warn("Peer {} : Ignore {} for same device", peer_.PeerAddress(),
-              BtifAvEvent::EventName(event));
+                BtifAvEvent::EventName(event));
       btif_queue_advance();
     } break;
 
@@ -4252,7 +4254,7 @@ void btif_av_set_audio_delay(const RawAddress& peer_address, uint16_t delay,
 
   BtifAvPeer* peer = btif_av_find_peer(peer_address, local_a2dp_type);
   if (peer != nullptr && peer->IsSink()) {
-    if (com::android::bluetooth::flags::a2dp_delay_report_in_dumpsys()) {
+    if (com_android_bluetooth_flags_a2dp_delay_report_in_dumpsys()) {
       btif_report_audio_delay(peer_address, delay);
     }
     peer->SetDelayReport(delay);

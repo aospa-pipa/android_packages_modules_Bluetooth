@@ -59,6 +59,7 @@
 #include "bta/include/bta_le_audio_api.h"
 #include "bta/include/bta_le_audio_broadcaster_api.h"
 #include "bta/include/bta_vc_api.h"
+#include "bta/include/bta_vaps_server_api.h"
 #include "btif/avrcp/avrcp_service.h"
 #include "btif/include/bluetooth.h"
 #include "btif/include/btif_a2dp.h"
@@ -883,7 +884,7 @@ static int set_event_filter_connection_setup_all_devices() {
 }
 
 static void dump(int fd, const char** /*arguments*/) {
-  if (com::android::bluetooth::flags::protect_dumpsys_during_stack_shutdown() &&
+  if (com_android_bluetooth_flags_protect_dumpsys_during_stack_shutdown() &&
       !stack_manager_get_interface()->get_stack_is_running()) {
     log::error("Stack is not running, skipping dumpsys!!");
     return;
@@ -901,6 +902,9 @@ static void dump(int fd, const char** /*arguments*/) {
   btif_sock_dump(fd);
   bluetooth::avrcp::AvrcpService::DebugDump(fd);
   gatt_tcb_dump(fd);
+  if (com::android::bluetooth::flags::gatt_offload_api()) {
+    gatt_offload_sessions_dump(fd);
+  }
   bta_gatt_client_dump(fd);
   device_debug_iot_config_dump(fd);
   BTA_HfClientDumpStatistics(fd);
@@ -912,6 +916,7 @@ static void dump(int fd, const char** /*arguments*/) {
   LeAudioClient::DebugDump(fd);
   LeAudioBroadcaster::DebugDump(fd);
   VolumeControl::DebugDump(fd);
+  bluetooth::vaps::GetVapsServer()->DebugDump(fd);
   connection_manager::dump(fd);
   bluetooth::bqr::DebugDump(fd);
   AVCT_Dumpsys(fd);
@@ -1020,6 +1025,10 @@ static const void* get_profile_interface(const char* profile_id) {
     return btif_vendor_get_interface();
   }
 
+  if (is_profile(profile_id, BT_PROFILE_VAPS_SERVER_ID)) {
+    return btif_vaps_server_get_interface();
+  }
+
   if (is_profile(profile_id, BT_BQR_ID)) {
     return bluetooth::bqr::getBluetoothQualityReportInterface();
   }
@@ -1122,7 +1131,7 @@ static int config_clear(void) {
     log::error("Failed to clear device iot config");
     ret = BT_STATUS_FAIL;
   }
-
+  interop_database_clear();
   return ret;
 }
 

@@ -47,6 +47,7 @@ import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.EncryptionStatus;
+import android.bluetooth.GattOffloadCapabilities;
 import android.bluetooth.IBluetooth;
 import android.bluetooth.IBluetoothActivityEnergyInfoListener;
 import android.bluetooth.IBluetoothConnectionCallback;
@@ -54,6 +55,7 @@ import android.bluetooth.IBluetoothHciVendorSpecificCallback;
 import android.bluetooth.IBluetoothMetadataListener;
 import android.bluetooth.IBluetoothOobDataCallback;
 import android.bluetooth.IBluetoothPreferredAudioProfilesCallback;
+import android.bluetooth.IBluetoothProfileCallback;
 import android.bluetooth.IBluetoothQualityReportReadyCallback;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IncomingRfcommSocketInfo;
@@ -526,16 +528,16 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
-    public long getSupportedProfiles(AttributionSource source) {
+    public int[] getSupportedProfiles(AttributionSource source) {
         AdapterService service = getService();
         if (service == null
                 || !checkConnectPermissionForDataDelivery(
                         service, source, TAG, "getSupportedProfiles")) {
-            return 0;
+            return new int[0];
         }
 
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
-        return Config.getSupportedProfilesBitMask();
+        return Config.getSupportedProfiles();
     }
 
     @Override
@@ -1303,54 +1305,22 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
-    public int isLeAudioSupported() {
-        AdapterService service = getService();
-        if (service == null) {
-            return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
-        }
-
+    public boolean isLeAudioSupported() {
         Set<Integer> supportedProfileServices =
                 Arrays.stream(Config.getSupportedProfiles()).boxed().collect(Collectors.toSet());
         int[] leAudioUnicastProfiles = Config.getLeAudioUnicastProfiles();
 
-        if (Arrays.stream(leAudioUnicastProfiles).allMatch(supportedProfileServices::contains)) {
-            return BluetoothStatusCodes.FEATURE_SUPPORTED;
-        }
-
-        return BluetoothStatusCodes.FEATURE_NOT_SUPPORTED;
+        return Arrays.stream(leAudioUnicastProfiles).allMatch(supportedProfileServices::contains);
     }
 
     @Override
-    public int isLeAudioBroadcastSourceSupported() {
-        AdapterService service = getService();
-        if (service == null) {
-            return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
-        }
-
-        long supportBitMask = Config.getSupportedProfilesBitMask();
-        if ((supportBitMask & (1 << BluetoothProfile.LE_AUDIO_BROADCAST)) != 0) {
-            return BluetoothStatusCodes.FEATURE_SUPPORTED;
-        }
-
-        return BluetoothStatusCodes.FEATURE_NOT_SUPPORTED;
+    public boolean isLeAudioBroadcastSourceSupported() {
+        return Config.isProfileSupported(BluetoothProfile.LE_AUDIO_BROADCAST);
     }
 
     @Override
-    public int isLeAudioBroadcastAssistantSupported() {
-        AdapterService service = getService();
-        if (service == null) {
-            return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
-        }
-
-        int[] supportedProfileServices = Config.getSupportedProfiles();
-
-        if (Arrays.stream(supportedProfileServices)
-                .anyMatch(
-                        profileId -> profileId == BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT)) {
-            return BluetoothStatusCodes.FEATURE_SUPPORTED;
-        }
-
-        return BluetoothStatusCodes.FEATURE_NOT_SUPPORTED;
+    public boolean isLeAudioBroadcastAssistantSupported() {
+        return Config.isProfileSupported(BluetoothProfile.LE_AUDIO_BROADCAST_ASSISTANT);
     }
 
     @Override
@@ -1407,7 +1377,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 .post(
                         () ->
                                 service.getMetadataListeners()
-                                        .computeIfAbsent(device, k -> new RemoteCallbackList())
+                                        .computeIfAbsent(device, k -> new RemoteCallbackList<>())
                                         .register(listener));
         return true;
     }
@@ -1925,6 +1895,16 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
+    public void getProfileOneway(int profileId, IBluetoothProfileCallback callback) {
+        AdapterService service = getService();
+        if (service == null) {
+            return;
+        }
+
+        service.getProfile(profileId, callback);
+    }
+
+    @Override
     public int setActiveAudioDevicePolicy(
             BluetoothDevice device, int activeAudioDevicePolicy, AttributionSource source) {
         AdapterService service = getService();
@@ -2165,40 +2145,51 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         return service.isConnected(device, transport);
     }
 
+    @Override
+    public GattOffloadCapabilities.InnerParcel getSupportedGattOffloadCapabilities(
+            AttributionSource source) {
+        AdapterService service = getService();
+        if (service == null) {
+            return null;
+        }
+        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        return service.getSupportedGattOffloadCapabilities();
+    }
+
     // Either implement these custom methods, or remove them from IBluetooth.
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public void setBondingInitiatedLocally(BluetoothDevice device, boolean localInitiated,
-	    AttributionSource source) {}
+            AttributionSource source) {}
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public boolean isTwsPlusDevice(BluetoothDevice device,
-	    AttributionSource attributionSource) { return false; }
+            AttributionSource attributionSource) { return false; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public String getTwsPlusPeerAddress(BluetoothDevice device,
-	    AttributionSource attributionSource) { return null; }
+            AttributionSource attributionSource) { return null; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int setSocketOpt(int type, int port, int optionName, byte [] optionVal,
-	    int optionLen) { return -1; }
+            int optionLen) { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int getSocketOpt(int type, int port, int optionName,
-	    byte [] optionVal) { return -1; }
+            byte [] optionVal) { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public int getDeviceType(BluetoothDevice device, AttributionSource source)
-	    { return -1; }
+            { return -1; }
 
     @Override
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public boolean isBroadcastActive(AttributionSource attributionSource) {
-	return true;
+        return true;
     }
 }

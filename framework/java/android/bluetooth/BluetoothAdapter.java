@@ -38,6 +38,7 @@ import static java.util.Objects.requireNonNull;
 
 import android.annotation.BroadcastBehavior;
 import android.annotation.CallbackExecutor;
+import android.annotation.FlaggedApi;
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -104,7 +105,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.lang.reflect.Method;
@@ -904,6 +904,10 @@ public final class BluetoothAdapter {
 
         @GuardedBy("BluetoothAdapter.sProfileLock")
         void connect(BluetoothProfile proxy, IBinder binder) {
+            if (Flags.getProfileOneway() && mConnected) {
+                Log.v(TAG, getProfileName(mProfile) + " already connected");
+                return;
+            }
             Log.d(TAG, getProfileName(mProfile) + " connected");
             mConnected = true;
             proxy.onServiceConnected(binder);
@@ -912,6 +916,10 @@ public final class BluetoothAdapter {
 
         @GuardedBy("BluetoothAdapter.sProfileLock")
         void disconnect(BluetoothProfile proxy) {
+            if (Flags.getProfileOneway() && !mConnected) {
+                Log.v(TAG, getProfileName(mProfile) + " already disconnected");
+                return;
+            }
             Log.d(TAG, getProfileName(mProfile) + " disconnected");
             mConnected = false;
             proxy.onServiceDisconnected();
@@ -922,8 +930,7 @@ public final class BluetoothAdapter {
     private static final Object sProfileLock = new Object();
 
     @GuardedBy("sProfileLock")
-    private final Map<BluetoothProfile, ProfileConnection> mProfileConnections =
-            new ConcurrentHashMap<>();
+    private final Map<BluetoothProfile, ProfileConnection> mProfileConnections = new HashMap<>();
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
 
@@ -2367,7 +2374,12 @@ public final class BluetoothAdapter {
         if (!getLeAccess()) {
             return ERROR_BLUETOOTH_NOT_ENABLED;
         }
-        return callServiceIfEnabled(s -> s.isLeAudioSupported(), ERROR_BLUETOOTH_NOT_ENABLED);
+        return callServiceIfEnabled(
+                s ->
+                        s.isLeAudioSupported()
+                                ? BluetoothStatusCodes.FEATURE_SUPPORTED
+                                : BluetoothStatusCodes.FEATURE_NOT_SUPPORTED,
+                ERROR_BLUETOOTH_NOT_ENABLED);
     }
 
     /**
@@ -2383,7 +2395,11 @@ public final class BluetoothAdapter {
             return ERROR_BLUETOOTH_NOT_ENABLED;
         }
         return callServiceIfEnabled(
-                s -> s.isLeAudioBroadcastSourceSupported(), ERROR_BLUETOOTH_NOT_ENABLED);
+                s ->
+                        s.isLeAudioBroadcastSourceSupported()
+                                ? BluetoothStatusCodes.FEATURE_SUPPORTED
+                                : BluetoothStatusCodes.FEATURE_NOT_SUPPORTED,
+                ERROR_BLUETOOTH_NOT_ENABLED);
     }
 
     /**
@@ -2399,7 +2415,11 @@ public final class BluetoothAdapter {
             return ERROR_BLUETOOTH_NOT_ENABLED;
         }
         return callServiceIfEnabled(
-                s -> s.isLeAudioBroadcastAssistantSupported(), ERROR_BLUETOOTH_NOT_ENABLED);
+                s ->
+                        s.isLeAudioBroadcastAssistantSupported()
+                                ? BluetoothStatusCodes.FEATURE_SUPPORTED
+                                : BluetoothStatusCodes.FEATURE_NOT_SUPPORTED,
+                ERROR_BLUETOOTH_NOT_ENABLED);
     }
 
     /**
@@ -2604,31 +2624,23 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
     public @NonNull List<Integer> getSupportedProfiles() {
-        final ArrayList<Integer> supportedProfiles = new ArrayList<Integer>();
-
         mServiceLock.readLock().lock();
         try {
             if (mService != null) {
-                final long supportedProfilesBitMask =
-                        mService.getSupportedProfiles(mAttributionSource);
-
-                for (int i = 0; i <= BluetoothProfile.MAX_PROFILE_ID; i++) {
-                    if ((supportedProfilesBitMask & (1L << i)) != 0) {
-                        supportedProfiles.add(i);
-                    }
-                }
-            } else {
-                // Bluetooth is disabled. Just fill in known supported Profiles
-                if (isHearingAidProfileSupported()) {
-                    supportedProfiles.add(BluetoothProfile.HEARING_AID);
-                }
+                return Arrays.stream(mService.getSupportedProfiles(mAttributionSource))
+                        .boxed()
+                        .toList();
             }
         } catch (RemoteException e) {
             logRemoteException(TAG, e);
         } finally {
             mServiceLock.readLock().unlock();
         }
-        return supportedProfiles;
+        // Bluetooth is disabled. Just fill in known supported Profiles
+        if (isHearingAidProfileSupported()) {
+            return List.of(BluetoothProfile.HEARING_AID);
+        }
+        return List.of();
     }
 
     private static final IpcDataCache.QueryHandler<IBluetooth, Integer>
@@ -3392,6 +3404,19 @@ public final class BluetoothAdapter {
             // ProfileConnection.connect concurrently
             mProfileConnections.put(profileProxy, connection);
 
+            if (Flags.getProfileOneway()) {
+                getProfile(
+                        profile,
+                        new IBluetoothProfileCallback.Stub() {
+                            @RequiresNoPermission
+                            public void getProfileReply(IBinder binder) {
+                                synchronized (sProfileLock) {
+                                    connection.connect(profileProxy, binder);
+                                }
+                            }
+                        });
+                return true;
+            }
             IBinder binder = getProfile(profile);
             if (binder != null) {
                 connection.connect(profileProxy, binder);
@@ -3409,7 +3434,7 @@ public final class BluetoothAdapter {
      * @param proxy Profile proxy object
      * @hide
      */
-    @SuppressLint("AndroidFrameworkRequiresPermission") // Call control is not exposed to 3p app
+    @SuppressLint("AndroidFrameworkRequiresPermission")
     @RequiresNoPermission
     public void closeProfileProxy(@NonNull BluetoothProfile proxy) {
         if (proxy instanceof BluetoothGatt gatt) {
@@ -3640,6 +3665,19 @@ public final class BluetoothAdapter {
                             (proxy, connection) -> {
                                 if (connection.mConnected) return;
 
+                                if (Flags.getProfileOneway()) {
+                                    getProfile(
+                                            connection.mProfile,
+                                            new IBluetoothProfileCallback.Stub() {
+                                                @RequiresNoPermission
+                                                public void getProfileReply(IBinder binder) {
+                                                    synchronized (sProfileLock) {
+                                                        connection.connect(proxy, binder);
+                                                    }
+                                                }
+                                            });
+                                    return;
+                                }
                                 IBinder binder = getProfile(connection.mProfile);
                                 if (binder == null) {
                                     Log.e(
@@ -3978,8 +4016,12 @@ public final class BluetoothAdapter {
                 s -> IDistanceMeasurement.Stub.asInterface(s.getDistanceMeasurement()), null);
     }
 
+    private void getProfile(int profile, IBluetoothProfileCallback callback) {
+        callServiceIfEnabled(s -> s.getProfileOneway(profile, callback));
+    }
+
     /* Return a binder to a Profile service */
-    private @Nullable IBinder getProfile(int profile) {
+    private @Nullable IBinder getProfile(int profile) { // Delete with get_profile_oneway clean up
         return callServiceIfEnabled(s -> s.getProfile(profile), null);
     }
 
@@ -5699,5 +5741,32 @@ public final class BluetoothAdapter {
         }
         return callServiceIfEnabled(
                 s -> s.isRfcommSocketOffloadSupported(mAttributionSource), false);
+    }
+
+    /**
+     * Get the supported GATT offload capabilities.
+     *
+     * @return instance of {@link GattOffloadCapabilities} or null if an error has occurred
+     * @hide
+     */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_GATT_OFFLOAD_API)
+    @RequiresPermission(BLUETOOTH_PRIVILEGED)
+    public @Nullable GattOffloadCapabilities getSupportedGattOffloadCapabilities() {
+        if (!isEnabled()) {
+            return null;
+        }
+        mServiceLock.readLock().lock();
+        try {
+            if (mService != null) {
+                return mService.getSupportedGattOffloadCapabilities(mAttributionSource)
+                        .toGattOffloadCapabilities();
+            }
+        } catch (RemoteException e) {
+            Log.e(TAG, e.toString() + "\n" + Log.getStackTraceString(new Throwable()));
+        } finally {
+            mServiceLock.readLock().unlock();
+        }
+        return null;
     }
 }

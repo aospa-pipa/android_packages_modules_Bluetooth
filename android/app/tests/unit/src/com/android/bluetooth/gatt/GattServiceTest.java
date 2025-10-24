@@ -115,6 +115,9 @@ public class GattServiceTest {
     private GattService mService;
 
     private final Context mContext = InstrumentationRegistry.getInstrumentation().getContext();
+    private final CompanionDeviceManager mCompanionDeviceManager =
+            mContext.getSystemService(CompanionDeviceManager.class);
+
     private CompanionManager mBtCompanionManager;
     private final BluetoothDevice mDevice = getTestDevice(109);
     private MockContentResolver mMockContentResolver;
@@ -222,8 +225,6 @@ public class GattServiceTest {
         mockGetBluetoothManager(mAdapterService);
         mockGetSystemService(mAdapterService, LocationManager.class);
         mockGetSystemService(mAdapterService, ActivityManager.class);
-        final var companionDeviceManager = mContext.getSystemService(CompanionDeviceManager.class);
-        mockGetSystemService(mAdapterService, CompanionDeviceManager.class, companionDeviceManager);
 
         mBtCompanionManager = new CompanionManager(mAdapterService);
         doReturn(mBtCompanionManager).when(mAdapterService).getCompanionManager();
@@ -234,6 +235,7 @@ public class GattServiceTest {
                         mNativeInterface,
                         mAdvertiseManagerNativeInterface,
                         mDistanceMeasurementNativeInterface,
+                        mCompanionDeviceManager,
                         mTimeProvider);
 
         mService.mClientMap = mClientMap;
@@ -262,6 +264,7 @@ public class GattServiceTest {
                             mNativeInterface,
                             mAdvertiseManagerNativeInterface,
                             mDistanceMeasurementNativeInterface,
+                            mCompanionDeviceManager,
                             mTimeProvider);
         }
     }
@@ -290,6 +293,39 @@ public class GattServiceTest {
                             anyInt(),
                             anyInt());
         }
+    }
+
+    @Test
+    public void subrateModeRequestDisablementLatencyParamRestore() {
+        InOrder inOrder = inOrder(mNativeInterface);
+        int implementInterval = 3;
+        int peripheralLatency = 5;
+        int supervisionTimeout = 6;
+        int status = 0;
+
+        ContextMap<IBluetoothGattCallback>.App app = mock(ContextMap.App.class);
+        doReturn(app).when(mClientMap).getByConnId(CLIENT_CONN_ID);
+        doReturn(mGattCallback).when(app).getCallback();
+        doReturn(mDevice).when(mClientMap).deviceByConnId(CLIENT_CONN_ID);
+
+        mService.onClientConnUpdateFromNative(
+                CLIENT_CONN_ID, implementInterval, peripheralLatency, supervisionTimeout, status);
+
+        mService.subrateModeRequest(mGattCallback, mDevice, BluetoothGatt.SUBRATE_MODE_HIGH);
+        inOrder.verify(mNativeInterface)
+                .gattSubrateRequest(
+                        eq(CLIENT_IF), eq(mDevice), anyInt(), anyInt(), eq(0), anyInt(), anyInt());
+
+        mService.subrateModeRequest(mGattCallback, mDevice, BluetoothGatt.SUBRATE_MODE_OFF);
+        inOrder.verify(mNativeInterface)
+                .gattSubrateRequest(
+                        eq(CLIENT_IF),
+                        eq(mDevice),
+                        anyInt(),
+                        anyInt(),
+                        eq(peripheralLatency),
+                        anyInt(),
+                        anyInt());
     }
 
     @Test

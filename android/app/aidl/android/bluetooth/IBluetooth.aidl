@@ -57,6 +57,7 @@ import android.bluetooth.IBluetoothHciVendorSpecificCallback;
 import android.bluetooth.IBluetoothPreferredAudioProfilesCallback;
 import android.bluetooth.IBluetoothQualityReportReadyCallback;
 import android.bluetooth.IBluetoothCallback;
+import android.bluetooth.IBluetoothProfileCallback;
 import android.bluetooth.IBluetoothConnectionCallback;
 import android.bluetooth.IBluetoothMetadataListener;
 import android.bluetooth.IBluetoothOobDataCallback;
@@ -68,6 +69,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothDevice.BluetoothAddress;
 import android.bluetooth.BluetoothQualityReport;
 import android.bluetooth.EncryptionStatus;
+import android.bluetooth.GattOffloadCapabilities;
 import android.bluetooth.IncomingRfcommSocketInfo;
 import android.bluetooth.OobData;
 import android.content.AttributionSource;
@@ -81,7 +83,7 @@ parcelable BluetoothDevice.BluetoothAddress;
 /**
  * System private API for talking with the Bluetooth service.
  *
- * {@hide}
+ * @hide
  */
 interface IBluetooth
 {
@@ -137,7 +139,7 @@ interface IBluetooth
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     boolean isBondingInitiatedLocally(in BluetoothDevice device, in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
-    long getSupportedProfiles(in AttributionSource attributionSource);
+    int[] getSupportedProfiles(in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     int getConnectionState(in BluetoothDevice device, in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
@@ -214,11 +216,11 @@ interface IBluetooth
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
     boolean isLePeriodicAdvertisingSupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
-    int isLeAudioSupported();
+    boolean isLeAudioSupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
-    int isLeAudioBroadcastSourceSupported();
+    boolean isLeAudioBroadcastSourceSupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
-    int isLeAudioBroadcastAssistantSupported();
+    boolean isLeAudioBroadcastAssistantSupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
     int isDistanceMeasurementSupported(in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
@@ -345,7 +347,10 @@ interface IBluetooth
     IBinder getBluetoothScan();
 
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
-    IBinder getProfile(int profile);
+    IBinder getProfile(int profile);// TODO delete with get_profile_oneway
+
+    @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
+    oneway void getProfileOneway(int profile, in IBluetoothProfileCallback callback);
 
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
     int setActiveAudioDevicePolicy(in BluetoothDevice device, int activeAudioDevicePolicy, in AttributionSource source);
@@ -385,4 +390,7 @@ interface IBluetooth
 
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     boolean isConnected(in BluetoothDevice device, in AttributionSource source, in int transport);
+
+    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_PRIVILEGED)")
+    GattOffloadCapabilities.InnerParcel getSupportedGattOffloadCapabilities(in AttributionSource source);
 }

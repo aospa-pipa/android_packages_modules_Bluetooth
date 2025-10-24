@@ -202,7 +202,7 @@ public:
     fixed_queue_free(tx_audio_queue, nullptr);
     tx_audio_queue = nullptr;
     tx_flush = false;
-    if (!com::android::bluetooth::flags::ref_counted_native_wakelock() ||
+    if (!com_android_bluetooth_flags_ref_counted_native_wakelock() ||
         btif_a2dp_source_is_streaming()) {
       media_alarm.CancelAndWait();
       wakelock_release();
@@ -265,7 +265,7 @@ static void btif_a2dp_source_audio_tx_flush_event(void);
 // Set up the A2DP Source codec, and prepare the encoder.
 // The peer address is |peer_addr|.
 // This function should be called prior to starting A2DP streaming.
-static void btif_a2dp_source_setup_codec(const RawAddress& peer_addr);
+static bool btif_a2dp_source_setup_codec(const RawAddress& peer_addr);
 static void btif_a2dp_source_cleanup_codec_delayed();
 static void btif_a2dp_source_encoder_user_config_update_event(
         const RawAddress& peer_address,
@@ -335,7 +335,7 @@ bool btif_a2dp_source_init(void) {
   // Start A2DP Source media task
   btif_a2dp_source_thread.StartUp();
 
-  if (com::android::bluetooth::flags::a2dp_source_null_fixed_queue()) {
+  if (com_android_bluetooth_flags_a2dp_source_null_fixed_queue()) {
     if (!btif_a2dp_source_thread.EnableRealTimeScheduling()) {
 #if defined(__ANDROID__)
       log::fatal("unable to enable real time scheduling");
@@ -446,7 +446,7 @@ static bool btif_a2dp_source_startup(void) {
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateStartingUp);
   btif_a2dp_source_cb.tx_audio_queue = fixed_queue_new(SIZE_MAX);
 
-  if (com::android::bluetooth::flags::a2dp_source_null_fixed_queue()) {
+  if (com_android_bluetooth_flags_a2dp_source_null_fixed_queue()) {
     if (!bluetooth::audio::a2dp::init(get_main_thread(), &a2dp_stream_callbacks,
                                       btif_av_is_a2dp_offload_enabled())) {
       log::warn("Failed to setup the bluetooth audio HAL");
@@ -495,7 +495,11 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
                                                    std::promise<void> peer_ready_promise) {
   log::info("peer_address={} state={}", peer_address, btif_a2dp_source_cb.StateStr());
 
-  btif_a2dp_source_setup_codec(peer_address);
+  if (!btif_a2dp_source_setup_codec(peer_address)) {
+    log::error("Setup codec error");
+    peer_ready_promise.set_value();
+    return;
+  }
 
   if (btif_a2dp_source_cb.State() != BtifA2dpSource::kStateRunning) {
     log::error("A2DP Source media task is not running");
@@ -578,7 +582,7 @@ void btif_a2dp_source_shutdown(std::promise<void> shutdown_complete_promise) {
   btif_a2dp_source_cb.SetState(BtifA2dpSource::kStateShuttingDown);
 
   // Stop the timer.
-  if (!com::android::bluetooth::flags::ref_counted_native_wakelock() ||
+  if (!com_android_bluetooth_flags_ref_counted_native_wakelock() ||
       btif_a2dp_source_is_streaming()) {
     btif_a2dp_source_cb.media_alarm.CancelAndWait();
     wakelock_release();
@@ -643,20 +647,21 @@ static uint16_t btif_a2dp_get_peer_mtu(A2dpCodecConfig* a2dp_config) {
   return peer_mtu;
 }
 
-static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
+static bool btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
+  bool retvalue = false;
   log::info("peer_address={} state={}", peer_address, btif_a2dp_source_cb.StateStr());
 
   tA2DP_ENCODER_INIT_PEER_PARAMS peer_params;
   bta_av_co_get_peer_params(peer_address, &peer_params);
   if (!bta_av_co_set_active_source_peer(peer_address)) {
     log::error("Cannot stream audio: cannot set active peer to {}", peer_address);
-    return;
+    return retvalue;
   }
 
   const tA2DP_ENCODER_INTERFACE* encoder_interface = bta_av_co_get_encoder_interface(peer_address);
   if (encoder_interface == nullptr) {
     log::error("Cannot stream audio: no source encoder interface");
-    return;
+    return retvalue;
   }
 
   A2dpCodecConfig* a2dp_codec_config = bta_av_get_a2dp_current_codec();
@@ -666,7 +671,7 @@ static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
     codec_config = a2dp_codec_config->getCodecConfig();
   } else {
     log::error("Cannot stream audio: current codec is not set");
-    return;
+    return retvalue;
   }
 
   encoder_interface->encoder_init(&peer_params, a2dp_codec_config,
@@ -710,6 +715,7 @@ static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
     }
   }
 
+  retvalue = true;
   if (bluetooth::audio::a2dp::is_hal_enabled()) {
     bluetooth::audio::a2dp::ahal_codec_configuration config = {
             .peer_mtu = btif_a2dp_get_peer_mtu(a2dp_codec_config),
@@ -721,8 +727,9 @@ static void btif_a2dp_source_setup_codec(const RawAddress& peer_address) {
 
     log::verbose("{}", config.ToString());
 
-    bluetooth::audio::a2dp::setup_codec(config);
+    retvalue = bluetooth::audio::a2dp::setup_codec(config);
   }
+  return retvalue;
 }
 
 static void btif_a2dp_source_cleanup_codec_delayed() {
@@ -975,7 +982,7 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
     return;
   }
 
-  if (!com::android::bluetooth::flags::a2dp_fmq_read_exact()) {
+  if (!com_android_bluetooth_flags_a2dp_fmq_read_exact()) {
     /* Drain data still left in the queue */
     static constexpr size_t AUDIO_STREAM_OUTPUT_BUFFER_SZ = 28 * 512;
     uint8_t p_buf[AUDIO_STREAM_OUTPUT_BUFFER_SZ * 2];
