@@ -18,6 +18,7 @@ package android.bluetooth;
 
 import android.annotation.FlaggedApi;
 import android.annotation.Hide;
+import android.annotation.LongDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
@@ -26,6 +27,9 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 import com.android.bluetooth.flags.Flags;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
  * Represents a supported source codec type for a Bluetooth A2DP device. See {@link
@@ -39,7 +43,11 @@ public final class BluetoothCodecType implements Parcelable {
 
     private BluetoothCodecType(Parcel in) {
         mNativeCodecType = in.readInt();
-        mCodecId = in.readLong() & 0xFFFFFFFFL;
+        if (Flags.a2dpLdacApi()) {
+            mCodecId = in.readLong();
+        } else {
+            mCodecId = in.readLong() & 0xFFFFFFFFL;
+        }
         mCodecName = in.readString();
     }
 
@@ -55,8 +63,18 @@ public final class BluetoothCodecType implements Parcelable {
     /** Aptx HD codec identifier. See {@link BluetoothCodecType#getCodecId}. */
     public static final long CODEC_ID_APTX_HD = 0x002400d7ff;
 
-    /** LDAC codec identifier. See {@link BluetoothCodecType#getCodecId}. */
+    /**
+     * LDAC codec identifier. See {@link BluetoothCodecType#getCodecId}.
+     *
+     * @deprecated This codec value is invalid. Please use {@link #CODEC_ID_SONY_LDAC} instead.
+     */
+    @FlaggedApi(Flags.FLAG_A2DP_LDAC_API)
+    @Deprecated
     public static final long CODEC_ID_LDAC = 0x00aa012dff;
+
+    /** LDAC codec identifier. See {@link BluetoothCodecType#getCodecId}. */
+    @FlaggedApi(Flags.FLAG_A2DP_LDAC_API)
+    public static final long CODEC_ID_SONY_LDAC = 0x00aa_012d_ffL;
 
     /** Opus codec identifier. See {@link BluetoothCodecType#getCodecId}. */
     public static final long CODEC_ID_OPUS = 0x000100e0ff;
@@ -70,6 +88,20 @@ public final class BluetoothCodecType implements Parcelable {
     @FlaggedApi(Flags.FLAG_A2DP_LHDC_API)
     public static final long CODEC_ID_LHDCV5 = 0x4c35_053a_ffL;
 
+    /** @hide */
+    @Hide
+    @Retention(RetentionPolicy.SOURCE)
+    @LongDef({
+        CODEC_ID_SBC,
+        CODEC_ID_AAC,
+        CODEC_ID_APTX,
+        CODEC_ID_APTX_HD,
+        CODEC_ID_LDAC,
+        CODEC_ID_SONY_LDAC,
+        CODEC_ID_OPUS,
+    })
+    public @interface CodecId {}
+
     /**
      * Create the bluetooth codec type from the static codec type index.
      *
@@ -78,7 +110,11 @@ public final class BluetoothCodecType implements Parcelable {
      */
     private BluetoothCodecType(@BluetoothCodecConfig.SourceCodecType int codecType, long codecId) {
         mNativeCodecType = codecType;
-        mCodecId = codecId & 0xFFFFFFFFL;
+        if (Flags.a2dpLdacApi()) {
+            mCodecId = codecId;
+        } else {
+            mCodecId = codecId & 0xFFFFFFFFL;
+        }
         mCodecName = BluetoothCodecConfig.getCodecName(codecType);
     }
 
@@ -93,7 +129,11 @@ public final class BluetoothCodecType implements Parcelable {
     @SystemApi
     public BluetoothCodecType(int codecType, long codecId, @NonNull String codecName) {
         mNativeCodecType = codecType;
-        mCodecId = codecId & 0xFFFFFFFFL;
+        if (Flags.a2dpLdacApi()) {
+            mCodecId = codecId;
+        } else {
+            mCodecId = codecId & 0xFFFFFFFFL;
+        }
         mCodecName = codecName;
     }
 
@@ -179,6 +219,7 @@ public final class BluetoothCodecType implements Parcelable {
      */
     @Hide
     @SystemApi
+    @SuppressWarnings("FlaggedApi") // Due to deprecated CODEC_ID_LDAC
     public static @Nullable BluetoothCodecType createFromType(
             @BluetoothCodecConfig.SourceCodecType int codecType) {
         long codecId =
@@ -187,7 +228,13 @@ public final class BluetoothCodecType implements Parcelable {
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC -> CODEC_ID_AAC;
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX -> CODEC_ID_APTX;
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD -> CODEC_ID_APTX_HD;
-                    case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC -> CODEC_ID_LDAC;
+                    case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC -> {
+                        if (Flags.a2dpLdacApi()) {
+                            yield CODEC_ID_SONY_LDAC;
+                        } else {
+                            yield CODEC_ID_LDAC;
+                        }
+                    }
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS -> CODEC_ID_OPUS;
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_ADAPTIVE -> CODEC_ID_APTX_AD;
                     case BluetoothCodecConfig.SOURCE_CODEC_TYPE_LC3,
@@ -199,6 +246,49 @@ public final class BluetoothCodecType implements Parcelable {
             return null;
         }
         return new BluetoothCodecType(codecType, codecId);
+    }
+
+    /**
+     * Create the bluetooth codec type from the codec ID.
+     *
+     * @param codecId the codec ID
+     * @return the codec type if valid
+     */
+    @Hide
+    @FlaggedApi(Flags.FLAG_A2DP_CREATE_CODEC_TYPE_FROM_ID_API)
+    @SuppressWarnings("FlaggedApi") // Due to deprecated CODEC_ID_LDAC
+    @SystemApi
+    public static @Nullable BluetoothCodecType createFromId(@CodecId long codecId) {
+        if (codecId == CODEC_ID_SBC) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC, CODEC_ID_SBC, "SBC");
+        }
+        if (codecId == CODEC_ID_AAC) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC, CODEC_ID_AAC, "AAC");
+        }
+        if (codecId == CODEC_ID_APTX) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX, CODEC_ID_APTX, "AptX");
+        }
+        if (codecId == CODEC_ID_APTX_HD) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_HD, CODEC_ID_APTX_HD, "AptX HD");
+        }
+        if (Flags.a2dpLdacApi()) {
+            if (codecId == CODEC_ID_SONY_LDAC) {
+                return new BluetoothCodecType(
+                        BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC, CODEC_ID_SONY_LDAC, "LDAC");
+            }
+        } else if (codecId == CODEC_ID_LDAC) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC, CODEC_ID_LDAC, "LDAC");
+        }
+        if (codecId == CODEC_ID_OPUS) {
+            return new BluetoothCodecType(
+                    BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS, CODEC_ID_OPUS, "Opus");
+        }
+        return null;
     }
 
     @Override

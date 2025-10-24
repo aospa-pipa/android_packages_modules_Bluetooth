@@ -20,7 +20,9 @@ import android.bluetooth.BluetoothUtils.extractBytes
 import android.bluetooth.le.ScanRecord
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.os.Binder
 import android.os.SystemClock
+import android.provider.DeviceConfig
 import android.provider.Settings
 import android.util.Log
 import com.android.bluetooth.Utils
@@ -29,7 +31,6 @@ import com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_INTERVAL_MS
 import com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_BALANCED_WINDOW_MS
 import com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_POWER_INTERVAL_MS
 import com.android.bluetooth.le_scan.ScanUtil.SCAN_MODE_LOW_POWER_WINDOW_MS
-import com.android.bluetooth.le_scan.ScanUtil.scanModeToString
 import com.android.bluetooth.util.NumberUtils
 import java.util.concurrent.TimeUnit
 
@@ -42,6 +43,11 @@ data class BatchScanParams(
 )
 
 object BatchScanUtil {
+
+    // The default floor value for LE batch scan report delays greater than 0
+    const val DEFAULT_REPORT_DELAY_FLOOR_MS = 5000L
+
+    const val ACTION_REFRESH_BATCHED_SCAN = "com.android.bluetooth.gatt.REFRESH_BATCHED_SCAN"
 
     private const val TRUNCATED_RESULT_SIZE = 11
 
@@ -85,8 +91,6 @@ object BatchScanUtil {
                     Settings.Global.BLE_SCAN_LOW_POWER_WINDOW_MS,
                     SCAN_MODE_LOW_POWER_WINDOW_MS,
                 )
-        }.also { windowMs ->
-            Log.d(TAG, "windowMillis=${windowMs}ms for scan mode=${scanModeToString(scanMode)}")
         }
 
     @JvmStatic
@@ -106,9 +110,56 @@ object BatchScanUtil {
                     Settings.Global.BLE_SCAN_LOW_POWER_INTERVAL_MS,
                     SCAN_MODE_LOW_POWER_INTERVAL_MS,
                 )
-        }.also { intervalMs ->
-            Log.d(TAG, "intervalMillis=${intervalMs}ms for scan mode=${scanModeToString(scanMode)}")
         }
+
+    /**
+     * Ensures the report delay is either 0 or at least the floor value.
+     *
+     * @param settings are the scan settings passed into a request to start le scanning
+     * @return the passed in ScanSettings object if the report delay is 0 or above the floor value;
+     *   a new ScanSettings object with the report delay being the floor value if the original
+     *   report delay was between 0 and the floor value (exclusive of both)
+     * @see DEFAULT_REPORT_DELAY_FLOOR_MS
+     */
+    @JvmStatic
+    fun enforceReportDelayFloor(settings: ScanSettings): ScanSettings {
+        val originalDelay = settings.reportDelayMillis
+        val header = "enforceReportDelayFloor():"
+
+        if (originalDelay == 0L) {
+            Log.d(TAG, "$header Report delay is 0, skipping floor enforcement")
+            return settings
+        }
+
+        // Need to clear identity to pass device config permission check
+        val callerToken = Binder.clearCallingIdentity()
+        try {
+            val floor =
+                DeviceConfig.getLong(
+                    DeviceConfig.NAMESPACE_BLUETOOTH,
+                    "report_delay",
+                    DEFAULT_REPORT_DELAY_FLOOR_MS,
+                )
+            return if (originalDelay >= floor) {
+                Log.d(TAG, "$header Delay ${originalDelay}ms >= floor ${floor}ms, no changes")
+                settings
+            } else {
+                Log.d(TAG, "$header Delay ${originalDelay}ms < floor, setting to ${floor}ms")
+                ScanSettings.Builder()
+                    .setCallbackType(settings.callbackType)
+                    .setLegacy(settings.legacy)
+                    .setMatchMode(settings.matchMode)
+                    .setNumOfMatches(settings.numOfMatches)
+                    .setPhy(settings.phy)
+                    .setReportDelay(floor) // Set the new floor value
+                    .setScanMode(settings.scanMode)
+                    .setScanResultType(settings.scanResultType)
+                    .build()
+            }
+        } finally {
+            Binder.restoreCallingIdentity(callerToken)
+        }
+    }
 
     @JvmStatic
     fun parseResults(
@@ -142,6 +193,7 @@ object BatchScanUtil {
             val device = adapterService.getRemoteDevice(Utils.getAddressStringFromByte(address))
             val rssi = record[8].toInt()
             val nanos = now - parseTimestampNanos(extractBytes(record, 9, 2))
+            @Suppress("DEPRECATION")
             results.add(ScanResult(device, ScanRecord.parseFromBytes(byteArrayOf()), rssi, nanos))
         }
         return results
@@ -185,6 +237,7 @@ object BatchScanUtil {
                 advertisePacketLen,
                 scanResponsePacketLen,
             )
+            @Suppress("DEPRECATION")
             results.add(ScanResult(device, ScanRecord.parseFromBytes(scanRecordBytes), rssi, nanos))
         }
         return results

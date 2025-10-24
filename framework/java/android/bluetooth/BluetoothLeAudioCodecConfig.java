@@ -399,35 +399,20 @@ public final class BluetoothLeAudioCodecConfig implements Parcelable {
 
     @Override
     public String toString() {
-        return "{codecName:"
-                + getCodecName()
-                + ",mCodecType:"
-                + mCodecType
-                + ",mCodecPriority:"
-                + mCodecPriority
-                + ",mSampleRate:"
-                + sampleRateToString(mSampleRate)
-                + ",mBitsPerSample:"
-                + mBitsPerSample
-                + ",mChannelCountBitMask:"
-                + mChannelCount
-                + ",mFrameDuration:"
-                + frameDurationToString(mFrameDuration)
-                + ",mOctetsPerFrame:"
-                + mOctetsPerFrame
-                + ",mMinOctetsPerFrame:"
-                + mMinOctetsPerFrame
-                + ",mMaxOctetsPerFrame:"
-                + mMaxOctetsPerFrame
-                + ",mCodecSpecific1:"
-                + mCodecSpecific1
-                + ",mCodecSpecific2:"
-                + mCodecSpecific2
-                + ",mCodecSpecific3:"
-                + mCodecSpecific3
-                + ",mCodecSpecific4:"
-                + mCodecSpecific4
-                + "}";
+        return ("BluetoothLeAudioCodecConfig [codecName=" + getCodecName())
+                + (",mCodecType=" + mCodecType)
+                + (",mCodecPriority=" + mCodecPriority)
+                + (",mSampleRate=" + sampleRateToString(mSampleRate))
+                + (",mBitsPerSample=" + mBitsPerSample)
+                + (",mChannelCountBitMask=" + mChannelCount)
+                + (",mFrameDuration=" + frameDurationToString(mFrameDuration))
+                + (",mOctetsPerFrame=" + mOctetsPerFrame)
+                + (",mMinOctetsPerFrame=" + mMinOctetsPerFrame)
+                + (",mMaxOctetsPerFrame=" + mMaxOctetsPerFrame)
+                + (",mCodecSpecific1=" + mCodecSpecific1)
+                + (",mCodecSpecific2=" + mCodecSpecific2)
+                + (",mCodecSpecific3=" + mCodecSpecific3)
+                + (",mCodecSpecific4=" + mCodecSpecific4 + "]");
     }
 
     /**

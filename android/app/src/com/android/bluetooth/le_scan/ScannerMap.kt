@@ -35,12 +35,13 @@ private const val TAG = "ScannerMap"
 /** List of our registered scanners. */
 class ScannerMap {
 
-    /** Internal map to keep track of logging information by app name */
+    /** Internal map to keep track of logging information by app uid */
     private val appScanStatsMap = mutableMapOf<Int, AppScanStats>()
     private val apps = ConcurrentLinkedQueue<ScannerApp>()
 
     fun addWithCallback(
         appUid: Int,
+        appPid: Int,
         appName: String,
         uuid: UUID,
         source: AttributionSource,
@@ -50,6 +51,7 @@ class ScannerMap {
     ): ScannerApp =
         add(
             appUid = appUid,
+            appPid = appPid,
             appName = appName,
             uuid = uuid,
             userHandle = null,
@@ -69,6 +71,7 @@ class ScannerMap {
     ): ScannerApp =
         add(
             appUid = piInfo.callingUid(),
+            appPid = piInfo.callingPid(),
             appName = appNameOrUnknown(piInfo.callingPackage(), piInfo.callingUid()),
             uuid = uuid,
             userHandle = userHandle,
@@ -81,6 +84,7 @@ class ScannerMap {
 
     private fun add(
         appUid: Int,
+        appPid: Int,
         appName: String,
         uuid: UUID,
         userHandle: UserHandle?,
@@ -92,20 +96,26 @@ class ScannerMap {
     ): ScannerApp {
         val appScanStats =
             appScanStatsMap.getOrPut(appUid) {
-                AppScanStats(appName, workSource, appUid, adapterService, TimeProvider.systemClock)
+                AppScanStats(
+                    appUid,
+                    appPid,
+                    appName,
+                    workSource,
+                    adapterService,
+                    TimeProvider.systemClock,
+                )
             }
         val app =
             ScannerApp(
+                appScanStats,
                 uuid,
                 userHandle,
                 source.getLastAttributionTag(),
                 callback,
                 piInfo,
-                appName,
-                appScanStats,
             )
         apps.add(app)
-        appScanStats.mIsRegistered = true
+        appScanStats.isRegistered = true
         return app
     }
 
@@ -161,23 +171,66 @@ class ScannerMap {
     /** Logs debug information for registered apps and their scan statistics. */
     fun dump(sb: StringBuilder, settingsMap: Map<Int, ScanSettings>) {
         sb.append("LE Scanner:\n")
-        for (entry in apps) {
-            sb.append("  app_if: ${entry.id}, appName: ${entry.name}")
 
-            entry.attributionTag?.let { tag -> sb.append(", tag: $tag") }
+        if (apps.isNotEmpty()) {
+            val colWidthUid = 5 // "10300"
+            val colWidthPid = 5 // "10300"
+            val colWidthId = 2 // Longest: "32"
+            val colWidthPackage = apps.maxOfOrNull { it.name.length } ?: 30
+            val colWidthTag = apps.maxOfOrNull { it.attributionTag?.length ?: 0 } ?: 0
+            val colTagExists = colWidthTag != 0
+            val reportDelayMsColWidth =
+                if (settingsMap.values.any { it.reportDelayMillis > 0 }) 15 else 0
+            val colReportDelayExists = reportDelayMsColWidth != 0
 
-            settingsMap[entry.id]?.let { settings ->
-                if (settings.reportDelayMillis > 0) {
-                    sb.append(", reportDelayMillis: ${settings.reportDelayMillis}")
-                }
-            }
+            // Headers
+            val headerUid = "UID".padEnd(colWidthUid)
+            val headerPid = "PID".padEnd(colWidthPid)
+            val headerId = "ID".padEnd(colWidthId)
+            val headerPackage = "PACKAGE".padEnd(colWidthPackage)
+            val headerTag = "TAG".padEnd(colWidthTag)
+            val headerReportDelayMs = "REPORT_DELAY_MS" // Last column doesn't need padding
+            sb.append("  $headerUid $headerPid $headerId $headerPackage")
+            if (colTagExists) sb.append(" $headerTag")
+            if (colReportDelayExists) sb.append(" $headerReportDelayMs")
             sb.append("\n")
+
+            // Separators
+            val separatorUid = "-".repeat(colWidthUid)
+            val separatorPid = "-".repeat(colWidthPid)
+            val separatorId = "-".repeat(colWidthId)
+            val separatorPackage = "-".repeat(colWidthPackage)
+            val separatorTag = "-".repeat(colWidthTag)
+            val separatorReportDelayMs = "-".repeat(reportDelayMsColWidth)
+            sb.append("  $separatorUid $separatorPid $separatorId $separatorPackage")
+            if (colTagExists) sb.append(" $separatorTag")
+            if (colReportDelayExists) sb.append(" $separatorReportDelayMs")
+            sb.append("\n")
+
+            // Values
+            apps.forEach { app ->
+                val uid = app.uid.toString().padEnd(colWidthUid)
+                val pid = app.pid.toString().padEnd(colWidthPid)
+                val id = app.id.toString().padEnd(colWidthId)
+                val name = app.name.padEnd(colWidthPackage)
+                sb.append("  $uid $pid $id $name")
+                if (colTagExists) {
+                    val tag = (app.attributionTag ?: "").padEnd(colWidthTag)
+                    sb.append(" $tag")
+                }
+                if (colReportDelayExists) {
+                    val reportDelayMs = settingsMap[app.id]?.reportDelayMillis ?: 0
+                    val reportDelayString = if (reportDelayMs > 0) reportDelayMs.toString() else ""
+                    sb.append(" ${reportDelayString.padEnd(reportDelayMsColWidth)}")
+                }
+                sb.append("\n")
+            }
         }
 
         sb.append("\nLE Scanner Map:\n")
         sb.append("  Entries: ${appScanStatsMap.size}\n\n")
         for (appScanStats in appScanStatsMap.values) {
-            val scannerApps = apps.filter { it.name == appScanStats.mAppName }
+            val scannerApps = apps.filter { it.name == appScanStats.name }
             appScanStats.dump(sb, scannerApps)
         }
     }

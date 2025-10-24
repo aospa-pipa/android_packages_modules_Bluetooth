@@ -329,7 +329,7 @@ public final class AdvertiseData implements Parcelable {
                 + (", mIncludeDeviceName=" + mIncludeDeviceName)
                 + (", mDeviceNameEnc=" + mDeviceNameEnc)
                 + (", mIncludePublicBroadcastDeviceName=" + mIncludePublicBroadcastDeviceName)
-                + mIncludePublicBroadcastDeviceName + ", mPublicBroadcastDeviceName="
+                + (", mPublicBroadcastDeviceName=" + mPublicBroadcastDeviceName)
                 + (", mPublicBroadcastDeviceNameEnc=" + mPublicBroadcastDeviceNameEnc)
                 + "]";
     }

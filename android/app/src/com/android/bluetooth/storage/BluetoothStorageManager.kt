@@ -276,7 +276,7 @@ constructor(
         return value.toByteArray()
     }
 
-    fun setCustomMetadata(device: BluetoothDevice, key: Int, value: ByteArray?) {
+    fun setCustomMetadata(device: BluetoothDevice, key: Int, value: ByteArray) {
         validateMetadataKey(key)
 
         ioScope.launch {
@@ -285,8 +285,8 @@ constructor(
                 val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
                 val newByteString =
-                    if (value == null) ByteString.EMPTY else ByteString.copyFrom(value)
-                val oldByteString = deviceBuilder.customMetadataMap[key]
+                    if (value.isEmpty()) ByteString.EMPTY else ByteString.copyFrom(value)
+                val oldByteString = deviceBuilder.customMetadataMap[key] ?: ByteString.EMPTY
 
                 if (oldByteString == newByteString) {
                     return@updateData storage
@@ -296,7 +296,7 @@ constructor(
                 logEvent(device, "Custom metadata changed for $key")
 
                 val metadataBuilder = deviceBuilder.customMetadataMap.toMutableMap()
-                if (value == null) {
+                if (value.isEmpty()) {
                     metadataBuilder.remove(key)
                 } else {
                     metadataBuilder[key] = newByteString
@@ -374,10 +374,10 @@ constructor(
         }
 
     fun getA2dpOptionalCodecsSupported(device: BluetoothDevice): Int {
-        val settings = currentStorage.devicesMap[device.address]?.a2DpSettings
+        val a2dpSettings = currentStorage.devicesMap[device.address]?.a2DpSettings
         val status =
-            if (settings?.hasOptionalCodecsSupported() == true) {
-                settings.optionalCodecsSupported
+            if (a2dpSettings?.hasOptionalCodecsSupported() == true) {
+                a2dpSettings.optionalCodecsSupported
             } else {
                 null
             }
@@ -405,10 +405,10 @@ constructor(
         }
 
     fun getA2dpOptionalCodecsEnabled(device: BluetoothDevice): Int {
-        val settings = currentStorage.devicesMap[device.address]?.a2DpSettings
+        val a2dpSettings = currentStorage.devicesMap[device.address]?.a2DpSettings
         val status =
-            if (settings?.hasOptionalCodecsEnabled() == true) {
-                settings.optionalCodecsEnabled
+            if (a2dpSettings?.hasOptionalCodecsEnabled() == true) {
+                a2dpSettings.optionalCodecsEnabled
             } else {
                 null
             }
@@ -583,6 +583,34 @@ constructor(
                 logEvent(device, "Microphone preferred for calls set to $enabled")
                 deviceBuilder.microphonePreferredForCalls = enabled
 
+                builder.putDevices(device.address, deviceBuilder.build()).build()
+            }
+        }
+
+    fun getAvrcpVolume(device: BluetoothDevice, defaultValue: Int): Int {
+        val avrcpSettings = currentStorage.devicesMap[device.address]?.avrcpSettings
+        return if (avrcpSettings?.hasVolume() == true) {
+            avrcpSettings.volume
+        } else {
+            defaultValue
+        }
+    }
+
+    fun setAvrcpVolume(device: BluetoothDevice, newVolume: Int) =
+        ioScope.launch {
+            dataStore.updateData { storage ->
+                val builder = storage.toBuilder()
+                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+                val settingsBuilder = deviceBuilder.avrcpSettings.toBuilder()
+
+                if (settingsBuilder.hasVolume() && settingsBuilder.volume == newVolume) {
+                    return@updateData storage
+                }
+
+                logEvent(device, "Storing AVRCP Volume = $newVolume")
+                settingsBuilder.volume = newVolume
+
+                deviceBuilder.setAvrcpSettings(settingsBuilder.build())
                 builder.putDevices(device.address, deviceBuilder.build()).build()
             }
         }

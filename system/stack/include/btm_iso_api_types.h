@@ -25,6 +25,7 @@
 
 namespace bluetooth {
 namespace hci {
+
 constexpr uint8_t kIsoCodingFormatTransparent = 0x03;
 constexpr uint8_t kIsoCodingFormatLc3 = 0x06;
 constexpr uint8_t kIsoCodingFormatVendorSpecific = 0xFF;
@@ -46,6 +47,11 @@ constexpr uint8_t kIsoCigPhyC = 0x04;
 constexpr uint8_t kIsoCigPhyHdt = 0x10;
 
 namespace iso_manager {
+
+// A handle to identify a registered ISO client.
+// A value of 0 is considered invalid.
+using IsoClientHandle = uint8_t;
+constexpr IsoClientHandle kInvalidIsoClientHandle = 0;
 
 constexpr uint8_t kIsoDataPathDirectionIn = 0x00;
 constexpr uint8_t kIsoDataPathDirectionOut = 0x01;
@@ -166,7 +172,7 @@ struct big_create_params {
 
 struct big_create_cmpl_evt {
   uint8_t status;
-  uint8_t big_id;
+  uint8_t big_handle;
   uint32_t big_sync_delay;
   uint32_t transport_latency_big;
   uint8_t phy;
@@ -180,7 +186,7 @@ struct big_create_cmpl_evt {
 };
 
 struct big_terminate_cmpl_evt {
-  uint8_t big_id;
+  uint8_t big_handle;
   uint8_t reason;
 };
 

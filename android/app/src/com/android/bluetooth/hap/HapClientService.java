@@ -52,9 +52,8 @@ import android.util.Log;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.flags.Flags;
-import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -418,6 +417,8 @@ public class HapClientService extends ConnectableProfile {
         if (adManager != null) {
             adManager.profileConnectionStateChanged(mProfileId, device, fromState, toState);
         }
+        mAdapterService.updateProfileConnectionAdapterProperties(
+                device, mProfileId, toState, fromState);
     }
 
     @Override

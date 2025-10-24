@@ -2,16 +2,6 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "early_incoming_hid_connection"
-    namespace: "bluetooth"
-    description: "Allow early incoming HID connection"
-    bug: "398105207"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "hh_state_update_race_fix"
     namespace: "bluetooth"
     description: "Fix stuck in connecting state due to race when updating state"
@@ -22,30 +12,10 @@ flag {
 }
 
 flag {
-    name: "simpler_hid_connection_policy"
-    namespace: "bluetooth"
-    description: "Simplify native HID host connection policy enforcement"
-    bug: "404590499"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "hogp_encryption_collision"
     namespace: "bluetooth"
     description: "HOGP host may not be able to proceed with connection if the link is getting encrypted"
     bug: "405437978"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "reconnect_on_hogp_connection_failure"
-    namespace: "bluetooth"
-    description: "Put the added HOGP device in the background connection list if the connection attempt failed"
-    bug: "406399172"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

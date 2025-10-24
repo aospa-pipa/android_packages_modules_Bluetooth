@@ -849,7 +849,7 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_numbe
     p_dev_rec->sec_rec.sec_flags &= ~BTM_SEC_NAME_KNOWN;
     p_dev_rec->sec_bd_name[0] = '\0';
   }
-  if (!(p_dev_rec->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) || p_dev_rec->is_originator)
+  if (!(p_dev_rec->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) || p_dev_rec->outgoing)
   {
     log::debug("Calling Next Security Procedure");
     if ((status = btm_sec_execute_procedure(p_dev_rec)) != tBTM_STATUS::BTM_CMD_STARTED) {

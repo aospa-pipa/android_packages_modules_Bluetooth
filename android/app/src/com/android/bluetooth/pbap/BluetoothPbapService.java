@@ -57,10 +57,9 @@ import com.android.bluetooth.ObexServerSockets;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.InteropUtil;
 import com.android.bluetooth.flags.Flags;
-import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.bluetooth.util.DevicePolicyUtils;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -208,7 +207,9 @@ public class BluetoothPbapService extends ConnectableProfile implements IObexCon
                         mContactChangeObserver);
 
         mSessionStatusHandler.sendEmptyMessage(GET_LOCAL_TELEPHONY_DETAILS);
-        mSessionStatusHandler.sendEmptyMessage(LOAD_CONTACTS);
+        if (!Flags.pbapLazyLoadContacts()) {
+            mSessionStatusHandler.sendEmptyMessage(LOAD_CONTACTS);
+        }
         mSessionStatusHandler.sendEmptyMessage(START_LISTENER);
 
         mIsPseDynamicVersionUpgradeEnabled =
@@ -690,6 +691,9 @@ public class BluetoothPbapService extends ConnectableProfile implements IObexCon
                             + " socket="
                             + socket);
             return false;
+        }
+        if (Flags.pbapCleanupUseHandler() && !mContactsLoaded) {
+            mSessionStatusHandler.sendEmptyMessage(LOAD_CONTACTS);
         }
 
         PbapStateMachine sm =
