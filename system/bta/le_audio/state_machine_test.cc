@@ -250,6 +250,7 @@ protected:
   std::vector<uint8_t> cis_status_;
   uint8_t enabled_directions_;
   bool group_is_suspending_;
+  uint8_t iso_client_handle_ = 1;
 
   /* Needed for tests when one set member is bonded */
   int overrided_group_size_;
@@ -296,10 +297,9 @@ protected:
     cis_status_.clear();
     enabled_directions_ = bluetooth::le_audio::types::kLeAudioDirectionBoth;
     group_is_suspending_ = false;
-
     overrided_group_size_ = -1;
 
-    LeAudioGroupStateMachine::Initialize(&mock_callbacks_);
+    LeAudioGroupStateMachine::Initialize(&mock_callbacks_, iso_client_handle_);
 
     ContentControlIdKeeper::GetInstance()->Start();
 
@@ -426,7 +426,8 @@ protected:
 
     ON_CALL(*mock_iso_manager_, CreateCig)
             .WillByDefault(
-                    [this](uint8_t cig_id, bluetooth::hci::iso_manager::cig_create_params p) {
+                    [this](bluetooth::hci::iso_manager::IsoClientHandle /*client_handle*/,
+                           uint8_t cig_id, bluetooth::hci::iso_manager::cig_create_params p) {
                       log::debug("CreateCig");
                       last_cig_params_ = p;
 
@@ -2196,7 +2197,7 @@ TEST_F(StateMachineTest, testConfigureQosSingle) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(3);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2244,7 +2245,7 @@ TEST_F(StateMachineTest, testConfigureQosSingleRecoverCig) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(3);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(2);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveCig(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
@@ -2287,7 +2288,7 @@ TEST_F(StateMachineTest, testConfigureQosMultiple) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2341,7 +2342,7 @@ TEST_F(StateMachineTest, testConfigureQosFailed) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2388,7 +2389,7 @@ TEST_F(StateMachineTest, testDeviceDisconnectedWhileCigCreated) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(1);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2456,7 +2457,7 @@ TEST_F(StateMachineTest, testStreamCreationError) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2508,7 +2509,7 @@ TEST_F(StateMachineTest, testStreamSingle) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(3);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2560,7 +2561,7 @@ TEST_F(StateMachineTest, testStreamSingleRetryCisFailure) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(3);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2613,7 +2614,7 @@ TEST_F(StateMachineTest, testStreamSingleRetryCisSuccess) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(3);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(3);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2673,7 +2674,7 @@ TEST_F(StateMachineTest, testStreamSkipEnablingSink) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2732,7 +2733,7 @@ TEST_F(StateMachineTest, testStreamSkipEnablingSinkSource) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2774,7 +2775,7 @@ TEST_F(StateMachineTest, testStreamMultipleMedia_OneMemberHasNoAses) {
   PrepareEnableHandler(group);
   PrepareReceiverStartReadyHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2837,7 +2838,7 @@ TEST_F(StateMachineTest, testStreamMultipleMedia_OneMemberHasNoAsesAndNotConnect
   PrepareEnableHandler(group);
   PrepareReceiverStartReadyHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2914,7 +2915,7 @@ TEST_F(StateMachineTest, testStreamSingleConversational_TwsWithTwoBidirectional)
   PrepareEnableHandler(group);
   PrepareReceiverStartReadyHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -2971,7 +2972,7 @@ TEST_F(StateMachineTest, testStreamMultipleConversational) {
   PrepareEnableHandler(group);
   PrepareReceiverStartReadyHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3030,7 +3031,7 @@ TEST_F(StateMachineTest, testFailedStreamMultipleConversational) {
   PrepareReceiverStartReadyHandler(group);
   PrepareReleaseHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
 
   /* Bidirectional CIS data path is configured in tw ocalls and removed for both
@@ -3163,7 +3164,7 @@ TEST_F(StateMachineTest, testFailedStreamCreation) {
   PrepareEnableHandler(group, 0, true /* inject enabling */, false /* inject streaming*/);
   PrepareReleaseHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3237,7 +3238,7 @@ TEST_F(StateMachineTest, remoteRejectsEnable) {
                               client_parser::ascs::kCtpResponseNoReason);
   PrepareReleaseHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3300,7 +3301,7 @@ TEST_F(StateMachineTest, testStreamMultiple) {
   PrepareConfigureQosHandler(group);
   PrepareEnableHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3352,7 +3353,7 @@ TEST_F(StateMachineTest, testUpdateMetadataMultiple) {
   PrepareConfigureQosHandler(group);
   PrepareEnableHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3429,7 +3430,7 @@ TEST_F(StateMachineTest, testUpdateMetadataMultiple_NoUpdatesOnKeyTouch) {
   PrepareConfigureQosHandler(group);
   PrepareEnableHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -3514,7 +3515,7 @@ TEST_F(StateMachineTest, testDisableSingle) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_,
@@ -3583,7 +3584,7 @@ TEST_F(StateMachineTest, testDisableMultiple) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_,
@@ -3647,7 +3648,7 @@ TEST_F(StateMachineTest, testDisableBidirectional) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(AtLeast(4));
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(3);
   bool removed_bidirectional = false;
@@ -3748,7 +3749,7 @@ TEST_F(StateMachineTest, testTwoBidirectionalAses) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(AtLeast(4));
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -3809,7 +3810,7 @@ TEST_F(StateMachineTest, testReleaseSingle) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(1);
@@ -3886,7 +3887,7 @@ TEST_F(StateMachineTest, testReleaseCachingSingle) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(1);
@@ -3957,7 +3958,7 @@ TEST_F(StateMachineTest, testStreamCaching_NoReconfigurationNeeded_SingleDevice)
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(6);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(2);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(1);
@@ -4048,7 +4049,7 @@ TEST_F(StateMachineTest, test_StreamCaching_ReconfigureForContextChange_SingleDe
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(8);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(2);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(2);
 
   /* 2 times for first configuration (1 Sink, 1 Source), 1 time for second
@@ -4133,7 +4134,7 @@ TEST_F(StateMachineTest, testReleaseMultiple) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4209,7 +4210,7 @@ TEST_F(StateMachineTest, testStartAndStopStreamConversational_VerifyCodecManager
 
   auto* leAudioDevice = group->GetFirstDevice();
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4308,7 +4309,7 @@ TEST_F(StateMachineTest, testReleaseMultiple_CisDisconnectedBeforeGettingToIdleS
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4393,7 +4394,7 @@ TEST_F(StateMachineTest, testReleaseMultiple_CisDisconnectedBeforeGettingToConfi
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4478,7 +4479,7 @@ TEST_F(StateMachineTest, testAutonomousReleaseMultiple) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4571,7 +4572,7 @@ TEST_F(StateMachineTest, testReleaseMultiple_DeviceDisconnectedDuringRelease) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -4643,7 +4644,7 @@ TEST_F(StateMachineTest, testReleaseBidirectional) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(AtLeast(4));
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(3);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4722,7 +4723,7 @@ TEST_F(StateMachineTest, testDisableAndReleaseBidirectional) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(AtLeast(4));
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(3);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -4756,7 +4757,7 @@ TEST_F(StateMachineTest, testAseIdAssignmentIdle) {
 
   // Should not trigger any action on our side
   EXPECT_CALL(gatt_queue, WriteCharacteristic(_, _, _, _, _, _)).Times(0);
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(0);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -4784,7 +4785,7 @@ TEST_F(StateMachineTest, testAseIdAssignmentCodecConfigured) {
 
   // Should not trigger any action on our side
   EXPECT_CALL(gatt_queue, WriteCharacteristic(_, _, _, _, _, _)).Times(0);
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(0);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -5038,7 +5039,7 @@ TEST_F(StateMachineTest, testSenderStateReleaseHandling) {
     leAudioDevice = group->GetNextDevice(leAudioDevice);
   }
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -5484,7 +5485,7 @@ TEST_F(StateMachineTest, testInjectReleasingStateWhenEnabling) {
 
   InjectInitialConfiguredNotification(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -5815,7 +5816,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStream) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -5916,7 +5917,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStreamV2) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6017,7 +6018,7 @@ TEST_F(StateMachineTest, testStreamingContextMechanism) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6082,7 +6083,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStreamDeviceNoAvailableContext) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6165,7 +6166,7 @@ TEST_F(StateMachineTest, testQoSConfigureWhileStreaming) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(4);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(1);
@@ -6250,7 +6251,7 @@ TEST_F(StateMachineTest, testReleaseStreamWithLateAttachToStream_CodecConfigStat
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6403,7 +6404,7 @@ TEST_F(StateMachineTest, testReleaseStreamWithLateAttachToStream_QoSConfigState)
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6555,7 +6556,7 @@ TEST_F(StateMachineTest, testReleaseStreamWithLateAttachToStream_EnablingState) 
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6711,7 +6712,7 @@ TEST_F(StateMachineTest, testReleaseStreamWithLateAttachToStream_BeforeStreaming
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6866,7 +6867,7 @@ TEST_F(StateMachineTest, testAutonomousConfiguredAndAttachToStream) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -6985,7 +6986,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStream_autonomusQoSConfiguredState
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7083,7 +7084,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStream_remoteDoesNotResponseOnCode
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7207,7 +7208,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStreamDoNotAttach) {
   InjectAclDisconnected(group, lastDevice);
 
   // Start the configuration and stream Media content
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
   LeAudioGroupStateMachine::Get()->StartStream(group, context_type,
@@ -7267,7 +7268,7 @@ TEST_F(StateMachineTest, testReconfigureAfterLateDeviceAttached) {
 
   /* First device connected. Configure it to stream media */
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
 
@@ -7300,7 +7301,7 @@ TEST_F(StateMachineTest, testReconfigureAfterLateDeviceAttached) {
 
   /* Start stream, make sure 2 devices are started. */
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7364,7 +7365,7 @@ TEST_F(StateMachineTest, testReconfigureAfterLateDeviceAttachedConversationalSwb
   InjectAclDisconnected(group, lastDevice);
 
   /* First device connected. Configure it to stream media */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7405,7 +7406,7 @@ TEST_F(StateMachineTest, testReconfigureAfterLateDeviceAttachedConversationalSwb
   group->UpdateAudioSetConfigurationCache(context_type);
 
   /* Start stream, make sure 2 devices are started. */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -7475,7 +7476,7 @@ TEST_F(StateMachineTestNoSwb, testReconfigureAfterLateDeviceAttachedConversation
   InjectAclDisconnected(group, lastDevice);
 
   /* First device connected. Configure it to stream media */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7516,7 +7517,7 @@ TEST_F(StateMachineTestNoSwb, testReconfigureAfterLateDeviceAttachedConversation
   group->UpdateAudioSetConfigurationCache(context_type);
 
   /* Start stream, make sure 2 devices are started. */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -7573,7 +7574,7 @@ TEST_F(StateMachineTest, testConfigurationForOneDeviceBonded) {
   InjectInitialIdleNotification(group);
 
   /* First device connected. Configure it to stream media */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
 
@@ -7615,7 +7616,7 @@ TEST_F(StateMachineTest, testConfigurationForOneDeviceBondedThenAttachSecondOne)
   InjectInitialIdleNotification(group);
 
   /* First device connected. Configure it to stream media */
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(1);
 
@@ -7685,7 +7686,7 @@ TEST_F(StateMachineTest, testStreamToGettingReadyDevice) {
                                               _, GATT_WRITE_NO_RSP, _, _))
           .Times(AtLeast(3));
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -7743,7 +7744,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheConversationalStream) {
   ASSERT_NE(nullptr, firstDevice);
   ASSERT_NE(nullptr, lastDevice);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
 
   EXPECT_CALL(*mock_iso_manager_,
@@ -9210,7 +9211,7 @@ TEST_F(StateMachineTest, StartStreamCachedConfigReconfigInvalidBehavior) {
               StatusReportCb(leaudio_group_id, bluetooth::le_audio::GroupStreamStatus::RELEASING))
           .Times(0);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(0);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(0);
 
   // Block the fallback Release which will happen when CreateCig will fail
   stay_in_releasing_state_ = true;
@@ -9564,7 +9565,7 @@ TEST_F(StateMachineTest, lateCisDisconnectedEvent_DuringReconfiguration) {
 
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -9645,7 +9646,7 @@ TEST_F(StateMachineTest, lateCisDisconnectedEvent_AutonomousConfigured) {
 
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -9728,7 +9729,7 @@ TEST_F(StateMachineTest, lateCisDisconnectedEvent_Idle) {
 
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -9792,7 +9793,7 @@ TEST_F(StateMachineTest, StreamReconfigureAfterCisLostTwoDevices) {
   /* Prepare DisconnectCis mock to not symulate CisDisconnection */
   ON_CALL(*mock_iso_manager_, DisconnectCis).WillByDefault(Return());
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, DisconnectCis(_, _)).Times(0);
@@ -9829,7 +9830,7 @@ TEST_F(StateMachineTest, StreamReconfigureAfterCisLostTwoDevices) {
   testing::Mock::VerifyAndClearExpectations(&gatt_queue);
   testing::Mock::VerifyAndClearExpectations(&mock_callbacks_);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -9914,7 +9915,7 @@ TEST_F(StateMachineTest, StreamClearAfterReleaseAndConnectionTimeout) {
   PrepareConfigureQosHandler(group);
   PrepareEnableHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(2);
@@ -10048,7 +10049,7 @@ TEST_F(StateMachineTest, VerifyThereIsNoDoubleDataPathRemoval) {
   PrepareReleaseHandler(group);
   PrepareReceiverStartReadyHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(1);
@@ -10265,7 +10266,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStreamCisFailure) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -10362,7 +10363,7 @@ TEST_F(StateMachineTest, testAttachDeviceToTheStreamDataPathFailure) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -10459,7 +10460,7 @@ TEST_F(StateMachineTest, testAttachDeviceWhileSecondDeviceDisconnects) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -10591,7 +10592,7 @@ TEST_F(StateMachineTest, testAclDropWithoutApriorCisDisconnection) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(2);
 
@@ -10659,7 +10660,7 @@ TEST_F(StateMachineTest, testAutonomousDisableOneDeviceAndGoBackToStream_CisDisc
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -10766,7 +10767,7 @@ TEST_F(StateMachineTest, testAutonomousDisableOneDeviceAndGoBackToStream_CisConn
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -10875,7 +10876,7 @@ TEST_F(StateMachineTest, testAutonomousDisable_GoToIdle) {
   }
   ASSERT_EQ(expected_devices_written, num_devices);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);
 
@@ -10966,7 +10967,7 @@ TEST_F(StateMachineTest, testStopStreamBeforeCodecConfigureIsArrived) {
                                   GATT_WRITE_NO_RSP, _, _))
           .Times(1);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(0);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(0);
   EXPECT_CALL(*mock_iso_manager_, RemoveIsoDataPath(_, _)).Times(0);
@@ -11689,7 +11690,7 @@ TEST_F(StateMachineTest, testStreamMultipleDsa) {
   PrepareConfigureQosHandler(group);
   PrepareEnableHandler(group);
 
-  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _)).Times(1);
+  EXPECT_CALL(*mock_iso_manager_, CreateCig(_, _, _)).Times(1);
   EXPECT_CALL(*mock_iso_manager_, EstablishCis(_)).Times(AtLeast(1));
   // Called 4 times: 2 devices x 2 directions
   EXPECT_CALL(*mock_iso_manager_, SetupIsoDataPath(_, _)).Times(4);

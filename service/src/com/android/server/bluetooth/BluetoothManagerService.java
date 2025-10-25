@@ -711,10 +711,6 @@ class BluetoothManagerService {
         mCallbacks.unregister(callback);
     }
 
-    boolean isEnabled() {
-        return getState() == State.ON;
-    }
-
 //  @GuardedBy("mAdapterLock")
 //     private boolean synchronousDisable(AttributionSource attributionSource)
 //             throws RemoteException, TimeoutException {
@@ -2013,11 +2009,11 @@ class BluetoothManagerService {
         String errorMsg = null;
 
         writer.println("Bluetooth Status:");
-        writer.println("  Enabled:       " + isEnabled());
         writer.println("  State:         " + mState);
         writer.println("  Address:       " + Log.address(mAddress));
         writer.println("  Name:          " + mName);
-        if (mEnable) {
+        writer.println("  Inner app:     " + mBluetoothComponent.getPackageName());
+        if (!mState.oneOf(State.OFF)) {
             Duration elapsed = Duration.between(mLastBindingTime, Instant.now());
             writer.println(
                     "  Uptime:        "
@@ -2051,10 +2047,11 @@ class BluetoothManagerService {
         writer.println("  mQuietEnableExternal:" + mQuietEnableExternal);
 
         writer.println("");
-        writer.flush();
 
         dumpBluetoothFlags(writer);
         writer.println("");
+
+        writer.flush();
 
         if (mAdapter == null) {
             errorMsg = "Bluetooth Service not connected";

@@ -159,10 +159,7 @@ public class ScanManagerTest {
 
     private final FakeTimeProvider mTimeProvider = new FakeTimeProvider();
 
-    private ScanRadioStats mScanRadioStats;
-    private AppScanStats mMockAppScanStats;
-    private MockContentResolver mMockContentResolver;
-
+    private AppScanStats mAppScanStats;
     private ScanManager mScanManager;
     private TestLooper mLooper;
     private long mScanReportDelay;
@@ -214,8 +211,8 @@ public class ScanManagerTest {
 
         final var context = InstrumentationRegistry.getInstrumentation().getContext();
         doReturn(context.getResources()).when(mAdapterService).getResources();
-        mMockContentResolver = new MockContentResolver(context);
-        mMockContentResolver.addProvider(
+        var mockContentResolver = new MockContentResolver(context);
+        mockContentResolver.addProvider(
                 Settings.AUTHORITY,
                 new MockContentProvider() {
                     @Override
@@ -223,7 +220,7 @@ public class ScanManagerTest {
                         return Bundle.EMPTY;
                     }
                 });
-        doReturn(mMockContentResolver).when(mAdapterService).getContentResolver();
+        doReturn(mockContentResolver).when(mAdapterService).getContentResolver();
         // Needed to mock Native call/callback when hw offload scan filter is enabled
         doReturn(true).when(mAdapter).isOffloadedFilteringSupported();
 
@@ -231,8 +228,8 @@ public class ScanManagerTest {
         // Mock JNI callback in ScanNativeCallback
         doReturn(true).when(mScanNativeCallback).waitForCallback(anyInt());
 
-        mScanRadioStats = new ScanRadioStats(mTimeProvider);
-        doReturn(mScanRadioStats).when(mScanController).getScanRadioStats();
+        var scanRadioStats = new ScanRadioStats(mTimeProvider);
+        doReturn(scanRadioStats).when(mScanController).getScanRadioStats();
         MetricsLogger.setInstanceForTesting(mMetricsLogger);
         mInOrder = inOrder(mMetricsLogger);
 
@@ -252,8 +249,16 @@ public class ScanManagerTest {
 
         mScanReportDelay = DEFAULT_BATCH_SCAN_REPORT_DELAY_MS;
         final int appUid = 1234;
-        mMockAppScanStats =
-                spy(new AppScanStats(TEST_APP_NAME, null, appUid, mAdapterService, mTimeProvider));
+        final int appPid = 5678;
+        mAppScanStats =
+                spy(
+                        new AppScanStats(
+                                appUid,
+                                appPid,
+                                TEST_APP_NAME,
+                                null,
+                                mAdapterService,
+                                mTimeProvider));
     }
 
     @After
@@ -354,9 +359,8 @@ public class ScanManagerTest {
             AppScanStats appScanStats,
             List<ScanFilter> scanFilterList) {
         ScanSettings scanSettings = createScanSettings(scanMode, isBatch, isAutoBatch);
-
         mClientId = mClientId + 1;
-        ScanClient client = new ScanClient(mClientId, scanSettings, scanFilterList, appUid);
+        ScanClient client = new ScanClient(appUid, mClientId, scanSettings, scanFilterList);
         client.setAppScanStats(Optional.of(appScanStats));
         client.getAppScanStats()
                 .get()
@@ -379,13 +383,7 @@ public class ScanManagerTest {
 
     private ScanClient createScanClient(boolean isFiltered, int scanMode) {
         return createScanClient(
-                isFiltered,
-                false,
-                scanMode,
-                false,
-                false,
-                Binder.getCallingUid(),
-                mMockAppScanStats);
+                isFiltered, false, scanMode, false, false, Binder.getCallingUid(), mAppScanStats);
     }
 
     private ScanClient createScanClient(
@@ -402,7 +400,7 @@ public class ScanManagerTest {
                 isBatch,
                 isAutoBatch,
                 Binder.getCallingUid(),
-                mMockAppScanStats);
+                mAppScanStats);
     }
 
     private ScanClient createScanClient(boolean isFiltered, boolean isEmptyFilter, int scanMode) {
@@ -413,26 +411,24 @@ public class ScanManagerTest {
                 false,
                 false,
                 Binder.getCallingUid(),
-                mMockAppScanStats);
+                mAppScanStats);
     }
 
     private static List<ScanFilter> createScanFilterList(
             boolean isFiltered, boolean isEmptyFilter) {
-        List<ScanFilter> scanFilterList = null;
+        List<ScanFilter> filters = new ArrayList<>();
         if (isFiltered) {
-            scanFilterList = new ArrayList<>();
             if (isEmptyFilter) {
-                scanFilterList.add(new ScanFilter.Builder().build());
+                filters.add(new ScanFilter.Builder().build());
             } else {
-                scanFilterList.add(new ScanFilter.Builder().setDeviceName("TestName").build());
+                filters.add(new ScanFilter.Builder().setDeviceName("TestName").build());
             }
         }
-        return scanFilterList;
+        return filters;
     }
 
     private ScanSettings createScanSettings(int scanMode, boolean isBatch, boolean isAutoBatch) {
-
-        ScanSettings scanSettings = null;
+        ScanSettings scanSettings;
         if (isBatch && isAutoBatch) {
             int autoCallbackType = CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH;
             scanSettings =
@@ -466,8 +462,8 @@ public class ScanManagerTest {
         ScanSettings scanSettings = createScanSettingsWithPhy(scanMode, phy);
 
         final int appUid = 1234;
-        ScanClient client = new ScanClient(id, scanSettings, scanFilterList, appUid);
-        client.setAppScanStats(Optional.of(mMockAppScanStats));
+        ScanClient client = new ScanClient(appUid, id, scanSettings, scanFilterList);
+        client.setAppScanStats(Optional.of(mAppScanStats));
         client.getAppScanStats()
                 .get()
                 .recordScanStart(scanSettings, scanFilterList, isFiltered, false, id, null);
@@ -742,7 +738,7 @@ public class ScanManagerTest {
                     advanceTime(DEFAULT_SCAN_TIMEOUT);
                     // Since we are using a TestLooper, need to mock AppScanStats.isScanningTooLong
                     // to return true because no real time is elapsed
-                    doReturn(true).when(mMockAppScanStats).isScanningTooLong();
+                    doReturn(true).when(mAppScanStats).isScanningTooLong();
                     mLooper.dispatchAll();
                     assertThat(client.getSettings().getScanMode()).isEqualTo(expectedScanMode);
                     assertThat(client.getAppScanStats().get().isScanTimeout(client.getScannerId()))
@@ -1314,8 +1310,16 @@ public class ScanManagerTest {
             WorkSource source = new WorkSource(UID, PACKAGE_NAME);
             // Create app scan stats for the app
             final int appUid = 1234;
+            final int appPid = 5678;
             AppScanStats appScanStats =
-                    spy(new AppScanStats(APP_NAME, source, appUid, mAdapterService, mTimeProvider));
+                    spy(
+                            new AppScanStats(
+                                    appUid,
+                                    appPid,
+                                    APP_NAME,
+                                    source,
+                                    mAdapterService,
+                                    mTimeProvider));
             // Set app importance as Foreground Service for the stats
             appScanStats.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
             // Create scan client for the app, which also records scan start
@@ -1384,8 +1388,16 @@ public class ScanManagerTest {
         WorkSource source1 = new WorkSource(UID_1, PACKAGE_NAME_1);
         // Create app scan stats for the first app
         final int appUid1 = 12341;
+        final int appPid1 = 5678;
         AppScanStats appScanStats1 =
-                spy(new AppScanStats(APP_NAME_1, source1, appUid1, mAdapterService, mTimeProvider));
+                spy(
+                        new AppScanStats(
+                                appUid1,
+                                appPid1,
+                                APP_NAME_1,
+                                source1,
+                                mAdapterService,
+                                mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats1.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the first app
@@ -1402,8 +1414,16 @@ public class ScanManagerTest {
         WorkSource source2 = new WorkSource(UID_2, PACKAGE_NAME_2);
         // Create app scan stats for the second app
         final int appUid2 = 12342;
+        final int appPid2 = 56782;
         AppScanStats appScanStats2 =
-                spy(new AppScanStats(APP_NAME_2, source2, appUid2, mAdapterService, mTimeProvider));
+                spy(
+                        new AppScanStats(
+                                appUid2,
+                                appPid2,
+                                APP_NAME_2,
+                                source2,
+                                mAdapterService,
+                                mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats2.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the second app
@@ -1436,8 +1456,16 @@ public class ScanManagerTest {
         WorkSource source3 = new WorkSource(UID_3, PACKAGE_NAME_3);
         // Create app scan stats for the third app
         final int appUid3 = 12343;
+        final int appPid3 = 56783;
         AppScanStats appScanStats3 =
-                spy(new AppScanStats(APP_NAME_3, source3, appUid3, mAdapterService, mTimeProvider));
+                spy(
+                        new AppScanStats(
+                                appUid3,
+                                appPid3,
+                                APP_NAME_3,
+                                source3,
+                                mAdapterService,
+                                mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats3.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the third app
@@ -1471,8 +1499,16 @@ public class ScanManagerTest {
         WorkSource source4 = new WorkSource(UID_4, PACKAGE_NAME_4);
         // Create app scan stats for the fourth app
         final int appUid4 = 12344;
+        final int appPid4 = 56784;
         AppScanStats appScanStats4 =
-                spy(new AppScanStats(APP_NAME_4, source4, appUid4, mAdapterService, mTimeProvider));
+                spy(
+                        new AppScanStats(
+                                appUid4,
+                                appPid4,
+                                APP_NAME_4,
+                                source4,
+                                mAdapterService,
+                                mTimeProvider));
         // Set app importance as Foreground Service for the stats
         appScanStats4.setAppImportance(IMPORTANCE_FOREGROUND_SERVICE);
         // Create scan client for the fourth app
@@ -2098,7 +2134,7 @@ public class ScanManagerTest {
                         false,
                         false,
                         Binder.getCallingUid(),
-                        mMockAppScanStats,
+                        mAppScanStats,
                         scanFilterList);
         // Start scan
         startScan(client);
@@ -2111,7 +2147,7 @@ public class ScanManagerTest {
                         false,
                         false,
                         Binder.getCallingUid(),
-                        mMockAppScanStats,
+                        mAppScanStats,
                         scanFilterList);
         // Start scan
         startScan(anotherClient);
@@ -2160,7 +2196,7 @@ public class ScanManagerTest {
                         false,
                         false,
                         Binder.getCallingUid(),
-                        mMockAppScanStats,
+                        mAppScanStats,
                         scanFilterList);
         // Start scan
         startScan(client);

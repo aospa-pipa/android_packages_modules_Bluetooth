@@ -33,6 +33,7 @@
 #include "bta/le_audio/le_audio_types.h"
 #include "bta/le_audio/mock_codec_manager.h"
 #include "btif/include/btif_common.h"
+#include "btm_iso_api_types.h"
 #include "gd/common/utils.h"
 #include "hci/controller_mock.h"
 #include "stack/include/btm_iso_api.h"
@@ -174,7 +175,7 @@ BroadcastConfiguration GetBroadcastConfig(
 class MockAudioHalClientEndpoint;
 MockAudioHalClientEndpoint* mock_audio_source_;
 bool is_audio_hal_acquired;
-void (*iso_active_callback)(bool);
+std::function<void(bool)> iso_active_callback;
 
 std::unique_ptr<LeAudioSourceAudioHalClient> LeAudioSourceAudioHalClient::AcquireBroadcast() {
   if (mock_audio_source_) {
@@ -317,12 +318,14 @@ protected:
     iso_manager_->Start();
 
     mock_iso_manager_ = MockIsoManager::GetInstance();
-    ON_CALL(*mock_iso_manager_, RegisterBigCallbacks(_)).WillByDefault(SaveArg<0>(&big_callbacks_));
-
+    EXPECT_CALL(*mock_iso_manager_, RegisterCallbacks(_))
+            .WillOnce([this](bluetooth::hci::iso_manager::IsoManagerCallbacks callbacks) {
+              this->big_callbacks_ = callbacks.big_callbacks;
+              iso_active_callback = callbacks.iso_traffic_active_callback;
+              constexpr bluetooth::hci::iso_manager::IsoClientHandle kIsoClientHandle = 1;
+              return kIsoClientHandle;
+            });
     ConfigAudioHalClientMock();
-
-    EXPECT_CALL(*MockIsoManager::GetInstance(), RegisterOnIsoTrafficActiveCallbacks)
-            .WillOnce(SaveArg<0>(&iso_active_callback));
 
     ASSERT_FALSE(LeAudioBroadcaster::IsLeAudioBroadcasterRunning());
     LeAudioBroadcaster::Initialize(&mock_broadcaster_callbacks_,
@@ -432,12 +435,12 @@ protected:
     return broadcast_id;
   }
 
-  void InjectBigCreateComplete(uint8_t big_id, uint8_t status) {
+  void InjectBigCreateComplete(uint8_t big_handle, uint8_t status) {
     std::vector<uint16_t> conn_handles = {0x10, 0x12};
 
     hci::iso_manager::big_create_cmpl_evt evt = {
             .status = status,
-            .big_id = big_id,
+            .big_handle = big_handle,
             .big_sync_delay = 1231,
             .transport_latency_big = 1234,
             .phy = 2,
@@ -453,8 +456,8 @@ protected:
     big_callbacks_->OnBigEvent(bluetooth::hci::iso_manager::kIsoEventBigOnCreateCmpl, &evt);
   }
 
-  void InjectBigTerminateComplete(uint8_t big_id, uint8_t reason) {
-    hci::iso_manager::big_terminate_cmpl_evt evt = {.big_id = big_id, .reason = reason};
+  void InjectBigTerminateComplete(uint8_t big_handle, uint8_t reason) {
+    hci::iso_manager::big_terminate_cmpl_evt evt = {.big_handle = big_handle, .reason = reason};
     big_callbacks_->OnBigEvent(bluetooth::hci::iso_manager::kIsoEventBigOnTerminateCmpl, &evt);
   }
 
@@ -615,7 +618,7 @@ TEST_F(BroadcasterTest, StartAudioBroadcast) {
   //         IsoManager to prepare one (and that's good since IsoManager is also
   //         a mocked one).
   BigConfig big_cfg;
-  big_cfg.big_id = MockBroadcastStateMachine::GetLastInstance()->GetAdvertisingSid();
+  big_cfg.big_handle = MockBroadcastStateMachine::GetLastInstance()->GetAdvertisingSid();
   big_cfg.connection_handles = {0x10, 0x12};
   big_cfg.max_pdu = 128;
   MockBroadcastStateMachine::GetLastInstance()->SetExpectedBigConfig(big_cfg);
@@ -666,7 +669,7 @@ TEST_F(BroadcasterTest, StartAudioBroadcastMedia) {
 
   auto mock_state_machine = MockBroadcastStateMachine::GetLastInstance();
   BigConfig big_cfg;
-  big_cfg.big_id = mock_state_machine->GetAdvertisingSid();
+  big_cfg.big_handle = mock_state_machine->GetAdvertisingSid();
   big_cfg.connection_handles = {0x10, 0x12};
   big_cfg.max_pdu = 128;
   mock_state_machine->SetExpectedBigConfig(big_cfg);
@@ -697,12 +700,12 @@ TEST_F(BroadcasterTest, StopAudioBroadcast) {
 
   auto mock_state_machine = MockBroadcastStateMachine::GetLastInstance();
   BigConfig big_cfg;
-  big_cfg.big_id = mock_state_machine->GetAdvertisingSid();
+  big_cfg.big_handle = mock_state_machine->GetAdvertisingSid();
   big_cfg.connection_handles = {0x10, 0x12};
   big_cfg.max_pdu = 128;
   mock_state_machine->SetExpectedBigConfig(big_cfg);
 
-  InjectBigCreateComplete(big_cfg.big_id, 0x00);
+  InjectBigCreateComplete(big_cfg.big_handle, 0x00);
   EXPECT_CALL(mock_broadcaster_callbacks_,
               OnBroadcastStateChanged(broadcast_id, BroadcastState::STOPPED))
           .Times(1);
@@ -710,7 +713,7 @@ TEST_F(BroadcasterTest, StopAudioBroadcast) {
   EXPECT_CALL(*mock_audio_source_, Stop).Times(AtLeast(1));
   LeAudioBroadcaster::Get()->StopAudioBroadcast(broadcast_id);
 
-  InjectBigTerminateComplete(big_cfg.big_id, 0x16);
+  InjectBigTerminateComplete(big_cfg.big_handle, 0x16);
   Mock::VerifyAndClearExpectations(mock_codec_manager_);
 }
 

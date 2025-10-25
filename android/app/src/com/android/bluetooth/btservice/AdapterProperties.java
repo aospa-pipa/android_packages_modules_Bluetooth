@@ -52,7 +52,6 @@ import android.util.Pair;
 
 import androidx.annotation.VisibleForTesting;
 
-import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.flags.Flags;
@@ -67,7 +66,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-class AdapterProperties {
+public class AdapterProperties {
     private static final String TAG = Utils.BT_PREFIX + AdapterProperties.class.getSimpleName();
 
     private static final String MAX_CONNECTED_AUDIO_DEVICES_PROPERTY =
@@ -81,7 +80,6 @@ class AdapterProperties {
 
     private static final long DEFAULT_DISCOVERY_TIMEOUT_MS = 12800;
     @VisibleForTesting static final int BLUETOOTH_NAME_MAX_LENGTH_BYTES = 248;
-    private static final int SYSTEM_CONNECTION_LATENCY_METRIC = 65536;
 
     private volatile String mName;
     private volatile byte[] mAddress;
@@ -110,7 +108,7 @@ class AdapterProperties {
     private final RemoteDevices mRemoteDevices;
     private final Handler mHandler;
 
-    // TODO(b/447313374): Remove when ignore_redundant_disovery_if_same_state is shipped.
+    // TODO(b/447313374): Remove when ignore_redundant_discovery_if_same_state is shipped.
     private boolean mDiscovering;
     private long mDiscoveryEndMs; // < Time (ms since epoch) that discovery ended or will end.
     // TODO - all hw capabilities to be exposed as a class
@@ -250,7 +248,7 @@ class AdapterProperties {
         }
     }
 
-    ParcelUuid[] getUuids() {
+    public ParcelUuid[] getUuids() {
         return mUuids;
     }
 
@@ -509,7 +507,7 @@ class AdapterProperties {
         return mDiscoveryEndMs;
     }
 
-    // TODO(b/447313374): Remove when ignore_redundant_disovery_if_same_state is shipped.
+    // TODO(b/447313374): Remove when ignore_redundant_discovery_if_same_state is shipped.
     boolean isDiscovering() {
         return mDiscovering;
     }
@@ -528,15 +526,7 @@ class AdapterProperties {
             Log.e(TAG, "AdapterService is null");
             return;
         }
-        BluetoothStatsLog.write(
-                BluetoothStatsLog.BLUETOOTH_CONNECTION_STATE_CHANGED,
-                newState,
-                0 /* deprecated */,
-                profile,
-                mService.obfuscateAddress(device),
-                mService.getMetricId(device),
-                0,
-                SYSTEM_CONNECTION_LATENCY_METRIC);
+        MetricsLogger.getInstance().logDeviceConnectionStateChanges(device, profile, newState);
         if (!validateProfileConnectionState(newState)
                 || !validateProfileConnectionState(prevState)) {
             // Previously, an invalid state was broadcast anyway,

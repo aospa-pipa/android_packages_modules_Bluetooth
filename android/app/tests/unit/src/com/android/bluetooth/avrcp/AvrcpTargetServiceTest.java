@@ -26,12 +26,10 @@ import static com.android.bluetooth.avrcp.AvrcpVersion.AVRCP_VERSION_PROPERTY;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import android.bluetooth.BluetoothDevice;
@@ -44,7 +42,6 @@ import android.media.AudioDeviceCallback;
 import android.media.AudioManager;
 import android.media.AudioPlaybackConfiguration;
 import android.media.session.MediaSessionManager;
-import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.SystemProperties;
 import android.os.UserManager;
@@ -57,9 +54,9 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.bluetooth.TestLooper;
 import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.audio_util.Image;
-import com.android.bluetooth.audio_util.MediaData;
 import com.android.bluetooth.audio_util.Metadata;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.storage.BluetoothStorageManager;
 import com.android.tests.bluetooth.StaticMockitoRule;
 
 import org.junit.After;
@@ -85,6 +82,7 @@ public class AvrcpTargetServiceTest {
     public final StaticMockitoRule mMockitoRule = new StaticMockitoRule(SystemProperties.class);
 
     @Mock private AdapterService mAdapterService;
+    @Mock private BluetoothStorageManager mStorage;
     @Mock private A2dpService mA2dpService;
     @Mock private AudioManager mAudioManager;
     @Mock private AvrcpNativeInterface mNativeInterface;
@@ -110,7 +108,6 @@ public class AvrcpTargetServiceTest {
 
     private TestLooper mLooper;
     private AvrcpTargetService mService;
-    private AvrcpTargetService.ListCallback mListCallback;
 
     @Before
     public void setUp() throws Exception {
@@ -141,16 +138,16 @@ public class AvrcpTargetServiceTest {
         doReturn(true).when(mUserManager).isUserUnlocked();
 
         AvrcpVolumeManager volumeManager =
-                new AvrcpVolumeManager(mAdapterService, mNativeInterface);
+                new AvrcpVolumeManager(mAdapterService, mStorage, mNativeInterface);
         mService =
                 new AvrcpTargetService(
                         mAdapterService,
+                        mStorage,
                         mAudioManager,
                         mNativeInterface,
                         volumeManager,
                         mUserManager,
                         mLooper.getLooper());
-        mListCallback = mService.new ListCallback();
 
         // Verify that the service registers an audio device callback upon creation.
         verify(mAudioManager).registerAudioDeviceCallback(mAudioDeviceCb.capture(), any());
@@ -196,85 +193,6 @@ public class AvrcpTargetServiceTest {
         secondQueue.set(1, createEmptyMetadata());
         secondQueue.get(1).artist = TEST_DATA;
         assertThat(AvrcpTargetService.isQueueUpdated(firstQueue, secondQueue)).isTrue();
-    }
-
-    @Test
-    public void listCallbackRun_noChange_doesNotSendUpdate() {
-        // The service is initialized with a MediaData(null, null, null).
-        // Calling run with another MediaData(null, null, null) should not trigger an update.
-        MediaData data = new MediaData(null, null, null);
-
-        mListCallback.run(data);
-
-        verify(mNativeInterface, never()).sendMediaUpdate(anyBoolean(), anyBoolean(), anyBoolean());
-    }
-
-    @Test
-    public void listCallbackRun_metadataChanged_sendsUpdate() {
-        Metadata metadata = createEmptyMetadata();
-        metadata.title = "Test Title";
-        MediaData data = new MediaData(metadata, null, null);
-
-        mListCallback.run(data);
-
-        verify(mNativeInterface).sendMediaUpdate(true, false, false);
-    }
-
-    @Test
-    public void listCallbackRun_playStateChanged_sendsUpdate() {
-        PlaybackState state =
-                new PlaybackState.Builder()
-                        .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
-                        .build();
-        MediaData data = new MediaData(null, state, null);
-
-        mListCallback.run(data);
-
-        verify(mNativeInterface).sendMediaUpdate(false, true, false);
-    }
-
-    @Test
-    public void listCallbackRun_queueChanged_sendsUpdate() {
-        List<Metadata> queue = new ArrayList<>();
-        queue.add(createEmptyMetadata());
-        MediaData data = new MediaData(null, null, queue);
-
-        mListCallback.run(data);
-
-        verify(mNativeInterface).sendMediaUpdate(false, false, true);
-    }
-
-    @Test
-    public void listCallbackRun_allChanged_sendsUpdate() {
-        Metadata metadata = createEmptyMetadata();
-        metadata.title = "Test Title";
-        PlaybackState state =
-                new PlaybackState.Builder()
-                        .setState(PlaybackState.STATE_PLAYING, 0, 1.0f)
-                        .build();
-        List<Metadata> queue = new ArrayList<>();
-        queue.add(createEmptyMetadata());
-        MediaData data = new MediaData(metadata, state, queue);
-
-        mListCallback.run(data);
-
-        verify(mNativeInterface).sendMediaUpdate(true, true, true);
-    }
-
-    @Test
-    public void listCallbackRun_changeThenNoChange_sendsUpdateOnce() {
-        // First update with a change
-        Metadata metadata = createEmptyMetadata();
-        metadata.title = "Test Title";
-        MediaData data = new MediaData(metadata, null, null);
-        mListCallback.run(data);
-        verify(mNativeInterface).sendMediaUpdate(true, false, false);
-
-        // Second update with the same data, should be no change
-        mListCallback.run(data);
-        // Verify sendMediaUpdate was only called once in total
-        verify(mNativeInterface, times(1))
-                .sendMediaUpdate(anyBoolean(), anyBoolean(), anyBoolean());
     }
 
     @Test

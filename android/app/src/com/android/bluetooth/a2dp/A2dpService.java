@@ -57,10 +57,9 @@ import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
-import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.bluetooth.profile.ProfileService;
-import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 import com.android.bluetooth.storage.BluetoothStorageManager;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.internal.annotations.GuardedBy;
@@ -1238,13 +1237,17 @@ public class A2dpService extends ConnectableProfile {
         if (bondState != BluetoothDevice.BOND_NONE) {
             return;
         }
-        mAdapterService
-                .getAvrcpTargetService()
-                .ifPresent(
-                        avrcpTarget -> {
-                            Log.d(TAG, "bondStateChanged: going for removeStoredVolumeForDevice");
-                            avrcpTarget.removeStoredVolumeForDevice(device);
-                        });
+        if (!Flags.mainlineBetaStorage()) {
+            mAdapterService
+                    .getAvrcpTargetService()
+                    .ifPresent(
+                            avrcpTarget -> {
+                                Log.d(
+                                        TAG,
+                                        "bondStateChanged: going for removeStoredVolumeForDevice");
+                                avrcpTarget.removeStoredVolumeForDevice(device);
+                            });
+        }
         synchronized (mStateMachines) {
             A2dpStateMachine sm = mStateMachines.get(device);
             if (sm == null) {

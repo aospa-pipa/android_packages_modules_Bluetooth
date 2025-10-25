@@ -310,6 +310,7 @@ static void stop_stack(ProfileStopCallback stopProfiles) {
   l2c_free();
   get_btm_client_interface().lifecycle.btm_ble_free();
 
+  // btm_free() is called in main thread, and is a blocking call.
   do_in_main_thread(base::BindOnce(get_btm_client_interface().lifecycle.btm_free));
 
   hack_future = future_new();
