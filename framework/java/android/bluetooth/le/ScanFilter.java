@@ -654,41 +654,23 @@ public final class ScanFilter implements Parcelable {
 
     @Override
     public String toString() {
-        return "BluetoothLeScanFilter [mDeviceName="
-                + mDeviceName
-                + ", mDeviceAddress="
-                + mDeviceAddress
-                + ", mUuid="
-                + mServiceUuid
-                + ", mUuidMask="
-                + mServiceUuidMask
-                + ", mServiceSolicitationUuid="
-                + mServiceSolicitationUuid
-                + ", mServiceSolicitationUuidMask="
-                + mServiceSolicitationUuidMask
-                + ", mServiceDataUuid="
-                + Objects.toString(mServiceDataUuid)
-                + ", mServiceData="
-                + Arrays.toString(mServiceData)
-                + ", mServiceDataMask="
-                + Arrays.toString(mServiceDataMask)
-                + ", mManufacturerId="
-                + mManufacturerId
-                + ", mManufacturerData="
-                + Arrays.toString(mManufacturerData)
-                + ", mManufacturerDataMask="
-                + Arrays.toString(mManufacturerDataMask)
-                + ", mAdvertisingDataType="
-                + mAdvertisingDataType
-                + ", mAdvertisingData="
-                + Arrays.toString(mAdvertisingData)
-                + ", mAdvertisingDataMask="
-                + Arrays.toString(mAdvertisingDataMask)
-                + ", mTransportBlockFilter="
-                + mTransportBlockFilter
-                + ", mGroupBasedFiltering="
-                + mGroupBasedFiltering
-                + "]";
+        return ("BluetoothLeScanFilter [mDeviceName=" + mDeviceName)
+                + (", mDeviceAddress=" + mDeviceAddress)
+                + (", mUuid=" + mServiceUuid)
+                + (", mUuidMask=" + mServiceUuidMask)
+                + (", mServiceSolicitationUuid=" + mServiceSolicitationUuid)
+                + (", mServiceSolicitationUuidMask=" + mServiceSolicitationUuidMask)
+                + (", mServiceDataUuid=" + Objects.toString(mServiceDataUuid))
+                + (", mServiceData=" + Arrays.toString(mServiceData))
+                + (", mServiceDataMask=" + Arrays.toString(mServiceDataMask))
+                + (", mManufacturerId=" + mManufacturerId)
+                + (", mManufacturerData=" + Arrays.toString(mManufacturerData))
+                + (", mManufacturerDataMask=" + Arrays.toString(mManufacturerDataMask))
+                + (", mAdvertisingDataType=" + mAdvertisingDataType)
+                + (", mAdvertisingData=" + Arrays.toString(mAdvertisingData))
+                + (", mAdvertisingDataMask=" + Arrays.toString(mAdvertisingDataMask))
+                + (", mTransportBlockFilter=" + mTransportBlockFilter)
+                + (", mGroupBasedFiltering=" + mGroupBasedFiltering + "]");
     }
 
     @Override

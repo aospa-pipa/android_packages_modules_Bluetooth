@@ -2431,8 +2431,7 @@ static void btif_add_local_irk_to_resolving_list() {
   if (bluetooth::shim::GetController()->IsRpaGenerationSupported()) {
     const Octet16 all_zero_peer_irk = {0};
 
-    if (com_android_bluetooth_flags_non_zero_local_irk() &&
-        ble_local_key_cb.id_keys.irk == all_zero_peer_irk) {
+    if (ble_local_key_cb.id_keys.irk == all_zero_peer_irk) {
       log::debug("Local IRK is all-zero, wait for it be generated");
       return;
     }
@@ -2684,9 +2683,7 @@ void btif_dm_sec_evt(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data) {
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.irk, BTIF_DM_LE_LOCAL_KEY_IRK);
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.ir, BTIF_DM_LE_LOCAL_KEY_IR);
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.dhk, BTIF_DM_LE_LOCAL_KEY_DHK);
-      if (com_android_bluetooth_flags_non_zero_local_irk()) {
-        btif_add_local_irk_to_resolving_list();
-      }
+      btif_add_local_irk_to_resolving_list();
       break;
     case BTA_DM_BLE_LOCAL_ER_EVT:
       log::verbose("BTA_DM_BLE_LOCAL_ER_EVT");
@@ -3097,23 +3094,6 @@ void btif_dm_cancel_bond(const RawAddress bd_addr) {
       /* Cancel bonding, in case it is in ACL connection setup state */
       BTA_DmBondCancel(bd_addr);
     }
-  }
-}
-
-/*******************************************************************************
- *
- * Function         btif_dm_hh_open_failed
- *
- * Description      informs the upper layers if the HH have failed during
- *                  bonding
- *
- * Returns          none
- *
- ******************************************************************************/
-// TODO: Remove when simpler_hid_connection_policy is released
-void btif_dm_hh_open_failed(RawAddress* bdaddr) {
-  if (pairing_cb.state == BT_BOND_STATE_BONDING && *bdaddr == pairing_cb.bd_addr) {
-    bond_state_changed(BT_STATUS_RMT_DEV_DOWN, *bdaddr, BT_BOND_STATE_NONE);
   }
 }
 

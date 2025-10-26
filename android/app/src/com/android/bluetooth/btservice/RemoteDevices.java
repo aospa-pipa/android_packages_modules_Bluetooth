@@ -1613,13 +1613,11 @@ public class RemoteDevices {
             if (getBondState(device) == BluetoothDevice.BOND_BONDING) {
                 // Send PAIRING_CANCEL intent to dismiss any dialog requesting bonding.
                 sendPairingCancelIntent(device);
-            } else if (getBondState(device) == BluetoothDevice.BOND_NONE) {
+            } else if (getBondState(device) == BluetoothDevice.BOND_NONE
+                    && deviceProperties.getBondingInitiator()
+                            != DeviceProperties.BONDING_INITIATOR_NONE) {
                 // Don't remove device properties if bonding never attempted
-                if (!Flags.nonBondedDeviceProperties()
-                        || deviceProperties.getBondingInitiator()
-                                != DeviceProperties.BONDING_INITIATOR_NONE) {
-                    removeDeviceProperties(Utils.getAddressStringFromByte(address));
-                }
+                removeDeviceProperties(Utils.getAddressStringFromByte(address));
             }
             if (Flags.fixIntentSelectionForAcl()
                     || state == BluetoothAdapter.STATE_ON
@@ -1651,11 +1649,9 @@ public class RemoteDevices {
                 DeviceProperties deviceProp = getDeviceProperties(device);
                 if (deviceProp != null && deviceProp.isBondingInitiatedLocally()) {
                     // Reset bonding initiator state if both transports are disconnected
-                    boolean disconnected =
-                            deviceProp.getConnectionHandle(TRANSPORT_LE) == BluetoothDevice.ERROR
-                                    && deviceProp.getConnectionHandle(TRANSPORT_BREDR)
-                                            == BluetoothDevice.ERROR;
-                    if (!Flags.bondingInitiatorStateReset() || disconnected) {
+                    if (deviceProp.getConnectionHandle(TRANSPORT_LE) == BluetoothDevice.ERROR
+                            && deviceProp.getConnectionHandle(TRANSPORT_BREDR)
+                                    == BluetoothDevice.ERROR) {
                         deviceProp.setBondingInitiatedLocally(false);
                     }
                 }

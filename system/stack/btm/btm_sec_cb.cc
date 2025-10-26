@@ -28,7 +28,6 @@
 #include "internal_include/bt_trace.h"
 #include "internal_include/stack_config.h"
 #include "osi/include/allocator.h"
-#include "osi/include/fixed_queue.h"
 #include "osi/include/list.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/security_device_record.h"
@@ -46,10 +45,6 @@ void tBTM_SEC_CB::Init(uint8_t initial_security_mode) {
   connecting_bda = RawAddress::kEmpty;
   connecting_dc = kDevClassEmpty;
 
-  if (!com_android_bluetooth_flags_separate_encryption_queue()) {
-    sec_pending_q = fixed_queue_new(SIZE_MAX);
-  }
-
   sec_collision_timer = alarm_new("btm.sec_collision_timer");
   pairing_timer = alarm_new("btm.pairing_timer");
   execution_wait_timer = alarm_new("btm.execution_wait_timer");
@@ -57,25 +52,29 @@ void tBTM_SEC_CB::Init(uint8_t initial_security_mode) {
   security_mode = initial_security_mode;
   link_spec = {};
   link_spec.addrt.bda = RawAddress::kAny;
-  sec_dev_rec = list_new([](void* ptr) {
-    // Invoke destructor for all record objects and reset to default
-    // initialized value so memory may be properly freed
-    *((tBTM_SEC_DEV_REC*)ptr) = {};
-    osi_free(ptr);
-  });
+  if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
+    sec_dev_rec = list_new([](void* ptr) {
+      // Invoke destructor for all record objects and reset to default
+      // initialized value so memory may be properly freed
+      *((tBTM_SEC_DEV_REC*)ptr) = {};
+      osi_free(ptr);
+    });
+    return;
+  }
+
+  device_records = {};
 }
 
 void tBTM_SEC_CB::Free() {
-  if (com_android_bluetooth_flags_separate_encryption_queue()) {
-    service_access_q.clear();
-    enc_request_q.clear();
-  } else {
-    fixed_queue_free(sec_pending_q, nullptr);
-    sec_pending_q = nullptr;
-  }
+  service_access_q.clear();
+  enc_request_q.clear();
 
-  list_free(sec_dev_rec);
-  sec_dev_rec = nullptr;
+  if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
+    list_free(sec_dev_rec);
+    sec_dev_rec = nullptr;
+  } else {
+    device_records = {};
+  }
 
   alarm_free(sec_collision_timer);
   sec_collision_timer = nullptr;
@@ -106,11 +105,11 @@ void BTM_Sec_Free() { btm_sec_cb.Free(); }
  * Returns          Pointer to the record or NULL
  *
  ******************************************************************************/
-tBTM_SEC_SERV_REC* tBTM_SEC_CB::find_first_serv_rec(bool is_originator, uint16_t psm) {
+tBTM_SEC_SERV_REC* tBTM_SEC_CB::find_first_serv_rec(bool outgoing, uint16_t psm) {
   tBTM_SEC_SERV_REC* p_serv_rec = &sec_serv_rec[0];
   int i;
 
-  if (is_originator && p_out_serv && p_out_serv->psm == psm) {
+  if (outgoing && p_out_serv && p_out_serv->psm == psm) {
     /* If this is outgoing connection and the PSM matches p_out_serv,
      * use it as the current service */
     return p_out_serv;
@@ -192,7 +191,7 @@ bool tBTM_SEC_CB::IsDeviceBonded(const RawAddress bd_addr, tBT_TRANSPORT transpo
 }
 
 #define BTM_NO_AVAIL_SEC_SERVICES ((uint16_t)0xffff)
-bool tBTM_SEC_CB::AddService(bool is_originator, const char* p_name, uint8_t service_id,
+bool tBTM_SEC_CB::AddService(bool outgoing, const char* p_name, uint8_t service_id,
                              uint16_t sec_level, uint16_t psm, uint32_t mx_proto_id,
                              uint32_t mx_chan_id) {
   tBTM_SEC_SERV_REC* p_srec;
@@ -245,7 +244,7 @@ bool tBTM_SEC_CB::AddService(bool is_originator, const char* p_name, uint8_t ser
   p_srec->service_id = service_id;
   p_srec->mx_proto_id = mx_proto_id;
 
-  if (is_originator) {
+  if (outgoing) {
     p_srec->orig_mx_chan_id = mx_chan_id;
     osi_strlcpy((char*)p_srec->orig_service_name, p_name, BT_MAX_SERVICE_NAME_LEN + 1);
     /* clear out the old setting, just in case it exists */
@@ -304,8 +303,8 @@ bool tBTM_SEC_CB::AddService(bool is_originator, const char* p_name, uint8_t ser
   log::debug(
           "[{}]: id:{}, is_orig:{} psm:0x{:04x} proto_id:{} chan_id:{}  : "
           "sec:0x{:x} service_name:[{}] (up to {} chars saved)",
-          index, service_id, is_originator, psm, mx_proto_id, mx_chan_id, p_srec->security_flags,
-          p_name, BT_MAX_SERVICE_NAME_LEN);
+          index, service_id, outgoing, psm, mx_proto_id, mx_chan_id, p_srec->security_flags, p_name,
+          BT_MAX_SERVICE_NAME_LEN);
 
   return record_allocated;
 }
@@ -365,4 +364,21 @@ bool tBTM_SEC_REC::is_bonded(tBT_TRANSPORT transport) const {
   }
 
   return bonded;
+}
+
+// TODO: b/444620685 - Remove this function once the flag is fully rolled out, and replace all the
+// instances with actual functionality as the callbacks are invoked only from single place so do
+// that inline.
+// This is similar to list_foreach, but for array.
+tBTM_SEC_DEV_REC* tBTM_SEC_CB::for_each_dev_rec(sec_dev_rec_iter_cb cb, void* context) {
+  log::assert_that(com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec(),
+                   "assert failed: flag use_array_instead_list_in_sec_dev_rec is disabled.");
+  log::assert_that(cb != NULL, "assert failed: callback is null.");
+
+  for (tBTM_SEC_DEV_REC& dev_rec : device_records) {
+    if (dev_rec.IsInitialized() && !cb(&dev_rec, context)) {
+      return &dev_rec;
+    }
+  }
+  return nullptr;
 }

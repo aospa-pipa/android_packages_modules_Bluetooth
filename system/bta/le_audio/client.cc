@@ -111,7 +111,6 @@
 #endif  // TARGET_FLOSS
 
 using namespace bluetooth;
-using base::Closure;
 using bluetooth::Uuid;
 using bluetooth::common::ToString;
 using bluetooth::groups::DeviceGroups;
@@ -120,6 +119,9 @@ using bluetooth::hci::IsoManager;
 using bluetooth::hci::iso_manager::cig_create_cmpl_evt;
 using bluetooth::hci::iso_manager::cig_remove_cmpl_evt;
 using bluetooth::hci::iso_manager::CigCallbacks;
+using bluetooth::hci::iso_manager::IsoClientHandle;
+using bluetooth::hci::iso_manager::IsoManagerCallbacks;
+using bluetooth::hci::iso_manager::kInvalidIsoClientHandle;
 using bluetooth::hci::iso_manager::VscCallback;
 using bluetooth::le_audio::CodecManager;
 using bluetooth::le_audio::ConnectionState;
@@ -244,11 +246,11 @@ LeAudioClientImpl* instance;
 std::mutex instance_mutex;
 LeAudioSourceAudioHalClient::Callbacks* audioSinkReceiver;
 LeAudioSinkAudioHalClient::Callbacks* audioSourceReceiver;
-CigCallbacks* stateMachineHciCallbacks;
 VscCallback* stateMachineVscHciCallback;
 LeAudioGroupStateMachine::Callbacks* stateMachineCallbacks;
 DeviceGroupsCallbacks* device_group_callbacks;
 LeAudioIsoDataCallback* iso_data_callback;
+IsoManagerCallbacks* iso_manager_callbacks;
 acl_client_callback_s* aclClientCallbacks;
 constexpr uint16_t HCI_VS_QBCE_OCF                      = 0xFC51;
 constexpr uint8_t  LTV_TYPE_VS_METADATA                 = 0xFF;
@@ -380,7 +382,12 @@ void UpdateEncoderParams(uint8_t cig_id, uint8_t cis_id,
  */
 class LeAudioClientImpl : public LeAudioClient {
 public:
+  IsoClientHandle iso_client_handle_ = kInvalidIsoClientHandle;
+
   ~LeAudioClientImpl() {
+    if (iso_client_handle_ != kInvalidIsoClientHandle) {
+      IsoManager::GetInstance()->DeregisterCallbacks(iso_client_handle_);
+    }
     alarm_free(close_vbc_timeout_);
     alarm_free(disable_timer_);
     alarm_free(suspend_timeout_);
@@ -389,7 +396,7 @@ public:
 
   LeAudioClientImpl(bluetooth::le_audio::LeAudioClientCallbacks* callbacks,
                     LeAudioGroupStateMachine::Callbacks* state_machine_callbacks,
-                    base::OnceClosure initCb)
+                    base::OnceClosure initCb, IsoManagerCallbacks* iso_manager_callbacks)
       : gatt_if_(0),
         callbacks_(callbacks),
         active_group_id_(bluetooth::groups::kGroupUnknown),
@@ -418,7 +425,8 @@ public:
         suspend_timeout_(alarm_new("LeAudioSuspendTimeout")),
         reconfiguration_timeout_(alarm_new("LeAudioReconfigurationTimeout")),
         disable_timer_(alarm_new("LeAudioDisableTimer")) {
-    LeAudioGroupStateMachine::Initialize(state_machine_callbacks);
+    iso_client_handle_ = IsoManager::GetInstance()->RegisterCallbacks(*iso_manager_callbacks);
+    LeAudioGroupStateMachine::Initialize(state_machine_callbacks, iso_client_handle_);
     groupStateMachine_ = LeAudioGroupStateMachine::Get();
 
     audioContextTypeManager_ = bluetooth::le_audio::AudioContextTypeManager::Get();
@@ -772,8 +780,7 @@ public:
         notify_flag_ptr = INT_TO_PTR(leAudioDevice->notify_connected_after_read_);
       }
 
-      if (/*!com_android_bluetooth_flags_le_ase_read_multiple_variable()*/ true ||
-          !is_multiread_expected) {
+      if (!is_multiread_expected) {
         BtaGattQueue::ReadCharacteristic(leAudioDevice->conn_id_,
                                          leAudioDevice->ases_[i].hdls.val_hdl, OnGattReadRspStatic,
                                          notify_flag_ptr);
@@ -790,7 +797,7 @@ public:
       }
     }
 
-    if (/*!com_android_bluetooth_flags_le_ase_read_multiple_variable()*/ false && is_multiread_expected &&
+    if (is_multiread_expected &&
         (ases_num % GATT_MAX_READ_MULTI_HANDLES != 0)) {
       multi_read.num_attr = ases_num % GATT_MAX_READ_MULTI_HANDLES;
       BtaGattQueue::ReadMultiCharacteristic(leAudioDevice->conn_id_, multi_read,
@@ -1550,17 +1557,13 @@ public:
 
     log::info("output codec type: {}, input codec type: {}",
                     output_codec_config.codec_type, input_codec_config.codec_type);
-    if (!com::android::bluetooth::flags::leaudio_set_codec_config_preference()) {
-      log::debug("leaudio_set_codec_config_preference flag is not enabled");
+    UpdateCodecConfigPreferenceToHal(&input_codec_config, &output_codec_config);
+    if (group->SetPreferredAudioSetConfiguration(input_codec_config, output_codec_config)) {
+      log::info("group id: {}, setting preferred codec is successful.", group_id);
     } else {
-      UpdateCodecConfigPreferenceToHal(&input_codec_config, &output_codec_config);
-      if (group->SetPreferredAudioSetConfiguration(input_codec_config, output_codec_config)) {
-        log::info("group id: {}, setting preferred codec is successful.", group_id);
-      } else {
-        log::warn("group id: {}, setting preferred codec is failed.", group_id);
-        if (!lex_enablement_changed)
-          return;
-      }
+      log::warn("group id: {}, setting preferred codec is failed.", group_id);
+      if (!lex_enablement_changed)
+        return;
     }
 
     if (SetConfigurationAndStopStreamWhenNeeded(group, configuration_context_type_)) {
@@ -3406,7 +3409,7 @@ public:
      *    it can change very often which, as we observed, might lead to not being sent by
      *    remote devices
      */
-    if (/*!com_android_bluetooth_flags_le_ase_read_multiple_variable()*/ true || !is_eatt_supported) {
+    if (!is_eatt_supported) {
       BtaGattQueue::ReadCharacteristic(leAudioDevice->conn_id_,
                                        leAudioDevice->audio_avail_hdls_.val_hdl,
                                        OnGattReadRspStatic, NULL);
@@ -5702,6 +5705,10 @@ public:
     auto group = aseGroups_.FindById(active_group_id_);
     if (!group) {
       log::error("Invalid group: {}", static_cast<int>(active_group_id_));
+      if (com_android_bluetooth_flags_leaudio_cancel_stream_request_when_invalid_group() &&
+          (active_group_id_ != bluetooth::groups::kGroupUnknown)) {
+        CancelLocalAudioSourceStreamingRequest();
+      }
       return;
     }
     auto upcoming_configuration_context_type = configuration_context_type_;
@@ -6092,6 +6099,10 @@ public:
     if (!group) {
        is_local_sink_metadata_available_ = false;
       log::error("Invalid group: {}", static_cast<int>(active_group_id_));
+      if (com_android_bluetooth_flags_leaudio_cancel_stream_request_when_invalid_group() &&
+          (active_group_id_ != bluetooth::groups::kGroupUnknown)) {
+        CancelLocalAudioSinkStreamingRequest();
+      }
       return;
     }
 
@@ -8959,16 +8970,19 @@ void LeAudioClient::Initialize(
 
   audioSinkReceiver = &audioSinkReceiverImpl;
   audioSourceReceiver = &audioSourceReceiverImpl;
-  stateMachineHciCallbacks = &stateMachineHciCallbacksImpl;
   stateMachineCallbacks = &stateMachineCallbacksImpl;
   stateMachineVscHciCallback = &stateMachineVscHciCallbackImpl;
   device_group_callbacks = &deviceGroupsCallbacksImpl;
   aclClientCallbacks = &aclClientCallbacksImpl;
-  instance = new LeAudioClientImpl(callbacks_, stateMachineCallbacks, std::move(initCb));
 
   get_btm_client_interface().lifecycle.ACL_RegisterClient(aclClientCallbacks);
 
-  IsoManager::GetInstance()->RegisterCigCallbacks(stateMachineHciCallbacks);
+  iso_manager_callbacks = new IsoManagerCallbacks();
+  iso_manager_callbacks->cig_callbacks = &stateMachineHciCallbacksImpl;
+
+  instance = new LeAudioClientImpl(callbacks_, stateMachineCallbacks, std::move(initCb),
+                                   iso_manager_callbacks);
+
   IsoManager::GetInstance()->RegisterVscCallback(stateMachineVscHciCallback);
   CodecManager::GetInstance()->Start(offloading_preference);
   ContentControlIdKeeper::GetInstance()->Start();

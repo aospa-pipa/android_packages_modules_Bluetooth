@@ -10,16 +10,6 @@ flag {
 }
 
 flag {
-    name: "avdt_wait_for_initial_delay_report_as_initiator"
-    namespace: "bluetooth"
-    description: "As signaling initiator wait for delay report for peer sink and only then send open command"
-    bug: "394553654"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "a2dp_disconnect_reason_api"
     namespace: "bluetooth"
     description: "Define the extra parameter DISCONNECTED_REASON for a2dp.CONNECTION_STATE_CHANGED intent"
@@ -158,4 +148,30 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "a2dp_source_metadata_changed"
+    namespace: "bluetooth"
+    description: "Optionally reconfigure the codec if the stream changes to gaming mode"
+    bug: "448710897"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "a2dp_ldac_api"
+    namespace: "bluetooth"
+    description: "API change for LDAC codec"
+    is_exported: true
+    bug: "445909312"
+}
+
+flag {
+    name: "a2dp_create_codec_type_from_id_api"
+    namespace: "bluetooth"
+    description: "API change for BluetoothCodecType - create from codec ID"
+    is_exported: true
+    bug: "445930556"
 }

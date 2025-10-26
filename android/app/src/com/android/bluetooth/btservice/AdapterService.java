@@ -167,6 +167,7 @@ import com.android.bluetooth.opp.BluetoothOppService;
 import com.android.bluetooth.pan.PanService;
 import com.android.bluetooth.pbap.BluetoothPbapService;
 import com.android.bluetooth.pbapclient.PbapClientService;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.bluetooth.sap.SapService;
 import com.android.bluetooth.sdp.SdpManager;
@@ -359,7 +360,7 @@ public class AdapterService extends Service {
     private Optional<PhonePolicy> mPhonePolicy = Optional.empty();
 
     private ActiveDeviceManager mActiveDeviceManager;
-    private CompanionManager mBtCompanionManager;
+    private CompanionManager mCompanionManager;
     private AppOpsManager mAppOps;
 
     private BluetoothSocketManagerBinder mBluetoothSocketManagerBinder;
@@ -645,7 +646,7 @@ public class AdapterService extends Service {
                         mNativeInterface.getAdapterProperty(
                                 AbstractionLayer.BT_PROPERTY_DYNAMIC_AUDIO_BUFFER);
                         mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
-                        mBtCompanionManager.loadCompanionInfo();
+                        mCompanionManager.loadCompanionInfo();
                     }
                 }
                 case BluetoothAdapter.STATE_OFF -> {
@@ -789,7 +790,7 @@ public class AdapterService extends Service {
         return mStorage.isMicrophonePreferredForCalls(device);
     }
 
-    AdapterProperties getAdapterProperties() {
+    public AdapterProperties getAdapterProperties() {
         return mAdapterProperties;
     }
 
@@ -953,7 +954,7 @@ public class AdapterService extends Service {
         return getStartedProfile(BluetoothProfile.VAPS_SERVER, VapsServerService.class);
     }
 
-    Optional<ConnectableProfile> getStartedConnectableProfile(int id) {
+    public Optional<ConnectableProfile> getStartedConnectableProfile(int id) {
         return getStartedProfile(id, ConnectableProfile.class);
     }
 
@@ -1085,7 +1086,7 @@ public class AdapterService extends Service {
         mActiveDeviceManager = new ActiveDeviceManager(this, mStorage);
         mActiveDeviceManager.start();
 
-        mBtCompanionManager = new CompanionManager(this);
+        mCompanionManager = new CompanionManager(this);
 
         mBluetoothSocketManagerBinder = new BluetoothSocketManagerBinder(this);
 
@@ -1315,7 +1316,7 @@ public class AdapterService extends Service {
             case BluetoothProfile.A2DP -> new A2dpService(this, mStorage, mCompanionDeviceManager);
             case BluetoothProfile.A2DP_SINK -> new A2dpSinkService(this);
             case BluetoothProfile.AVRCP_CONTROLLER -> new AvrcpControllerService(this);
-            case BluetoothProfile.AVRCP -> new AvrcpTargetService(this, mUserManager);
+            case BluetoothProfile.AVRCP -> new AvrcpTargetService(this, mStorage, mUserManager);
             case BluetoothProfile.BATTERY -> new BatteryService(this);
             case BluetoothProfile.CSIP_SET_COORDINATOR -> new CsipSetCoordinatorService(this);
             case BluetoothProfile.HAP_CLIENT -> new HapClientService(this);
@@ -1346,14 +1347,15 @@ public class AdapterService extends Service {
     @VisibleForTesting
     void setProfileServiceState(int profileId, int state) {
         Instant start = Instant.now();
-        String logHdr = "setProfileServiceState(" + getProfileName(profileId) + ", " + state + "):";
+        var profile = getProfileName(profileId);
+        var header = "setProfileServiceState(" + profile + ", " + nameForState(state) + "): ";
 
         if (state == BluetoothAdapter.STATE_ON) {
             if (mStartedProfiles.containsKey(profileId)) {
-                Log.wtf(TAG, logHdr + " profile is already started");
+                Log.wtf(TAG, header + "Profile is already started");
                 return;
             }
-            Log.i(TAG, logHdr + " starting profile");
+            Log.i(TAG, header + "Starting profile…");
             final var profileService = constructProfile(profileId);
             mStartedProfiles.put(profileId, profileService);
             addProfile(profileService);
@@ -1362,10 +1364,10 @@ public class AdapterService extends Service {
         } else if (state == BluetoothAdapter.STATE_OFF) {
             ProfileService profileService = mStartedProfiles.remove(profileId);
             if (profileService == null) {
-                Log.wtf(TAG, logHdr + " profile is already stopped");
+                Log.wtf(TAG, header + "Profile is already stopped");
                 return;
             }
-            Log.i(TAG, logHdr + " stopping profile");
+            Log.i(TAG, header + "Stopping profile…");
             profileService.setAvailable(false);
             onProfileServiceStateChanged(profileService, BluetoothAdapter.STATE_OFF);
             removeProfile(profileService);
@@ -1373,7 +1375,7 @@ public class AdapterService extends Service {
             profileService.getBinder().ifPresent(ProfileService.IProfileServiceBinder::cleanup);
         }
         Instant end = Instant.now();
-        Log.i(TAG, logHdr + " completed in " + Duration.between(start, end).toMillis() + "ms");
+        Log.i(TAG, header + "Completed in " + Duration.between(start, end).toMillis() + "ms");
     }
 
     /**
@@ -2274,6 +2276,10 @@ public class AdapterService extends Service {
         logManufacturerInfo(device, key, value);
         if (Flags.mainlineBetaStorage()) {
             mStorage.setCustomMetadata(device, key, value);
+            if (key == BluetoothDevice.METADATA_SOFTWARE_VERSION
+                    && getBondState(device) == BOND_BONDED) {
+                mCompanionManager.setCompanionDevice(device, value);
+            }
             return true;
         } else {
             return mDatabaseManager.setCustomMeta(device, key, value); // Migrating
@@ -2817,6 +2823,11 @@ public class AdapterService extends Service {
                     callingPackage, new DiscoveringPackageInfo(permission, hasDisavowedLocation));
 
             if (Flags.ignoreRedundantDiscoveryIfSameState() && discovering) {
+                // If discovery is already running, broadcast the ACTION_DISCOVERY_STARTED intent.
+                Log.d(TAG, "startDiscovery: discovery is already running");
+                Intent intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
+                intent.setPackage(callingPackage);
+                sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());
                 return true;
             }
         }
@@ -5023,19 +5034,7 @@ public class AdapterService extends Service {
     }
 
     public CompanionManager getCompanionManager() {
-        return mBtCompanionManager;
-    }
-
-    /**
-     * Call for the AdapterService receives bond state change
-     *
-     * @param device Bluetooth device
-     * @param state bond state
-     */
-    public void onBondStateChanged(BluetoothDevice device, int state) {
-        if (mBtCompanionManager != null) {
-            mBtCompanionManager.onBondStateChanged(device, state);
-        }
+        return mCompanionManager;
     }
 
     /**

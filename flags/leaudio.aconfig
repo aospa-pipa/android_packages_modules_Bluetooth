@@ -42,23 +42,6 @@ flag {
 }
 
 flag {
-    name: "le_ase_read_multiple_variable"
-    namespace: "bluetooth"
-    description: "Use GATT read multiple variable length characteristic values"
-    bug: "352085435"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_set_codec_config_preference"
-    namespace: "bluetooth"
-    description: "New apis to set codec config preference"
-    bug: "353909820"
-}
-
-flag {
     name: "leaudio_config_profile_enabling"
     namespace: "bluetooth"
     description: "Change how LE Audio profiles are configured and enabled"
@@ -413,4 +396,28 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "leaudio_cancel_stream_request_when_invalid_group"
+    namespace: "bluetooth"
+    description: "Cancel stream request when active group is invalid"
+    bug: "447083886"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_sink_feature"
+    namespace: "bluetooth"
+    description: "LE Audio Broadcast Sink Feature"
+    bug: "452247122"
+}
+
+flag {
+    name: "core_ipu_support"
+    namespace: "bluetooth"
+    description: "Update CIG/CIS parameter without destroying the group"
+    bug: "450606834"
 }

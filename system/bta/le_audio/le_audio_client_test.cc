@@ -934,7 +934,7 @@ protected:
                       return addr.address[RawAddress::kLength - 1];
                     });
 
-    ON_CALL(mock_state_machine_, Initialize(_))
+    ON_CALL(mock_state_machine_, Initialize(_, _))
             .WillByDefault(SaveArg<0>(&state_machine_callbacks_));
 
     ON_CALL(mock_state_machine_, EnableStreamingDirection(_, _))
@@ -1696,7 +1696,12 @@ protected:
     iso_manager_->Start();
 
     mock_iso_manager_ = MockIsoManager::GetInstance();
-    ON_CALL(*mock_iso_manager_, RegisterCigCallbacks(_)).WillByDefault(SaveArg<0>(&cig_callbacks_));
+    ON_CALL(*mock_iso_manager_, RegisterCallbacks(_))
+            .WillByDefault([this](bluetooth::hci::iso_manager::IsoManagerCallbacks callbacks) {
+              this->cig_callbacks_ = callbacks.cig_callbacks;
+              constexpr bluetooth::hci::iso_manager::IsoClientHandle kIsoClientHandle = 1;
+              return kIsoClientHandle;
+            });
 
     ON_CALL(mock_btm_interface_, IsDeviceBonded(_, _)).WillByDefault(DoAll(Return(true)));
 
@@ -3610,8 +3615,6 @@ TEST_F(UnicastTest, ConnectOneEarbudNoAscs) {
 }
 
 TEST_F(UnicastTest, ConnectOneEarbudAscsMultipleOfGattMultiRead) {
-  com::android::bluetooth::flags::provider_->le_ase_read_multiple_variable(true);
-
   const RawAddress test_address0 = GetTestAddress(0);
   uint16_t conn_id = 1;
   SetSampleDatabaseEarbudsValid(conn_id, test_address0, codec_spec_conf::kLeAudioLocationStereo,
@@ -8016,8 +8019,6 @@ TEST_F(UnicastTest, TwoEarbudsStreaming) {
 }
 
 TEST_F(UnicastTest, TestSetValidSingleOutputPreferredCodecConfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   btle_audio_codec_config_t preferred_output_codec_config = {
           .codec_type = LE_AUDIO_CODEC_INDEX_SOURCE_LC3,
           .sample_rate = LE_AUDIO_SAMPLE_RATE_INDEX_24000HZ,
@@ -8055,8 +8056,6 @@ TEST_F(UnicastTest, TestSetValidSingleOutputPreferredCodecConfig) {
 }
 
 TEST_F(UnicastTest, TestSetPreferredCodecConfigToNonActiveGroup) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
   StartStreaming(AUDIO_USAGE_MEDIA, AUDIO_CONTENT_TYPE_MUSIC, group_id);
@@ -8111,8 +8110,6 @@ TEST_F(UnicastTest, TestSetPreferredCodecConfigToNonActiveGroup) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsClearPreferenceBeforeMedia) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8131,8 +8128,6 @@ TEST_F(UnicastTest, TwoEarbudsClearPreferenceBeforeMedia) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessBeforeMedia) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8158,8 +8153,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessBeforeMedia) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailBeforeMedia) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8185,8 +8178,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailBeforeMedia) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringMediaWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8212,8 +8203,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringMediaWithReconfig) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringMediaWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8240,8 +8229,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringMediaWithoutReconfig) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailDuringMediaWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8268,8 +8255,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailDuringMediaWithoutReconfig) {
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeMediaClearPreferenceDuringMediaWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8297,8 +8282,6 @@ TEST_F(UnicastTest,
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeMediaSetPreferenceSuccessDuringMediaWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8333,8 +8316,6 @@ TEST_F(UnicastTest,
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeMediaSetPreferenceSuccessDuringMediaWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8369,8 +8350,6 @@ TEST_F(UnicastTest,
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeMediaSetPreferenceFailDuringMediaWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8404,8 +8383,6 @@ TEST_F(UnicastTest,
 }
 
 TEST_F(UnicastTest, TwoEarbudsClearPreferenceBeforeConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8428,8 +8405,6 @@ TEST_F(UnicastTest, TwoEarbudsClearPreferenceBeforeConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessBeforeConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8459,8 +8434,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessBeforeConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailBeforeConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8490,8 +8463,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailBeforeConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringConvWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8521,8 +8492,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringConvWithReconfig) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringConvWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8553,8 +8522,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSuccessDuringConvWithoutReconfig) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailDuringConvWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8584,8 +8551,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceFailDuringConvWithoutReconfig) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceSucessBeforeConvClearPreferenceDuringConvWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8617,8 +8582,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceSucessBeforeConvClearPreferenceDuring
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeConvSetPreferenceSuccessDuringConvWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8658,8 +8621,6 @@ TEST_F(UnicastTest,
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeConvSetPreferenceSuccessDuringConvWithoutReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8699,8 +8660,6 @@ TEST_F(UnicastTest,
 
 TEST_F(UnicastTest,
        TwoEarbudsSetPreferenceSucessBeforeConvSetPreferenceFailDuringConvWithReconfig) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8739,8 +8698,6 @@ TEST_F(UnicastTest,
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8788,8 +8745,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleForBothMediaAndConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleForMediaNotForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8837,8 +8792,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleForMediaNotForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleNotForMediaForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8886,8 +8839,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleNotForMediaForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleNotForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8935,8 +8886,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenIdleNotForBothMediaAndConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -8985,8 +8934,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaForBothMediaAndConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaForMediaNotForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9035,8 +8982,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaForMediaNotForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaNotForMediaForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9085,8 +9030,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaNotForMediaForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaNotForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9135,8 +9078,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenMediaNotForBothMediaAndConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9184,8 +9125,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvForBothMediaAndConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvForMediaNotForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9233,8 +9172,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvForMediaNotForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvNotForMediaForConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -9282,8 +9219,6 @@ TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvNotForMediaForConv) {
 }
 
 TEST_F(UnicastTest, TwoEarbudsSetPreferenceWhenConvNotForBothMediaAndConv) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   int group_id = 2;
   TestSetupRemoteDevices(group_id);
 
@@ -10670,8 +10605,6 @@ TEST_F(UnicastTest, CheckDeviceIsNotAttachedToStreamWhenNotNeeded) {
 }
 
 TEST_F(UnicastTest, ReconnectedDeviceAndAttachedToStreamBecauseOfAvailableContextTypeChange) {
-  com::android::bluetooth::flags::provider_->le_ase_read_multiple_variable(true);
-
   uint8_t group_size = 2;
   int group_id = 2;
 
@@ -15840,6 +15773,65 @@ TEST_F(UnicastTest, HandleConfigureStreamFailure) {
   Mock::VerifyAndClearExpectations(&mock_state_machine_);
 }
 
+TEST_F(UnicastTest, OnLocalAudioSourceResumeWithInvalidGroupCancelsStreamRequest) {
+  // Enable the feature flag
+  com::android::bluetooth::flags::provider_->leaudio_cancel_stream_request_when_invalid_group(true);
+
+  // 1. Setup device and group
+  const RawAddress test_address0 = GetTestAddress(0);
+  int group_id = test_address0.address[RawAddress::kLength - 1];
+  ConnectNonCsisDevice(test_address0, 1 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontLeft,
+                       codec_spec_conf::kLeAudioLocationFrontLeft);
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+
+  // 2. Set group active, which acquires the HAL client
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, Start(_, _, _)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, Start(_, _, _)).Times(1);
+  LeAudioClient::Get()->GroupSetActive(group_id);
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+
+  // 3. Remove the group by injecting a callback, leaving active_group_id stale
+  InjectGroupDeviceRemoved(test_address0, group_id);
+  SyncOnMainLoop();
+
+  // 4. Expect CancelStreamingRequest when resuming with an invalid group
+  //    (confirmation=false, cancel=true)
+  LocalAudioSourceResume(false, true);
+}
+
+TEST_F(UnicastTest, OnLocalAudioSourceResumeWithInvalidGroupFlagDisabledDoesNotCancel) {
+  // Disable the feature flag (default state)
+  com::android::bluetooth::flags::provider_->leaudio_cancel_stream_request_when_invalid_group(
+          false);
+
+  // 1. Setup device and group
+  const RawAddress test_address0 = GetTestAddress(0);
+  int group_id = test_address0.address[RawAddress::kLength - 1];
+  ConnectNonCsisDevice(test_address0, 1 /*conn_id*/, codec_spec_conf::kLeAudioLocationFrontLeft,
+                       codec_spec_conf::kLeAudioLocationFrontLeft);
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(&mock_audio_hal_client_callbacks_);
+
+  // 2. Set group active, which acquires the HAL client
+  EXPECT_CALL(*mock_le_audio_source_hal_client_, Start(_, _, _)).Times(1);
+  EXPECT_CALL(*mock_le_audio_sink_hal_client_, Start(_, _, _)).Times(1);
+  LeAudioClient::Get()->GroupSetActive(group_id);
+  SyncOnMainLoop();
+  Mock::VerifyAndClearExpectations(mock_le_audio_source_hal_client_);
+  Mock::VerifyAndClearExpectations(mock_le_audio_sink_hal_client_);
+
+  // 3. Remove the group by injecting a callback, leaving active_group_id stale
+  InjectGroupDeviceRemoved(test_address0, group_id);
+  SyncOnMainLoop();
+
+  // 4. Expect CancelStreamingRequest to NOT be called when resuming with an
+  //    invalid group because the flag is off (confirmation=false, cancel=false)
+  LocalAudioSourceResume(false, false);
+}
+
 class UnicastTestGmap : public UnicastTest {
 protected:
   void SetUp() override {
@@ -17783,8 +17775,6 @@ static std::vector<types::AseConfiguration> GetVendorAseConfigurationsForRequire
 }
 
 TEST_F(UnicastTest, RequestConfigurationOpusHiRes) {
-  com::android::bluetooth::flags::provider_->leaudio_set_codec_config_preference(true);
-
   EXPECT_CALL(*mock_codec_manager_, GetRemoteAudioCodecCapa(_)).Times(AtLeast(1));
 
   auto const test_audio_context = LeAudioContextType::MEDIA;
