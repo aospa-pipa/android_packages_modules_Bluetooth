@@ -499,6 +499,8 @@ bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBLE_ADDR_TYP
   if (!gatt_connect(bd_addr, addr_type, p_tcb, transport, initiating_phys, p_reg->gatt_if)) {
     log::error("gatt_connect failed");
     fixed_queue_free(p_tcb->pending_ind_q, NULL);
+    alarm_free(p_tcb->conf_timer);
+    alarm_free(p_tcb->ind_ack_timer);
     *p_tcb = tGATT_TCB();
     return false;
   }
@@ -689,13 +691,13 @@ static void gatt_channel_congestion(tGATT_TCB* p_tcb, bool congested) {
 }
 
 void gatt_notify_phy_updated(tHCI_STATUS status, uint16_t handle, uint8_t tx_phy, uint8_t rx_phy) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
-  if (!p_dev_rec) {
+  BtmDevice* p_device = btm_find_dev_by_handle(handle);
+  if (!p_device) {
     log::warn("No Device Found!");
     return;
   }
 
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
+  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_device->ble.pseudo_addr, BT_TRANSPORT_LE);
   if (!p_tcb) {
     return;
   }
@@ -730,13 +732,13 @@ void gatt_notify_conn_update(const RawAddress& remote, uint16_t interval, uint16
 
 void gatt_notify_subrate_change(uint16_t handle, uint16_t subrate_factor, uint16_t latency,
                                 uint16_t cont_num, uint16_t timeout, uint8_t status) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
-  if (!p_dev_rec) {
+  BtmDevice* p_device = btm_find_dev_by_handle(handle);
+  if (!p_device) {
     log::warn("No Device Found!");
     return;
   }
 
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
+  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_device->ble.pseudo_addr, BT_TRANSPORT_LE);
   if (!p_tcb) {
     return;
   }
@@ -1139,6 +1141,18 @@ void gatt_send_srv_chg_ind(const RawAddress& peer_bda, uint16_t start_handle) {
 void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt) {
   log::verbose("srv_changed={}, start_handle: {:#x}", p_srv_chg_clt->srv_changed,
                p_srv_chg_clt->start_handle);
+
+  if (com_android_bluetooth_flags_gatt_not_send_service_change_indication() &&
+      p_srv_chg_clt->srv_changed) {
+    char remote_name[BD_NAME_LEN] = "";
+
+    if (btif_storage_get_stored_remote_name(p_srv_chg_clt->bda, remote_name)) {
+      if (interop_match_name(INTEROP_GATTC_NO_SERVICE_CHANGED_IND, remote_name)) {
+        log::verbose("discard srv chg - interop matched {}", remote_name);
+        p_srv_chg_clt->srv_changed = false;
+      }
+    }
+  }
 
   if (p_srv_chg_clt->srv_changed) {
     char remote_name[BD_NAME_LEN] = "";

@@ -375,18 +375,18 @@ void btif_av_set_dynamic_audio_buffer_size(uint8_t dynamic_audio_buffer_size);
 void btif_av_set_low_latency(bool is_low_latency);
 
 /**
+ * Report a change in the source audio metadata
+ *
+ * @param audio_context to update
+ */
+void btif_av_source_metadata_changed(btav_a2dp_codec_audio_context_t audio_context);
+
+/**
  * Update Codec Mode
  *
  * @param
  */
 void btif_av_update_codec_mode();
-
-/**
- * Update Source Metadata
- *
- * @param source_metadata to set
- */
-void btif_av_update_source_metadata(bool is_Gaming_Enabled);
 
 /*
  * Dual Mode Enabled check

@@ -1583,7 +1583,6 @@ public final class BluetoothAdapter {
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    @SuppressLint("AndroidFrameworkRequiresPermission") // See disable(boolean) for reason
     public boolean disable() {
         //android.util.SeempLog.record(57);
         return disable(true);
@@ -2697,7 +2696,6 @@ public final class BluetoothAdapter {
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    @SuppressLint("AndroidFrameworkRequiresPermission") // IpcDataCache prevent lint enforcement
     public @ConnectionState int getProfileConnectionState(int profile) {
         //android.util.SeempLog.record(64);
         if (getState() != STATE_ON) {
@@ -3364,7 +3362,6 @@ public final class BluetoothAdapter {
      * @param proxy Profile proxy object
      */
     @Hide
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     @RequiresNoPermission
     public void closeProfileProxy(@NonNull BluetoothProfile proxy) {
         if (proxy instanceof BluetoothGatt gatt) {
@@ -3523,7 +3520,6 @@ public final class BluetoothAdapter {
 
     private final IBluetoothManagerCallback mManagerCallback =
             new IBluetoothManagerCallback.Stub() {
-                @SuppressLint("AndroidFrameworkRequiresPermission") // Internal callback
                 @RequiresNoPermission
                 public void onBluetoothServiceUp(@NonNull IBinder bluetoothService) {
                     requireNonNull(bluetoothService);
@@ -3737,7 +3733,7 @@ public final class BluetoothAdapter {
     /**
      * Fetches a secret data value that can be used for a secure and simple pairing experience.
      *
-     * <p>This is the Local Out of Band data the comes from the
+     * <p>This is the Local Out of Band data that comes from the controller.
      *
      * <p>This secret is the local Out of Band data. This data is used to securely and quickly pair
      * two devices with minimal user interaction.
@@ -3749,7 +3745,11 @@ public final class BluetoothAdapter {
      * device will respond by automatically accepting the pairing due to the secret being so
      * trustworthy.
      *
+     * <p>OobData returned via the callback may be either P192 or P256. If the controller supports
+     * secure connections, P256 will be returned. Otherwise, P192 will be returned.
+     *
      * @param transport - provide type of transport (e.g. LE or Classic).
+     * @param executor - an {link Executor} to run the callback on.
      * @param callback - target object to receive the {@link OobData} value.
      * @throws NullPointerException if callback is null.
      * @throws IllegalArgumentException if the transport is not valid.

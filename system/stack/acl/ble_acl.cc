@@ -58,7 +58,7 @@ static bool acl_ble_common_connection(const tBLE_BD_ADDR& address_with_type, uin
     return false;
   }
 
-  tAclLinkSpec link_spec = { .addrt = address_with_type, .transport = BT_TRANSPORT_LE};
+  AclLinkSpec link_spec = {.addrt = address_with_type, .transport = BT_TRANSPORT_LE};
 
   /* Tell BTM Acl management about the link */
   btm_acl_created(link_spec, handle, role);
@@ -114,7 +114,7 @@ void acl_ble_enhanced_connection_complete_from_shim(
 
 void acl_ble_connection_fail(const tBLE_BD_ADDR& address_with_type, uint16_t /* handle */,
                              bool /* enhanced */, tHCI_STATUS status) {
-  tAclLinkSpec link_spec = {.addrt = address_with_type, .transport = BT_TRANSPORT_LE};
+  AclLinkSpec link_spec = {.addrt = address_with_type, .transport = BT_TRANSPORT_LE};
   acl_set_locally_initiated(true);  // LE connection failures are always locally initiated
   btm_acl_create_failed(link_spec, status);
 
@@ -131,16 +131,16 @@ void acl_ble_update_event_received(tHCI_STATUS status, uint16_t handle, uint16_t
                                    uint16_t latency, uint16_t timeout) {
   l2cble_process_conn_update_evt(handle, status, interval, latency, timeout);
 
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
+  BtmDevice* p_device = btm_find_dev_by_handle(handle);
 
-  if (p_dev_rec) {
-    p_dev_rec->conn_params.peripheral_latency = latency;
-    p_dev_rec->conn_params.supervision_tout = timeout;
+  if (p_device) {
+    p_device->conn_params.peripheral_latency = latency;
+    p_device->conn_params.supervision_tout = timeout;
   } else {
     return;
   }
 
-  gatt_notify_conn_update(p_dev_rec->ble.pseudo_addr, interval, latency, timeout, status);
+  gatt_notify_conn_update(p_device->ble.pseudo_addr, interval, latency, timeout, status);
 }
 
 void acl_ble_update_request_event_received(uint16_t handle, uint16_t interval_min,

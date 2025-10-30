@@ -29,7 +29,6 @@ import static com.android.bluetooth.flags.Flags.leaudioBroadcastSimplifySetBcast
 import static com.android.bluetooth.flags.Flags.leaudioIntentBroadcastInStateMachineCleanup;
 
 import android.annotation.Nullable;
-import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -493,7 +492,6 @@ class BassClientStateMachine extends StateMachine {
         return IntStream.range(0, data.length).parallel().allMatch(i -> data[i] == 0);
     }
 
-    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     private void processPASyncState(BluetoothLeBroadcastReceiveState recvState) {
         int serviceData = 0;
         if (recvState == null) {
@@ -552,7 +550,6 @@ class BassClientStateMachine extends StateMachine {
         }
     }
 
-    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     private void initiatePaSyncTransfer(int syncHandle, int sourceId) {
         if (syncHandle != BassConstants.INVALID_SYNC_HANDLE
                 && sourceId != BassConstants.INVALID_SOURCE_ID) {
@@ -1211,7 +1208,6 @@ class BassClientStateMachine extends StateMachine {
      * @return {@code true} if it successfully connects to the GATT server.
      */
     @VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
-    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     public boolean connectGatt(Boolean autoConnect) {
         if (mGattCallback == null) {
             mGattCallback = new GattCallback();
@@ -2518,7 +2514,6 @@ class BassClientStateMachine extends StateMachine {
 
     /** Mockable wrapper of {@link BluetoothGatt}. */
     @VisibleForTesting
-    @SuppressLint("AndroidFrameworkRequiresPermission") // TODO: b/350563786
     public static class BluetoothGattTestableWrapper {
         public final BluetoothGatt mWrappedBluetoothGatt;
 

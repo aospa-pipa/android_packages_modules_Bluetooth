@@ -81,7 +81,7 @@ static void blacklist_adjust_sniff_subrate(RawAddress peer_dev, uint16_t* ssr_ma
  * Returns          void
  *
  ******************************************************************************/
-static uint8_t bta_hh_get_cb_index(const tAclLinkSpec& link_spec) {
+static uint8_t bta_hh_get_cb_index(const AclLinkSpec& link_spec) {
   if (link_spec.addrt.bda.IsEmpty()) {
     return BTA_HH_IDX_INVALID;
   }
@@ -113,7 +113,7 @@ static uint8_t bta_hh_get_cb_index(const tAclLinkSpec& link_spec) {
  * Returns          void
  *
  ******************************************************************************/
-tBTA_HH_DEV_CB* bta_hh_get_cb(const tAclLinkSpec& link_spec) {
+tBTA_HH_DEV_CB* bta_hh_get_cb(const AclLinkSpec& link_spec) {
   uint8_t idx = bta_hh_get_cb_index(link_spec);
   if (idx == BTA_HH_IDX_INVALID) {
     log::error("No handle available for {}", link_spec);
@@ -135,7 +135,7 @@ tBTA_HH_DEV_CB* bta_hh_get_cb(const tAclLinkSpec& link_spec) {
  * Returns          void
  *
  ******************************************************************************/
-tBTA_HH_DEV_CB* bta_hh_find_cb(const tAclLinkSpec& link_spec) {
+tBTA_HH_DEV_CB* bta_hh_find_cb(const AclLinkSpec& link_spec) {
   if (link_spec.addrt.bda.IsEmpty()) {
     return nullptr;
   }
@@ -335,7 +335,7 @@ bool bta_hh_tod_spt(tBTA_HH_DEV_CB* p_cb, uint8_t sub_class) {
  * Returns          bthh_status_t  operation status
  *
  ******************************************************************************/
-bthh_status_t bta_hh_read_ssr_param(const tAclLinkSpec& link_spec, uint16_t* p_max_ssr_lat,
+bthh_status_t bta_hh_read_ssr_param(const AclLinkSpec& link_spec, uint16_t* p_max_ssr_lat,
                                     uint16_t* p_min_ssr_tout) {
   tBTA_HH_DEV_CB* p_cb = bta_hh_find_cb(link_spec);
   if (p_cb == nullptr) {

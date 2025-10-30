@@ -420,10 +420,10 @@ struct iso_impl {
 
       stream_ptr->state_flags |= kStateFlagIsConnecting;
 
-      tBTM_SEC_DEV_REC* p_rec = btm_find_dev_by_handle(el.acl_conn_handle);
-      if (p_rec) {
-        cis_hdl_to_addr[el.cis_conn_handle] = p_rec->ble.pseudo_addr;
-        BTM_LogHistory(kBtmLogTag, p_rec->ble.pseudo_addr, "Establish CIS",
+      BtmDevice* p_device = btm_find_dev_by_handle(el.acl_conn_handle);
+      if (p_device) {
+        cis_hdl_to_addr[el.cis_conn_handle] = p_device->ble.pseudo_addr;
+        BTM_LogHistory(kBtmLogTag, p_device->ble.pseudo_addr, "Establish CIS",
                        std::format("handle:0x{:04x}", el.acl_conn_handle));
       }
       log::verbose("{}, cis_handle: {:#x}, flags: {:#x}", cis_hdl_to_addr[el.cis_conn_handle],
@@ -1235,6 +1235,11 @@ struct iso_impl {
       }
     }
     dprintf(fd, "  ----------------");
+  }
+
+  void set_big_channel_map_classification(uint8_t action, uint8_t big_handle, uint8_t num_handles,
+                                          const std::vector<uint16_t>& handles) {
+    btsnd_hcic_ble_set_big_channel_map_classification_vsc(action, big_handle, num_handles, handles);
   }
 
   std::unordered_map<uint16_t, RawAddress> cis_hdl_to_addr;

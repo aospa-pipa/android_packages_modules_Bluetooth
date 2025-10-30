@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -52,7 +53,7 @@ import java.util.function.Predicate;
  *
  * @param <C> the callback type (must implement {@link IInterface}) for this map
  */
-class ContextMap<C extends IInterface> {
+public class ContextMap<C extends IInterface> {
     private static final String TAG = GattUtil.TAG_PREFIX + ContextMap.class.getSimpleName();
 
     private static final int MAX_LAST_RECORDS = 5;
@@ -67,7 +68,7 @@ class ContextMap<C extends IInterface> {
     private final List<AppRecord> mOngoingRecords = new ArrayList<>();
 
     @GuardedBy("mAppsLock")
-    private final List<AppRecord> mLastRecords = new ArrayList<>();
+    final List<AppRecord> mLastRecords = new ArrayList<>();
 
     private final Object mConnectionsLock = new Object();
 
@@ -290,14 +291,10 @@ class ContextMap<C extends IInterface> {
         return removedApp;
     }
 
-    List<Integer> getAllAppsIds() {
-        List<Integer> appIds = new ArrayList<>();
+    List<App> getAllApps() {
         synchronized (mAppsLock) {
-            for (App entry : mApps) {
-                appIds.add(entry.id);
-            }
+            return Collections.unmodifiableList(mApps);
         }
-        return appIds;
     }
 
     /** Get all registered application callbacks. */
@@ -489,15 +486,9 @@ class ContextMap<C extends IInterface> {
         return connectedMap;
     }
 
-    /** Logs debug information. */
     protected void dump(StringBuilder sb) {
         synchronized (mAppsLock) {
-            sb.append("  Entries: ").append(mApps.size()).append("\n");
-            sb.append("  Last apps: ").append("\n");
-            for (AppRecord record : mLastRecords) {
-                sb.append("       ").append(record.toString()).append("\n");
-            }
-            sb.append("\n");
+            sb.append(GattUtil.dump(this));
         }
     }
 

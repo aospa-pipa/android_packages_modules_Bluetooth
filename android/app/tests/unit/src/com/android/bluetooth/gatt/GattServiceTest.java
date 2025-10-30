@@ -100,7 +100,7 @@ public class GattServiceTest {
     @Rule public final MockitoRule mMockitoRule = new MockitoRule();
     @Rule public final SetFlagsRule mSetFlagsRule = new SetFlagsRule();
 
-    @Mock private AttributionSource mAttributionSource;
+    @Mock private AttributionSource mSource;
     @Mock private IBluetoothGattCallback mGattCallback;
     @Mock private ContextMap<IBluetoothGattCallback> mClientMap;
     @Mock private IBluetoothGattServerCallback mGattServerCallback;
@@ -159,9 +159,9 @@ public class GattServiceTest {
                     }
                 });
 
-        doReturn(mContext.getPackageName()).when(mAttributionSource).getPackageName();
-        doReturn(mContext.getPackageName()).when(mAttributionSource).getAttributionTag();
-        doReturn(Binder.getCallingUid()).when(mAttributionSource).getUid();
+        doReturn(mContext.getPackageName()).when(mSource).getPackageName();
+        doReturn(mContext.getPackageName()).when(mSource).getAttributionTag();
+        doReturn(Binder.getCallingUid()).when(mSource).getUid();
 
         doReturn(CLIENT_CONN_LIST).when(mClientMap).getConnectionsByDevice(CLIENT_IF, mDevice);
         ContextMap<IBluetoothGattCallback>.App clientApp = mock(ContextMap.App.class);
@@ -350,7 +350,7 @@ public class GattServiceTest {
         boolean eattSupport = true;
         int transport = TRANSPORT_LE;
 
-        mService.registerClient(uuid, callback, eattSupport, transport, mAttributionSource);
+        mService.registerClient(uuid, callback, eattSupport, transport, mSource);
         verify(mNativeInterface)
                 .gattClientRegisterApp(
                         uuid.getLeastSignificantBits(),
@@ -367,7 +367,7 @@ public class GattServiceTest {
         boolean eattSupport = true;
         int transport = TRANSPORT_LE;
 
-        mService.registerClient(uuid, callback, eattSupport, transport, mAttributionSource);
+        mService.registerClient(uuid, callback, eattSupport, transport, mSource);
         verify(mClientMap, never()).add(any(), any(), anyInt(), any(), any());
         verify(mNativeInterface, never())
                 .gattClientRegisterApp(anyLong(), anyLong(), any(), anyBoolean());
@@ -376,9 +376,7 @@ public class GattServiceTest {
     @Test
     public void unregisterClient() {
         mService.unregisterClient(
-                mGattCallback,
-                mAttributionSource,
-                ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+                mGattCallback, mSource, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         verify(mClientMap).remove(CLIENT_IF, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         verify(mNativeInterface).gattClientUnregisterApp(CLIENT_IF);
     }
@@ -387,36 +385,14 @@ public class GattServiceTest {
     public void unregisterClientTwice() {
         // Simulate simultaneous unregistering from different threads by mocking mClientMap.
         mService.unregisterClient(
-                mGattCallback,
-                mAttributionSource,
-                ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+                mGattCallback, mSource, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         mService.unregisterClient(
-                mGattCallback,
-                mAttributionSource,
-                ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+                mGattCallback, mSource, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         verify(mClientMap, atLeastOnce())
                 .remove(CLIENT_IF, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
 
         // The second call is not propagated to the native stack.
         verify(mNativeInterface, times(1)).gattClientUnregisterApp(CLIENT_IF);
-    }
-
-    @Test
-    public void clientUnregAll() throws Exception {
-        int appId = 1;
-        ContextMap<IBluetoothGattCallback>.App app = mock(ContextMap.App.class);
-        IBluetoothGattCallback callback = mock(IBluetoothGattCallback.class);
-        app.id = appId;
-        doReturn(callback).when(app).getCallback();
-        doReturn(app).when(mClientMap).getByCallbackId(callback);
-
-        List<IBluetoothGattCallback> callbacks = new ArrayList<>();
-        callbacks.add(callback);
-        doReturn(callbacks).when(mClientMap).getAllAppsCallbackId();
-
-        mService.unregAll();
-        verify(mClientMap).remove(appId, ContextMap.RemoveReason.REASON_UNREGISTER_ALL);
-        verify(mNativeInterface).gattClientUnregisterApp(appId);
     }
 
     @Test
@@ -435,7 +411,7 @@ public class GattServiceTest {
                 transport,
                 opportunistic,
                 phy,
-                mAttributionSource);
+                mSource);
 
         verify(mNativeInterface)
                 .gattClientConnect(
@@ -533,7 +509,7 @@ public class GattServiceTest {
                         false);
         mService.onConnectedFromNative(
                 CLIENT_IF, 15, transport, BluetoothGatt.GATT_SUCCESS, mDevice);
-        mService.clientDisconnect(mGattCallback, mDevice, mAttributionSource);
+        mService.clientDisconnect(mGattCallback, mDevice, mSource);
 
         verify(mAdapterService).notifyGattClientDisconnect(anyInt(), any());
     }
@@ -606,7 +582,7 @@ public class GattServiceTest {
         connMap.put(CLIENT_IF, mDevice);
         doReturn(connMap).when(mClientMap).getConnectedMap();
 
-        mService.disconnectAll(mAttributionSource);
+        mService.disconnectAll(mSource);
         verify(mNativeInterface).gattClientDisconnect(CLIENT_IF, mDevice, CLIENT_CONN_ID);
     }
 
@@ -735,7 +711,7 @@ public class GattServiceTest {
         int handle = 2;
         int authReq = 3;
 
-        mService.readCharacteristic(mGattCallback, mDevice, handle, authReq, mAttributionSource);
+        mService.readCharacteristic(mGattCallback, mDevice, handle, authReq);
         verify(mNativeInterface).gattClientReadCharacteristic(CLIENT_CONN_ID, handle, authReq);
     }
 
@@ -777,7 +753,7 @@ public class GattServiceTest {
         int handle = 2;
         int authReq = 3;
 
-        mService.readDescriptor(mGattCallback, mDevice, handle, authReq, mAttributionSource);
+        mService.readDescriptor(mGattCallback, mDevice, handle, authReq);
         verify(mNativeInterface).gattClientReadDescriptor(CLIENT_CONN_ID, handle, authReq);
     }
 
@@ -801,8 +777,7 @@ public class GattServiceTest {
         int handle = 2;
         boolean enable = true;
 
-        mService.registerForNotification(
-                mGattCallback, mDevice, handle, enable, mAttributionSource);
+        mService.registerForNotification(mGattCallback, mDevice, handle, enable);
 
         verify(mNativeInterface)
                 .gattClientRegisterForNotifications(CLIENT_IF, mDevice, handle, enable);
@@ -904,7 +879,7 @@ public class GattServiceTest {
 
         addServerAppRecord(SERVER_IF, TRANSPORT_LE, mGattServerCallback);
         mService.serverConnect(
-                mGattServerCallback, mDevice, addressType, isDirect, transport, mAttributionSource);
+                mGattServerCallback, mDevice, addressType, isDirect, transport, mSource);
         verify(mNativeInterface)
                 .gattServerConnect(SERVER_IF, mDevice, addressType, isDirect, transport);
     }
