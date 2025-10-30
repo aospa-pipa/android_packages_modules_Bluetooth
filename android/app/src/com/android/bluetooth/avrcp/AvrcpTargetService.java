@@ -667,8 +667,7 @@ public class AvrcpTargetService extends ProfileService {
 
     /** Dump debugging information to the string builder */
     public void dump(StringBuilder sb) {
-        sb.append("\nProfile: AvrcpTargetService:\n");
-
+        super.dump(sb);
         StringBuilder tempBuilder = new StringBuilder();
         tempBuilder.append("AVRCP version: ").append(mAvrcpVersion).append("\n");
 

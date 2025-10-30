@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,8 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <bluetooth/log.h>
+#include <gtest/gtest.h>
 
-#include <array>
-#include <cstdint>
-
-namespace bluetooth::hci {
-
-constexpr int kOctet16Length = 16;
-using Octet16 = std::array<uint8_t, kOctet16Length>;
-
-constexpr int kOctet32Length = 32;
-using Octet32 = std::array<uint8_t, kOctet32Length>;
-}  // namespace bluetooth::hci
+#define PACKET_TESTING  // Instantiate the generated tests from the packet files
+#include "ascs/ascs_packets.h"

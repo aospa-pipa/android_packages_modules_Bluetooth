@@ -31,10 +31,16 @@ fun <T> Iterable<T>.toTable(vararg columns: Column<T>) = toTable(columns.toList(
 /**
  * Formats an iterable of items into a monospaced string table
  *
- * Column widths are calculated dynamically based on content unless a `width` is specified.
+ * Column widths are calculated dynamically based on content unless a `width` is specified. To
+ * indent the entire resulting table, use [indent] on the returned string:
+ * ```
+ * val table = myList.toTable(columns).indent("  ")
+ * sb.appendLine(table)
+ * ```
+ * **
  *
  * @param columns A list of `Column` objects defining the table's structure.
- * @return A formatted string table, or an empty string if the input is empty.
+ * @return A formatted string table or an empty string if the input is empty.
  */
 fun <T> Iterable<T>.toTable(columns: List<Column<T>>): String {
     val data = this.toList()
@@ -50,14 +56,12 @@ fun <T> Iterable<T>.toTable(columns: List<Column<T>>): String {
 
     return buildString {
         // Headers
-        appendLine(columns.zip(colWidths) { c, width -> c.header.padEnd(width) }.joinToString(" "))
+        appendLine(columns.zip(colWidths) { c, w -> c.header.padEnd(w) }.joinToString(" "))
         // Separators
         appendLine(colWidths.joinToString(" ") { "-".repeat(it) })
         // Values
-        data.forEach { item ->
-            appendLine(
-                columns.zip(colWidths) { c, width -> c.value(item).padEnd(width) }.joinToString(" ")
-            )
+        data.forEach {
+            appendLine(columns.zip(colWidths) { c, w -> c.value(it).padEnd(w) }.joinToString(" "))
         }
     }
 }

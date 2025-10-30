@@ -1196,7 +1196,7 @@ bool GAP_BleReadEncKeyMaterial(const RawAddress& peer_bda, uint16_t handle,
  *
  ******************************************************************************/
 void GAP_BleGetEncKeyMaterialInfo(const RawAddress& remote_bda) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(remote_bda);
+  BtmDevice* p_dev_rec = btm_find_dev(remote_bda);
 
   /*
    * If remote device is encrypted, then only get the encrypt key material

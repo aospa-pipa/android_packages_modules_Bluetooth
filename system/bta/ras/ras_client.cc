@@ -44,14 +44,12 @@
 #include "main/shim/entry.h"
 #include "osi/include/alarm.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/security_device_record.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/gap_api.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
-#include "stack/btm/btm_dev.h"
-#include "stack/btm/security_device_record.h"
 #include "internal_include/stack_config.h"
 
 
@@ -488,9 +486,9 @@ public:
     bool is_last = (data[0] >> 1 & 0x01);
     alarm_cancel(tracker->ranging_data_timeout_timer_);
     if (!is_last) {
-      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(tracker->address_);
-      if (p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
-        log::info("Low Power Mode Timer: {}", p_dev_rec->conn_params.peripheral_latency);
+      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
+        log::info("Low Power Mode Timer: {}", p_device->conn_params.peripheral_latency);
         SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs_lowpower, TimeoutType::FOLLOWING_SEGMENT);
       } else {
         SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs, TimeoutType::FOLLOWING_SEGMENT);
@@ -837,8 +835,8 @@ public:
         return;
       }
       uint16_t first_segment_timeout_ms = kFirstSegmentRangingDataTimeoutMs;
-      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(tracker->address_);
-      if (p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
+      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
         first_segment_timeout_ms = kLowPowerFirstSegmentRangingDataTimeoutMs;
       }
       SetTimeOutAlarm(tracker, first_segment_timeout_ms, TimeoutType::FIRST_SEGMENT);

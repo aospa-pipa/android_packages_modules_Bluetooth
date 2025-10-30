@@ -412,8 +412,8 @@ class A2dpStreamCallbacks : public bluetooth::audio::a2dp::StreamCallbacks {
     return Status::SUCCESS;
   }
 
-  Status UpdateSourceMetadata(bool is_gaming_mode) const override {
-    btif_av_update_source_metadata(is_gaming_mode);
+  Status SourceMetadataChanged(btav_a2dp_codec_audio_context_t audio_context) const override {
+    btif_av_source_metadata_changed(audio_context);
     return Status::SUCCESS;
   }
 };

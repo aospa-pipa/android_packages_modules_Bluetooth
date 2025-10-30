@@ -435,6 +435,9 @@
 /* SOC Logging OCF */
 #define HCI_VS_HOST_LOG_OPCODE (0x0017 | HCI_GRP_VENDOR_SPECIFIC)
 
+/* Set Broadcast Source Channel Map Classification OCF */
+#define HCI_LE_SET_BIG_CHANNEL_MAP_CLASSIFICATION_OPCODE (0x0165 | HCI_GRP_VENDOR_SPECIFIC)
+
 /* subcode for multi adv feature */
 #define BTM_BLE_MULTI_ADV_SET_PARAM 0x01
 #define BTM_BLE_MULTI_ADV_WRITE_ADV_DATA 0x02
@@ -463,6 +466,9 @@
 
 /* Bluetooth Quality Report sub event */
 #define HCI_VSE_SUBCODE_BQR_SUB_EVT 0x58
+
+/* subcode for Set Broadcast Source Channel Map Classification */
+#define SET_BIG_MAP_BY_CONNECTION_HANDLE 0x01
 
 #define HCI_VSE_SUBCODE_QBCE 0x51
 

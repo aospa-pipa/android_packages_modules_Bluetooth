@@ -50,7 +50,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import android.annotation.SuppressLint;
 import android.app.AppOpsManager;
 import android.app.role.RoleManager;
 import android.bluetooth.IAdapter;
@@ -102,7 +101,6 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 @RunWith(ParameterizedAndroidJunit4.class)
-@SuppressLint("AndroidFrameworkRequiresPermission")
 public class BluetoothManagerServiceTest {
     @Rule public final SetFlagsRule mSetFlagsRule;
 
@@ -783,6 +781,23 @@ public class BluetoothManagerServiceTest {
         mManagerService.enable(0, "userSwitch_onSameUserWhenBtOff_canStillStart");
         transition_offToOn();
         assertThat(mManagerService.getState()).isEqualTo(State.ON);
+
+        endTest();
+    }
+
+    @Test
+    public void userSwitch_onSameUserWhenBtOn_doesNothing() throws Exception {
+        mManagerService.enable(0, "userSwitch_onSameUserWhenBtOn_doesNothing");
+        transition_offToOn();
+        assertThat(mManagerService.getState()).isEqualTo(State.ON);
+
+        mManagerService.onUserSwitching(mUser);
+
+        assertThat(mManagerService.getState()).isEqualTo(State.ON);
+
+        // Verify a subsequent enable call still works (is not blocked by a pending user switch).
+        assertThat(mManagerService.enable(0, "userSwitch_onSameUserWhenBtOn_doesNothing"))
+                .isTrue();
 
         endTest();
     }
