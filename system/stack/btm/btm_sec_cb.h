@@ -17,7 +17,9 @@
 
 #pragma once
 
+#include <bluetooth/types/acl_link_spec.h>
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 
 #include <cstdint>
 #include <list>
@@ -25,9 +27,8 @@
 #include "internal_include/bt_target.h"
 #include "osi/include/alarm.h"
 #include "osi/include/list.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/btm/btm_sec_int_types.h"
-#include "stack/btm/security_device_record.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/security_client_callbacks.h"
 
 // TODO: b/446803190 - Fix the arguments by making them const references.
@@ -43,7 +44,7 @@ public:
   tBTM_SEC_DEVCB devcb;
 
   uint16_t enc_handle{0};
-  BT_OCTET8 enc_rand; /* received rand value from LTK request*/
+  Octet8 enc_rand;    /* received rand value from LTK request*/
   uint16_t ediv{0};   /* received ediv value from LTK request */
   uint8_t key_size{0};
 
@@ -53,7 +54,7 @@ public:
   *****************************************************/
   tBTM_APPL_INFO api;
 
-  tBTM_SEC_DEV_REC* p_collided_dev_rec{nullptr};
+  BtmDevice* p_collided_dev{nullptr};
   alarm_t* sec_collision_timer{nullptr};
   uint64_t collision_start_time{0};
   uint32_t dev_rec_count{0}; /* Counter used for device record timestamp */
@@ -64,16 +65,16 @@ public:
   bool l2c_service_access_pending{false}; /* If an L2CAP service access request is pending */
 
   uint8_t pin_code_len{0};                               /* for legacy devices */
-  PIN_CODE pin_code;                                     /* for legacy devices */
+  PinCode pin_code;                                      /* for legacy devices */
   tBTM_PAIRING_STATE pairing_state{BTM_PAIR_STATE_IDLE}; /* The current pairing state    */
   uint8_t pairing_flags{0};                              /* The current pairing flags    */
-  tAclLinkSpec link_spec;                                /* The device currently pairing.
-                                                            Address type is ignored currently */
+  AclLinkSpec link_spec;                                 /* The device currently pairing.
+                                                             Address type is ignored currently */
   alarm_t* pairing_timer{nullptr};                       /* Timer for pairing process    */
   alarm_t* execution_wait_timer{nullptr};                /* To avoid concurrent auth request */
 // TODO(b/444620685): Remove when use_array_instead_list_in_sec_dev_rec is shipped.
-  list_t* sec_dev_rec{nullptr};                          /* list of tBTM_SEC_DEV_REC */
-  std::array<tBTM_SEC_DEV_REC, BTM_SEC_MAX_DEVICE_RECORDS + 1> device_records = {};
+  list_t* sec_dev_rec{nullptr}; /* list of BtmDevice */
+  std::array<BtmDevice, BTM_SEC_MAX_DEVICE_RECORDS + 1> device_records = {};
   tBTM_SEC_SERV_REC* p_out_serv{nullptr};
   tBTM_MKEY_CALLBACK* mkey_cback{nullptr};
 
@@ -99,7 +100,7 @@ public:
   bool IsDeviceAuthenticated(const RawAddress bd_addr, tBT_TRANSPORT transport);
   bool IsLinkKeyAuthenticated(const RawAddress bd_addr, tBT_TRANSPORT transport);
 
-  tBTM_SEC_REC* getSecRec(const RawAddress bd_addr);
+  BtmSecurityRecord* getSecRec(const RawAddress bd_addr);
 
   bool AddService(bool outgoing, const char* p_name, uint8_t service_id, uint16_t sec_level,
                   uint16_t psm, uint32_t mx_proto_id, uint32_t mx_chan_id);
@@ -107,7 +108,7 @@ public:
   uint8_t RemoveServiceByPsm(uint16_t psm);
 
   void change_pairing_state(tBTM_PAIRING_STATE new_state);
-  tBTM_SEC_DEV_REC* for_each_dev_rec(sec_dev_rec_iter_cb cb, void* context);
+  BtmDevice* for_each_dev_rec(sec_dev_rec_iter_cb cb, void* context);
 };
 
 extern tBTM_SEC_CB btm_sec_cb;

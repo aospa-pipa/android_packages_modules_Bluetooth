@@ -31,7 +31,7 @@
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/hci_role.h>
 
-#include "stack/btm/security_device_record.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/include/bt_dev_class.h"
 #include "stack/include/bt_device_type.h"
 #include "stack/include/btm_status.h"
@@ -128,14 +128,14 @@ struct BTM_IsBonded {
 extern struct BTM_IsBonded BTM_IsBonded;
 
 // Name: BTM_PINCodeReply
-// Params: const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, uint8_t*
+// Params: const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, PinCode pin_code
 // p_pin Return: void
 struct BTM_PINCodeReply {
-  std::function<void(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, uint8_t* p_pin)>
+  std::function<void(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, PinCode pin_code)>
           body{[](const RawAddress& /* bd_addr */, tBTM_STATUS /* res */, uint8_t /* pin_len */,
-                  uint8_t* /* p_pin */) {}};
-  void operator()(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, uint8_t* p_pin) {
-    body(bd_addr, res, pin_len, p_pin);
+                  PinCode /* pin_code */) {}};
+  void operator()(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, PinCode pin_code) {
+    body(bd_addr, res, pin_len, pin_code);
   }
 };
 extern struct BTM_PINCodeReply BTM_PINCodeReply;
@@ -290,12 +290,12 @@ struct BTM_SetEncryption {
 extern struct BTM_SetEncryption BTM_SetEncryption;
 
 // Name: BTM_SetPinType
-// Params: uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len
+// Params: uint8_t pin_type, PinCode pin_code, uint8_t pin_code_len
 // Return: void
 struct BTM_SetPinType {
-  std::function<void(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len)> body{
-          [](uint8_t /* pin_type */, PIN_CODE /* pin_code */, uint8_t /* pin_code_len */) {}};
-  void operator()(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len) {
+  std::function<void(uint8_t pin_type, PinCode pin_code, uint8_t pin_code_len)> body{
+          [](uint8_t /* pin_type */, PinCode /* pin_code */, uint8_t /* pin_code_len */) {}};
+  void operator()(uint8_t pin_type, PinCode pin_code, uint8_t pin_code_len) {
     body(pin_type, pin_code, pin_code_len);
   }
 };
@@ -441,11 +441,11 @@ struct btm_sec_bond_by_transport {
 extern struct btm_sec_bond_by_transport btm_sec_bond_by_transport;
 
 // Name: btm_sec_clear_ble_keys
-// Params: tBTM_SEC_DEV_REC* p_dev_rec
+// Params: BtmDevice* p_device
 // Return: void
 struct btm_sec_clear_ble_keys {
-  std::function<void(tBTM_SEC_DEV_REC* p_dev_rec)> body{[](tBTM_SEC_DEV_REC* /* p_dev_rec */) {}};
-  void operator()(tBTM_SEC_DEV_REC* p_dev_rec) { body(p_dev_rec); }
+  std::function<void(BtmDevice* p_device)> body{[](BtmDevice* /* p_device */) {}};
+  void operator()(BtmDevice* p_device) { body(p_device); }
 };
 extern struct btm_sec_clear_ble_keys btm_sec_clear_ble_keys;
 
@@ -475,13 +475,13 @@ struct btm_sec_connected {
 extern struct btm_sec_connected btm_sec_connected;
 
 // Name: btm_sec_execute_procedure
-// Params: tBTM_SEC_DEV_REC *p_dev_rec
+// Params: BtmDevice *p_dev
 // Return: tBTM_STATUS
 struct btm_sec_execute_procedure {
   static tBTM_STATUS return_value;
-  std::function<tBTM_STATUS(tBTM_SEC_DEV_REC* p_dev_rec)> body{
-          [](tBTM_SEC_DEV_REC* /* p_dev_rec */) { return return_value; }};
-  tBTM_STATUS operator()(tBTM_SEC_DEV_REC* p_dev_rec) { return body(p_dev_rec); }
+  std::function<tBTM_STATUS(BtmDevice* p_dev)> body{
+          [](BtmDevice* /* p_dev */) { return return_value; }};
+  tBTM_STATUS operator()(BtmDevice* p_dev) { return body(p_dev); }
 };
 extern struct btm_sec_execute_procedure btm_sec_execute_procedure;
 
@@ -498,14 +498,14 @@ struct btm_sec_cr_loc_oob_data_cback_event {
 extern struct btm_sec_cr_loc_oob_data_cback_event btm_sec_cr_loc_oob_data_cback_event;
 
 // Name: btm_sec_dev_rec_cback_event
-// Params: tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS btm_status, bool
+// Params: BtmDevice* p_device, tBTM_STATUS btm_status, bool
 // is_le_transport Return: void
 struct btm_sec_dev_rec_cback_event {
-  std::function<void(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS btm_status, bool is_le_transport)>
-          body{[](tBTM_SEC_DEV_REC* /* p_dev_rec */, tBTM_STATUS /* btm_status */,
-                  bool /* is_le_transport */) {}};
-  void operator()(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS btm_status, bool is_le_transport) {
-    body(p_dev_rec, btm_status, is_le_transport);
+  std::function<void(BtmDevice* p_device, tBTM_STATUS btm_status, bool is_le_transport)> body{
+          [](BtmDevice* /* p_device */, tBTM_STATUS /* btm_status */, bool /* is_le_transport */) {
+          }};
+  void operator()(BtmDevice* p_device, tBTM_STATUS btm_status, bool is_le_transport) {
+    body(p_device, btm_status, is_le_transport);
   }
 };
 extern struct btm_sec_dev_rec_cback_event btm_sec_dev_rec_cback_event;

@@ -18,13 +18,12 @@
 #pragma once
 
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/bt_transport.h>
 
 #include <cstdint>
 
 #include "stack/include/bt_dev_class.h"
-#include "stack/include/bt_name.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_api_types.h"
 #include "stack/include/btm_status.h"
 
@@ -50,8 +49,8 @@ void BTM_SecAddDevice(const RawAddress& bd_addr, const DEV_CLASS dev_class, Link
 /** Free resources associated with the device associated with |bd_addr| address.
  *
  * *** WARNING ***
- * tBTM_SEC_DEV_REC associated with bd_addr becomes invalid after this function
- * is called, also any of its fields. i.e. if you use p_dev_rec->bd_addr, it is
+ * BtmDevice associated with bd_addr becomes invalid after this function
+ * is called, also any of its fields. i.e. if you use p_device->bd_addr, it is
  * no longer valid!
  * *** WARNING ***
  *

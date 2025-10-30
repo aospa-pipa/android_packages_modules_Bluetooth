@@ -26,7 +26,6 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.RequiresPermission;
-import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
@@ -173,7 +172,6 @@ public class SapService extends ConnectableProfile
 
     private static final int CREATE_RETRY_TIME = 10;
 
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     private boolean initSocket() {
         Log.v(TAG, "Sap Service initSocket");
 
@@ -522,20 +520,21 @@ public class SapService extends ConnectableProfile
     }
 
     private synchronized void setState(int state, int result) {
-        if (state != mState) {
-            Log.d(TAG, "Sap state " + mState + " -> " + state + ", result = " + result);
-            int prevState = mState;
-            mState = state;
-            mAdapterService.updateProfileConnectionAdapterProperties(
-                    mRemoteDevice, mProfileId, mState, prevState);
-
-            BluetoothSap.invalidateBluetoothGetConnectionStateCache();
-            Intent intent = new Intent(BluetoothSap.ACTION_CONNECTION_STATE_CHANGED);
-            intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
-            intent.putExtra(BluetoothProfile.EXTRA_STATE, mState);
-            intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
-            sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+        if (state == mState) {
+            return;
         }
+        Log.d(TAG, "Sap state " + mState + " -> " + state + ", result = " + result);
+        int prevState = mState;
+        mState = state;
+        mAdapterService.updateProfileConnectionAdapterProperties(
+                mRemoteDevice, mProfileId, mState, prevState);
+
+        BluetoothSap.invalidateBluetoothGetConnectionStateCache();
+        Intent intent = new Intent(BluetoothSap.ACTION_CONNECTION_STATE_CHANGED);
+        intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
+        intent.putExtra(BluetoothProfile.EXTRA_STATE, mState);
+        intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
     }
 
     public int getState() {

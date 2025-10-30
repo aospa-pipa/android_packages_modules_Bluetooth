@@ -19,10 +19,10 @@
 
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 
 #include <optional>
 
-#include "bt_octets.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
@@ -90,7 +90,7 @@ bool BTM_SecIsLeSecurityPending(const RawAddress& bd_addr) {
   return btm_interface->SecIsSecurityPending(bd_addr);
 }
 
-tBTM_SEC_DEV_REC* btm_find_dev(const RawAddress& bd_addr) {
+BtmDevice* btm_find_dev(const RawAddress& bd_addr) {
   log::assert_that(btm_interface != nullptr, "Mock btm interface not set!");
   return btm_interface->FindDevice(bd_addr);
 }

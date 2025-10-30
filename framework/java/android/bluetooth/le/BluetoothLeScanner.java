@@ -44,9 +44,6 @@ import android.os.RemoteException;
 import android.os.WorkSource;
 import android.util.Log;
 
-
-import com.android.bluetooth.flags.Flags;
-
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -293,7 +290,6 @@ public final class BluetoothLeScanner {
     @RequiresPermission(
             allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN, UPDATE_DEVICE_STATS},
             conditional = true)
-    @SuppressLint("AndroidFrameworkRequiresPermission") // See startRegistration() for reason
     public void startScanFromSource(
             List<ScanFilter> filters,
             ScanSettings settings,
@@ -353,13 +349,11 @@ public final class BluetoothLeScanner {
                 return postCallbackErrorOrReturn(callback,
                         ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
             }
-            if (Flags.batchScanSupportCheck()) {
-                if (!mBluetoothAdapter.isOffloadedScanBatchingSupported()
-                        && settings.getReportDelayMillis() > 0) {
-                    Log.w(TAG, "Batch scan requested but not supported");
-                    return postCallbackErrorOrReturn(
-                            callback, ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
-                }
+            if (!mBluetoothAdapter.isOffloadedScanBatchingSupported()
+                    && settings.getReportDelayMillis() > 0) {
+                Log.w(TAG, "Batch scan requested but not supported");
+                return postCallbackErrorOrReturn(
+                        callback, ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
             }
             // If no filters are provided, initialize an empty list to simplify downstream logic
             if (filters == null) {
@@ -466,7 +460,6 @@ public final class BluetoothLeScanner {
     @SystemApi
     @RequiresBluetoothScanPermission
     @RequiresPermission(BLUETOOTH_SCAN)
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     public void startTruncatedScan(
             List<TruncatedFilter> truncatedFilters,
             ScanSettings settings,
@@ -517,10 +510,7 @@ public final class BluetoothLeScanner {
         // methods that provide a WorkSource, such as `startScanFromSource()`, are already annotated
         // with this permission. This suppression avoids propagating the conditional requirement to
         // Public API methods that do not use a WorkSource.
-        @SuppressLint({
-            "AndroidFrameworkRequiresPermission",
-            "IncorrectRequiresPermissionPropagation"
-        })
+        @SuppressLint("IncorrectRequiresPermissionPropagation")
         @SuppressWarnings("WaitNotInLoop") // TODO(b/314811467)
         void startRegistration() {
             synchronized (this) {
@@ -588,7 +578,6 @@ public final class BluetoothLeScanner {
 
         /** Application interface registered - app is ready to go */
         // TODO(b/447235251) Move all this logic to within the app without triggering the callback
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @Override
         public void onScannerRegistered(int status, int scannerId) {
             Log.d(

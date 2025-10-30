@@ -36,6 +36,7 @@
 #include <bluetooth/metrics/metric_id_api.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/bt_transport.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -58,8 +59,8 @@
 #include "bta/include/bta_hf_client_api.h"
 #include "bta/include/bta_le_audio_api.h"
 #include "bta/include/bta_le_audio_broadcaster_api.h"
-#include "bta/include/bta_vc_api.h"
 #include "bta/include/bta_vaps_server_api.h"
+#include "bta/include/bta_vc_api.h"
 #include "btif/avrcp/avrcp_service.h"
 #include "btif/include/bluetooth.h"
 #include "btif/include/btif_a2dp.h"
@@ -122,7 +123,6 @@
 #include "stack/include/avrc_api.h"
 #include "stack/include/bnep_api.h"
 #include "stack/include/bt_name.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/gatt_api.h"
@@ -324,7 +324,7 @@ struct CoreInterfaceImpl : bluetooth::core::CoreInterface {
   void removeDeviceFromProfiles(const RawAddress& bd_addr) override {
 /*special handling for HID devices */
 #if (defined(BTA_HH_INCLUDED) && (BTA_HH_INCLUDED == TRUE))
-    tAclLinkSpec link_spec;
+    AclLinkSpec link_spec;
     link_spec.addrt.bda = bd_addr;
     link_spec.addrt.type = BLE_ADDR_PUBLIC;
     link_spec.transport = BT_TRANSPORT_AUTO;
@@ -736,7 +736,7 @@ static int pin_reply(const RawAddress* bd_addr, uint8_t accept, uint8_t pin_len,
   if (!interface_ready()) {
     return BT_STATUS_NOT_READY;
   }
-  if (pin_code == nullptr || pin_len > PIN_CODE_LEN) {
+  if (pin_code == nullptr || pin_len > kOctet16Length) {
     return BT_STATUS_PARM_INVALID;
   }
 
@@ -1461,11 +1461,11 @@ void invoke_le_address_associate_cb(RawAddress main_bd_addr, RawAddress secondar
           main_bd_addr, secondary_bd_addr, identity_address_type));
 }
 
-void invoke_acl_state_changed_cb(bt_status_t status, tAclLinkSpec& link_spec, bt_acl_state_t state,
+void invoke_acl_state_changed_cb(bt_status_t status, AclLinkSpec& link_spec, bt_acl_state_t state,
                                  bt_hci_error_code_t hci_reason, bt_conn_direction_t direction,
                                  uint16_t acl_handle) {
   do_in_jni_thread(base::BindOnce(
-          [](bt_status_t status, tAclLinkSpec link_spec, bt_acl_state_t state,
+          [](bt_status_t status, AclLinkSpec link_spec, bt_acl_state_t state,
              bt_hci_error_code_t hci_reason, bt_conn_direction_t direction, uint16_t acl_handle) {
             HAL_CBACK(bt_hal_cbacks, acl_state_changed_cb, status, link_spec, state, hci_reason,
                       direction, acl_handle);

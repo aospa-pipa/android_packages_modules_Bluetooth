@@ -30,7 +30,6 @@
 #include "stack/include/bt_types.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_utils.h"
-#include "stack/include/btm_ble_sec_api.h"
 #include "stack/include/btm_sec_api_types.h"
 #include "stack/include/btm_status.h"
 #include "test/common/mock_functions.h"
@@ -164,9 +163,10 @@ bool BTM_IsBonded(const RawAddress& bd_addr, tBT_TRANSPORT transport) {
   inc_func_call_count(__func__);
   return test::mock::stack_btm_sec::BTM_IsBonded(bd_addr, transport);
 }
-void BTM_PINCodeReply(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, uint8_t* p_pin) {
+void BTM_PINCodeReply(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len,
+                      PinCode pin_code) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::BTM_PINCodeReply(bd_addr, res, pin_len, p_pin);
+  test::mock::stack_btm_sec::BTM_PINCodeReply(bd_addr, res, pin_len, pin_code);
 }
 void BTM_PasskeyReqReply(tBTM_STATUS res, const RawAddress& bd_addr, uint32_t passkey) {
   inc_func_call_count(__func__);
@@ -221,7 +221,7 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
   return test::mock::stack_btm_sec::BTM_SetEncryption(bd_addr, transport, p_callback, p_ref_data,
                                                       sec_act);
 }
-void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len) {
+void BTM_SetPinType(uint8_t pin_type, PinCode pin_code, uint8_t pin_code_len) {
   inc_func_call_count(__func__);
   test::mock::stack_btm_sec::BTM_SetPinType(pin_type, pin_code, pin_code_len);
 }
@@ -277,9 +277,9 @@ tBTM_STATUS btm_sec_bond_by_transport(const RawAddress& bd_addr, tBLE_ADDR_TYPE 
   inc_func_call_count(__func__);
   return test::mock::stack_btm_sec::btm_sec_bond_by_transport(bd_addr, addr_type, transport);
 }
-void btm_sec_clear_ble_keys(tBTM_SEC_DEV_REC* p_dev_rec) {
+void btm_sec_clear_ble_keys(BtmDevice* p_device) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::btm_sec_clear_ble_keys(p_dev_rec);
+  test::mock::stack_btm_sec::btm_sec_clear_ble_keys(p_device);
 }
 void btm_sec_conn_req(const RawAddress& bda, const DEV_CLASS dc) {
   inc_func_call_count(__func__);
@@ -290,19 +290,19 @@ void btm_sec_connected(const RawAddress& bda, uint16_t handle, tHCI_STATUS statu
   inc_func_call_count(__func__);
   test::mock::stack_btm_sec::btm_sec_connected(bda, handle, status, enc_mode, assigned_role);
 }
-tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec) {
+tBTM_STATUS btm_sec_execute_procedure(BtmDevice* p_dev) {
   inc_func_call_count(__func__);
-  return test::mock::stack_btm_sec::btm_sec_execute_procedure(p_dev_rec);
+  return test::mock::stack_btm_sec::btm_sec_execute_procedure(p_dev);
 }
 void btm_sec_cr_loc_oob_data_cback_event(const RawAddress& address,
                                          tSMP_LOC_OOB_DATA loc_oob_data) {
   inc_func_call_count(__func__);
   test::mock::stack_btm_sec::btm_sec_cr_loc_oob_data_cback_event(address, loc_oob_data);
 }
-void btm_sec_dev_rec_cback_event(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS btm_status,
+void btm_sec_dev_rec_cback_event(BtmDevice* p_device, tBTM_STATUS btm_status,
                                  bool is_le_transport) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::btm_sec_dev_rec_cback_event(p_dev_rec, btm_status, is_le_transport);
+  test::mock::stack_btm_sec::btm_sec_dev_rec_cback_event(p_device, btm_status, is_le_transport);
 }
 void btm_sec_dev_reset(void) {
   inc_func_call_count(__func__);

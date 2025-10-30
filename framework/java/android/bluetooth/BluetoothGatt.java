@@ -66,7 +66,6 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.RequiresNoPermission;
 import android.annotation.RequiresPermission;
-import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.bluetooth.BluetoothGattCharacteristic.WriteType;
 import android.bluetooth.annotations.RequiresBluetoothConnectPermission;
@@ -302,7 +301,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         /** Application interface registered - app is ready to go */
         @Hide
         @Override
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @RequiresNoPermission // Callback to app
         public void onClientRegistered(int status) {
             Log.d(TAG, "onClientRegistered(" + status + ")");
@@ -496,7 +494,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         /** Remote characteristic has been read. Updates the internal value. */
         @Hide
         @Override
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @RequiresNoPermission // Callback to app
         public void onCharacteristicRead(
                 BluetoothDevice device, int status, int handle, byte[] value) {
@@ -557,7 +554,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         /** Characteristic has been written to the remote device. Let the app know how we did... */
         @Hide
         @Override
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @RequiresNoPermission // Callback to app
         public void onCharacteristicWrite(
                 BluetoothDevice device, int status, int handle, byte[] value) {
@@ -658,7 +654,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         /** Descriptor has been read. */
         @Hide
         @Override
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @RequiresNoPermission // Callback to app
         public void onDescriptorRead(BluetoothDevice device, int status, int handle, byte[] value) {
             if (VDBG) {
@@ -710,7 +705,6 @@ public final class BluetoothGatt implements BluetoothProfile {
         /** Descriptor write operation complete. */
         @Hide
         @Override
-        @SuppressLint("AndroidFrameworkRequiresPermission")
         @RequiresNoPermission // Callback to app
         public void onDescriptorWrite(
                 BluetoothDevice device, int status, int handle, byte[] value) {

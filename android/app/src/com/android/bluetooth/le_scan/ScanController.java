@@ -488,6 +488,7 @@ public class ScanController {
 
         BluetoothDevice device = mAdapter.getRemoteLeDevice(address, addressType);
 
+        var noFilterMatchedClients = new ArrayList<ScanClient>();
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
             ScannerApp app = mScannerMap.getById(client.getScannerId());
             if (app == null) {
@@ -566,7 +567,7 @@ public class ScanController {
                 continue;
             }
             if (!matchesFilters(client, result, originalAddress)) {
-                Log.v(TAG, "No filter match for " + client + "; Skip");
+                noFilterMatchedClients.add(client);
                 continue;
             }
 
@@ -578,7 +579,7 @@ public class ScanController {
             }
 
             try {
-                app.getAppScanStats().addResult(client.getScannerId());
+                app.getAppScanStats().addResults(client.getScannerId());
                 if (app.getCallback() != null) {
                     app.getCallback().onScanResult(result);
                 } else {
@@ -591,6 +592,9 @@ public class ScanController {
                 Log.e(TAG, "Exception: " + e);
                 handleDeadScanClient(client);
             }
+        }
+        if (!noFilterMatchedClients.isEmpty()) {
+            Log.v(TAG, "No filter match for " + noFilterMatchedClients + "; Skip");
         }
     }
 
