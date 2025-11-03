@@ -340,8 +340,8 @@ struct EXT_CIS_TEST_CFG {
   uint8_t nse;
   uint16_t max_sdu_size_mtos;
   uint16_t max_sdu_size_stom;
-  uint8_t max_pdu_mtos;
-  uint8_t max_pdu_stom;
+  uint8_t max_payload_mtos;
+  uint8_t max_payload_stom;
   uint8_t phy_mtos;
   uint8_t phy_stom;
   uint8_t bn_mtos;
