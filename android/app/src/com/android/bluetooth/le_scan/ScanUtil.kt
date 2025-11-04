@@ -91,9 +91,6 @@ object ScanUtil {
     @JvmStatic fun findById(clients: Set<ScanClient>, id: Int) = clients.find { it.scannerId == id }
 
     @JvmStatic
-    fun appNameOrUnknown(appName: String?, uid: Int) = appName ?: "Unknown App (UID: $uid)"
-
-    @JvmStatic
     fun hasScanResultPermission(adapterService: AdapterService, client: ScanClient) =
         when {
             // Bypass permission check for internal clients
@@ -371,15 +368,15 @@ object ScanUtil {
         isTimeoutScanClient(client) || isDowngradedScanClient(client)
 
     private fun isTimeoutScanClient(client: ScanClient) =
-        client.appScanStats.map { it.isScanTimeout(client.scannerId) }.orElse(false)
+        client.appScanStats?.isScanTimeout(client.scannerId) ?: false
 
     @JvmStatic
     fun isDowngradedScanClient(client: ScanClient) =
-        client.appScanStats.map { it.isScanDowngraded(client.scannerId) }.orElse(false)
+        client.appScanStats?.isScanDowngraded(client.scannerId) ?: false
 
     @JvmStatic
     fun isAutoBatchScanClientEnabled(client: ScanClient) =
-        client.appScanStats.map { it.isAutoBatchScan(client.scannerId) }.orElse(false)
+        client.appScanStats?.isAutoBatchScan(client.scannerId) ?: false
 
     @JvmStatic
     fun isPhyConfigured(client: ScanClient, use1mPhy: Boolean) =
@@ -423,9 +420,7 @@ object ScanUtil {
         client.updateScanMode(SCAN_MODE_SCREEN_OFF)
         val scanModeString = scanModeToString(client.scanModeApp)
         Log.d(TAG, "Scan mode update during setAutoBatchScanClient() to $scanModeString")
-        client.appScanStats.ifPresent { appScanStats ->
-            appScanStats.setAutoBatchScan(client.scannerId, true)
-        }
+        client.appScanStats?.setAutoBatchScan(client.scannerId, true)
     }
 
     @JvmStatic
@@ -436,9 +431,7 @@ object ScanUtil {
         client.updateScanMode(client.scanModeApp)
         val scanModeString = scanModeToString(client.scanModeApp)
         Log.d(TAG, "Scan mode update during clearAutoBatchScanClient() to $scanModeString")
-        client.appScanStats.ifPresent { appScanStats ->
-            appScanStats.setAutoBatchScan(client.scannerId, false)
-        }
+        client.appScanStats?.setAutoBatchScan(client.scannerId, false)
     }
 
     fun ScanFilter.toStringWithoutNullParam() = buildString {

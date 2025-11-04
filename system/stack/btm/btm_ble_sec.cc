@@ -929,7 +929,7 @@ tBTM_STATUS btm_ble_set_encryption(const RawAddress& bd_addr, tBTM_BLE_SEC_ACT s
  ******************************************************************************/
 void btm_ble_ltk_request(uint16_t handle, Octet8 rand, uint16_t ediv) {
   tBTM_SEC_CB* p_cb = &btm_sec_cb;
-  BtmDevice* p_device = btm_find_dev_by_handle(handle);
+  const BtmDevice* p_device = btm_find_dev_by_handle(handle);
 
   p_cb->ediv = ediv;
   p_cb->enc_rand = rand;
@@ -1294,8 +1294,7 @@ static tBTM_STATUS btm_ble_br_keys_req(BtmDevice* p_device, tBTM_LE_IO_REQ* p_da
  *
  ******************************************************************************/
 void btm_ble_connected(const RawAddress& bda, uint16_t handle, uint8_t /* enc_mode */, uint8_t role,
-                       tBLE_ADDR_TYPE addr_type, bool addr_matched,
-                       bool can_read_discoverable_characteristics) {
+                       tBLE_ADDR_TYPE addr_type, bool can_read_discoverable_characteristics) {
   BtmDevice* p_device = btm_find_or_alloc_dev(bda);
   if (p_device == NULL) {
     return;
@@ -1321,7 +1320,7 @@ void btm_ble_connected(const RawAddress& bda, uint16_t handle, uint8_t /* enc_mo
   p_device->role_central = (role == HCI_ROLE_CENTRAL) ? true : false;
   p_device->can_read_discoverable = can_read_discoverable_characteristics;
 
-  if (!addr_matched) {
+  if (!p_device->sec_rec.is_bonded(BT_TRANSPORT_LE)) {
     p_device->ble.active_addr_type = BTM_BLE_ADDR_PSEUDO;
     if (p_device->ble.AddressType() == BLE_ADDR_RANDOM) {
       p_device->ble.cur_rand_addr = bda;
@@ -1861,7 +1860,7 @@ void btm_ble_reset_id(void) {
  ******************************************************************************/
 bool btm_ble_get_acl_remote_addr(uint16_t hci_handle, RawAddress& conn_addr,
                                  tBLE_ADDR_TYPE* p_addr_type) {
-  BtmDevice* p_device = btm_find_dev_by_handle(hci_handle);
+  const BtmDevice* p_device = btm_find_dev_by_handle(hci_handle);
   if (p_device == nullptr) {
     log::warn("Unable to find security device record hci_handle:{}", hci_handle);
     // TODO Release acl resource

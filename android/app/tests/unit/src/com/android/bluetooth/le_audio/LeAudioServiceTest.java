@@ -120,6 +120,7 @@ import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
 import platform.test.runner.parameterized.Parameters;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -274,7 +275,6 @@ public class LeAudioServiceTest {
         ExtendedMockito.doReturn(true)
                 .when(() -> Config.isProfileSupported(BluetoothProfile.LE_AUDIO));
 
-        doReturn(mActiveDeviceManager).when(mAdapterService).getActiveDeviceManager();
         doReturn(mDatabaseManager).when(mAdapterService).getDatabaseManager();
         doReturn(Optional.of(mTbsService)).when(mAdapterService).getTbsService();
 
@@ -335,9 +335,10 @@ public class LeAudioServiceTest {
                 new LeAudioService(
                         mAdapterService,
                         mStorage,
-                        mLooper.getLooper(),
                         mNativeInterface,
-                        mLeAudioBroadcasterNativeInterface);
+                        mLeAudioBroadcasterNativeInterface,
+                        mActiveDeviceManager,
+                        mLooper.getLooper());
         mService.setAvailable(true);
 
         LeAudioStackEvent stackEvent =
@@ -415,9 +416,10 @@ public class LeAudioServiceTest {
                 new LeAudioService(
                                 mAdapterService,
                                 mStorage,
-                                mLooper.getLooper(),
                                 mNativeInterface,
-                                mLeAudioBroadcasterNativeInterface)
+                                mLeAudioBroadcasterNativeInterface,
+                                mActiveDeviceManager,
+                                mLooper.getLooper())
                         .getTmapRoleMask();
         assertThat(mask).isEqualTo(expectedMasks);
     }
@@ -2423,11 +2425,18 @@ public class LeAudioServiceTest {
         /* AUDIO_DIRECTION_OUTPUT_BIT = 0x01 */
         int direction = 1;
         int availableContexts = 4;
+        List<BluetoothDevice> devices = new ArrayList<>();
+        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
+        when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
+
+        devices.add(mLeftDevice);
         connectTestDevice(mLeftDevice, TEST_GROUP_ID);
+        devices.add(0, mRightDevice);
         connectTestDevice(mRightDevice, TEST_GROUP_ID);
         assertThat(mService.setActiveDevice(mLeftDevice)).isFalse();
 
+        devices.add(0, mSingleDevice);
         connectTestDevice(mSingleDevice, TEST_GROUP_ID2);
 
         ArgumentCaptor<BluetoothProfileConnectionInfo> profileInfo =
@@ -2461,7 +2470,9 @@ public class LeAudioServiceTest {
         mService.setVolume(newVolume);
         verify(mVolumeControlService, never()).setGroupVolume(TEST_GROUP_ID, newVolume);
 
-        mService.mBroadcastToUnicastFallbackGroup = TEST_GROUP_ID;
+        broadcastReceivers.addAll(Arrays.asList(mLeftDevice, mRightDevice, mSingleDevice));
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+
         // Verify setGroupVolume will be called if synced sinks
         doReturn(List.of(mLeftDevice, mRightDevice, mSingleDevice))
                 .when(mBassClientService)
@@ -2942,7 +2953,12 @@ public class LeAudioServiceTest {
         injectAndVerifyDeviceConnected(mLeftDevice);
         injectAudioConfChanged(mSingleDevice, TEST_GROUP_ID, availableContexts, direction);
 
-        verify(mScanController).registerScannerInternal(scanCallbacks.capture(), any(), any());
+        if (Flags.scanRegisterAndStart()) {
+            verify(mScanController)
+                    .registerAndStartScanInternal(scanCallbacks.capture(), any(), any(), any());
+        } else {
+            verify(mScanController).registerScannerInternal(scanCallbacks.capture(), any(), any());
+        }
 
         ScanResult scanResult = new ScanResult(mRightDevice, null, 0, 0);
 
@@ -3493,6 +3509,7 @@ public class LeAudioServiceTest {
         int direction = 1;
         int availableContexts = 5 + BluetoothLeAudio.CONTEXT_TYPE_RINGTONE;
         List<BluetoothDevice> devices = new ArrayList<>();
+        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
         when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
 
@@ -3504,6 +3521,10 @@ public class LeAudioServiceTest {
         // Connect device
         devices.add(mSingleDevice);
         connectTestDevice(mSingleDevice, TEST_GROUP_ID);
+
+        /* Mock device1 as receiving broadcast device */
+        broadcastReceivers.add(mSingleDevice);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
 
         // Group should be updated to default (earliest connected)
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(TEST_GROUP_ID);
@@ -3526,9 +3547,13 @@ public class LeAudioServiceTest {
         mService.setBroadcastToUnicastFallbackGroup(TEST_GROUP_ID2);
 
         // Connect second device
-        devices.add(mLeftDevice);
+        devices.add(0, mLeftDevice);
         connectTestDevice(mLeftDevice, TEST_GROUP_ID2);
         mService.deviceConnected(mLeftDevice);
+
+        /* Mock device2 as receiving broadcast device */
+        broadcastReceivers.add(mLeftDevice);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
 
         // Fallback device should remain earliest connected
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(TEST_GROUP_ID);

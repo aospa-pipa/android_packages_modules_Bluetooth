@@ -55,6 +55,7 @@ import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
+import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.flags.Flags;
@@ -82,6 +83,7 @@ public class A2dpService extends ConnectableProfile {
     private final A2dpNativeInterface mNativeInterface;
     private final A2dpCodecConfig mA2dpCodecConfig;
     private final AudioManager mAudioManager;
+    private final ActiveDeviceManager mActiveDeviceManager;
     private final CompanionDeviceManager mCompanionDeviceManager;
     private final Looper mLooper;
     private final Handler mHandler;
@@ -125,8 +127,15 @@ public class A2dpService extends ConnectableProfile {
     public A2dpService(
             AdapterService adapterService,
             BluetoothStorageManager storage,
+            ActiveDeviceManager activeDeviceManager,
             CompanionDeviceManager companionDeviceManager) {
-        this(adapterService, storage, null, companionDeviceManager, Looper.getMainLooper());
+        this(
+                adapterService,
+                storage,
+                null,
+                activeDeviceManager,
+                companionDeviceManager,
+                Looper.getMainLooper());
     }
 
     @VisibleForTesting
@@ -134,6 +143,7 @@ public class A2dpService extends ConnectableProfile {
             AdapterService adapterService,
             BluetoothStorageManager storage,
             A2dpNativeInterface nativeInterface,
+            ActiveDeviceManager activeDeviceManager,
             CompanionDeviceManager companionDeviceManager,
             Looper looper) {
         super(BluetoothProfile.A2DP, adapterService, storage);
@@ -145,6 +155,7 @@ public class A2dpService extends ConnectableProfile {
                                         adapterService,
                                         new A2dpNativeCallback(adapterService, this)));
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
+        mActiveDeviceManager = activeDeviceManager;
         mCompanionDeviceManager = companionDeviceManager;
         mLooper = requireNonNull(looper);
         mHandler = new Handler(mLooper);
@@ -1091,9 +1102,7 @@ public class A2dpService extends ConnectableProfile {
     public void setMetadataContext(int context_type) {
         BluetoothDevice device = getActiveDevice();
         Log.w(TAG, "setMetadataContext Type: " + context_type + " for device = " + device);
-        mAdapterService
-                .getActiveDeviceManager()
-                .contextBundle(device, context_type);
+        mActiveDeviceManager.contextBundle(device, context_type);
     }
 
     /* Notifications of audio device connection/disconnection events. */
@@ -1382,9 +1391,12 @@ public class A2dpService extends ConnectableProfile {
         // Check if the device is disconnected - if unbond, remove the state machine
         if (toState == STATE_DISCONNECTED) {
             if (mAdapterService.getBondState(device) == BluetoothDevice.BOND_NONE) {
-                mAdapterService
-                        .getAvrcpTargetService()
-                        .ifPresent(avrcpTarget -> avrcpTarget.removeStoredVolumeForDevice(device));
+                if (!Flags.mainlineBetaStorage()) {
+                    mAdapterService
+                            .getAvrcpTargetService()
+                            .ifPresent(
+                                    avrcpTarget -> avrcpTarget.removeStoredVolumeForDevice(device));
+                }
                 removeStateMachine(device);
             }
         }
@@ -1395,9 +1407,7 @@ public class A2dpService extends ConnectableProfile {
                                 avrcpTarget.handleA2dpConnectionStateChanged(device, toState));
         mAdapterService.notifyProfileConnectionStateChangeToScan(mProfileId, fromState, toState);
         mAdapterService.handleProfileConnectionStateChange(mProfileId, device, fromState, toState);
-        mAdapterService
-                .getActiveDeviceManager()
-                .profileConnectionStateChanged(mProfileId, device, fromState, toState);
+        mActiveDeviceManager.profileConnectionStateChanged(mProfileId, device, fromState, toState);
         mAdapterService
                 .getSilenceDeviceManager()
                 .a2dpConnectionStateChanged(device, fromState, toState);

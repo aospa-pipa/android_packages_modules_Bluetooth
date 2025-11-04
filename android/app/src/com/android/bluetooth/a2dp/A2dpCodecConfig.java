@@ -22,11 +22,13 @@ import com.android.bluetooth.a2dp.A2dpService;
 import android.bluetooth.BluetoothCodecConfig;
 import android.bluetooth.BluetoothCodecConfig.CodecPriority;
 import android.bluetooth.BluetoothCodecStatus;
+import android.bluetooth.BluetoothCodecType;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.media.AudioManager;
+import android.os.Build;
 import android.os.SystemProperties;
 import android.util.Log;
 
@@ -59,6 +61,8 @@ class A2dpCodecConfig {
             BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
     private @CodecPriority int mA2dpSourceCodecPriorityOpus =
             BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
+    private @CodecPriority int mA2dpSourceCodecPriorityLhdcv5 =
+            BluetoothCodecConfig.CODEC_PRIORITY_DISABLED;
     private @CodecPriority int mA2dpSourceCodecPriorityAptxAdaptive =
             BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
 
@@ -327,6 +331,23 @@ class A2dpCodecConfig {
             mA2dpSourceCodecPriorityOpus = value;
         }
 
+        // LHDCv5 codec is not supported on Android 16 Baklava, the audio framework
+        // will not recognize the codec type and default to SBC as default
+        // configuration, which is often offloaded. This configuration can be overridden
+        // by setting the system property for LHDCv5 codec priority, e.g. in case SBC
+        // is not offloaded on the platform.
+        value =
+                SystemProperties.getInt(
+                        "bluetooth.a2dp.source.lhdcv5_priority.config",
+                        Build.VERSION.SDK_INT >= 37
+                                ? 5002
+                                : BluetoothCodecConfig.CODEC_PRIORITY_DISABLED);
+
+        if ((value >= BluetoothCodecConfig.CODEC_PRIORITY_DISABLED)
+                && (value < BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST)) {
+            mA2dpSourceCodecPriorityLhdcv5 = value;
+        }
+
         if(mAdapterService.isSplitA2DPSourceAPTXADAPTIVE()) {
             try {
                 value = resources.getInteger(R.integer.a2dp_source_codec_priority_aptx_adaptive);
@@ -342,8 +363,7 @@ class A2dpCodecConfig {
         }
 
         BluetoothCodecConfig codecConfig;
-        BluetoothCodecConfig[] codecConfigArray =
-                new BluetoothCodecConfig[BluetoothCodecConfig.SOURCE_CODEC_TYPE_MAX];
+        BluetoothCodecConfig[] codecConfigArray = new BluetoothCodecConfig[8];
         int codecCount = 0;
         codecConfig = new BluetoothCodecConfig.Builder()
                 .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC)
@@ -373,6 +393,13 @@ class A2dpCodecConfig {
         codecConfig = new BluetoothCodecConfig.Builder()
                 .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_OPUS)
                 .setCodecPriority(mA2dpSourceCodecPriorityOpus)
+                .build();
+        codecConfigArray[codecCount++] = codecConfig;
+        codecConfig = new BluetoothCodecConfig.Builder()
+                .setExtendedCodecType(
+                        new BluetoothCodecType(
+                                7, BluetoothCodecType.CODEC_ID_LHDCV5, "LHDCV5"))
+                .setCodecPriority(mA2dpSourceCodecPriorityLhdcv5)
                 .build();
         codecConfigArray[codecCount++] = codecConfig;
         codecConfig = new BluetoothCodecConfig.Builder()

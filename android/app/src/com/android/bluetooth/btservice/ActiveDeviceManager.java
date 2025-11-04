@@ -41,6 +41,7 @@ import android.util.ArraySet;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothMethodProxy;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.R;
 import com.android.bluetooth.a2dp.A2dpService;
@@ -103,7 +104,7 @@ import java.util.stream.Collectors;
  * device, the corresponding profile is marked as having no active device.
  */
 public class ActiveDeviceManager implements AdapterService.BluetoothStateCallback {
-    private static final String TAG = Utils.BT_PREFIX + ActiveDeviceManager.class.getSimpleName();
+    private static final String TAG = Util.BT_PREFIX + ActiveDeviceManager.class.getSimpleName();
 
     @VisibleForTesting
     static final int A2DP_HFP_SYNC_CONNECTION_TIMEOUT_MS = 5_000;

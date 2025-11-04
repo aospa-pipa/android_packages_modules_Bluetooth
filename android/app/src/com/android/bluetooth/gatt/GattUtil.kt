@@ -115,7 +115,7 @@ object GattUtil {
      * This block should be kept in sync with system/stack/gatt/gatt_api.h
      */
     @JvmStatic
-    fun gattStatusToString(status: Int) =
+    fun statusToString(status: Int) =
         when (status) {
             BluetoothGatt.GATT_SUCCESS -> "GATT_SUCCESS (0x00)"
             0x01 -> "GATT_INVALID_HANDLE (0x01)"
@@ -189,22 +189,14 @@ object GattUtil {
     }
 
     private fun <C : IInterface> StringBuilder.dumpMapDetails(map: ContextMap<C>) =
-        map.allApps.forEach { app ->
+        map.getAllApps().forEach { app ->
             append("    app_if: ${app.id}")
-            append(", appName: ${app.packageName}")
+            append(", appName: ${app.name}")
             append(", transport: ${transportToString(app.transport)}")
-            app.mAttributionTag?.let { tag -> append(", tag: $tag") }
+            app.tag?.let { tag -> append(", tag: $tag") }
             appendLine()
             map.getConnectionByApp(app.id).forEach { appendLine("      $it") }
         }
-
-    @JvmStatic
-    fun <C : IInterface> ContextMap<C>.dump() = buildString {
-        appendLine("  Entries: ${allApps.size}")
-        appendLine("  Last apps: ")
-        mLastRecords.forEach { appendLine("       $it") }
-        appendLine()
-    }
 
     @JvmStatic
     fun HandleMap.dump() = buildString {

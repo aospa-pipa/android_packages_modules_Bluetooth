@@ -18,6 +18,8 @@ package com.android.bluetooth.le_scan
 
 import android.app.PendingIntent
 import android.bluetooth.le.IScannerCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanSettings
 import android.content.AttributionSource
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -48,7 +50,7 @@ import org.mockito.kotlin.whenever
 class ScannerMapTest {
     @get:Rule val mockitoRule = MockitoRule()
 
-    @Mock private lateinit var attributionSource: AttributionSource
+    @Mock private lateinit var source: AttributionSource
     @Mock private lateinit var adapterService: AdapterService
     @Mock private lateinit var packageManager: PackageManager
     @Mock private lateinit var scannerCallback: IScannerCallback
@@ -67,12 +69,17 @@ class ScannerMapTest {
         val intent = PendingIntent.getBroadcast(context, 0, Intent(), PendingIntent.FLAG_IMMUTABLE)
         val info = ScanController.PendingIntentInfo(intent, null, null, APP_NAME, UID, PID)
         val uuid = UUID.randomUUID()
+        val scanSettings = ScanSettings.Builder().build()
+        val filters = listOf(ScanFilter.Builder().build())
         val app =
             scannerMap.addWithPendingIntent(
+                APP_NAME,
                 uuid,
                 mock(UserHandle::class.java),
-                attributionSource,
+                source,
                 info,
+                scanSettings,
+                filters,
                 adapterService,
             )
         app.id = SCANNER_ID
@@ -90,15 +97,19 @@ class ScannerMapTest {
         val uuid = UUID.randomUUID()
         val appUid = Binder.getCallingUid()
         val appPid = Binder.getCallingPid()
+        val scanSettings = ScanSettings.Builder().build()
+        val filters = listOf(ScanFilter.Builder().build())
         val app =
             scannerMap.addWithCallback(
                 appUid,
                 appPid,
                 APP_NAME,
                 uuid,
-                attributionSource,
+                source,
                 null,
                 scannerCallback,
+                scanSettings,
+                filters,
                 adapterService,
             )
         app.id = SCANNER_ID
@@ -117,15 +128,19 @@ class ScannerMapTest {
         val uuid = UUID.randomUUID()
         val appUid = 1234
         val appPid = Binder.getCallingPid()
+        val scanSettings = ScanSettings.Builder().build()
+        val filters = listOf(ScanFilter.Builder().build())
         val app =
             scannerMap.addWithCallback(
                 appUid,
                 appPid,
                 APP_NAME,
                 uuid,
-                attributionSource,
+                source,
                 null,
                 scannerCallback,
+                scanSettings,
+                filters,
                 adapterService,
             )
         app.id = SCANNER_ID
@@ -142,14 +157,18 @@ class ScannerMapTest {
         val scannerMap = ScannerMap()
         val appUid = 1234
         val appPid = Binder.getCallingPid()
+        val scanSettings = ScanSettings.Builder().build()
+        val filters = listOf(ScanFilter.Builder().build())
         scannerMap.addWithCallback(
             appUid,
             appPid,
             APP_NAME,
             UUID.randomUUID(),
-            attributionSource,
+            source,
             null,
             scannerCallback,
+            scanSettings,
+            filters,
             adapterService,
         )
         scannerMap.dump(sb, emptyMap())

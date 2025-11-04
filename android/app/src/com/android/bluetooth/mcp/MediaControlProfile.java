@@ -158,8 +158,9 @@ public class MediaControlProfile implements MediaControlServiceCallbacks {
     void onCurrentPlayerStateUpdated(boolean stateChanged, boolean metadataChanged) {
         Map<PlayerStateField, Object> state_map = new HashMap<>();
 
+        String playerName = getCurrentPlayerName();
+        Log.d(TAG, "onCurrentPlayerStateUpdated: current player is " + playerName);
         if (mMediaPlayerList.getActivePlayer() != mLastActivePlayer) {
-            String playerName = getCurrentPlayerName();
             if (playerName != null) {
                 state_map.put(PlayerStateField.PLAYER_NAME, playerName);
             }
@@ -168,6 +169,7 @@ public class MediaControlProfile implements MediaControlServiceCallbacks {
         if (stateChanged) {
             if (mCurrentData.state != null) {
                 MediaState playback_state = playerState2McsState(mCurrentData.state.getState());
+                Log.d(TAG, "onCurrentPlayerStateUpdated: media state is " + playback_state);
                 if (isLeAudioServiceAvailable()) {
                   //get incall value here
                   if (mLeAudioService.getInCall() &&  (playback_state ==  MediaState.PLAYING)){

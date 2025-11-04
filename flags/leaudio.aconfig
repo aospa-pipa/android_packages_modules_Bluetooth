@@ -32,6 +32,16 @@ flag {
 }
 
 flag {
+    name: "csis_quirk_for_single_device_with_sirk_all_zeros"
+    namespace: "bluetooth"
+    description: "Allow LeAudio device with invalid CSIS when set size is 1 and sirk is ALL zeros"
+    bug: "447588233"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_dynamic_direction_opening"
     namespace: "bluetooth"
     description: "Enable direction only when needed"
@@ -46,6 +56,16 @@ flag {
     namespace: "bluetooth"
     description: "Change how LE Audio profiles are configured and enabled"
     bug: "379178585"
+}
+
+flag {
+    name: "leaudio_fix_allocation_in_codec_config"
+    namespace: "bluetooth"
+    description: "Fix not setting allocation LTV in CodecConfig for mono allication"
+    bug: "454311602"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
@@ -407,6 +427,26 @@ flag {
     namespace: "bluetooth"
     description: "Use burst buffer with pool rotation"
     bug: "453508454"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "coordinated_remove_bond"
+    namespace: "bluetooth"
+    description: "Remove all coordinated set members when any member is requested to be removed"
+    bug: "454419225"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_sw_config_quality_logic"
+    namespace: "bluetooth"
+    description: "Improve broadcast config selection by using quality-based logic instead of context type"
+    bug: "450213446"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
