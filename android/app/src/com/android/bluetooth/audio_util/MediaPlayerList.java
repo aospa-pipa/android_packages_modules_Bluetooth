@@ -826,7 +826,7 @@ public class MediaPlayerList {
         int previousActivePlayerId = mActivePlayerId;
         MediaPlayerWrapper previousPlayer = getActivePlayer();
 
-        Log.d(TAG, "setActivePlayer: playerId: " + playerId + ", previousActivePlayerId:" +
+        Log.d(TAG, "setActivePlayer(): playerId: " + playerId + ", previousActivePlayerId:" +
                 previousActivePlayerId);
 
         if (playerId == previousActivePlayerId) {
@@ -842,7 +842,7 @@ public class MediaPlayerList {
 
         mActivePlayerId = playerId;
 
-        Log.d(TAG, "setActivePlayer: mActivePlayerId: " + mActivePlayerId +
+        Log.d(TAG, "setActivePlayer(): mActivePlayerId: " + mActivePlayerId +
                    ", mAddressedPlayerId:" + mAddressedPlayerId);
 
         if (Utils.isPtsTestMode()) {
@@ -850,7 +850,7 @@ public class MediaPlayerList {
         } else if (Util.areMultiplePlayersSupported()) {
             if (mActivePlayerId != mAddressedPlayerId) {
                 mAddressedPlayerId = mActivePlayerId;
-                Log.d(TAG, "setActivePlayer AddressedPlayer changed to " + mAddressedPlayerId);
+                Log.d(TAG, "setActivePlayer(): AddressedPlayer changed to " + mAddressedPlayerId);
                 sendFolderUpdate(false, true, false);
             }
         }
@@ -874,9 +874,11 @@ public class MediaPlayerList {
             return;
         }
 
-        if (mAudioPlaybackIsActive) {
+        if (data != null && mAudioPlaybackIsActive) {
             data.state = mCurrMediaData.state;
-            Log.d(TAG, "setActivePlayer mAudioPlaybackIsActive=true, state=" + data.state);
+            Log.d(TAG, "setActivePlayer(): mAudioPlaybackIsActive=true, state=" + data.state);
+        } else {
+            Log.w(TAG, "setActivePlayer(): data is null or mAudioPlaybackIsActive=false");
         }
         sendMediaUpdate(data);
     }
