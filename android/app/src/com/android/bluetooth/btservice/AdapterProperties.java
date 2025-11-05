@@ -52,6 +52,7 @@ import android.util.Pair;
 
 import androidx.annotation.VisibleForTesting;
 
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.flags.Flags;
@@ -66,7 +67,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class AdapterProperties {
-    private static final String TAG = Utils.BT_PREFIX + AdapterProperties.class.getSimpleName();
+    private static final String TAG = Util.BT_PREFIX + AdapterProperties.class.getSimpleName();
 
     private static final String MAX_CONNECTED_AUDIO_DEVICES_PROPERTY =
             "persist.bluetooth.maxconnectedaudiodevices";
@@ -107,8 +108,7 @@ public class AdapterProperties {
     private final RemoteDevices mRemoteDevices;
     private final Handler mHandler;
 
-    // TODO(b/447313374): Remove when ignore_redundant_discovery_if_same_state is shipped.
-    private boolean mDiscovering;
+    private boolean mNativeDiscovering;
     private long mDiscoveryEndMs; // < Time (ms since epoch) that discovery ended or will end.
     // TODO - all hw capabilities to be exposed as a class
     private int mNumOfAdvertisementInstancesSupported;
@@ -506,9 +506,8 @@ public class AdapterProperties {
         return mDiscoveryEndMs;
     }
 
-    // TODO(b/447313374): Remove when ignore_redundant_discovery_if_same_state is shipped.
-    boolean isDiscovering() {
-        return mDiscovering;
+    boolean isNativeDiscovering() {
+        return mNativeDiscovering;
     }
 
     void updateOnProfileConnectionChanged(
@@ -949,18 +948,14 @@ public class AdapterProperties {
         synchronized (mObject) {
             Intent intent;
             if (state == AbstractionLayer.BT_DISCOVERY_STOPPED) {
-                if (!Flags.ignoreRedundantDiscoveryIfSameState()) {
-                    mDiscovering = false;
-                }
-                mService.clearDiscoveringPackages();
+                mNativeDiscovering = false;
+                mService.clearDiscoveryData();
                 mDiscoveryEndMs = System.currentTimeMillis();
                 intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
                 mService.sendBroadcast(
                         intent, BLUETOOTH_SCAN, getBroadcastOptionsForDiscoveryFinished());
             } else if (state == AbstractionLayer.BT_DISCOVERY_STARTED) {
-                if (!Flags.ignoreRedundantDiscoveryIfSameState()) {
-                    mDiscovering = true;
-                }
+                mNativeDiscovering = true;
                 mDiscoveryEndMs = System.currentTimeMillis() + DEFAULT_DISCOVERY_TIMEOUT_MS;
                 intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
                 mService.sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());

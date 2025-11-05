@@ -91,6 +91,7 @@ import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.bass_client.BassClientService;
 import com.android.bluetooth.bass_client.BassClientService.SetBigChannelMapClassificationAction;
+import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.Config;
 import com.android.bluetooth.btservice.MetricsLogger;
@@ -176,6 +177,7 @@ public class LeAudioService extends ConnectableProfile {
     private final ArrayDeque<BluetoothLeBroadcastSettings> mCreateBroadcastQueue =
             new ArrayDeque<>();
 
+    private final ActiveDeviceManager mActiveDeviceManager;
     private final LeAudioNativeInterface mNativeInterface;
     private final HandlerThread mStateMachinesThread;
     private final LeAudioCodecConfig mLeAudioCodecConfig;
@@ -244,8 +246,11 @@ public class LeAudioService extends ConnectableProfile {
     final RemoteCallbackList<IBluetoothLeAudioCallback> mLeAudioCallbacks =
             new RemoteCallbackList<>();
 
-    public LeAudioService(AdapterService adapterService, BluetoothStorageManager storage) {
-        this(adapterService, storage, null, null, null);
+    public LeAudioService(
+            AdapterService adapterService,
+            BluetoothStorageManager storage,
+            ActiveDeviceManager activeDeviceManager) {
+        this(adapterService, storage, null, null, activeDeviceManager, null);
     }
 
     private SharedPreferences getLeAudioCodecMap() {
@@ -256,14 +261,16 @@ public class LeAudioService extends ConnectableProfile {
     LeAudioService(
             AdapterService adapterService,
             BluetoothStorageManager storage,
-            Looper looper,
             LeAudioNativeInterface nativeInterface,
-            LeAudioBroadcasterNativeInterface leAudioBroadcasterNativeInterface) {
+            LeAudioBroadcasterNativeInterface leAudioBroadcasterNativeInterface,
+            ActiveDeviceManager activeDeviceManager,
+            Looper looper) {
         super(BluetoothProfile.LE_AUDIO, adapterService, storage);
         mNativeInterface =
                 requireNonNullElseGet(
                         nativeInterface, () -> new LeAudioNativeInterface(adapterService, this));
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
+        mActiveDeviceManager = activeDeviceManager;
 
         if (looper == null) {
             mHandler = new Handler(Looper.getMainLooper());
@@ -921,7 +928,10 @@ public class LeAudioService extends ConnectableProfile {
 
             BluetoothDevice device =
                     getStorage().getLeastRecentlyConnectedDeviceInList(availableDevices);
-            updateFallbackUnicastGroupIdForBroadcast(getDeviceDescriptor(device).mGroupId);
+            LeAudioDeviceDescriptor descriptor = getDeviceDescriptor(device);
+            int targetGroupId =
+                    descriptor != null ? descriptor.mGroupId : LE_AUDIO_GROUP_ID_INVALID;
+            updateFallbackUnicastGroupIdForBroadcast(targetGroupId);
             return;
         }
 
@@ -2082,9 +2092,7 @@ public class LeAudioService extends ConnectableProfile {
 
         mAdapterService.notifyProfileConnectionStateChangeToScan(mProfileId, prevState, newState);
         mAdapterService.handleProfileConnectionStateChange(mProfileId, device, prevState, newState);
-        mAdapterService
-                .getActiveDeviceManager()
-                .profileConnectionStateChanged(mProfileId, device, prevState, newState);
+        mActiveDeviceManager.profileConnectionStateChanged(mProfileId, device, prevState, newState);
         mAdapterService.updateProfileConnectionAdapterProperties(
                 device, mProfileId, newState, prevState);
 
@@ -2266,10 +2274,30 @@ public class LeAudioService extends ConnectableProfile {
 
             mScannerId = SCANNER_INITIALIZING;
             final var scanController = mAdapterService.getBluetoothScanController();
+            var source = getAttributionSource();
+
+            if (Flags.scanRegisterAndStart()) {
+                ScanFilter filter =
+                        new ScanFilter.Builder()
+                                .setServiceData(
+                                        BluetoothUuid.CAP, CAP_TARGETED_ANNOUNCEMENT_PAYLOAD)
+                                .build();
+                ScanSettings settings =
+                        new ScanSettings.Builder()
+                                .setLegacy(false)
+                                .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                                .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+                                .setPhy(BluetoothDevice.PHY_LE_1M)
+                                .build();
+                scanController.doOnScanThread(
+                        () ->
+                                scanController.registerAndStartScanInternal(
+                                        this, source, settings, List.of(filter)));
+                return;
+            }
+
             scanController.doOnScanThread(
-                    () ->
-                            scanController.registerScannerInternal(
-                                    this, null, getAttributionSource()));
+                    () -> scanController.registerScannerInternal(this, null, source));
         }
 
         synchronized void stopBackgroundScan() {
@@ -2295,6 +2323,11 @@ public class LeAudioService extends ConnectableProfile {
                 return;
             }
             mScannerId = scannerId;
+
+            if (Flags.scanRegisterAndStart()) {
+                // `ScanController#onScannerRegistered` starts the scan for us
+                return;
+            }
 
             ScanFilter filter =
                     new ScanFilter.Builder()
@@ -6266,9 +6299,7 @@ public class LeAudioService extends ConnectableProfile {
     public void setMetadataContext(int context_type) {
         BluetoothDevice btDevice = mActiveAudioInDevice;
         Log.w(TAG, "setMetadataContext Type: " + context_type + " for device" + btDevice);
-        mAdapterService
-                .getActiveDeviceManager()
-                .contextBundle(btDevice, context_type);
+        mActiveDeviceManager.contextBundle(btDevice, context_type);
     }
 
     /**

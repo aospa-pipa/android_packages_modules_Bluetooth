@@ -38,6 +38,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import android.app.AppOpsManager;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.IPeriodicAdvertisingCallback;
@@ -84,7 +85,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -96,7 +96,7 @@ public class ScanControllerTest {
 
     @Rule public final SetFlagsRule mSetFlagsRule;
 
-    @Mock private AttributionSource mAttributionSource;
+    @Mock private AttributionSource mSource;
     @Mock private AdapterService mAdapterService;
     @Mock private ScanManager mScanManager;
     @Mock private ScanNativeInterface mScanNativeInterface;
@@ -132,6 +132,7 @@ public class ScanControllerTest {
 
         final Context context = InstrumentationRegistry.getInstrumentation().getContext();
         doReturn(context.getPackageManager()).when(mAdapterService).getPackageManager();
+        doReturn(context.getPackageName()).when(mSource).getPackageName();
         doReturn(context.getSharedPreferences("ScanControllerTest", Context.MODE_PRIVATE))
                 .when(mAdapterService)
                 .getSharedPreferences(anyString(), anyInt());
@@ -140,6 +141,7 @@ public class ScanControllerTest {
         mockGetRemoteDevice(mAdapterService, mDevice);
         mockGetBluetoothManager(mAdapterService);
         mockGetSystemService(mAdapterService, LocationManager.class);
+        mockGetSystemService(mAdapterService, AppOpsManager.class);
 
         mLooper = new TestLooper();
         mScanController =
@@ -192,7 +194,7 @@ public class ScanControllerTest {
         scanClient.setHasNetworkSettingsPermission(true);
         AppScanStats appScanStats = mock(AppScanStats.class);
         doReturn(appScanStats).when(mApp).getAppScanStats();
-        scanClient.setAppScanStats(Optional.of(appScanStats));
+        scanClient.setAppScanStats(appScanStats);
         var callback = mock(IScannerCallback.class);
         doReturn(callback).when(mApp).getCallback();
         Set<ScanClient> scanClientSet = Collections.singleton(scanClient);
@@ -228,6 +230,9 @@ public class ScanControllerTest {
         UUID uuid = new UUID(uuidMsb, uuidLsb);
         var callback = mock(IScannerCallback.class);
         doReturn(callback).when(mApp).getCallback();
+        doReturn(new ScanSettings.Builder().build()).when(mApp).getSettings();
+        doReturn(new ArrayList<ScanFilter>()).when(mApp).getFilters();
+        doReturn(mSource).when(mApp).getSource();
         doReturn(mApp).when(mScannerMap).getByUuid(uuid);
 
         mScanController.onScannerRegistered(TEST_STATUS, TEST_SCANNER_ID, uuid);
@@ -382,14 +387,14 @@ public class ScanControllerTest {
         AppScanStats appScanStats = mock(AppScanStats.class);
         doReturn(appScanStats).when(mScannerMap).getAppScanStatsByUid(Binder.getCallingUid());
 
-        mScanController.registerScanner(callback, workSource, mAttributionSource);
+        mScanController.registerScanner(callback, workSource, mSource);
         verify(mScannerMap)
                 .addWithCallback(
                         anyInt(),
                         anyInt(),
                         anyString(),
                         any(),
-                        eq(mAttributionSource),
+                        eq(mSource),
                         eq(workSource),
                         eq(callback),
                         any());

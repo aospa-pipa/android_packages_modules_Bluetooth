@@ -21,6 +21,7 @@ import static android.bluetooth.BluetoothDevice.TRANSPORT_AUTO;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.OobData;
 
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 
 import java.io.FileDescriptor;
@@ -28,8 +29,7 @@ import java.lang.annotation.Native;
 
 /** Native interface to be used by AdapterService */
 public class AdapterNativeInterface {
-    private static final String TAG =
-            Utils.BT_PREFIX + AdapterNativeInterface.class.getSimpleName();
+    private static final String TAG = Util.BT_PREFIX + AdapterNativeInterface.class.getSimpleName();
 
     @Native private AdapterNativeCallback mNativeCallback;
 
@@ -60,8 +60,8 @@ public class AdapterNativeInterface {
         cleanupNative();
     }
 
-    boolean enable() {
-        return enableNative();
+    boolean enable(String localName) {
+        return enableNative(localName);
     }
 
     boolean disable() {
@@ -306,7 +306,7 @@ public class AdapterNativeInterface {
 
     private native void cleanupNative();
 
-    private native boolean enableNative();
+    private native boolean enableNative(String localName);
 
     private native boolean disableNative();
 
