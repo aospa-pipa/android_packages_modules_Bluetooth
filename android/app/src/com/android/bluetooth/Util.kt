@@ -16,6 +16,7 @@
 
 package com.android.bluetooth
 
+import android.bluetooth.BluetoothDevice
 import com.android.bluetooth.btservice.AdapterService
 
 object Util {
@@ -24,4 +25,36 @@ object Util {
     @JvmStatic
     fun AdapterService.appNameOrUnknown(uid: Int) =
         packageManager.getNameForUid(uid) ?: "Unknown App (UID: $uid)"
+
+    @JvmStatic
+    fun addressTypeToString(addressType: Int) =
+        when (addressType) {
+            BluetoothDevice.ADDRESS_TYPE_PUBLIC -> "Public "
+            BluetoothDevice.ADDRESS_TYPE_RANDOM -> "Random "
+            else -> "Unknown"
+        }
+
+    @JvmStatic
+    fun deviceTypeToString(deviceType: Int) =
+        when (deviceType) {
+            BluetoothDevice.DEVICE_TYPE_UNKNOWN -> " ???? "
+            BluetoothDevice.DEVICE_TYPE_CLASSIC -> "BR/EDR"
+            BluetoothDevice.DEVICE_TYPE_LE -> "  LE  "
+            BluetoothDevice.DEVICE_TYPE_DUAL -> " DUAL "
+            else -> "Invalid device type: $deviceType"
+        }
+
+    @JvmInline
+    internal value class Transport(val value: Int) {
+        override fun toString() = transportToString(value)
+    }
+
+    @JvmStatic
+    fun transportToString(transport: Int) =
+        when (transport) {
+            BluetoothDevice.TRANSPORT_AUTO -> "AUTO"
+            BluetoothDevice.TRANSPORT_BREDR -> "BR/EDR"
+            BluetoothDevice.TRANSPORT_LE -> "LE"
+            else -> "Unknown transport ($transport)"
+        }
 }

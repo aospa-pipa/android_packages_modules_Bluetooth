@@ -368,7 +368,7 @@ void btif_storage_remove_enc_key_material(const RawAddress* remote_bd_addr);
  *                  false otherwise
  *
  ******************************************************************************/
-bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr);
+bool btif_storage_is_restricted_device(RawAddress remote_bd_addr);
 
 /*******************************************************************************
  *

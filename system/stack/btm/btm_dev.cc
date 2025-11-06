@@ -191,7 +191,7 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
   btm_sec_clear_ble_keys(p_device);
   wipe_secrets_and_remove(p_device);
   /* Tell controller to get rid of the link key, if it has one stored */
-  BTM_DeleteStoredLinkKey(&bda, NULL);
+  btm_sec_hci_delete_stored_link_key(bda);
   log::info("{} complete", bd_addr);
   BTM_LogHistory(kBtmLogTag, bd_addr, "Device removed",
                  std::format("device_type:{} bond_type:{}", DeviceTypeText(device_type),
@@ -806,6 +806,11 @@ BtmDevice* btm_sec_allocate_dev_rec(void) {
     p_device = static_cast<BtmDevice*>(osi_calloc(sizeof(BtmDevice)));
     list_append(btm_sec_cb.sec_dev_rec, p_device);
   } else {
+    if (!btm_sec_cb.IsSecCBInitialized()) {
+      log::warn("Security CB is not initialized");
+      return nullptr;
+    }
+
     for (BtmDevice& device : btm_sec_cb.device_records) {
       if (!device.IsInitialized()) {
         p_device = &device;

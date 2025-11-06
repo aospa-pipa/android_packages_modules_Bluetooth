@@ -187,16 +187,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for connection state");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onConnectionStateChanged, (jint)state,
-                                 addr.get());
+                                 jaddr.get());
   }
 
   void OnGroupStatus(int group_id, GroupStatus group_status) override {
@@ -222,15 +215,8 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
-    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onGroupNodeStatus, addr.get(),
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
+    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onGroupNodeStatus, jaddr.get(),
                                  (jint)group_id, (jint)node_status);
   }
 
@@ -263,16 +249,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     jint jni_sink_audio_location = sink_audio_location ? sink_audio_location->to_ulong() : -1;
-    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSinkAudioLocationAvailable, addr.get(),
+    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSinkAudioLocationAvailable, jaddr.get(),
                                  jni_sink_audio_location);
   }
 
@@ -357,16 +336,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onHealthBasedRecommendationAction,
-                                 addr.get(), (jint)action);
+                                 jaddr.get(), (jint)action);
   }
 
   void OnHealthBasedGroupRecommendationAction(

@@ -355,64 +355,6 @@ public class ScanController {
         mScanManager.setAptXLowLatencyMode(enabled);
     }
 
-    /**************************************************************************
-     * Callback functions - CLIENT
-     *************************************************************************/
-
-    // EN format defined here:
-    // https://blog.google/documents/70/Exposure_Notification_-_Bluetooth_Specification_v1.2.2.pdf
-    private static final byte[] EXPOSURE_NOTIFICATION_FLAGS_PREAMBLE =
-            new byte[] {
-                // size 2, flag field, flags byte (value is not important)
-                (byte) 0x02, (byte) 0x01
-            };
-
-    private static final int EXPOSURE_NOTIFICATION_FLAGS_LENGTH = 0x2 + 1;
-    private static final byte[] EXPOSURE_NOTIFICATION_PAYLOAD_PREAMBLE =
-            new byte[] {
-                // size 3, complete 16 bit UUID, EN UUID
-                (byte) 0x03, (byte) 0x03, (byte) 0x6F, (byte) 0xFD,
-                // size 23, data for 16 bit UUID, EN UUID
-                (byte) 0x17, (byte) 0x16, (byte) 0x6F, (byte) 0xFD,
-                // ...payload
-            };
-    private static final int EXPOSURE_NOTIFICATION_PAYLOAD_LENGTH = 0x03 + 0x17 + 2;
-
-    private static boolean arrayStartsWith(byte[] array, byte[] prefix) {
-        if (array.length < prefix.length) {
-            return false;
-        }
-        for (int i = 0; i < prefix.length; i++) {
-            if (prefix[i] != array[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static ScanResult getSanitizedExposureNotification(ScanResult result) {
-        ScanRecord record = result.getScanRecord();
-        // Remove the flags part of the payload, if present
-        if (record.getBytes().length > EXPOSURE_NOTIFICATION_FLAGS_LENGTH
-                && arrayStartsWith(record.getBytes(), EXPOSURE_NOTIFICATION_FLAGS_PREAMBLE)) {
-            record =
-                    ScanRecord.parseFromBytes(
-                            Arrays.copyOfRange(
-                                    record.getBytes(),
-                                    EXPOSURE_NOTIFICATION_FLAGS_LENGTH,
-                                    record.getBytes().length));
-        }
-
-        if (record.getBytes().length != EXPOSURE_NOTIFICATION_PAYLOAD_LENGTH) {
-            return null;
-        }
-        if (!arrayStartsWith(record.getBytes(), EXPOSURE_NOTIFICATION_PAYLOAD_PREAMBLE)) {
-            return null;
-        }
-
-        return new ScanResult(null, 0, 0, 0, 0, 0, result.getRssi(), 0, record, 0);
-    }
-
     /** Callback method for a scan result. */
     void onScanResult(
             int eventType,
@@ -556,7 +498,7 @@ public class ScanController {
                 }
             }
             if (!hasPermission && client.isEligibleForSanitizedExposureNotification()) {
-                ScanResult sanitized = getSanitizedExposureNotification(result);
+                ScanResult sanitized = ScanUtil.getSanitizedExposureNotification(scanRecord, rssi);
                 if (sanitized != null) {
                     hasPermission = true;
                     result = sanitized;
@@ -734,6 +676,13 @@ public class ScanController {
         return false;
     }
 
+    private void handleDeadScanClient(int scannerId) {
+        var client = findScanClientById(scannerId);
+        if (client != null) {
+            handleDeadScanClient(client);
+        }
+    }
+
     private void handleDeadScanClient(ScanClient client) {
         if (client.getAppDied()) {
             Log.w(TAG, "Already dead " + client);
@@ -752,15 +701,6 @@ public class ScanController {
         }
         for (ScanClient client : mScanManager.getBatchScanQueue()) {
             if (client.getScannerId() == clientIf) {
-                return client;
-            }
-        }
-        return null;
-    }
-
-    private ScanClient findBatchScanClientById(int scannerId) {
-        for (ScanClient client : mScanManager.getBatchScanQueue()) {
-            if (client.getScannerId() == scannerId) {
                 return client;
             }
         }
@@ -790,7 +730,7 @@ public class ScanController {
                 return;
             }
 
-            ScanClient client = findBatchScanClientById(scannerId);
+            var client = ScanUtil.findById(mScanManager.getBatchScanQueue(), scannerId);
             if (client == null) {
                 return;
             }
@@ -976,10 +916,7 @@ public class ScanController {
                 sendErrorByPendingIntent(app.getInfo(), errorCode);
             } catch (PendingIntent.CanceledException e) {
                 Log.e(TAG, "Error sending error code via PendingIntent: " + e);
-                ScanClient client = findScanClientById(scannerId);
-                if (client != null) {
-                    handleDeadScanClient(client);
-                }
+                handleDeadScanClient(scannerId);
             }
         }
     }
@@ -1030,10 +967,6 @@ public class ScanController {
             mIsMsftAdvMonitorEnabled = enable;
         }
     }
-
-    /**************************************************************************
-     * Scan functions - Shared CLIENT/SERVER
-     *************************************************************************/
 
     // TODO(b/455057044) Delete on flag cleanup
     void registerScanner(
@@ -1188,10 +1121,9 @@ public class ScanController {
                 callingPackage.equals(mExposureNotificationPackage));
         scanClient.setHasDisavowedLocation(
                 Utils.hasDisavowedLocationForScan(mAdapterService, source, mTestModeEnabled));
-        scanClient.setQApp(
-                checkCallerTargetSdk(mAdapterService, callingPackage, Build.VERSION_CODES.Q));
+        var isQApp = checkCallerTargetSdk(mAdapterService, callingPackage, Build.VERSION_CODES.Q);
         if (!scanClient.getHasDisavowedLocation()) {
-            if (scanClient.isQApp()) {
+            if (isQApp) {
                 scanClient.setHasLocationPermission(
                         Utils.checkCallerHasFineLocation(
                                 mAdapterService, source, scanClient.getUserHandle()));
@@ -1209,7 +1141,7 @@ public class ScanController {
                 Utils.checkCallerHasScanWithoutLocationPermission(mAdapterService));
         scanClient.setAssociatedDevices(getAssociatedDevices(callingPackage));
 
-        startScan(scannerId, settings, filters, scanClient);
+        dispatchStartScan(scannerId, settings, filters, scanClient);
     }
 
     // TODO(b/455057044) Make private on cleanup
@@ -1225,7 +1157,6 @@ public class ScanController {
                         filters,
                         Binder.getCallingUserHandle(),
                         true);
-        scanClient.setQApp(true);
         scanClient.setHasNetworkSettingsPermission(
                 Utils.checkCallerHasNetworkSettingsPermission(mAdapterService));
         scanClient.setHasNetworkSetupWizardPermission(
@@ -1234,10 +1165,10 @@ public class ScanController {
                 Utils.checkCallerHasScanWithoutLocationPermission(mAdapterService));
         scanClient.setAssociatedDevices(Collections.emptyList());
 
-        startScan(scannerId, settings, filters, scanClient);
+        dispatchStartScan(scannerId, settings, filters, scanClient);
     }
 
-    private void startScan(
+    private void dispatchStartScan(
             int scannerId, ScanSettings settings, List<ScanFilter> filters, ScanClient scanClient) {
         var appScanStats = mScannerMap.getAppScanStatsById(scannerId);
         if (appScanStats != null) {
@@ -1348,8 +1279,6 @@ public class ScanController {
                         piInfo.filters,
                         app.getUserHandle());
         scanClient.setHasLocationPermission(app.getHasLocationPermission());
-        scanClient.setQApp(
-                checkCallerTargetSdk(mAdapterService, app.getName(), Build.VERSION_CODES.Q));
         scanClient.setEligibleForSanitizedExposureNotification(
                 app.getEligibleForSanitizedExposureNotification());
         scanClient.setHasNetworkSettingsPermission(app.getHasNetworkSettingsPermission());
@@ -1379,12 +1308,12 @@ public class ScanController {
 
     void flushPendingBatchResults(int scannerId) {
         enforceScanThread();
-        final var scanClient = findBatchScanClientById(scannerId);
-        if (scanClient == null) {
+        var client = ScanUtil.findById(mScanManager.getBatchScanQueue(), scannerId);
+        if (client == null) {
             Log.e(TAG, "Unexpectedly cannot find batch scan client for scannerId=" + scannerId);
             return;
         }
-        mScanManager.flushBatchScanResults(scanClient);
+        mScanManager.flushBatchScanResults(client);
     }
 
     public void stopScan(int scannerId) {
@@ -1477,18 +1406,8 @@ public class ScanController {
 
         @Override
         public void binderDied() {
-            Log.d(
-                    TAG,
-                    "binderDied(): "
-                            + ("Unregistering scanner for=" + mPackageName)
-                            + (" with scannerId=" + mScannerId));
-            doOnScanThread(
-                    () -> {
-                        ScanClient client = findScanClientById(mScannerId);
-                        if (client != null) {
-                            handleDeadScanClient(client);
-                        }
-                    });
+            Log.d(TAG, "binderDied(): Unregister scannerId=" + mScannerId + " for " + mPackageName);
+            doOnScanThread(() -> handleDeadScanClient(mScannerId));
         }
     }
 

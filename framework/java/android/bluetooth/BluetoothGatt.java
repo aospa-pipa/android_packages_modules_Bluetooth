@@ -72,7 +72,6 @@ import android.bluetooth.annotations.RequiresBluetoothConnectPermission;
 import android.bluetooth.annotations.RequiresLegacyBluetoothPermission;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.AttributionSource;
-import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.ParcelUuid;
@@ -88,6 +87,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import android.annotation.SystemApi;
 
 /**
@@ -107,7 +107,7 @@ public final class BluetoothGatt implements BluetoothProfile {
 
     private final IBluetoothGatt mService;
     private volatile BluetoothGattCallback mCallback;
-    private final Handler mHandler;
+    private final Executor mExecutor;
     private final BluetoothDevice mDevice;
     private final boolean mAutoConnect;
     private boolean mClientRegistered;
@@ -126,10 +126,8 @@ public final class BluetoothGatt implements BluetoothProfile {
 
     private final int mTransport;
 
-    private final int mPhy;
     private final boolean mOpportunistic;
     private final AttributionSource mAttributionSource;
-
     private static final int AUTH_RETRY_STATE_IDLE = 0;
     private static final int AUTH_RETRY_STATE_MITM = 2;
 
@@ -289,18 +287,7 @@ public final class BluetoothGatt implements BluetoothProfile {
          * immediately if no Handler was provided.
          */
         private void runOrQueueCallback(final Runnable cb) {
-            if (mHandler != null) {
-                executeFromBinder(mHandler::post, cb);
-                return;
-            }
-            final long identity = Binder.clearCallingIdentity();
-            try {
-                cb.run();
-            } catch (Exception ex) {
-                Log.w(TAG, "Unhandled exception in callback", ex);
-            } finally {
-                Binder.restoreCallingIdentity(identity);
-            }
+            executeFromBinder(mExecutor, cb);
         }
 
         /** Application interface registered - app is ready to go */
@@ -347,7 +334,6 @@ public final class BluetoothGatt implements BluetoothProfile {
                         !mAutoConnect,
                         mTransport,
                         mOpportunistic,
-                        mPhy,
                         mAttributionSource);
             } catch (RemoteException e) {
                 Log.e(TAG, "", e);
@@ -961,22 +947,16 @@ public final class BluetoothGatt implements BluetoothProfile {
     BluetoothGatt(
             @NonNull IBluetoothGatt iGatt,
             @NonNull BluetoothDevice device,
-            int transport,
-            boolean opportunistic,
-            int phy,
             AttributionSource source,
-            boolean autoConnect,
-            BluetoothGattCallback callback,
-            Handler handler) {
+            BluetoothGattConnectionSettings gattConnectionSettings) {
         mService = iGatt;
         mDevice = device;
-        mTransport = transport;
-        mAutoConnect = autoConnect;
-        mPhy = phy;
-        mOpportunistic = opportunistic;
+        mTransport = gattConnectionSettings.getTransport();
+        mAutoConnect = gattConnectionSettings.isAutoConnectEnabled();
+        mOpportunistic = gattConnectionSettings.isOpportunisticEnabled();
         mAttributionSource = source;
-        mCallback = callback;
-        mHandler = handler;
+        mCallback = gattConnectionSettings.getBluetoothGattCallback();
+        mExecutor = gattConnectionSettings.getBluetoothGattCallbackExecutor();
         UUID uuid = UUID.randomUUID();
         Log.d(TAG, "BluetoothGatt() UUID=" + uuid);
         try {
@@ -1159,7 +1139,6 @@ public final class BluetoothGatt implements BluetoothProfile {
                     !mAutoConnect,
                     mTransport,
                     mOpportunistic,
-                    mPhy,
                     mAttributionSource);
             return true;
         } catch (RemoteException e) {

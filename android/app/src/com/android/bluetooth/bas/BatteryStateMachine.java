@@ -185,8 +185,8 @@ public class BatteryStateMachine extends StateMachine {
                         TRANSPORT_LE,
                         /* opportunistic= */ true,
                         PHY_LE_1M_MASK | PHY_LE_2M_MASK,
-                        getHandler(),
-                        mGattCallback);
+                        mGattCallback,
+                        getHandler()::post);
         return mBluetoothGatt != null;
     }
 
