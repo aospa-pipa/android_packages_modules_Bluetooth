@@ -7416,11 +7416,11 @@ public:
         }
         LeAudioDeviceGroup* group = aseGroups_.FindById(leAudioDevice->group_id_);
 
-        if (event->max_pdu_mtos > 0) {
+        if (event->max_payload_mtos > 0) {
           group->SetTransportLatency(bluetooth::le_audio::types::kLeAudioDirectionSink,
                                      event->trans_lat_mtos);
         }
-        if (event->max_pdu_stom > 0) {
+        if (event->max_payload_stom > 0) {
           group->SetTransportLatency(bluetooth::le_audio::types::kLeAudioDirectionSource,
                                      event->trans_lat_stom);
         }

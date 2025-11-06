@@ -582,8 +582,8 @@ protected:
                     evt.bn_stom = 0;
                     evt.ft_mtos = 0;
                     evt.ft_stom = 0;
-                    evt.max_pdu_mtos = 0;
-                    evt.max_pdu_stom = 0;
+                    evt.max_payload_mtos = 0;
+                    evt.max_payload_stom = 0;
                     evt.iso_itv = 0;
 
                     LeAudioGroupStateMachine::Get()->ProcessHciNotifCisEstablished(

@@ -795,8 +795,8 @@ struct iso_impl {
     STREAM_TO_UINT8(evt.bn_stom, data);
     STREAM_TO_UINT8(evt.ft_mtos, data);
     STREAM_TO_UINT8(evt.ft_stom, data);
-    STREAM_TO_UINT16(evt.max_pdu_mtos, data);
-    STREAM_TO_UINT16(evt.max_pdu_stom, data);
+    STREAM_TO_UINT16(evt.max_payload_mtos, data);
+    STREAM_TO_UINT16(evt.max_payload_stom, data);
     STREAM_TO_UINT16(evt.iso_itv, data);
     // New parameters from v4 of LE CIS Established event
     // TODO: Remove this when corestack adds V4 function separately
