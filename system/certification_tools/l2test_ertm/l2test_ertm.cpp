@@ -656,7 +656,8 @@ void bdt_enable(void) {
     printf("Bluetooth is already enabled\n");
     return;
   }
-  status = (bt_status_t)sBtInterface->enable();
+  std::string toolName = "l2cap_tool";
+  status = (bt_status_t)sBtInterface->enable(std::move(toolName));
   return;
 }
 
