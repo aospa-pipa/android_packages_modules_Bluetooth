@@ -229,6 +229,9 @@ public class AdapterProperties {
     }
 
     String getName() {
+        if (Flags.setNameInSystemServer()) {
+            throw new IllegalStateException("setNameInSystemServer is enabled");
+        }
         return mName;
     }
 
@@ -238,6 +241,9 @@ public class AdapterProperties {
      * @param name the name to set
      */
     boolean setName(String name) {
+        if (Flags.setNameInSystemServer()) {
+            throw new IllegalStateException("setNameInSystemServer is enabled");
+        }
         synchronized (mObject) {
             return mService.getNative()
                     .setAdapterProperty(
@@ -717,6 +723,9 @@ public class AdapterProperties {
             synchronized (mObject) {
                 switch (type) {
                     case AbstractionLayer.BT_PROPERTY_BDNAME -> {
+                        if (Flags.setNameInSystemServer()) {
+                            throw new IllegalStateException("setNameInSystemServer is enabled");
+                        }
                         String name = new String(val);
                         if (name.equals(mName)) {
                             debugLog("Name already set: " + mName);
@@ -781,7 +790,7 @@ public class AdapterProperties {
             debugLog(
                     "updateBondedDevices: Add device: "
                             + BluetoothUtils.toAnonymizedAddress(address)
-                            + ("[" + Utils.addressTypeToString(addressType) + "]"));
+                            + ("[" + Util.addressTypeToString(addressType) + "]"));
 
             BluetoothDevice device =
                     Flags.retainAddressType()
@@ -982,7 +991,11 @@ public class AdapterProperties {
 
     protected void dump(PrintWriter writer) {
         writer.println(TAG);
-        writer.println("  " + "Name: " + getName());
+        if (Flags.setNameInSystemServer()) {
+            writer.println("  " + "Name: " + mService.getName());
+        } else {
+            writer.println("  " + "Name: " + getName());
+        }
         writer.println("  " + "Address: " + Utils.getRedactedAddressStringFromByte(mAddress));
         writer.println("  " + "ConnectionState: " + dumpConnectionState(getConnectionState()));
         writer.println("  " + "State: " + BluetoothAdapter.nameForState(getState()));

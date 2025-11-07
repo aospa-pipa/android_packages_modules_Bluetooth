@@ -32,7 +32,6 @@ import android.annotation.SystemApi;
 import android.app.PendingIntent;
 import android.bluetooth.Attributable;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothGatt;
 import android.bluetooth.IBluetoothScan;
 import android.bluetooth.annotations.RequiresBluetoothLocationPermission;
 import android.bluetooth.annotations.RequiresBluetoothScanPermission;
@@ -171,7 +170,7 @@ public final class BluetoothLeScanner {
             conditional = true)
     public void startScan(
             List<ScanFilter> filters, ScanSettings settings, final ScanCallback callback) {
-        startScan(filters, settings, /* workSource */ null, callback, /* callbackIntent= */ null);
+        doStartScan(filters, settings, /* workSource */ null, callback, /* callbackIntent= */ null);
     }
 
     /**
@@ -220,7 +219,7 @@ public final class BluetoothLeScanner {
             @Nullable List<ScanFilter> filters,
             @Nullable ScanSettings settings,
             @NonNull PendingIntent callbackIntent) {
-        return startScan(
+        return doStartScan(
                 filters,
                 settings != null ? settings : new ScanSettings.Builder().build(),
                 /* workSource */ null,
@@ -297,13 +296,13 @@ public final class BluetoothLeScanner {
             ScanSettings settings,
             final WorkSource workSource,
             final ScanCallback callback) {
-        startScan(filters, settings, workSource, callback, /* callbackIntent= */ null);
+        doStartScan(filters, settings, workSource, callback, /* callbackIntent= */ null);
     }
 
     @RequiresPermission(
             allOf = {BLUETOOTH_PRIVILEGED, BLUETOOTH_SCAN},
             conditional = true)
-    private int startScan(
+    private int doStartScan(
             List<ScanFilter> filters,
             ScanSettings settings,
             final WorkSource workSource,
@@ -481,7 +480,7 @@ public final class BluetoothLeScanner {
         mLeScanClients.clear();
     }
 
-    /** Bluetooth GATT interface callbacks */
+    /** Bluetooth Scan interface callbacks */
     private final class BleScanCallbackWrapper extends IScannerCallback.Stub {
         // TODO(b/455057044) Delete on flag cleanup
         private static final int REGISTRATION_CALLBACK_TIMEOUT_MILLIS = 2000;
@@ -608,16 +607,28 @@ public final class BluetoothLeScanner {
         /** Application interface registered - app is ready to go */
         @Override
         public void onScannerRegistered(int status, int scannerId) {
-            Log.d(
-                    TAG,
-                    ("onScannerRegistered(): status=" + status + ", scannerId=" + scannerId)
-                            + (", mScannerId=" + mScannerId));
+            String header =
+                    "onScannerRegistered(status=" + status + ", scannerId=" + scannerId + "): ";
+            Log.d(TAG, header + "mScannerId=" + mScannerId);
             synchronized (this) {
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    if (Flags.scanRegisterAndStart()) {
+                if (Flags.scanRegisterAndStart()) {
+                    if (status == ScanCallback.NO_ERROR) {
                         mScannerId = scannerId;
-                        return;
+                    } else {
+                        // If scanning too frequently, don't report anything to the app.
+                        if (scannerId == -2) {
+                            Log.e(TAG, header + "Failed. App is scanning too frequently");
+                        } else {
+                            postCallbackError(
+                                    mCallback,
+                                    ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED);
+                        }
+                        mLeScanClients.remove(mCallback);
                     }
+                    return;
+                }
+
+                if (status == ScanCallback.NO_ERROR) {
                     try {
                         if (mScannerId == -1) {
                             // Registration succeeds after timeout, unregister scanner.
@@ -627,23 +638,15 @@ public final class BluetoothLeScanner {
                             mScan.startScan(mScannerId, mSettings, mFilters, mSource);
                         }
                     } catch (RemoteException e) {
-                        Log.e(TAG, "onScannerRegistered(): Failed to start scan" + e);
+                        Log.e(TAG, header + "Failed to start scan" + e);
                         mScannerId = -1;
                     }
                 } else if (status == ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY) {
-                    if (Flags.scanRegisterAndStart()) {
-                        mLeScanClients.remove(mCallback);
-                    }
                     mScannerId = -2; // Application was scanning too frequently
                 } else {
-                    if (Flags.scanRegisterAndStart()) {
-                        mLeScanClients.remove(mCallback);
-                    }
                     mScannerId = -1; // Registration failed
                 }
-                if (!Flags.scanRegisterAndStart()) {
-                    notifyAll();
-                }
+                notifyAll();
             }
         }
 
@@ -666,7 +669,6 @@ public final class BluetoothLeScanner {
                     }
                     return;
                 }
-                ;
             }
             mHandler.post(
                     () -> {

@@ -39,6 +39,7 @@ import static android.bluetooth.IBluetoothManager.EXTRA_LOCAL_NAME;
 import static android.bluetooth.IBluetoothManager.EXTRA_PREVIOUS_STATE;
 import static android.bluetooth.IBluetoothManager.EXTRA_STATE;
 import static android.os.PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_FOREGROUND_SERVICE_ALLOWED;
+import static android.provider.Settings.Global.DEVICE_NAME;
 
 import static java.util.Objects.requireNonNull;
 
@@ -73,6 +74,7 @@ import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
 
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.util.Text;
 import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.bluetooth.airplane.AirplaneModeListener;
@@ -92,6 +94,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -217,6 +220,9 @@ class BluetoothManagerService {
 
                 @Override
                 public void onAdapterNameChange(String name) {
+                    if (Flags.setNameInSystemServer()) {
+                        throw new IllegalStateException("setNameInSystemServer is enabled");
+                    }
                     requireNonNull(name);
                     if (name.isEmpty()) {
                         throw new IllegalArgumentException("Invalid Empty name");
@@ -264,6 +270,23 @@ class BluetoothManagerService {
                             });
                 }
             };
+
+    private String validateLocalName(String name) {
+        if (name == null || name.isEmpty()) {
+            name = SystemProperties.get("bluetooth.device.default_name");
+        }
+        if (name == null || name.isEmpty()) {
+            name = Settings.Global.getString(mContentResolver, DEVICE_NAME);
+        }
+        if (name == null || name.isEmpty()) {
+            name = SystemProperties.get("ro.product.model");
+        }
+        if (name == null || name.isEmpty()) {
+            name = "Android";
+        }
+        // The Bluetooth Device Name can be up to 248 bytes (see [Vol 2] Part C, Section 4.3.5).
+        return Text.truncateUtf8String(name, 248);
+    }
 
     private void storeName(String name) {
         if (!Settings.Secure.putString(mContentResolver, Settings.Secure.BLUETOOTH_NAME, name)) {
@@ -593,9 +616,18 @@ class BluetoothManagerService {
         filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY);
         mContext.registerReceiver(mReceiver, filter, null, mHandler);
 
-        mName =
-                BluetoothServerProxy.getInstance()
-                        .settingsSecureGetString(mContentResolver, Settings.Secure.BLUETOOTH_NAME);
+        if (Flags.setNameInSystemServer()) {
+            mName =
+                    validateLocalName(
+                            BluetoothServerProxy.getInstance()
+                                    .settingsSecureGetString(
+                                            mContentResolver, Settings.Secure.BLUETOOTH_NAME));
+        } else {
+            mName =
+                    BluetoothServerProxy.getInstance()
+                            .settingsSecureGetString(
+                                    mContentResolver, Settings.Secure.BLUETOOTH_NAME);
+        }
         mAddress =
                 BluetoothServerProxy.getInstance()
                         .settingsSecureGetString(
@@ -1219,12 +1251,25 @@ class BluetoothManagerService {
                 IBluetoothManagerCallback::onBluetoothServiceDown);
     }
 
-    // Called from unsafe binder thread
     String getAddress() {
         return mAddress;
     }
 
-    // Called from unsafe binder thread
+    void setName(String name) {
+        name = validateLocalName(name);
+        if (Objects.equals(name, mName)) {
+            return;
+        }
+        if (mAdapter != null) {
+            try {
+                mAdapter.setName(name);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Unable to change the local name", e);
+            }
+        }
+        storeName(name);
+    }
+
     String getName() {
         return mName;
     }
@@ -1420,11 +1465,17 @@ class BluetoothManagerService {
                     if (mState.oneOf(State.TURNING_ON, State.ON)) {
                         bluetoothStateChangeHandler(mState.get(), State.TURNING_OFF);
                     }
-                    if (mState.oneOf(State.TURNING_OFF)) {
-                        bluetoothStateChangeHandler(mState.get(), State.BLE_ON);
-                    }
-                    if (mState.oneOf(State.BLE_ON)) {
-                        bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
+                    if (Flags.skipBleOnWhenTurningOff()) {
+                        if (mState.oneOf(State.TURNING_OFF, State.BLE_ON)) {
+                            bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
+                        }
+                    } else {
+                        if (mState.oneOf(State.TURNING_OFF)) {
+                            bluetoothStateChangeHandler(mState.get(), State.BLE_ON);
+                        }
+                        if (mState.oneOf(State.BLE_ON)) {
+                            bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
+                        }
                     }
                     if (mState.oneOf(State.BLE_TURNING_ON, State.BLE_TURNING_OFF)) {
                         bluetoothStateChangeHandler(mState.get(), State.OFF);
@@ -1585,6 +1636,9 @@ class BluetoothManagerService {
         requireNonNull(mUser, "There is no user to start for.");
         int flags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT;
         Intent intent = new Intent(IAdapter.class.getName());
+        if (Flags.setNameInSystemServer()) {
+            intent.putExtra(EXTRA_LOCAL_NAME, mName);
+        }
         intent.setComponent(mBluetoothComponent.getComponentName());
 
         Log.d(TAG, "Start binding to the Bluetooth service with intent=" + intent);

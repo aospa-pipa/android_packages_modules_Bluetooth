@@ -22,7 +22,6 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 
-import static com.android.bluetooth.flags.Flags.leaudioBisSyncControl;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastFixAutonomousSourceAdding;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastImproveSourceOperations;
 import static com.android.bluetooth.flags.Flags.leaudioBroadcastSimplifySetBcastCode;
@@ -1481,20 +1480,25 @@ public class BassClientService extends ConnectableProfile {
     }
 
     /**
-     * Checks the PA Sync State change for BIG Channel Map classification based on the sink device.
-     * This method determines whether to add or delete a BIG Channel Map classification based on the
-     * transition of the PA sync status.
+     * Checks the PA (Periodic Advertising) sync status for BIG (Broadcast Isochronous Group)
+     * channel map classification based on the provided {@link BluetoothLeBroadcastReceiveState}.
      *
-     * @param sink The Bluetooth device sink.
-     * @param oldSyncStatus The previous {@link SyncStatus} of the PA.
-     * @param newSyncStatus The current {@link SyncStatus} of the PA.
+     * @param sink The Bluetooth device of the sink.
+     * @param broadcastId The Broadcast ID.
+     * @param receiveState The current {@link BluetoothLeBroadcastReceiveState} of the broadcast.
      * @return An integer representing the action to be taken: {@link
      *     SetBigChannelMapClassificationAction#ADD} if transitioned to PA_SYNCED, {@link
      *     SetBigChannelMapClassificationAction#DELETE} if transitioned to NOT_SYNCED, or {@link
      *     SetBigChannelMapClassificationAction#NO_ACTION} if no change or other status.
      */
     public int checkPaSyncStatusForBigChannelMapClassification(
-            BluetoothDevice sink, SyncStatus oldSyncStatus, SyncStatus newSyncStatus) {
+            BluetoothDevice sink, int broadcastId, BluetoothLeBroadcastReceiveState receiveState) {
+        // Read the oldSyncStatus from the mSyncStatusMap for comparison with newSyncStatus.
+        SyncStatus oldSyncStatus =
+                mSyncStatusMap
+                        .getOrDefault(sink, Collections.emptyMap())
+                        .getOrDefault(broadcastId, SyncStatus.NOT_SYNCED);
+        SyncStatus newSyncStatus = GetSyncStatusFromReceiveState(receiveState);
 
         int action = SetBigChannelMapClassificationAction.NO_ACTION.getValue();
 
@@ -1543,16 +1547,9 @@ public class BassClientService extends ConnectableProfile {
         }
 
         if (isLocalBroadcast(broadcastId)) {
-            // Read the oldSyncStatus from the mSyncStatusMap for comparison with newSyncStatus.
-            SyncStatus oldSyncStatus =
-                    mSyncStatusMap
-                            .getOrDefault(sink, Collections.emptyMap())
-                            .getOrDefault(broadcastId, SyncStatus.NOT_SYNCED);
-            SyncStatus newSyncStatus = GetSyncStatusFromReceiveState(receiveState);
-
             int action =
                     checkPaSyncStatusForBigChannelMapClassification(
-                            sink, oldSyncStatus, newSyncStatus);
+                            sink, broadcastId, receiveState);
             if (action != SetBigChannelMapClassificationAction.NO_ACTION.getValue()) {
                 final var leAudio = mAdapterService.getLeAudioService();
                 if (!leAudio.isEmpty()) {
@@ -1587,91 +1584,9 @@ public class BassClientService extends ConnectableProfile {
             }
         }
 
-        // If sink has broadcast synced && not paused by the host
-        if (!isEmptyBluetoothDevice(receiveState.getSourceDevice())
-                && !isSuspendedByHostPauseReason(broadcastId)) {
+        handlePausedBroadcasts(sink, broadcastId, receiveState, broadcastSyncIsAdvancing);
 
-            // If sink actively synced (PA or BIG)
-            if (isReceiverActive(receiveState)) {
-                // Clear paused broadcast sink (not need to resume manually)
-                mPausedBroadcastSinks.remove(sink);
-
-                // If all sinks for this broadcast are actively synced (PA or BIG) and there is no
-                // more sinks to resume then stop monitoring
-                if (isAllReceiversActive(broadcastId) && mPausedBroadcastSinks.isEmpty()) {
-                    stopBroadcastMonitoring(broadcastId, /* hostInitiated */ false);
-                }
-                // If broadcast not local and sink not requested for PAST
-            } else if ((!isLocalBroadcast(receiveState)
-                    && receiveState.getPaSyncState()
-                            != BluetoothLeBroadcastReceiveState.PA_SYNC_STATE_SYNCINFO_REQUEST)) {
-
-                // If broadcast not paused yet and BASS has data to start synchronization
-                if (!leaudioBroadcastImproveSourceOperations()
-                        && !mPausedBroadcastIds.containsKey(broadcastId)
-                        && mCachedBroadcasts.containsKey(broadcastId)) {
-                    // Try to sync to it and start BIG monitoring
-                    cacheSuspendingSources(broadcastId);
-                    mPausedBroadcastIds.put(broadcastId, PauseReason.BIG_MONITORING);
-                    logPausedBroadcastsAndSinks();
-                    mTimeoutHandler.stop(broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT);
-                    mTimeoutHandler.start(
-                            broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT, sBigMonitorTimeout);
-                    addSelectSourceRequest(broadcastId, /* hasPriority */ true);
-                    // If sink synchronization not advancing
-                } else if (leaudioBroadcastImproveSourceOperations() && !broadcastSyncIsAdvancing) {
-                    // Add sink to monitor and start BIG monitoring if not started yet to
-                    // automatically resume it when possible
-                    boolean newPausedSinkAdded = false;
-                    if (!mPausedBroadcastSinks.contains(sink)) {
-                        mPausedBroadcastSinks.add(sink);
-                        newPausedSinkAdded = true;
-                    }
-                    if (!mPausedBroadcastIds.containsKey(broadcastId)) {
-                        mPausedBroadcastIds.put(broadcastId, PauseReason.BIG_MONITORING);
-                        mTimeoutHandler.stop(broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT);
-                        mTimeoutHandler.start(
-                                broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT, sBigMonitorTimeout);
-                        addSelectSourceRequest(broadcastId, /* hasPriority */ true);
-                    }
-                    logPausedBroadcastsAndSinks();
-                    // If new paused sink, call resume in case that it is already in resume state
-                    if (newPausedSinkAdded && isResumingPauseReason(broadcastId)) {
-                        resumeReceiversSourceSynchronization();
-                    }
-                }
-            }
-            // If paused by host then stop active sync, it could be not stopped, if during previous
-            // stop there was pending past or metadata request
-        } else if (isSuspendedByHostPauseReason(broadcastId)) {
-            stopActiveSync(broadcastId);
-            if (Flags.leaudioBroadcastStopBigMonitoringBasedOnBisSync()
-                    && !isAnyChannelSelected(getMetadataFromSinkWithBroadcastId(sink, broadcastId))
-                    && isReceiveStateSyncedToBis(receiveState)) {
-                mPausedBroadcastSinks.remove(sink);
-                if (isAllReceiversActive(broadcastId) && mPausedBroadcastSinks.isEmpty()) {
-                    stopBroadcastMonitoring(broadcastId, /* hostInitiated */ false);
-                }
-            }
-            // If sink unsynced then remove potentially waiting past and check if any broadcast
-            // monitoring should be stopped for all broadcast Ids
-        } else if (isEmptyBluetoothDevice(receiveState.getSourceDevice())) {
-            if (!leaudioBroadcastImproveSourceOperations()) {
-                synchronized (mSinksWaitingForPast) {
-                    mSinksWaitingForPast.remove(sink);
-                }
-            }
-            synchronized (mSinksWaitingForMetadata) {
-                Integer broadcastIdForMetadata = mSinksWaitingForMetadata.remove(sink);
-                if (broadcastIdForMetadata != null) {
-                    mTimeoutHandler.stop(broadcastIdForMetadata, MESSAGE_UPDATE_METADATA_TIMEOUT);
-                }
-                if (mSinksWaitingForMetadata.isEmpty() && mIsBackgroundScan) {
-                    stopSearchingForSources(/* foreground= */ false);
-                }
-            }
-            checkAndStopBroadcastMonitoring();
-        }
+        updateMetadataFromReceiveState(sink, broadcastId, receiveState);
 
         final var leAudio = mAdapterService.getLeAudioService();
         if (leAudio.isEmpty()) {
@@ -3936,6 +3851,11 @@ public class BassClientService extends ConnectableProfile {
                     existingMap.put(broadcastId, metadata);
                     return existingMap;
                 });
+        Log.v(
+                TAG,
+                ("Stored Sink Metadata (device: " + device)
+                        + (", broadcastId: " + broadcastId)
+                        + (", metadata: " + metadata + ")"));
     }
 
     private void removeSinkMetadataHelper(BluetoothDevice device, int broadcastId) {
@@ -3957,6 +3877,10 @@ public class BassClientService extends ConnectableProfile {
                     }
                     return existingMap;
                 });
+
+        Log.v(
+                TAG,
+                ("Removed Sink Metadata (device: " + device) + (", broadcastId: " + broadcastId));
     }
 
     private void removeSinkMetadata(BluetoothDevice device, int broadcastId) {
@@ -4423,23 +4347,13 @@ public class BassClientService extends ConnectableProfile {
                 }
             }
 
-            if (leaudioBisSyncControl()) {
-                sendModifySource(
-                        stateMachine,
-                        device,
-                        deviceSourceId,
-                        BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE,
-                        updatedMetadata,
-                        ModifyCallReason.API);
-            } else {
-                sendModifySource(
-                        stateMachine,
-                        device,
-                        deviceSourceId,
-                        BassConstants.INVALID_PA_SYNC_VALUE,
-                        updatedMetadata,
-                        ModifyCallReason.API);
-            }
+            sendModifySource(
+                    stateMachine,
+                    device,
+                    deviceSourceId,
+                    BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE,
+                    updatedMetadata,
+                    ModifyCallReason.API);
 
             if (!leaudioBroadcastSimplifySetBcastCode()) {
                 byte[] code = updatedMetadata.getBroadcastCode();
@@ -4531,33 +4445,12 @@ public class BassClientService extends ConnectableProfile {
             stopBroadcastMonitoring(metaData.getBroadcastId(), /* hostInitiated */ true);
         }
 
-        if (leaudioBisSyncControl()) {
-            sEventLogger.logi(
-                    TAG, "Remove Broadcast Source: device: " + sink + ", sourceId: " + sourceId);
+        sEventLogger.logi(
+                TAG, "Remove Broadcast Source: device: " + sink + ", sourceId: " + sourceId);
 
-            Message message =
-                    stateMachine.obtainMessage(BassClientStateMachine.REMOVE_BCAST_SOURCE);
-            message.arg1 = sourceId;
-            stateMachine.sendMessage(message);
-        } else {
-            if (stateMachine.isSyncedToTheSource(sourceId)) {
-                sendModifySource(
-                        stateMachine,
-                        sink,
-                        sourceId,
-                        BassConstants.PA_SYNC_DO_NOT_SYNC,
-                        metaData,
-                        ModifyCallReason.REMOVE);
-            } else {
-                sEventLogger.logd(
-                        TAG,
-                        "Remove Broadcast Source: device: " + sink + ", sourceId: " + sourceId);
-                Message message =
-                        stateMachine.obtainMessage(BassClientStateMachine.REMOVE_BCAST_SOURCE);
-                message.arg1 = sourceId;
-                stateMachine.sendMessage(message);
-            }
-        }
+        Message message = stateMachine.obtainMessage(BassClientStateMachine.REMOVE_BCAST_SOURCE);
+        message.arg1 = sourceId;
+        stateMachine.sendMessage(message);
 
         enqueueSourceGroupOp(
                 sink, BassClientStateMachine.REMOVE_BCAST_SOURCE, Integer.valueOf(sourceId));
@@ -5186,24 +5079,14 @@ public class BassClientService extends ConnectableProfile {
 
             int sourceId = pair.second;
             BluetoothLeBroadcastMetadata metadata = sm.getCurrentBroadcastMetadata(sourceId);
-            if (leaudioBisSyncControl()) {
-                metadata = getMetadataWithChannelUnselected(metadata);
-                sendModifySource(
-                        sm,
-                        device,
-                        sourceId,
-                        BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE,
-                        metadata,
-                        ModifyCallReason.SUSPEND);
-            } else {
-                sendModifySource(
-                        sm,
-                        device,
-                        sourceId,
-                        BassConstants.PA_SYNC_DO_NOT_SYNC,
-                        metadata,
-                        ModifyCallReason.SUSPEND);
-            }
+            metadata = getMetadataWithChannelUnselected(metadata);
+            sendModifySource(
+                    sm,
+                    device,
+                    sourceId,
+                    BassConstants.FLAG_SYNC_PA | BassConstants.FLAG_SYNC_BIS_CHANNEL_PREFERENCE,
+                    metadata,
+                    ModifyCallReason.SUSPEND);
         }
     }
 
@@ -5215,15 +5098,10 @@ public class BassClientService extends ConnectableProfile {
 
     private static boolean doesReceiveStateNeedsResume(
             Optional<BluetoothLeBroadcastReceiveState> receiveState) {
-        /* Only receive states which are synced to:
-         * - BIS (don't care about PA) with BisSyncControl flag
-         * - PA & BIS without BisSyncControl flag
-         *   doesn't need to be resumed.
-         */
+        /* Only receive states which are synced to BIS doesn't need to be resumed. */
         if (receiveState != null
                 && receiveState.isPresent()
-                && ((leaudioBisSyncControl() && isReceiveStateSyncedToBis(receiveState.get()))
-                        || (!leaudioBisSyncControl() && isReceiverActive(receiveState.get())))) {
+                && isReceiveStateSyncedToBis(receiveState.get())) {
             return false;
         }
 
@@ -5406,23 +5284,127 @@ public class BassClientService extends ConnectableProfile {
             return;
         }
 
-        if (leaudioBisSyncControl()) {
-            // Use no preference BIS sync
-            sendModifySource(
-                    stateMachine,
-                    sink,
-                    sourceId,
-                    BassConstants.FLAG_SYNC_PA,
-                    metadata,
-                    ModifyCallReason.RESUME);
-        } else {
-            sendModifySource(
-                    stateMachine,
-                    sink,
-                    sourceId,
-                    BassConstants.PA_SYNC_PAST_AVAILABLE,
-                    metadata,
-                    ModifyCallReason.RESUME);
+        // Use no preference BIS sync
+        sendModifySource(
+                stateMachine,
+                sink,
+                sourceId,
+                BassConstants.FLAG_SYNC_PA,
+                metadata,
+                ModifyCallReason.RESUME);
+    }
+
+    private void updateMetadataFromReceiveState(
+            BluetoothDevice sink, int broadcastId, BluetoothLeBroadcastReceiveState receiveState) {
+        // If the stream is suspended by host, that means we already have set selected channels
+        // to be resumed. Do not overwrite metadata - initial update was enough.
+        if (!Flags.leaudioBroadcastStopBigMonitoringBasedOnBisSync()
+                || mPausedBroadcastSinks.contains(sink)) {
+            return;
+        }
+
+        // based on channels received in receiveState, update selected channels in metadata.
+        BluetoothLeBroadcastMetadata currentMetadata =
+                getMetadataFromSinkWithBroadcastId(sink, broadcastId);
+
+        BluetoothLeBroadcastMetadata newMetadata =
+                getSourceMetadata(sink, receiveState.getSourceId());
+        if (newMetadata == null) {
+            Log.d(TAG, "updateMetadataFromReceiveState: no metadata available");
+        } else if (!Objects.equals(newMetadata, currentMetadata)) {
+            storeSinkMetadata(sink, broadcastId, newMetadata);
+        }
+    }
+
+    private void handlePausedBroadcasts(
+            BluetoothDevice sink,
+            int broadcastId,
+            BluetoothLeBroadcastReceiveState receiveState,
+            boolean broadcastSyncIsAdvancing) {
+        // If sink has broadcast synced && not paused by the host
+        if (!isEmptyBluetoothDevice(receiveState.getSourceDevice())
+                && !isSuspendedByHostPauseReason(broadcastId)) {
+
+            // If sink actively synced (PA or BIG)
+            if (isReceiverActive(receiveState)) {
+                // Clear paused broadcast sink (not need to resume manually)
+                mPausedBroadcastSinks.remove(sink);
+
+                // If all sinks for this broadcast are actively synced (PA or BIG) and there is no
+                // more sinks to resume then stop monitoring
+                if (isAllReceiversActive(broadcastId) && mPausedBroadcastSinks.isEmpty()) {
+                    stopBroadcastMonitoring(broadcastId, /* hostInitiated */ false);
+                }
+                // If broadcast not local and sink not requested for PAST
+            } else if ((!isLocalBroadcast(receiveState)
+                    && receiveState.getPaSyncState()
+                            != BluetoothLeBroadcastReceiveState.PA_SYNC_STATE_SYNCINFO_REQUEST)) {
+
+                // If broadcast not paused yet and BASS has data to start synchronization
+                if (!leaudioBroadcastImproveSourceOperations()
+                        && !mPausedBroadcastIds.containsKey(broadcastId)
+                        && mCachedBroadcasts.containsKey(broadcastId)) {
+                    // Try to sync to it and start BIG monitoring
+                    cacheSuspendingSources(broadcastId);
+                    mPausedBroadcastIds.put(broadcastId, PauseReason.BIG_MONITORING);
+                    logPausedBroadcastsAndSinks();
+                    mTimeoutHandler.stop(broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT);
+                    mTimeoutHandler.start(
+                            broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT, sBigMonitorTimeout);
+                    addSelectSourceRequest(broadcastId, /* hasPriority */ true);
+                    // If sink synchronization not advancing
+                } else if (leaudioBroadcastImproveSourceOperations() && !broadcastSyncIsAdvancing) {
+                    // Add sink to monitor and start BIG monitoring if not started yet to
+                    // automatically resume it when possible
+                    boolean newPausedSinkAdded = false;
+                    if (!mPausedBroadcastSinks.contains(sink)) {
+                        mPausedBroadcastSinks.add(sink);
+                        newPausedSinkAdded = true;
+                    }
+                    if (!mPausedBroadcastIds.containsKey(broadcastId)) {
+                        mPausedBroadcastIds.put(broadcastId, PauseReason.BIG_MONITORING);
+                        mTimeoutHandler.stop(broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT);
+                        mTimeoutHandler.start(
+                                broadcastId, MESSAGE_BIG_MONITOR_TIMEOUT, sBigMonitorTimeout);
+                        addSelectSourceRequest(broadcastId, /* hasPriority */ true);
+                    }
+                    logPausedBroadcastsAndSinks();
+                    // If new paused sink, call resume in case that it is already in resume state
+                    if (newPausedSinkAdded && isResumingPauseReason(broadcastId)) {
+                        resumeReceiversSourceSynchronization();
+                    }
+                }
+            }
+            // If paused by host then stop active sync, it could be not stopped, if during previous
+            // stop there was pending past or metadata request
+        } else if (isSuspendedByHostPauseReason(broadcastId)) {
+            stopActiveSync(broadcastId);
+            if (Flags.leaudioBroadcastStopBigMonitoringBasedOnBisSync()
+                    && !isAnyChannelSelected(getMetadataFromSinkWithBroadcastId(sink, broadcastId))
+                    && isReceiveStateSyncedToBis(receiveState)) {
+                mPausedBroadcastSinks.remove(sink);
+                if (isAllReceiversActive(broadcastId) && mPausedBroadcastSinks.isEmpty()) {
+                    stopBroadcastMonitoring(broadcastId, /* hostInitiated */ false);
+                }
+            }
+            // If sink unsynced then remove potentially waiting past and check if any broadcast
+            // monitoring should be stopped for all broadcast Ids
+        } else if (isEmptyBluetoothDevice(receiveState.getSourceDevice())) {
+            if (!leaudioBroadcastImproveSourceOperations()) {
+                synchronized (mSinksWaitingForPast) {
+                    mSinksWaitingForPast.remove(sink);
+                }
+            }
+            synchronized (mSinksWaitingForMetadata) {
+                Integer broadcastIdForMetadata = mSinksWaitingForMetadata.remove(sink);
+                if (broadcastIdForMetadata != null) {
+                    mTimeoutHandler.stop(broadcastIdForMetadata, MESSAGE_UPDATE_METADATA_TIMEOUT);
+                }
+                if (mSinksWaitingForMetadata.isEmpty() && mIsBackgroundScan) {
+                    stopSearchingForSources(/* foreground= */ false);
+                }
+            }
+            checkAndStopBroadcastMonitoring();
         }
     }
 

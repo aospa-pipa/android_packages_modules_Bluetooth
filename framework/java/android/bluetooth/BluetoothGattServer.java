@@ -503,7 +503,6 @@ public final class BluetoothGattServer implements BluetoothProfile {
             }
         }
     }
-    ;
 
     /** Create a BluetoothGattServer proxy object. */
     /* package */ BluetoothGattServer(
