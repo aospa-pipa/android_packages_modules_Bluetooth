@@ -592,7 +592,7 @@ static void bond_state_changed_cb(bt_status_t status,
   g_PairState = state;
 }
 
-static void acl_state_changed(bt_status_t status, tAclLinkSpec& link_spec,
+static void acl_state_changed(bt_status_t status, AclLinkSpec& link_spec,
                               bt_acl_state_t state, bt_hci_error_code_t hci_reason,
                               bt_conn_direction_t direction,
                               uint16_t acl_handle) {}
