@@ -2313,7 +2313,9 @@ void bdt_enable(void) {
     bdt_log("Bluetooth is already enabled");
     return;
   }
-  status = sBtInterface->enable();
+
+  std::string toolName = "gatt_tool";
+  status = sBtInterface->enable(std::move(toolName));
 
   check_return_status(status);
 }
