@@ -37,8 +37,11 @@ void btm_sec_disconnected(uint16_t handle, tHCI_STATUS reason, std::string);
 void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
                             uint8_t key_size, bool from_key_refresh = false);
 void btm_sec_encryption_change_evt(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
-                                   uint8_t key_size);
-void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status);
+                                   uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                   uint8_t key_sched_debug_flag);
+void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status,
+                                             uint8_t mic_length, uint8_t key_sched_enabled,
+                                             uint8_t key_sched_debug_flag);
 void btm_sec_link_key_notification(const RawAddress& p_bda, const Octet16& link_key,
                                    uint8_t key_type);
 void btm_sec_link_key_request(const RawAddress bda);

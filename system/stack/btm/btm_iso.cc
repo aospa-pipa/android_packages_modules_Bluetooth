@@ -201,6 +201,12 @@ void IsoManager::HandleVSCodecSettingsEvent(uint8_t mode, uint16_t delay,
   }
 }
 
+void IsoManager::HandleHciHdtEvent(uint8_t sub_code, uint8_t* params, uint16_t length) {
+  if (pimpl_->IsRunning()) {
+    pimpl_->iso_impl_->on_iso_hdt_event(sub_code, params, length);
+  }
+}
+
 void IsoManager::Start() {
   if (!pimpl_->IsRunning()) {
     pimpl_->Start();

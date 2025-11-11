@@ -70,8 +70,8 @@ public:
   }
 
   void OnDataLengthChange(uint16_t tx_octets, uint16_t tx_time, uint16_t rx_octets,
-                          uint16_t rx_time) override {
-    SAVE_OR_CALL(OnDataLengthChange, tx_octets, tx_time, rx_octets, rx_time)
+                          uint16_t rx_time, uint8_t phys) override {
+    SAVE_OR_CALL(OnDataLengthChange, tx_octets, tx_time, rx_octets, rx_time, phys)
   }
 
   void OnReadRemoteVersionInformationComplete(hci::ErrorCode hci_status, uint8_t lmp_version,
@@ -95,6 +95,20 @@ public:
                          uint16_t supervision_timeout) override {
     SAVE_OR_CALL(OnLeSubrateChange, hci_status, subrate_factor, peripheral_latency,
                  continuation_number, supervision_timeout);
+  }
+
+  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
+                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                    uint8_t key_sched_debug_flag) override {
+    SAVE_OR_CALL(OnEncryptionChangeV3, hci_status, encr_enable, key_size, mic_length,
+                 key_sched_enabled, key_sched_debug_flag);
+  }
+
+  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
+                                        uint8_t key_sched_enabled,
+                                        uint8_t key_sched_debug_flag) override {
+    SAVE_OR_CALL(OnEncryptionKeyRefreshCompleteV2, hci_status, mic_length, key_sched_enabled,
+                key_sched_debug_flag);
   }
 
   void OnDisconnection(ErrorCode reason) override { SAVE_OR_CALL(OnDisconnection, reason); }

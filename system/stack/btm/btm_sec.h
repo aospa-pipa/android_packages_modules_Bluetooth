@@ -568,7 +568,8 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status);
  *
  ******************************************************************************/
 void btm_sec_encryption_change_evt(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
-                                   uint8_t key_size);
+                                   uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                   uint8_t key_sched_debug_flag);
 
 /*******************************************************************************
  *
@@ -636,7 +637,9 @@ void btm_sec_link_key_notification(const RawAddress& p_bda, const Octet16& link_
                                    uint8_t key_type);
 
 /** This function is called for each encryption key refresh complete event */
-void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status);
+void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status,
+                                             uint8_t mic_length, uint8_t key_sched_enabled,
+                                             uint8_t key_sched_debug_flag);
 
 /*******************************************************************************
  *

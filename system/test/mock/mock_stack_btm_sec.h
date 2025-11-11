@@ -565,11 +565,16 @@ extern struct btm_sec_encrypt_change btm_sec_encrypt_change;
 // Params: uint16_t handle, tHCI_STATUS status, uint8_t encr_enable, uint8_t key_size
 // Return: void
 struct btm_sec_encryption_change_evt {
-  std::function<void(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable, uint8_t key_size)>
+  std::function<void(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable, uint8_t key_size,
+                     uint8_t mic_length, uint8_t key_sched_enabled,
+                     uint8_t key_sched_debug_flag)>
           body{[](uint16_t /* handle */, tHCI_STATUS /* status */, uint8_t /* encr_enable */,
-                  uint8_t /* key_size */) {}};
-  void operator()(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable, uint8_t key_size) {
-    body(handle, status, encr_enable, key_size);
+                  uint8_t /* key_size */, uint8_t /* mic_length */, uint8_t key_sched_enabled,
+                  uint8_t key_sched_debug_flag) {}};
+  void operator()(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable, uint8_t key_size,
+                  uint8_t mic_length, uint8_t key_sched_enabled, uint8_t key_sched_debug_flag) {
+    body(handle, status, encr_enable, key_size, mic_length, key_sched_enabled,
+         key_sched_debug_flag);
   }
 };
 extern struct btm_sec_encryption_change_evt btm_sec_encryption_change_evt;
@@ -637,10 +642,14 @@ extern struct btm_sec_link_key_notification btm_sec_link_key_notification;
 // Params: uint16_t handle, tHCI_STATUS status
 // Return: void
 struct btm_sec_encryption_key_refresh_complete {
-  std::function<void(uint16_t handle, tHCI_STATUS status)> body{
-          [](uint16_t /* handle */, tHCI_STATUS /* status */) -> void {}};
-  void operator()(uint16_t handle, tHCI_STATUS status) { body(handle, status); }
-};
+  std::function<void(uint16_t handle, tHCI_STATUS status, uint8_t mic_length,
+                     uint8_t key_sched_enabled, uint8_t key_sched_debug_flag)> body{
+          [](uint16_t /* handle */, tHCI_STATUS /* status */, uint8_t /* mic_length */,
+            uint8_t /* key_sched_enabled */, uint8_t /* key_sched_debug_flag */) -> void {}};
+  void operator()(uint16_t handle, tHCI_STATUS status, uint8_t mic_length,
+                  uint8_t key_sched_enabled, uint8_t key_sched_debug_flag) { 
+    body(handle, status, mic_length, key_sched_enabled, key_sched_debug_flag); }
+  };
 extern struct btm_sec_encryption_key_refresh_complete btm_sec_encryption_key_refresh_complete;
 
 // Name: btm_sec_link_key_request

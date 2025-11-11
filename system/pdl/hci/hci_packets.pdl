@@ -352,6 +352,7 @@ enum OpCode : 16 {
   LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT = 0x202E,
   LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_V2 = 0x209E,
   LE_READ_MAXIMUM_DATA_LENGTH = 0x202F,
+  LE_READ_MAXIMUM_DATA_LENGTH_V2 = 0xFBE7, // Temporary opcode
   LE_READ_PHY = 0x2030,
   LE_SET_DEFAULT_PHY = 0x2031,
   LE_SET_PHY = 0x2032,
@@ -446,6 +447,10 @@ enum OpCode : 16 {
   LE_CS_TEST = 0x2095,
   LE_CS_TEST_END = 0x2096,
 
+  // HDT specific
+  LE_SET_HDT_DEFAULT_PARAMETERS = 0xFBF7,
+  LE_START_ENCRYPTION_V2 = 0xFBE6,
+  LE_SET_DATA_LENGTH_V2 = 0xFBF4,
   // VENDOR_SPECIFIC
   // MSFT_OPCODE_xxxx below is needed for the tests.
   MSFT_OPCODE_INTEL = 0xFC1E,
@@ -793,6 +798,10 @@ enum OpCodeIndex : 16 {
   LE_SET_DEFAULT_SUBRATE = 460,
   LE_SUBRATE_REQUEST = 461,
   LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_V2 = 482,
+  LE_START_ENCRYPTION_V2 = 600,
+  LE_READ_MAXIMUM_DATA_LENGTH_V2 = 617,
+  LE_SET_DATA_LENGTH_V2 = 622,
+  LE_SET_HDT_DEFAULT_PARAMETERS = 637,
 }
 
 packet Command {
@@ -873,6 +882,8 @@ enum EventCode : 8 {
   NUMBER_OF_COMPLETED_DATA_BLOCKS = 0x48,
   AUTHENTICATED_PAYLOAD_TIMEOUT_EXPIRED = 0x57,
   ENCRYPTION_CHANGE_V2 = 0x59,
+  ENCRYPTION_CHANGE_V3 = 0xFC,
+  HDT_EVENT = 0xFE,
   VENDOR_SPECIFIC = 0xFF,
 }
 
@@ -928,6 +939,12 @@ enum SubeventCode : 8 {
   LE_CS_SUBEVENT_RESULT = 0x31,
   LE_CS_SUBEVENT_RESULT_CONTINUE = 0x32,
   LE_CS_TEST_END_COMPLETE = 0x33,
+  ENCRYPTION_CHANGE_V3 = 0xFC,
+  ENCRYPTION_KEY_REFRESH_COMPLETE_V2 = 0xFB,
+  LE_CIS_ESTABLISHED_V4 = 0xF5,
+  LE_CREATE_BIG_COMPLETE_V2 = 0xF9,
+  DATA_LENGTH_CHANGE_V2 = 0xF8,
+  LE_TEST_REPORT_HDT_LINK_QUALITY = 0xF3,
 }
 
 // Vendor specific events
@@ -3614,6 +3631,23 @@ packet LeStartEncryption : LeSecurityCommand (op_code = LE_START_ENCRYPTION) {
 packet LeStartEncryptionStatus : CommandStatus (command_op_code = LE_START_ENCRYPTION) {
 }
 
+
+packet LeStartEncryptionV2 : LeSecurityCommand (op_code = LE_START_ENCRYPTION_V2) {
+  connection_handle: 16,
+  rand: 8[8],
+  ediv: 16,
+  ltk: 8[16],
+  hdt_mic_length: 2,
+  _reserved_ : 6,
+  encryption_type: 1,
+  _reserved_ : 7,
+}
+
+packet LeStartEncryptionV2Status : CommandStatus (command_op_code = LE_START_ENCRYPTION_V2) {
+}
+
+
+
 packet LeLongTermKeyRequestReply : LeSecurityCommand (op_code = LE_LONG_TERM_KEY_REQUEST_REPLY) {
   connection_handle: 16,
   long_term_key: 8[16],
@@ -3712,7 +3746,7 @@ packet LeRemoteConnectionParameterRequestNegativeReplyComplete : CommandComplete
 packet LeSetDataLength : LeConnectionManagementCommand (op_code = LE_SET_DATA_LENGTH) {
   connection_handle : 12,
   _reserved_ : 4,
-  tx_octets : 16, // payload octets per single PDU 0x1B to 0x00FB
+  tx_octets : 16, // payload octets per single PDU 0x0000 to 0x1FEF if HDT supported or 0x1B to 0x00FB
   tx_time : 16, // microseconds used to transmit a single PDU 0x0148 to 0x4290
 }
 
@@ -3836,6 +3870,24 @@ packet LeSetResolvablePrivateAddressTimeoutV2Complete : CommandComplete (command
 packet LeReadMaximumDataLength : Command (op_code = LE_READ_MAXIMUM_DATA_LENGTH) {
 }
 
+packet LeReadMaximumDataLengthV2 : Command (op_code = LE_READ_MAXIMUM_DATA_LENGTH_V2) {
+  phy: 5,
+  _reserved_: 3,
+}
+
+packet LeSetHdtDefaultParameters : Command (op_code = LE_SET_HDT_DEFAULT_PARAMETERS) {
+  preferred_mic_length : 2,
+  _reserved_ : 6,
+  preferred_packet_format : 2,
+  _reserved_ : 6,
+  preferred_acl_rates: 5,
+  _reserved_ : 11,
+}
+
+packet LeSetHdtDefaultParametersComplete : CommandComplete (command_op_code = LE_SET_HDT_DEFAULT_PARAMETERS) {
+  status : ErrorCode,
+}
+
 struct LeMaximumDataLength {
   supported_max_tx_octets : 16,
   supported_max_tx_time: 16,
@@ -3843,9 +3895,24 @@ struct LeMaximumDataLength {
   supported_max_rx_time: 16,
 }
 
+struct LeMaximumDataLengthV2 {
+  supported_max_tx_octets : 16,
+  supported_max_tx_time: 16,
+  supported_max_rx_octets : 16,
+  supported_max_rx_time: 16,
+  supported_max_tx_pdus_per_packet: 8,
+  supported_max_rx_pdus_per_packet: 8,
+  supported_max_rx_octets_per_packet: 16,
+}
+
 packet LeReadMaximumDataLengthComplete : CommandComplete (command_op_code = LE_READ_MAXIMUM_DATA_LENGTH) {
   status : ErrorCode,
   le_maximum_data_length : LeMaximumDataLength,
+}
+
+packet LeReadMaximumDataLengthV2Complete : CommandComplete (command_op_code = LE_READ_MAXIMUM_DATA_LENGTH_V2) {
+  status : ErrorCode,
+  le_maximum_data_length_v2 : LeMaximumDataLengthV2,
 }
 
 packet LeReadPhy : LeConnectionManagementCommand (op_code = LE_READ_PHY) {
@@ -3857,6 +3924,7 @@ enum PhyType : 8 {
   LE_1M = 0x01,
   LE_2M = 0x02,
   LE_CODED = 0x03,
+  LE_HDT = 0x05,
 }
 
 packet LeReadPhyComplete : CommandComplete (command_op_code = LE_READ_PHY) {
@@ -3871,10 +3939,10 @@ packet LeSetDefaultPhy : LeConnectionManagementCommand (op_code = LE_SET_DEFAULT
   all_phys_no_transmit_preference : 1,
   all_phys_no_receive_preference : 1,
   _reserved_ : 6,
-  tx_phys_bitmask : 3,
-  _reserved_ : 5,
-  rx_phys_bitmask : 3,
-  _reserved_ : 5,
+  tx_phys_bitmask : 4,
+  _reserved_ : 4,
+  rx_phys_bitmask : 4,
+  _reserved_ : 4,
 }
 
 packet LeSetDefaultPhyComplete : CommandComplete (command_op_code = LE_SET_DEFAULT_PHY) {
@@ -3893,10 +3961,10 @@ packet LeSetPhy : LeConnectionManagementCommand (op_code = LE_SET_PHY) {
   all_phys_no_transmit_preference : 1,
   all_phys_no_receive_preference : 1,
   _reserved_ : 6,
-  tx_phys_bitmask : 3,
-  _reserved_ : 5,
-  rx_phys_bitmask : 3,
-  _reserved_ : 5,
+  tx_phys_bitmask : 4,
+  _reserved_ : 4,
+  rx_phys_bitmask : 4,
+  _reserved_ : 4,
   phy_options : PhyOptions,
 }
 
@@ -6360,6 +6428,11 @@ packet LeMetaEvent : Event (event_code = LE_META_EVENT) {
   _body_,
 }
 
+packet HdtEvent : Event (event_code = HDT_EVENT) {
+  subevent_code : SubeventCode,
+  _body_,
+}
+
 packet NumberOfCompletedDataBlocks : Event (event_code = NUMBER_OF_COMPLETED_DATA_BLOCKS) {
   total_num_data_blocks : 16,
   _payload_, // placeholder (unimplemented)
@@ -7585,4 +7658,77 @@ packet LeSetBigChannelMapClassificationComplete : CommandComplete(command_op_cod
   sub_opcode: LeSetBigChannelMapClassificationSubOpcode,
   action: LeSetBigChannelMapClassificationAction,
   big_handle: 8,
+}
+
+ // HDT Events
+
+packet LeCisEstablishedV4 : HdtEvent (subevent_code = LE_CIS_ESTABLISHED_V4) {
+  status : ErrorCode,
+  connection_handle : 12,
+  _reserved_ : 4,
+  cig_sync_delay : 24,
+  cis_sync_delay : 24,
+  transport_latency_c_to_p : 24,
+  transport_latency_p_to_c : 24,
+  phy_c_to_p : SecondaryPhyType,
+  phy_p_to_c : SecondaryPhyType,
+  nse : 8,
+  bn_c_to_p : 4,
+  _reserved_ : 4,
+  bn_p_to_c : 4,
+  _reserved_ : 4,
+  ft_c_to_p : 8,
+  ft_p_to_c : 8,
+  max_payload_c_to_p : 16,
+  max_payload_p_to_c : 16,
+  iso_interval : 16,
+  sub_interval : 24,
+  max_sdu_c_to_p : 16,
+  max_sdu_p_to_c : 16,
+  sdu_interval_c_to_p : 24,
+  sdu_interval_p_to_c : 24,
+  framing : Enable,
+  rates_c_to_p : 8,
+  rates_p_to_c : 8,
+  config_id : 8,
+  tl_group_id : 8,
+  encryption_enabled : Enable,
+  mic_length : 8,
+}
+
+packet EncryptionChangeV3 : HdtEvent (subevent_code = ENCRYPTION_CHANGE_V3) {
+  status : ErrorCode,
+  connection_handle : 12,
+  _reserved_ : 4,
+  encryption_enabled : EncryptionEnabled,
+  key_size : 8,
+  mic_length: 2,
+  _reserved_: 6,
+  key_sched_enabled: 2,
+  _reserved_: 6,
+  key_sched_debug_flag: 1,
+  _reserved_: 7,
+}
+
+packet EncryptionKeyRefreshCompleteV2 : HdtEvent (subevent_code = ENCRYPTION_KEY_REFRESH_COMPLETE_V2) {
+  status : ErrorCode,
+  connection_handle : 12,
+  _reserved_ : 4,
+  mic_length: 2,
+  _reserved_: 6,
+  key_sched_enabled: 2,
+  _reserved_: 6,
+  key_sched_debug_flag: 1,
+  _reserved_: 7,
+}
+
+packet LeDataLengthChangeV2 : HdtEvent (subevent_code = DATA_LENGTH_CHANGE_V2) {
+  connection_handle : 12,
+  _reserved_ : 4,
+  max_tx_octets : 16, // 0x001B - 0x1FEF
+  max_tx_time : 16, // 0x0148 - 0x4290
+  max_rx_octets : 16, // 0x001B - 0x1FEF
+  max_rx_time : 16, // 0x0148 - 0x4290
+  phys : 1,
+  _reserved_ : 7,
 }

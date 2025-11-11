@@ -30,7 +30,7 @@ public:
   virtual void OnParameterUpdateRequest(uint16_t interval_min, uint16_t interval_max,
                                         uint16_t latency, uint16_t supervision_timeout) = 0;
   virtual void OnDataLengthChange(uint16_t tx_octets, uint16_t tx_time, uint16_t rx_octets,
-                                  uint16_t rx_time) = 0;
+                                  uint16_t rx_time, uint8_t phys) = 0;
   virtual void OnDisconnection(hci::ErrorCode reason) = 0;
   virtual void OnReadRemoteVersionInformationComplete(hci::ErrorCode hci_status,
                                                       uint8_t lmp_version,
@@ -41,6 +41,12 @@ public:
   virtual void OnLeSubrateChange(hci::ErrorCode hci_status, uint16_t subrate_factor,
                                  uint16_t peripheral_latency, uint16_t continuation_number,
                                  uint16_t supervision_timeout) = 0;
+  virtual void OnEncryptionChangeV3(hci::ErrorCode hci_status,  uint8_t encr_enable,
+                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                    uint8_t key_sched_debug_flag) = 0;
+  virtual void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
+                                                uint8_t key_sched_enabled,
+                                                uint8_t key_sched_debug_flag) = 0;
 };
 
 }  // namespace acl_manager

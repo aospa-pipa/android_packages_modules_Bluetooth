@@ -78,6 +78,8 @@ namespace {
 constexpr char kBtmLogTag[] = "SEC";
 }
 
+constexpr uint16_t kDefaultMicLength = 2;
+constexpr uint16_t kDefaultEncryptionType = 0;
 static constexpr char kPropertyCtkdDisableCsrkDistribution[] =
         "bluetooth.core.smp.le.ctkd.quirk_disable_csrk_distribution";
 
@@ -988,12 +990,27 @@ tBTM_STATUS btm_ble_start_encrypt(const RawAddress& bda, bool use_stk, Octet16* 
   }
 
   p_cb->enc_handle = p_device->ble_hci_handle;
-
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
   if (use_stk) {
-    btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, dummy_rand, 0, *p_stk);
+    if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                            bluetooth::hci::OpCode::LE_START_ENCRYPTION_V2)) {
+      // Sending default values for mic_length and enc type - will be decided by controller
+      btsnd_hcic_ble_start_enc_v2(p_device->ble_hci_handle, dummy_rand, 0, *p_stk,
+                                  kDefaultMicLength, kDefaultEncryptionType);
+    } else {
+      btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, dummy_rand, 0, *p_stk);
+    }
   } else if (p_device->sec_rec.ble_keys.key_type & BTM_LE_KEY_PENC) {
-    btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
+    if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                            bluetooth::hci::OpCode::LE_START_ENCRYPTION_V2)) {
+      // Sending def values for mic_length and enc type - will be decided by controller
+      btsnd_hcic_ble_start_enc_v2(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
+                             p_device->sec_rec.ble_keys.ediv, p_device->sec_rec.ble_keys.pltk,
+                             kDefaultMicLength, kDefaultEncryptionType);
+    } else {
+      btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
                              p_device->sec_rec.ble_keys.ediv, p_device->sec_rec.ble_keys.pltk);
+    }
   } else {
     log::error("No key available to encrypt the link");
     return tBTM_STATUS::BTM_ERR_KEY_MISSING;

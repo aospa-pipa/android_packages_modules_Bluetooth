@@ -329,9 +329,12 @@ void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status, uint8_t encr_en
                                                     from_key_refresh);
 }
 void btm_sec_encryption_change_evt(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
-                                   uint8_t key_size) {
+                                   uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                   uint8_t key_sched_debug_flag) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::btm_sec_encryption_change_evt(handle, status, encr_enable, key_size);
+  test::mock::stack_btm_sec::btm_sec_encryption_change_evt(handle, status, encr_enable, key_size,
+                                                           mic_length, key_sched_enabled,
+                                                           key_sched_debug_flag);
 }
 bool btm_sec_is_a_bonded_dev_by_transport(const RawAddress& bda, tBT_TRANSPORT transport) {
   inc_func_call_count(__func__);
@@ -356,9 +359,13 @@ void btm_sec_link_key_notification(const RawAddress& p_bda, const Octet16& link_
   inc_func_call_count(__func__);
   test::mock::stack_btm_sec::btm_sec_link_key_notification(p_bda, link_key, key_type);
 }
-void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status) {
+void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status,
+                                             uint8_t mic_length, uint8_t key_sched_enabled,
+                                             uint8_t key_sched_debug_flag) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::btm_sec_encryption_key_refresh_complete(handle, status);
+  test::mock::stack_btm_sec::btm_sec_encryption_key_refresh_complete(handle, status,
+                                                                     mic_length, key_sched_enabled,
+                                                                     key_sched_debug_flag);
 }
 void btm_sec_link_key_request(const RawAddress bda) {
   inc_func_call_count(__func__);

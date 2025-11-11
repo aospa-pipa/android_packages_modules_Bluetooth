@@ -143,6 +143,7 @@ public:
   MOCK_METHOD(uint8_t, GetLeFilterAcceptListSize, (), (const));
   MOCK_METHOD(uint8_t, GetLeResolvingListSize, (), (const));
   MOCK_METHOD(LeMaximumDataLength, GetLeMaximumDataLength, (), (const));
+  MOCK_METHOD(LeMaximumDataLengthV2, GetLeMaximumDataLengthV2, (), (const));
   MOCK_METHOD(uint16_t, GetLeMaximumAdvertisingDataLength, (), (const));
   MOCK_METHOD(uint16_t, GetLeSuggestedDefaultDataLength, (), (const));
   MOCK_METHOD(uint8_t, GetLeNumberOfSupportedAdvertisingSets, (), (const));
@@ -151,7 +152,6 @@ public:
   MOCK_METHOD(VendorCapabilities, GetVendorCapabilities, (), (const));
   MOCK_METHOD(bool, IsSupported, (OpCode op_code), (const));
   MOCK_METHOD(bool, IsRpaGenerationSupported, (), (const));
-
   MOCK_METHOD(uint32_t, GetDabSupportedCodecs, (), (const));
   MOCK_METHOD((const std::array<DynamicAudioBufferCodecCapability, 32>&), GetDabCodecCapabilities,
               (), (const));

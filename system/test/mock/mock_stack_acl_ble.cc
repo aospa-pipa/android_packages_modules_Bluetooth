@@ -65,6 +65,6 @@ void acl_ble_update_request_event_received(uint16_t /* handle */, uint16_t /* in
 
 void acl_ble_data_length_change_event(uint16_t /* handle */, uint16_t /* max_tx_octets */,
                                       uint16_t /* max_tx_time */, uint16_t /* max_rx_octets */,
-                                      uint16_t /* max_rx_time */) {
+                                      uint16_t /* max_rx_time */, uint8_t /* phys */) {
   inc_func_call_count(__func__);
 }

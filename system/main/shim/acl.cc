@@ -743,9 +743,9 @@ public:
                         latency, supervision_timeout);
   }
   void OnDataLengthChange(uint16_t max_tx_octets, uint16_t max_tx_time, uint16_t max_rx_octets,
-                          uint16_t max_rx_time) {
+                          uint16_t max_rx_time, uint8_t phys) {
     TRY_POSTING_ON_MAIN(interface_.on_data_length_change, handle_, max_tx_octets, max_tx_time,
-                        max_rx_octets, max_rx_time);
+                        max_rx_octets, max_rx_time, phys);
   }
   void OnLeSubrateChange(hci::ErrorCode hci_status, uint16_t subrate_factor,
                          uint16_t peripheral_latency, uint16_t continuation_number,
@@ -770,6 +770,23 @@ public:
   void OnPhyUpdate(hci::ErrorCode hci_status, uint8_t tx_phy, uint8_t rx_phy) override {
     TRY_POSTING_ON_MAIN(interface_.on_phy_update, ToLegacyHciErrorCode(hci_status), handle_, tx_phy,
                         rx_phy);
+  }
+
+  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
+                            uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                            uint8_t key_sched_debug_flag) {
+    TRY_POSTING_ON_MAIN(interface_.on_encryption_change_v3, handle_,
+                        ToLegacyHciErrorCode(hci_status), encr_enable, key_size, mic_length, 
+                        key_sched_enabled, key_sched_debug_flag);
+  }
+
+  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status,
+                                        uint8_t mic_length,
+                                        uint8_t key_sched_enabled,
+                                        uint8_t key_sched_debug_flag) override {
+    TRY_POSTING_ON_MAIN(interface_.on_encryption_key_refresh_complete_v2, handle_,
+                        ToLegacyHciErrorCode(hci_status), mic_length, key_sched_enabled,
+                        key_sched_debug_flag);
   }
 
   void OnDisconnection(hci::ErrorCode reason) {

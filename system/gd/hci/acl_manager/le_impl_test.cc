@@ -1197,16 +1197,18 @@ TEST_F(LeImplWithConnectionTest, on_le_event__DATA_LENGTH_CHANGE) {
   uint16_t tx_time{0};
   uint16_t rx_octets{0};
   uint16_t rx_time{0};
+  uint8_t phys{0};
 
   // Send a data length event
   {
-    EXPECT_CALL(connection_management_callbacks_, OnDataLengthChange(_, _, _, _))
+    EXPECT_CALL(connection_management_callbacks_, OnDataLengthChange(_, _, _, _, _))
             .WillOnce([&](uint16_t _tx_octets, uint16_t _tx_time, uint16_t _rx_octets,
-                          uint16_t _rx_time) {
+                          uint16_t _rx_time, uint8_t _phys) {
               tx_octets = _tx_octets;
               tx_time = _tx_time;
               rx_octets = _rx_octets;
               rx_time = _rx_time;
+              phys = _phys;
             });
     auto command = LeDataLengthChangeBuilder::Create(kHciHandle, 0x1234, 0x5678, 0x9abc, 0xdef0);
     auto bytes = Serialize<LeDataLengthChangeBuilder>(std::move(command));
