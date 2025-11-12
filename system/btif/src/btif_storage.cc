@@ -936,6 +936,9 @@ void btif_storage_load_le_devices(void) {
     if (btif_storage_get_ble_bonding_key(bonded_devices.devices[i].bda, BTM_LE_KEY_PID,
                                          reinterpret_cast<uint8_t*>(&key),
                                          sizeof(tBTM_LE_PID_KEYS)) == BT_STATUS_SUCCESS) {
+
+          tBLE_BD_ADDR identity_addr = {.type = key.pid_key.identity_addr_type,
+                                         .bda = key.pid_key.identity_addr};
       if (bonded_devices.devices[i].bda != key.pid_key.identity_addr) {
         log::info("Found device with a known identity address {} {}", bonded_devices.devices[i],
                   key.pid_key.identity_addr);
@@ -943,10 +946,16 @@ void btif_storage_load_le_devices(void) {
         if (bonded_devices.devices[i].bda.IsEmpty() || key.pid_key.identity_addr.IsEmpty()) {
           log::warn("Address is empty! Skip");
         } else {
-          tBLE_BD_ADDR identity_addr = {.type = key.pid_key.identity_addr_type,
-                                        .bda = key.pid_key.identity_addr};
           consolidated_devices.emplace_back(bonded_devices.devices[i], identity_addr);
         }
+      }
+      else{
+      static thread_local std::unordered_set<RawAddress> s_logged_equal_addrs;
+      if (s_logged_equal_addrs.insert(bonded_devices.devices[i].bda).second)
+      {
+      log::info("loaded public devices");
+      consolidated_devices.emplace_back(bonded_devices.devices[i],identity_addr);
+      }
       }
     }
   }
