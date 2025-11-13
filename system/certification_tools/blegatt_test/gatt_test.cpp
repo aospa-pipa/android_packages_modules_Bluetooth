@@ -2018,7 +2018,7 @@ static void ssp_request_cb(RawAddress* remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
                            uint32_t pass_key) {
   printf("ssp_request_cb : variant=%d passkey=%u\n", pairing_variant, pass_key);
-  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
+  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(*remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
     printf("SSP Reply failed\n");
@@ -2335,7 +2335,7 @@ void do_pairing(char* p) {
   RawAddress bd_addr = {{0}};
   int transport = GATT_TRANSPORT_LE;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
-  if (BT_STATUS_SUCCESS != sBtInterface->create_bond(&bd_addr, transport)) {
+  if (BT_STATUS_SUCCESS != sBtInterface->create_bond(bd_addr, transport)) {
     printf("Failed to Initiate Pairing \n");
     return;
   }
@@ -3780,7 +3780,7 @@ void do_remove_bond(char* p) {
   printf("%s:: remote_bd_addr=%02x:%02x:%02x:%02x:%02x:%02x \n", __FUNCTION__,
          bd_addr.address[0], bd_addr.address[1], bd_addr.address[2],
          bd_addr.address[3], bd_addr.address[4], bd_addr.address[5]);
-  sBtInterface->remove_bond(&bd_addr);
+  sBtInterface->remove_bond(bd_addr);
 }
 
 void do_le_gap_conn_param_update(char* p) {
@@ -3864,7 +3864,7 @@ static void process_cmd(char* p, unsigned char is_job) {
       pincode.pin[i] = cmd[i];
     }
     if (BT_STATUS_SUCCESS !=
-        sBtInterface->pin_reply(&remote_bd_address, TRUE,
+        sBtInterface->pin_reply(remote_bd_address, TRUE,
                                 strlen((const char*)pincode.pin), &pincode)) {
       printf("Pin Reply failed\n");
     }
