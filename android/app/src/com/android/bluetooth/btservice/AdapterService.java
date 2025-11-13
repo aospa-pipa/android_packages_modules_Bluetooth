@@ -478,10 +478,11 @@ public class AdapterService extends Service {
         mHandler = new AdapterServiceHandler(mLooper);
         mNativeInterface = requireNonNull(nativeInterface);
         mBluetoothKeystoreService = new BluetoothKeystoreService(bluetoothKeystoreNativeInterface);
+        var bQRnativeCallback = new BluetoothQualityReportNativeCallback(this);
         mBluetoothQualityReportNativeInterface =
                 requireNonNullElseGet(
                         bluetoothQualityReportNativeInterface,
-                        () -> new BluetoothQualityReportNativeInterface(this));
+                        () -> new BluetoothQualityReportNativeInterface(bQRnativeCallback));
         mBluetoothHciVendorSpecificNativeInterface =
                 requireNonNullElseGet(
                         bluetoothHciVendorSpecificNativeInterface,
@@ -1059,7 +1060,9 @@ public class AdapterService extends Service {
         mVendor = new Vendor(this);
         // Load the name and address
         mNativeInterface.getAdapterProperty(AbstractionLayer.BT_PROPERTY_BDADDR);
-        mNativeInterface.getAdapterProperty(AbstractionLayer.BT_PROPERTY_BDNAME);
+        if (!Flags.setNameInSystemServer()) {
+            mNativeInterface.getAdapterProperty(AbstractionLayer.BT_PROPERTY_BDNAME);
+        }
         mNativeInterface.getAdapterProperty(AbstractionLayer.BT_PROPERTY_CLASS_OF_DEVICE);
 
         mBluetoothKeystoreService.initJni();
@@ -1574,6 +1577,8 @@ public class AdapterService extends Service {
         if (mNativeInterface.getCallbacks() != null) {
             mNativeInterface.getCallbacks().cleanup();
         }
+
+        mBluetoothQualityReportNativeInterface.cleanup();
 
         if (mBluetoothKeystoreService != null) {
             Log.d(TAG, "cleanup(): mBluetoothKeystoreService.cleanup()");
@@ -2849,11 +2854,16 @@ public class AdapterService extends Service {
             boolean discovering = isDiscovering();
             DiscoveringPackageInfo pkgInfo =
                     new DiscoveringPackageInfo(permission, hasDisavowedLocation);
-            mDiscoveringPackages.put(callingPackage, pkgInfo);
+            DiscoveringPackageInfo oldPkgInfo = mDiscoveringPackages.put(callingPackage, pkgInfo);
 
             if (Flags.ignoreRedundantDiscoveryIfSameState() && discovering) {
                 // If discovery is already running, broadcast the ACTION_DISCOVERY_STARTED intent.
                 Log.d(TAG, "startDiscovery: discovery is already running");
+                if (oldPkgInfo != null) {
+                    Log.e(TAG, "startDiscovery: discovery already started by the same package");
+                    return false;
+                }
+
                 Intent intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
                 intent.setPackage(callingPackage);
                 sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());
