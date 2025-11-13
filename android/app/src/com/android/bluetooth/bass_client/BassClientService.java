@@ -1366,10 +1366,13 @@ public class BassClientService extends ConnectableProfile {
         if (leaudioBroadcastImproveSourceOperations()) {
             synchronized (mPastResponseTimeouts) {
                 PastResponseTimeout timeout = new PastResponseTimeout(sink, sourceId, broadcastId);
-                mPastResponseTimeouts
-                        .computeIfAbsent(sink, k -> new ConcurrentHashMap<>())
-                        .put(sourceId, timeout);
-                mHandler.postDelayed(timeout, sPastResponseTimeout.toMillis());
+                if (mPastResponseTimeouts
+                                .computeIfAbsent(sink, k -> new ConcurrentHashMap<>())
+                                .putIfAbsent(sourceId, timeout)
+                        == null) {
+                    mHandler.postDelayed(timeout, sPastResponseTimeout.toMillis());
+                    Log.d(TAG, "syncRequestForPast: timeout scheduled");
+                }
             }
         } else {
             synchronized (mSinksWaitingForPast) {
@@ -1457,6 +1460,7 @@ public class BassClientService extends ConnectableProfile {
     public enum SetBigChannelMapClassificationAction {
         ADD(0x00),
         DELETE(0x01),
+        CLEAR(0x02),
         NO_ACTION(0xFF);
 
         private final int mValue;

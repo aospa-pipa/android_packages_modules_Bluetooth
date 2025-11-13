@@ -29,6 +29,8 @@ import android.bluetooth.le.IDistanceMeasurementCallback
 import android.content.AttributionSource
 import android.content.Context
 import android.os.ParcelUuid
+import com.android.bluetooth.Util
+import com.android.bluetooth.Util.checkProfileAvailable
 import com.android.bluetooth.Utils
 
 private const val TAG = GattUtil.TAG_PREFIX + "DistanceMeasurementBinder"
@@ -47,7 +49,7 @@ class DistanceMeasurementBinder(
     private fun getManager(): DistanceMeasurementManager? {
         val gatt = gattService ?: return null
         val manager = distanceMeasurementManager ?: return null
-        if (!Utils.checkServiceAvailable(gatt, TAG)) return null
+        if (!gatt.checkProfileAvailable(TAG)) return null
         return manager
     }
 
@@ -59,7 +61,7 @@ class DistanceMeasurementBinder(
         val manager = getManager()
         if (
             !Utils.callerIsSystemOrActiveOrManagedUser(context, TAG, "$TAG $method") ||
-                !Utils.checkConnectPermissionForDataDelivery(context, source, "$TAG $method")
+                !Util.enforceConnectPermissionForDataDelivery(context, source, "$TAG $method")
         ) {
             return null
         }
@@ -107,7 +109,7 @@ class DistanceMeasurementBinder(
         if (!Utils.callerIsSystemOrActiveOrManagedUser(context, TAG, methodName)) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED
         } else if (
-            !Utils.checkConnectPermissionForDataDelivery(context, source, "$TAG $methodName")
+            !Util.enforceConnectPermissionForDataDelivery(context, source, "$TAG $methodName")
         ) {
             return BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION
         }
