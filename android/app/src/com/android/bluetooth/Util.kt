@@ -18,7 +18,12 @@ package com.android.bluetooth
 
 import android.Manifest.permission.BLUETOOTH_ADVERTISE
 import android.Manifest.permission.BLUETOOTH_CONNECT
+import android.Manifest.permission.BLUETOOTH_PRIVILEGED
 import android.Manifest.permission.BLUETOOTH_SCAN
+import android.Manifest.permission.NETWORK_SETTINGS
+import android.Manifest.permission.NETWORK_SETUP_WIZARD
+import android.Manifest.permission.RADIO_SCAN_WITHOUT_LOCATION
+import android.Manifest.permission.WRITE_SMS
 import android.annotation.PermissionMethod
 import android.annotation.PermissionName
 import android.annotation.RequiresPermission
@@ -27,6 +32,8 @@ import android.content.AttributionSource
 import android.content.Context
 import android.os.IBinder
 import android.permission.PermissionManager
+import android.permission.PermissionManager.PERMISSION_GRANTED
+import android.permission.PermissionManager.PERMISSION_HARD_DENIED
 import android.util.Log
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.profile.ProfileService
@@ -84,6 +91,35 @@ object Util {
             BluetoothDevice.TRANSPORT_LE -> "LE"
             else -> "Unknown transport ($transport)"
         }
+
+    /** Returns `true` if the caller holds [NETWORK_SETTINGS] */
+    @JvmStatic
+    fun checkCallerHasNetworkSettingsPermission(context: Context) =
+        context.checkCallerHasPermission(NETWORK_SETTINGS)
+
+    /** Returns `true` if the caller holds [NETWORK_SETUP_WIZARD] */
+    @JvmStatic
+    fun checkCallerHasNetworkSetupWizardPermission(context: Context) =
+        context.checkCallerHasPermission(NETWORK_SETUP_WIZARD)
+
+    /** Returns `true` if the caller holds [RADIO_SCAN_WITHOUT_LOCATION] */
+    @JvmStatic
+    fun checkCallerHasScanWithoutLocationPermission(context: Context) =
+        context.checkCallerHasPermission(RADIO_SCAN_WITHOUT_LOCATION)
+
+    /** Returns `true` if the caller holds [BLUETOOTH_PRIVILEGED] */
+    @JvmStatic
+    fun checkCallerHasPrivilegedPermission(context: Context) =
+        context.checkCallerHasPermission(BLUETOOTH_PRIVILEGED)
+
+    /** Returns `true` if the caller holds [WRITE_SMS] */
+    @JvmStatic
+    fun checkCallerHasWriteSmsPermission(context: Context) =
+        context.checkCallerHasPermission(WRITE_SMS)
+
+    @PermissionMethod
+    private fun Context.checkCallerHasPermission(@PermissionName permission: String) =
+        checkCallingOrSelfPermission(permission) == PERMISSION_GRANTED
 
     /**
      * Returns `true` if the [BLUETOOTH_ADVERTISE] permission is granted for the calling app.
@@ -171,12 +207,12 @@ object Util {
                 currentAttribution,
                 message,
             )
-        if (result == PermissionManager.PERMISSION_GRANTED) {
+        if (result == PERMISSION_GRANTED) {
             return true
         }
 
         val msg = "Need $permission permission for $currentAttribution: $message"
-        if (result == PermissionManager.PERMISSION_HARD_DENIED) {
+        if (result == PERMISSION_HARD_DENIED) {
             throw SecurityException(msg)
         } else {
             Log.w(TAG, msg)
@@ -193,12 +229,12 @@ object Util {
         val permissionManager =
             context.getSystemService(PermissionManager::class.java) ?: return false
         val result = permissionManager.checkPermissionForPreflight(permission, source)
-        if (result == PermissionManager.PERMISSION_GRANTED) {
+        if (result == PERMISSION_GRANTED) {
             return true
         }
 
         val msg = "Need $permission permission"
-        if (result == PermissionManager.PERMISSION_HARD_DENIED) {
+        if (result == PERMISSION_HARD_DENIED) {
             throw SecurityException(msg)
         } else {
             Log.w(TAG, msg)
