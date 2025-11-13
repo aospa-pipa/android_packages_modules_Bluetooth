@@ -243,13 +243,14 @@ public class GattService extends ProfileService {
         mReliableQueue = requireNonNull(reliableQueue);
         mCompanionDeviceManager = companionDeviceManager;
         mTimeProvider = timeProvider;
-        mMetricsReporter = new GattMetricsReporter(mProfileId, adapterService);
+        mMetricsReporter = new GattMetricsReporter(getProfileId(), adapterService);
 
         Settings.Global.putInt(
                 getContentResolver(), "bluetooth_sanitized_exposure_notification_supported", 1);
 
-        mServerManager = new GattServerManager(mAdapterService, this, serverMap, mMetricsReporter);
-        var nativeCallback = new GattNativeCallback(mAdapterService, this, mServerManager);
+        mServerManager =
+                new GattServerManager(getAdapterService(), this, serverMap, mMetricsReporter);
+        var nativeCallback = new GattNativeCallback(getAdapterService(), this, mServerManager);
         mNativeInterface =
                 requireNonNullElseGet(
                         nativeInterface, () -> new GattNativeInterface(nativeCallback));
@@ -262,7 +263,7 @@ public class GattService extends ProfileService {
 
         mAdvertiseManager =
                 new AdvertiseManager(
-                        mAdapterService, this, advertiseManagerNativeInterface, looper);
+                        getAdapterService(), this, advertiseManagerNativeInterface, looper);
 
         mRssiReadThrottleMs =
                 SystemProperties.getInt(RSSI_READ_THROTTLE_MS, RSSI_READ_THROTTLE_MS_DEFAULT);
@@ -276,7 +277,7 @@ public class GattService extends ProfileService {
 
         mDistanceMeasurementManager =
                 new DistanceMeasurementManager(
-                        mAdapterService, this, distanceMeasurementNativeInterface, looper);
+                        getAdapterService(), this, distanceMeasurementNativeInterface, looper);
 
         mSubrateLowParameters =
                 new int[] {
@@ -422,7 +423,7 @@ public class GattService extends ProfileService {
                         + (" status=" + statusToString(status) + " device=" + device));
         int connectionState = BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTED;
         if (status != BluetoothGatt.GATT_SUCCESS) {
-            mAdapterService.notifyGattClientConnectFailed(clientIf, device);
+            getAdapterService().notifyGattClientConnectFailed(clientIf, device);
         } else {
             mClientMap.addConnection(clientIf, connId, transport, device);
 
@@ -451,7 +452,7 @@ public class GattService extends ProfileService {
                 ("onDisconnected(): clientIf=" + clientIf + ", connId=" + connId)
                         + (", transport=" + transportToString(transport) + ", device=" + device));
         mClientMap.removeConnection(clientIf, connId);
-        mAdapterService.notifyGattClientDisconnect(clientIf, device);
+        getAdapterService().notifyGattClientDisconnect(clientIf, device);
         var app = mClientMap.getById(clientIf);
         mRestrictedHandles.remove(connId);
 
@@ -478,7 +479,7 @@ public class GattService extends ProfileService {
         }
         final int disconnectStatus;
         if (status == 0x16 // HCI_ERR_CONN_CAUSE_LOCAL_HOST
-                && mAdapterService.getKeyMissingCount(device) > 0) {
+                && getAdapterService().getKeyMissingCount(device) > 0) {
             // Native stack disconnects the link on detecting the bond loss. Native GATT would
             // return HCI_ERR_CONN_CAUSE_LOCAL_HOST in such case, but the apps should see
             // HCI_ERR_AUTH_FAILURE.
@@ -868,7 +869,7 @@ public class GattService extends ProfileService {
         final Map<BluetoothDevice, Integer> deviceStates = new HashMap<>();
 
         // Add paired LE devices
-        final BluetoothDevice[] bondedDevices = mAdapterService.getBondedDevices();
+        final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
         for (BluetoothDevice device : bondedDevices) {
             if (getDeviceType(device) != AbstractionLayer.BT_DEVICE_TYPE_BREDR) {
                 deviceStates.put(device, STATE_DISCONNECTED);
@@ -948,7 +949,7 @@ public class GattService extends ProfileService {
                 TAG,
                 ("registerClient(): UUID=" + uuid + " name=" + name)
                         + (" transport=" + transportToString(transport)));
-        var appName = Util.appNameOrUnknown(mAdapterService, uid);
+        var appName = Util.appNameOrUnknown(getAdapterService(), uid);
         mClientMap.add(uid, appName, uuid, callback, transport, tag);
         mNativeInterface.gattClientRegisterApp(
                 uuid.getLeastSignificantBits(), uuid.getMostSignificantBits(), name, eattSupport);
@@ -1011,7 +1012,7 @@ public class GattService extends ProfileService {
         }
         Log.d(TAG, "clientConnect(): tag=" + tag + ", preferRelaxMode=" + preferRelaxMode);
         if (packageName != null) {
-            mAdapterService.addAssociatedPackage(device, packageName);
+            getAdapterService().addAssociatedPackage(device, packageName);
 
             // Some apps expect MTU to be exchanged immediately on connections
             for (Map.Entry<String, Integer> entry : EARLY_MTU_EXCHANGE_PACKAGES.entrySet()) {
@@ -1035,7 +1036,7 @@ public class GattService extends ProfileService {
                             && ((attributionTag != null
                                             && attributionTag.contains(entry.getValue()))
                                     || entry.getValue().isEmpty())) {
-                        mAdapterService.notifyDirectLeGattClientConnect(clientIf, device);
+                        getAdapterService().notifyDirectLeGattClientConnect(clientIf, device);
                         break;
                     }
                 }
@@ -1070,7 +1071,7 @@ public class GattService extends ProfileService {
         mMetricsReporter.logGattConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTING, -1);
         mMetricsReporter.logDisconnectStart(device, source.getUid());
-        mAdapterService.notifyGattClientDisconnect(clientIf, device);
+        getAdapterService().notifyGattClientDisconnect(clientIf, device);
         mNativeInterface.gattClientDisconnect(clientIf, device, connId != null ? connId : 0);
     }
 
@@ -1329,8 +1330,8 @@ public class GattService extends ProfileService {
         }
 
         int state = BluetoothAdapter.STATE_OFF;
-        if (mAdapterService != null) {
-            state = mAdapterService.getState();
+        if (getAdapterService() != null) {
+            state = getAdapterService().getState();
         }
 
         if (state == BluetoothAdapter.STATE_ON || state == BluetoothAdapter.STATE_BLE_ON) {
@@ -1390,7 +1391,7 @@ public class GattService extends ProfileService {
             return;
         }
         final var clientIf = clientApp.getId();
-        final var companionManager = mAdapterService.getCompanionManager();
+        final var companionManager = getAdapterService().getCompanionManager();
         final int minInterval =
                 companionManager.getGattConnParameters(
                         device, CompanionManager.GATT_CONN_INTERVAL_MIN, connectionPriority);
@@ -1501,7 +1502,7 @@ public class GattService extends ProfileService {
                 || isAndroidHeadtrackerSrvcUuid(uuid)
                 || (Flags.gattMessagingPermissions()
                         && isAppleNotificationCenterSrvcUuid(uuid)
-                        && mAdapterService.getMessageAccessPermission(device)
+                        && getAdapterService().getMessageAccessPermission(device)
                                 != BluetoothDevice.ACCESS_ALLOWED);
     }
 

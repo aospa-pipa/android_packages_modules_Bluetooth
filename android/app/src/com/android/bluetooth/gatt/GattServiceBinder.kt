@@ -499,7 +499,7 @@ class GattServiceBinder(private var gattService: GattService?) :
         requestId: Int,
         status: Int,
         offset: Int,
-        value: ByteArray,
+        value: ByteArray?,
         source: AttributionSource,
     ) {
         getServerManagerAndEnforceConnect(source)

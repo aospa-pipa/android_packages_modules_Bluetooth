@@ -257,8 +257,9 @@ typedef struct {
   bool le_periodic_advertising_sync_transfer_recipient_supported;
   uint16_t adv_filter_extended_features_mask;
   bool le_channel_sounding_supported;
+  bool le_high_data_rate_throughput_supported;
   bool le_hdt_phy_supported;
-} bt_local_le_features_t;
+} __attribute__((packed)) bt_local_le_features_t;
 
 typedef struct {
   uint8_t number_of_supported_offloaded_le_coc_sockets;

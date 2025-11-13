@@ -206,6 +206,8 @@ interface IBluetooth {
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
     boolean isLeCodedPhySupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
+    boolean isLeHighDataThroughputPhySupported();
+    @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
     boolean isLeExtendedAdvertisingSupported();
     @JavaPassthrough(annotation="@android.annotation.RequiresNoPermission")
     boolean isLePeriodicAdvertisingSupported();
