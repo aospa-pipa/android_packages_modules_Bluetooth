@@ -94,6 +94,7 @@ public class DistanceMeasurementManager {
 
     DistanceMeasurementManager(
             AdapterService adapterService,
+            GattService gattService,
             DistanceMeasurementNativeInterface nativeInterface,
             Looper looper) {
         mAdapterService = adapterService;
@@ -119,7 +120,8 @@ public class DistanceMeasurementManager {
                         nativeInterface,
                         () -> new DistanceMeasurementNativeInterface(nativeCallback));
         mNativeInterface.init();
-        mDistanceMeasurementBinder = new DistanceMeasurementBinder(adapterService, this);
+        mDistanceMeasurementBinder =
+                new DistanceMeasurementBinder(mAdapterService, gattService, this);
         mHasChannelSoundingFeature =
                 adapterService
                         .getPackageManager()
