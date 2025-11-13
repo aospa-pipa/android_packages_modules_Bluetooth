@@ -3272,16 +3272,18 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @param autoConnect Whether to directly connect to the remote device (false) or to
      *     automatically connect as soon as the remote device becomes available (true).
      * @throws IllegalArgumentException if callback is null
+     * @deprecated Use {@link #connectGatt(BluetoothGattConnectionSettings)}.
      */
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
+    @Deprecated
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public BluetoothGatt connectGatt(
             Context context, boolean autoConnect, BluetoothGattCallback callback) {
         return (connectGatt(
-                new BluetoothGattConnectionSettings.Builder()
-                        .setAutoConnectEnabled(autoConnect)
-                        .setBluetoothGattCallback(
+                new BluetoothGattConnectionSettings.Builder(
                                 new BluetoothUtils.SynchronousExecutor(), callback)
+                        .setAutoConnectEnabled(autoConnect)
                         .setTransport(TRANSPORT_AUTO)
                         .build()));
     }
@@ -3299,16 +3301,18 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *     BluetoothDevice#TRANSPORT_AUTO} or {@link BluetoothDevice#TRANSPORT_BREDR} or {@link
      *     BluetoothDevice#TRANSPORT_LE}
      * @throws IllegalArgumentException if callback is null
+     * @deprecated Use {@link #connectGatt(BluetoothGattConnectionSettings)}.
      */
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
+    @Deprecated
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public BluetoothGatt connectGatt(
             Context context, boolean autoConnect, BluetoothGattCallback callback, int transport) {
         return (connectGatt(
-                new BluetoothGattConnectionSettings.Builder()
-                        .setAutoConnectEnabled(autoConnect)
-                        .setBluetoothGattCallback(
+                new BluetoothGattConnectionSettings.Builder(
                                 new BluetoothUtils.SynchronousExecutor(), callback)
+                        .setAutoConnectEnabled(autoConnect)
                         .setTransport(transport)
                         .build()));
     }
@@ -3330,7 +3334,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *     BluetoothDevice#PHY_LE_CODED_MASK}. This option does not take effect if {@code
      *     autoConnect} is set to true.
      * @throws NullPointerException if callback is null
+     * @deprecated Use {@link #connectGatt(BluetoothGattConnectionSettings)}.
      */
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
+    @Deprecated
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public BluetoothGatt connectGatt(
@@ -3340,10 +3347,9 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             int transport,
             int phy) {
         return (connectGatt(
-                new BluetoothGattConnectionSettings.Builder()
-                        .setAutoConnectEnabled(autoConnect)
-                        .setBluetoothGattCallback(
+                new BluetoothGattConnectionSettings.Builder(
                                 new BluetoothUtils.SynchronousExecutor(), callback)
+                        .setAutoConnectEnabled(autoConnect)
                         .setTransport(transport)
                         .build()));
     }
@@ -3367,7 +3373,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @param handler The handler to use for the callback. If {@code null}, callbacks will happen on
      *     an un-specified background thread.
      * @throws NullPointerException if callback is null
+     * @deprecated Use {@link #connectGatt(BluetoothGattConnectionSettings)}.
      */
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
+    @Deprecated
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public BluetoothGatt connectGatt(
@@ -3378,13 +3387,12 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             int phy,
             Handler handler) {
         return (connectGatt(
-                new BluetoothGattConnectionSettings.Builder()
-                        .setAutoConnectEnabled(autoConnect)
-                        .setBluetoothGattCallback(
+                new BluetoothGattConnectionSettings.Builder(
                                 handler != null
                                         ? handler::post
                                         : new BluetoothUtils.SynchronousExecutor(),
                                 callback)
+                        .setAutoConnectEnabled(autoConnect)
                         .setTransport(transport)
                         .build()));
     }
@@ -3411,7 +3419,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @param executor The executor to use for the callback.
      * @return A BluetoothGatt instance. You can use BluetoothGatt to conduct GATT client
      *     operations.
+     * @deprecated Use {@link #connectGatt(BluetoothGattConnectionSettings)}.
      */
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
+    @Deprecated
     @Hide
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
@@ -3425,35 +3436,33 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             @NonNull BluetoothGattCallback callback,
             @NonNull @CallbackExecutor Executor executor) {
         return (connectGatt(
-                new BluetoothGattConnectionSettings.Builder()
+                new BluetoothGattConnectionSettings.Builder(executor, callback)
                         .setAutoConnectEnabled(autoConnect)
-                        .setBluetoothGattCallback(executor, callback)
                         .setTransport(transport)
                         .setOpportunisticEnabled(opportunistic)
                         .build()));
     }
 
     /**
-     * Connect to the GATT Server hosted by the given device. Caller acts as a GATT client. The
-     * {@link BluetoothGattConnectionSettings#setBluetoothGattCallback(BluetoothCallback)} is used
-     * to set the callback which will deliver results to the Caller, such as connection updates and
-     * GATT client operation results. The method returns a {@link BluetoothGatt} instance. The
-     * application can use BluetoothGatt to conduct GATT client operations.
+     * Connect to the GATT Server hosted by the given device. Caller acts as a GATT client. {@link
+     * BluetoothGattCallback} of {@link BluetoothGattConnectionSettings} will deliver results to the
+     * Caller, such as connection updates and GATT client operation results. The method returns a
+     * {@link BluetoothGatt} instance. The application can use BluetoothGatt to conduct GATT client
+     * operations.
      *
      * @param gattConnectionSettings {@link BluetoothGattConnectionSettings} objects with required
      *     gatt settings for the GATT connection
+     * @return A BluetoothGatt instance. You can use BluetoothGatt to conduct GATT client
+     *     operations.
+     * @throws NullPointerException if gattConnectionSettings is null.
      */
-    @Hide
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    @Nullable
-    BluetoothGatt connectGatt(@NonNull BluetoothGattConnectionSettings gattConnectionSettings) {
+    public @Nullable BluetoothGatt connectGatt(
+            @NonNull BluetoothGattConnectionSettings gattConnectionSettings) {
         if (gattConnectionSettings == null) {
             throw new NullPointerException("settings is null");
-        }
-
-        if (gattConnectionSettings.getBluetoothGattCallback() == null) {
-            throw new NullPointerException("Bluetooth gatt callback is null");
         }
 
         // TODO(Bluetooth) check whether platform support BLE
@@ -3470,6 +3479,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
                 new BluetoothGatt(iGatt, this, mAttributionSource, gattConnectionSettings);
         return gatt;
     }
+
     /**
      * Create a Bluetooth L2CAP Connection-oriented Channel (CoC) {@link BluetoothSocket} that can
      * be used to start a secure outgoing connection to the remote device with the same dynamic

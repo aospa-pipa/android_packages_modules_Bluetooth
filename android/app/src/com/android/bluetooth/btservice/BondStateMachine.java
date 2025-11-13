@@ -742,7 +742,7 @@ public final class BondStateMachine extends StateMachine {
     }
 
     /** Callback from native indicating an incoming pairing request */
-    void sspRequestCallback(byte[] address, int pairingVariant, int passkey) {
+    void sspRequestCallback(byte[] address, int pairingVariant, int passkey, int pairingAlgorithm) {
         int variant;
         boolean displayPasskey = false;
         switch (pairingVariant) {
@@ -779,7 +779,9 @@ public final class BondStateMachine extends StateMachine {
                         + " pairingVariant "
                         + pairingVariant
                         + " passkey: "
-                        + (Build.isDebuggable() ? passkey : "******"));
+                        + (Build.isDebuggable() ? passkey : "******")
+                        + "pairingAlgorithm: "
+                        + pairingAlgorithm);
 
         BluetoothDevice device = mRemoteDevices.getDevice(address);
         if (device == null) {
@@ -810,7 +812,12 @@ public final class BondStateMachine extends StateMachine {
     }
 
     /** Callback from native indicating a pin confirmation request is needed */
-    void pinRequestCallback(byte[] address, byte[] name, int deviceClass, boolean min16Digits) {
+    void pinRequestCallback(
+            byte[] address,
+            byte[] name,
+            int deviceClass,
+            boolean min16Digits,
+            int pairingAlgorithm) {
         // TODO(BT): Get wakelock and update name and class of device
 
         BluetoothDevice bdDevice = mRemoteDevices.getDevice(address);
@@ -828,7 +835,13 @@ public final class BondStateMachine extends StateMachine {
                 BluetoothProtoEnums.BOND_SUB_STATE_LOCAL_PIN_REQUESTED,
                 0);
 
-        logD("pinRequestCallback: " + bdDevice + " deviceClass:" + new BluetoothClass(deviceClass));
+        logD(
+                "pinRequestCallback: "
+                        + bdDevice
+                        + " deviceClass:"
+                        + new BluetoothClass(deviceClass)
+                        + " pairingAlgorithm: "
+                        + pairingAlgorithm);
 
         Message msg = obtainMessage(MESSAGE_PIN_REQUEST);
         msg.obj = bdDevice;

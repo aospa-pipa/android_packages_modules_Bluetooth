@@ -942,6 +942,7 @@ public final class BluetoothGatt implements BluetoothProfile {
         }
     }
 
+    @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     BluetoothGatt(
