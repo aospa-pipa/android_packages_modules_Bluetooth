@@ -1382,6 +1382,8 @@ LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionSubratingHost, 38)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleChannelSounding, 46)
 /* TODO: Decide and change bit number for HDT support, for testing keep this false since SoC support NA */
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleHDTPhy, 47)
+// TODO(b/455578977): Update the bit later, bit 56 is reserved for furture use in spec
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleHighDataThroughputPhy, 56)
 
 uint64_t ControllerImpl::GetLocalFeatures(uint8_t page_number) const {
   if (page_number < impl_->extended_lmp_features_array_.size()) {

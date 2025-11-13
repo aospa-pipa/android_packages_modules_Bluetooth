@@ -40,6 +40,7 @@ import android.os.Looper;
 import android.os.RemoteException;
 import android.util.Log;
 
+import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
@@ -99,7 +100,7 @@ public class AdvertiseManager {
         mActivityManager = mAdapterService.getSystemService(ActivityManager.class);
         mNativeInterface.init();
         mHandler = new Handler(advertiseLooper);
-        mAdvertiseBinder = new AdvertiseBinder(mAdapterService, this);
+        mAdvertiseBinder = new AdvertiseBinder(mAdapterService, mGattService, this);
         mAdvertiseSuspendManager = new AdvertiseSuspendManager(this, adapterService);
     }
 
@@ -143,25 +144,7 @@ public class AdvertiseManager {
     private record AdvertiserInfo(
             /* When id is negative, the registration is ongoing. When the registration finishes, id
              * becomes equal to advertiser_id */
-            Integer id,
-            AdvertisingSetDeathRecipient deathRecipient,
-            IAdvertisingSetCallback callback) {}
-
-    private class AdvertisingSetDeathRecipient implements IBinder.DeathRecipient {
-        private final IAdvertisingSetCallback mCallback;
-        private final String mAppName;
-
-        AdvertisingSetDeathRecipient(IAdvertisingSetCallback callback, String appName) {
-            this.mCallback = callback;
-            this.mAppName = appName;
-        }
-
-        @Override
-        public void binderDied() {
-            Log.d(TAG, "Binder is dead - unregistering advertising set (" + mAppName + ")!");
-            doOnAdvertiseThread(() -> stopAdvertisingSet(mCallback));
-        }
-    }
+            Integer id, ActionOnDeathRecipient deathRecipient, IAdvertisingSetCallback callback) {}
 
     private Map.Entry<IBinder, AdvertiserInfo> findAdvertiser(int advertiserId) {
         return mAdvertisers.entrySet().stream()
@@ -175,7 +158,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onAdvertisingSetStarted(): regId=" + regId + ", advertiserId=" + advertiserId)
                         + (", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(regId);
         if (entry == null) {
@@ -209,10 +192,7 @@ public class AdvertiseManager {
 
         mAdvertiseSuspendManager.onAdvertisingSetStarted(regId, advertiserId, status);
 
-        callbackToApp(
-                () ->
-                        callback.onAdvertisingSetStarted(
-                                mAdvertiseBinder, advertiserId, txPower, status));
+        callbackToApp(() -> callback.onAdvertisingSetStarted(advertiserId, txPower, status));
     }
 
     void onAdvertisingEnabled(int advertiserId, boolean enable, int status) {
@@ -220,7 +200,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onAdvertisingSetEnabled(): advertiserId=" + advertiserId + ", enable=" + enable)
                         + (", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -274,7 +254,7 @@ public class AdvertiseManager {
             IBluetoothGattServerCallback gattServerCallback,
             IAdvertisingSetCallback callback,
             AttributionSource source) {
-        checkThread();
+        enforceThread();
 
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
@@ -308,10 +288,7 @@ public class AdvertiseManager {
             Log.w(TAG, "Cannot advertise an isolated GATT server using a resolvable address");
             try {
                 callback.onAdvertisingSetStarted(
-                        mAdvertiseBinder,
-                        0x00,
-                        0x00,
-                        AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
+                        0x00, 0x00, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
             } catch (RemoteException exception) {
                 Log.e(TAG, "Failed to callback:" + Log.getStackTraceString(exception));
             }
@@ -320,7 +297,9 @@ public class AdvertiseManager {
 
         int uid = Flags.gattThread() ? source.getUid() : Binder.getCallingUid();
         var appName = Util.appNameOrUnknown(mAdapterService, uid);
-        final var deathRecipient = new AdvertisingSetDeathRecipient(callback, appName);
+        var message = "Unregistering advertising set (" + appName + ")!";
+        Runnable onDeathAction = () -> doOnAdvertiseThread(() -> stopAdvertisingSet(callback));
+        var deathRecipient = new ActionOnDeathRecipient(TAG, message, onDeathAction);
         final var binder = callback.asBinder();
         byte[] encryptedKeyMaterialValue = new byte[0];
         try {
@@ -381,10 +360,7 @@ public class AdvertiseManager {
             try {
                 binder.unlinkToDeath(deathRecipient, 0);
                 callback.onAdvertisingSetStarted(
-                        mAdvertiseBinder,
-                        0x00,
-                        0x00,
-                        AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE);
+                        0x00, 0x00, AdvertiseCallback.ADVERTISE_FAILED_DATA_TOO_LARGE);
             } catch (RemoteException exception) {
                 Log.e(TAG, "Failed to callback:" + Log.getStackTraceString(exception));
             }
@@ -393,7 +369,7 @@ public class AdvertiseManager {
 
     void onOwnAddressRead(int advertiserId, int addressType, String address) {
         Log.d(TAG, "onOwnAddressRead(): advertiserId=" + advertiserId);
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -406,7 +382,7 @@ public class AdvertiseManager {
     }
 
     void getOwnAddress(int advertiserId) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueGetOwnAddress(advertiserId);
@@ -422,7 +398,7 @@ public class AdvertiseManager {
     }
 
     void stopAdvertisingSet(IAdvertisingSetCallback callback) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueStopAdvertisingSet(callback);
@@ -465,7 +441,7 @@ public class AdvertiseManager {
             int duration,
             int maxExtAdvEvents,
             AttributionSource source) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueEnableAdvertisingSet(
@@ -488,7 +464,7 @@ public class AdvertiseManager {
     }
 
     void setAdvertisingData(int advertiserId, AdvertiseData data) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetAdvertisingData(advertiserId, data);
@@ -519,7 +495,7 @@ public class AdvertiseManager {
     }
 
     void setScanResponseData(int advertiserId, AdvertiseData data) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetScanResponseData(advertiserId, data);
@@ -550,7 +526,7 @@ public class AdvertiseManager {
     }
 
     void setAdvertisingParameters(int advertiserId, AdvertisingSetParameters parameters) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetAdvertisingParameters(advertiserId, parameters);
@@ -568,7 +544,7 @@ public class AdvertiseManager {
 
     void setPeriodicAdvertisingParameters(
             int advertiserId, PeriodicAdvertisingParameters parameters) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetPeriodicAdvertisingParameters(
@@ -586,7 +562,7 @@ public class AdvertiseManager {
     }
 
     void setPeriodicAdvertisingData(int advertiserId, AdvertiseData data) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetPeriodicAdvertisingData(advertiserId, data);
@@ -617,7 +593,7 @@ public class AdvertiseManager {
     }
 
     void setPeriodicAdvertisingEnable(int advertiserId, boolean enable) {
-        checkThread();
+        enforceThread();
         if (mAdvertiseSuspendManager.shouldQueueCommand()) {
             Log.i(TAG, "Suspending! Queue command and return early.");
             mAdvertiseSuspendManager.queueSetPeriodicAdvertisingEnable(advertiserId, enable);
@@ -633,7 +609,7 @@ public class AdvertiseManager {
     }
 
     void onAdvertisingDataSet(int advertiserId, int status) {
-        checkThread();
+        enforceThread();
         Log.d(TAG, "onAdvertisingDataSet() advertiserId=" + advertiserId + ", status=" + status);
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
@@ -647,7 +623,7 @@ public class AdvertiseManager {
     }
 
     void onScanResponseDataSet(int advertiserId, int status) {
-        checkThread();
+        enforceThread();
         Log.d(TAG, "onScanResponseDataSet() advertiserId=" + advertiserId + ", status=" + status);
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
@@ -665,7 +641,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onAdvertisingParametersUpdated(): advertiserId=" + advertiserId)
                         + (", txPower=" + txPower + ", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -682,7 +658,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onPeriodicAdvertisingParametersUpdated(): advertiserId=" + advertiserId)
                         + (", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -701,7 +677,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onPeriodicAdvertisingDataSet(): advertiserId=" + advertiserId)
                         + (", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -718,7 +694,7 @@ public class AdvertiseManager {
                 TAG,
                 ("onPeriodicAdvertisingEnabled(): advertiserId=" + advertiserId)
                         + (", status=" + status));
-        checkThread();
+        enforceThread();
 
         final Map.Entry<IBinder, AdvertiserInfo> entry = findAdvertiser(advertiserId);
         if (entry == null) {
@@ -751,6 +727,11 @@ public class AdvertiseManager {
     }
 
     private void forceRunSyncOnAdvertiseThread(Runnable r) {
+        if (Utils.isInstrumentationTestMode()) {
+            r.run();
+            return;
+        }
+
         final CompletableFuture<Void> future = new CompletableFuture<>();
         final var posted =
                 mHandler.postAtFrontOfQueue(
@@ -769,8 +750,10 @@ public class AdvertiseManager {
         }
     }
 
-    private void checkThread() {
-        if (!mHandler.getLooper().isCurrentThread() && !Utils.isInstrumentationTestMode()) {
+    private void enforceThread() {
+        if (Utils.isInstrumentationTestMode()) return;
+
+        if (!mHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Not on advertise thread");
         }
     }

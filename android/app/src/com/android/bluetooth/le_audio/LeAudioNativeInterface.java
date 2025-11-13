@@ -409,6 +409,17 @@ public class LeAudioNativeInterface {
         groupConfirmActiveNative(groupId);
     }
 
+    /**
+     * Sets the in game flag. *
+     *
+     * @param inGame A boolean value indicating whether the game is playing ({@code true}) or not
+     *     ({@code false}).
+     */
+    void setInGame(boolean inGame) {
+        Log.d(TAG, "setInGame inGame=" + inGame);
+        setInGameNative(inGame);
+    }
+
     // Native methods that call into the JNI interface
     private native void initNative(BluetoothLeAudioCodecConfig[] codecConfigOffloading);
 
@@ -447,4 +458,6 @@ public class LeAudioNativeInterface {
             int groupId, int sinkContextTypes, int sourceContextTypes);
 
     private native void groupConfirmActiveNative(int groupId);
+
+    private native void setInGameNative(boolean inGame);
 }
