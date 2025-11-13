@@ -28,9 +28,12 @@ import android.annotation.PermissionMethod
 import android.annotation.PermissionName
 import android.annotation.RequiresPermission
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothUtils
 import android.content.AttributionSource
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.IBinder
+import android.os.RemoteException
 import android.permission.PermissionManager
 import android.permission.PermissionManager.PERMISSION_GRANTED
 import android.permission.PermissionManager.PERMISSION_HARD_DENIED
@@ -91,6 +94,32 @@ object Util {
             BluetoothDevice.TRANSPORT_LE -> "LE"
             else -> "Unknown transport ($transport)"
         }
+
+    /**
+     * Check if BLE is supported by this platform
+     *
+     * @param context current device context
+     * @return `true` if BLE is supported, `false` otherwise
+     */
+    @JvmStatic
+    fun isBleSupported(context: Context) =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
+
+    /** @return `true` if this Android device is an automotive device, `false` otherwise */
+    @JvmStatic
+    fun isAutomotive(context: Context) =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
+
+    /** @return `true` if this Android device is a TV device, `false` otherwise */
+    @JvmStatic
+    fun isTv(context: Context) =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION) ||
+            context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+
+    /** @return `true` if this Android device is a watch device, `false` otherwise */
+    @JvmStatic
+    fun isWatch(context: Context) =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)
 
     /** Returns `true` if the caller holds [NETWORK_SETTINGS] */
     @JvmStatic
@@ -241,6 +270,14 @@ object Util {
             return false
         }
     }
+
+    /** Execute a remote callback without propagating the [RemoteException] of a dead app */
+    internal inline fun callbackToApp(block: () -> Unit) =
+        try {
+            block()
+        } catch (e: RemoteException) {
+            BluetoothUtils.logRemoteException(TAG, e)
+        }
 }
 
 class ActionOnDeathRecipient(

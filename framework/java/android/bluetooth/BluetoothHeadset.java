@@ -977,8 +977,12 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * audio connection.
      *
      * @return whether the connection was successfully initiated or an error code on failure
+     * @deprecated Starting with API 37, applications should use {@link
+     *     android.telecom.InCallService#requestBluetoothAudio(BluetoothDevice)}
      */
     @Hide
+    @FlaggedApi(Flags.FLAG_DEPRECATE_CONNECT_AUDIO)
+    @Deprecated
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1027,8 +1031,12 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * #STATE_AUDIO_DISCONNECTED}.
      *
      * @return whether the disconnection was initiated successfully or an error code on failure
+     * @deprecated Starting with API 37, applications should use {@link
+     *     android.telecom.InCallService#requestBluetoothAudio(BluetoothDevice)}
      */
     @Hide
+    @FlaggedApi(Flags.FLAG_DEPRECATE_CONNECT_AUDIO)
+    @Deprecated
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1190,8 +1198,11 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * @param device Remote Bluetooth Device, could be null if phone call audio should not be
      *     streamed to a headset
      * @return false on immediate error, true otherwise
+     * @deprecated this method should not be utilized for audio routing. System components can use
+     *     {@link BluetoothAdapter#setActiveDevice(BluetoothDevice, int)}
      */
     @Hide
+    @Deprecated
     @RequiresLegacyBluetoothAdminPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
@@ -1222,8 +1233,11 @@ public final class BluetoothHeadset implements BluetoothProfile {
      * Get the connected device that is active.
      *
      * @return the connected device that is active or null if no device is active.
+     * @deprecated this method should not be utilized for audio routing. System components can use
+     *     {@link BluetoothAdapter#getActiveDevices(int)}
      */
     @Hide
+    @Deprecated
     @UnsupportedAppUsage(trackingBug = 171933273)
     @Nullable
     @RequiresLegacyBluetoothPermission
