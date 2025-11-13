@@ -981,7 +981,7 @@ static void l2c_send(char* p) {
 static int l2c_pair(char* p) {
   RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
   if (BT_STATUS_SUCCESS !=
-      sBtInterface->create_bond(&bd_addr, TRANSPORT_BREDR)) {
+      sBtInterface->create_bond(bd_addr, TRANSPORT_BREDR)) {
     printf("Failed to Initiate Pairing \n");
     return FALSE;
   }
