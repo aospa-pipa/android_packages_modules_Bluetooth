@@ -892,8 +892,6 @@ provider::get_a2dp_configuration(
           ~((int64_t)QHS_SUPPORT_MASK);
     a2dp_configuration.codec_parameters.codec_specific_3 |=
          (int64_t)QHS_SUPPORT_AVAILABLE;
-    a2dp_configuration.codec_parameters.codec_specific_3 |=
-         (int64_t)APTX_ADAPTIVE_R2_2_SUPPORT_AVAILABLE;
   }
   return a2dp_configuration;
 }
