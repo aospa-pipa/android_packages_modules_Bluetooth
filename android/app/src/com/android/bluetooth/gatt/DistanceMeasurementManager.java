@@ -94,6 +94,7 @@ public class DistanceMeasurementManager {
 
     DistanceMeasurementManager(
             AdapterService adapterService,
+            GattService gattService,
             DistanceMeasurementNativeInterface nativeInterface,
             Looper looper) {
         mAdapterService = adapterService;
@@ -119,7 +120,8 @@ public class DistanceMeasurementManager {
                         nativeInterface,
                         () -> new DistanceMeasurementNativeInterface(nativeCallback));
         mNativeInterface.init();
-        mDistanceMeasurementBinder = new DistanceMeasurementBinder(adapterService, this);
+        mDistanceMeasurementBinder =
+                new DistanceMeasurementBinder(mAdapterService, gattService, this);
         mHasChannelSoundingFeature =
                 adapterService
                         .getPackageManager()
@@ -184,7 +186,7 @@ public class DistanceMeasurementManager {
             int appUid,
             DistanceMeasurementParams params,
             IDistanceMeasurementCallback callback) {
-        checkThread();
+        enforceThread();
 
         if (mIsTurnedOff) {
             Log.d(TAG, "BT is turned off, no new request is allowed.");
@@ -300,7 +302,7 @@ public class DistanceMeasurementManager {
     }
 
     int stopDistanceMeasurement(UUID uuid, BluetoothDevice device, int method, boolean timeout) {
-        checkThread();
+        enforceThread();
 
         Log.i(
                 TAG,
@@ -331,6 +333,8 @@ public class DistanceMeasurementManager {
     }
 
     int getChannelSoundingMaxSupportedSecurityLevel(BluetoothDevice remoteDevice) {
+        enforceThread();
+
         if (mHasChannelSoundingFeature && mAdapterService.isLeChannelSoundingSupported()) {
             return ChannelSoundingParams.CS_SECURITY_LEVEL_ONE;
         }
@@ -338,6 +342,8 @@ public class DistanceMeasurementManager {
     }
 
     int getLocalChannelSoundingMaxSupportedSecurityLevel() {
+        enforceThread();
+
         if (mHasChannelSoundingFeature && mAdapterService.isLeChannelSoundingSupported()) {
             return ChannelSoundingParams.CS_SECURITY_LEVEL_ONE;
         }
@@ -345,7 +351,7 @@ public class DistanceMeasurementManager {
     }
 
     Set<Integer> getChannelSoundingSupportedSecurityLevels() {
-        checkThread();
+        enforceThread();
 
         // TODO(b/378685103): get it from the HAL when level 4 is supported and HAL v2 is available.
         if (mHasChannelSoundingFeature && mAdapterService.isLeChannelSoundingSupported()) {
@@ -464,7 +470,7 @@ public class DistanceMeasurementManager {
     }
 
     void onDistanceMeasurementStarted(String address, int method) {
-        checkThread();
+        enforceThread();
 
         logd(
                 "onDistanceMeasurementStarted address:"
@@ -517,7 +523,7 @@ public class DistanceMeasurementManager {
     }
 
     void onDistanceMeasurementStopped(String address, int reason, int method) {
-        checkThread();
+        enforceThread();
         logd(
                 "onDistanceMeasurementStopped address:"
                         + BluetoothUtils.toAnonymizedAddress(address)
@@ -580,7 +586,7 @@ public class DistanceMeasurementManager {
             int detectedAttackLevel,
             double velocityMetersPerSecond,
             int method) {
-        checkThread();
+        enforceThread();
         logd(
                 "onDistanceMeasurementResult "
                         + BluetoothUtils.toAnonymizedAddress(address)
@@ -712,10 +718,10 @@ public class DistanceMeasurementManager {
         }
     }
 
-    private void checkThread() {
-        if (Flags.distanceMeasurementThread()
-                && !mHandler.getLooper().isCurrentThread()
-                && !Utils.isInstrumentationTestMode()) {
+    private void enforceThread() {
+        if (Utils.isInstrumentationTestMode()) return;
+
+        if (Flags.distanceMeasurementThread() && !mHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Not on distance measurement thread");
         }
     }

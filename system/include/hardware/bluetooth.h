@@ -257,8 +257,9 @@ typedef struct {
   bool le_periodic_advertising_sync_transfer_recipient_supported;
   uint16_t adv_filter_extended_features_mask;
   bool le_channel_sounding_supported;
+  bool le_high_data_rate_throughput_supported;
   bool le_hdt_phy_supported;
-} bt_local_le_features_t;
+} __attribute__((packed)) bt_local_le_features_t;
 
 typedef struct {
   uint8_t number_of_supported_offloaded_le_coc_sockets;
@@ -571,6 +572,49 @@ typedef struct {
 
 #define BT_MAX_NUM_UUIDS 40
 
+enum class PairingAlgorithm : uint8_t {
+  NONE, /* Indicates pairing information is not available */
+  LEGACY, /* Used by both BR/EDR and LE */
+  SSP, /* Secure Simple Pairing (only used for BR/EDR) */
+  SC,  /* Secure Connections (for both BR/EDR and LE) */
+};
+
+static inline std::string pairing_algorithm_text(const PairingAlgorithm& pairing_algorithm) {
+  switch (pairing_algorithm) {
+    CASE_RETURN_STRING(PairingAlgorithm::NONE);
+    CASE_RETURN_STRING(PairingAlgorithm::LEGACY);
+    CASE_RETURN_STRING(PairingAlgorithm::SC);
+    CASE_RETURN_STRING(PairingAlgorithm::SSP);
+    default:
+      RETURN_UNKNOWN_TYPE_STRING(PairingAlgorithm, pairing_algorithm);
+  }
+}
+
+enum LegacyPairingVariant : uint8_t {
+  PIN,
+  PIN_16,
+};
+
+static inline std::string bredr_legacy_pairing_variant_text(const LegacyPairingVariant& variant) {
+  switch (variant) {
+    CASE_RETURN_STRING(LegacyPairingVariant::PIN);
+    CASE_RETURN_STRING(LegacyPairingVariant::PIN_16);
+    default:
+      RETURN_UNKNOWN_TYPE_STRING(BredrLegacyPairingVariant, variant);
+  }
+}
+
+struct PairingType {
+  PairingAlgorithm algorithm;
+  union {
+    bt_ssp_variant_t variant;
+    LegacyPairingVariant legacy_variant;
+  };
+};
+
+constexpr PairingType kPairingTypeNone = {.algorithm = PairingAlgorithm::NONE,
+                                          .legacy_variant = LegacyPairingVariant::PIN};
+
 /** Bluetooth Interface callbacks */
 
 /** Bluetooth Enable/Disable Callback. */
@@ -606,7 +650,7 @@ typedef void (*discovery_state_changed_callback)(bt_discovery_state_t state);
 
 /** Bluetooth Legacy PinKey Request callback */
 typedef void (*pin_request_callback)(RawAddress* remote_bd_addr, bt_bdname_t* bd_name, uint32_t cod,
-                                     bool min_16_digit);
+                                     bool min_16_digit, PairingAlgorithm pairing_algorithm);
 
 /** Bluetooth SSP Request callback - Just Works & Numeric Comparison*/
 /** pass_key - Shall be 0 for BT_SSP_PAIRING_VARIANT_CONSENT &
@@ -614,12 +658,13 @@ typedef void (*pin_request_callback)(RawAddress* remote_bd_addr, bt_bdname_t* bd
 /* TODO: Passkey request callback shall not be needed for devices with display
  * capability. We still need support this in the stack for completeness */
 typedef void (*ssp_request_callback)(RawAddress* remote_bd_addr, bt_ssp_variant_t pairing_variant,
-                                     uint32_t pass_key);
+                                     uint32_t pass_key, PairingAlgorithm pairing_algorithm);
 
 /** Bluetooth Bond state changed callback */
 /* Invoked in response to create_bond, cancel_bond or remove_bond */
 typedef void (*bond_state_changed_callback)(bt_status_t status, RawAddress* remote_bd_addr,
-                                            bt_bond_state_t state, int fail_reason);
+                                            tBT_TRANSPORT transport, bt_bond_state_t state,
+                                            PairingType pairing_type, int fail_reason);
 
 /** Bluetooth Address consolidate callback */
 /* Callback to inform upper layer that these two addresses come from same
@@ -1084,6 +1129,10 @@ struct formatter<BtIoCap> : formatter<std::string> {
     return std::formatter<std::string>::format(BtIoCapText(io_cap), ctx);
   }
 };
+template <>
+struct formatter<PairingAlgorithm> : string_formatter<PairingAlgorithm, &pairing_algorithm_text> {};
+template <>
+struct formatter<LegacyPairingVariant> : enum_formatter<LegacyPairingVariant> {};
 }  // namespace std
 
 #endif  // __has_include(<bluetooth/log.h>)

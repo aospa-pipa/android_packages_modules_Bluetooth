@@ -72,6 +72,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** Remote device manager. This class is currently mostly used for HF and AG remote devices. */
@@ -391,6 +392,12 @@ public class RemoteDevices {
         @VisibleForTesting int mDiscoveryResultType = BluetoothDevice.DEVICE_TYPE_UNKNOWN;
         @VisibleForTesting boolean mHfpBatteryIndicator = false;
         private BluetoothSinkAudioPolicy mAudioPolicy;
+        private Optional<Integer> mLastBondLossReason;
+
+        private record BondStatus(int pairingAlgorithm, int pairingVariant) {}
+
+        private BondStatus mBredrBond;
+        private BondStatus mLeBond;
 
         static class LinkState {
             private final int mConnectionHandle;
@@ -553,6 +560,30 @@ public class RemoteDevices {
                     default ->
                             errorLog("setDisconnected(): unexpected transport value " + transport);
                 }
+            }
+        }
+
+        void setBondStatus(int transport, int pairingAlgorithm, int pairingVariant) {
+            synchronized (mObject) {
+                switch (transport) {
+                    case TRANSPORT_BREDR ->
+                            mBredrBond = new BondStatus(pairingAlgorithm, pairingVariant);
+                    case TRANSPORT_LE -> mLeBond = new BondStatus(pairingAlgorithm, pairingVariant);
+                    default -> errorLog("setBondStatus(): unexpected transport value " + transport);
+                }
+            }
+        }
+
+        BondStatus getBondStatus(int transport) {
+            synchronized (mObject) {
+                return switch (transport) {
+                    case TRANSPORT_BREDR -> mBredrBond;
+                    case TRANSPORT_LE -> mLeBond;
+                    default -> {
+                        errorLog("getBondStatus(): unexpected transport value " + transport);
+                        yield null;
+                    }
+                };
             }
         }
 
@@ -1056,6 +1087,18 @@ public class RemoteDevices {
                 // will make it the newest.
                 mPackages.remove(packageName);
                 mPackages.add(packageName);
+            }
+        }
+
+        public void setLastBondLossReason(Optional<Integer> bondLossReason) {
+            synchronized (mObject) {
+                this.mLastBondLossReason = bondLossReason;
+            }
+        }
+
+        public Optional<Integer> getLastBondLossReason() {
+            synchronized (mObject) {
+                return mLastBondLossReason;
             }
         }
     }
@@ -1741,6 +1784,16 @@ public class RemoteDevices {
         }
 
         mAdapterService.aclStateChangeBroadcastCallback(connectionChangeConsumer);
+
+        // Send the ACTION_KEY_MISSING Intent here if the link is disconnected in a bond-loss
+        // scenario.
+        if (Flags.enableAutonomousRepairing()
+                && mAdapterService.isBondLost(device)
+                && newState == AbstractionLayer.BT_ACL_STATE_DISCONNECTED
+                && deviceProperties.getLastBondLossReason().isPresent()) {
+            sendKeyMissingIntent(device, deviceProperties.getLastBondLossReason().get());
+            deviceProperties.setLastBondLossReason(Optional.empty()); // Reset once sent.
+        }
     }
 
     private void sendPairingCancelIntent(BluetoothDevice device) {
@@ -1783,11 +1836,33 @@ public class RemoteDevices {
         }
     }
 
-    void onBondStateChange(BluetoothDevice device, int newState) {
+    void onBondStateChange(
+            BluetoothDevice device,
+            int transport,
+            int newState,
+            int pairingAlgorithm,
+            int pairingVariant) {
         String address = device.getAddress();
 
         if (newState == BluetoothDevice.BOND_NONE) {
             removeDeviceProperties(address);
+        } else if (newState == BluetoothDevice.BOND_BONDED) {
+            Log.i(
+                    TAG,
+                    "onBondStateChange: device="
+                            + device
+                            + " newState="
+                            + newState
+                            + " transport="
+                            + transport
+                            + " pairingAlgorithm="
+                            + pairingAlgorithm
+                            + " pairingVariant="
+                            + pairingVariant);
+            DeviceProperties deviceProperties = getDeviceProperties(device);
+            if (deviceProperties != null) {
+                deviceProperties.setBondStatus(transport, pairingAlgorithm, pairingVariant);
+            }
         }
     }
 
@@ -1806,16 +1881,6 @@ public class RemoteDevices {
         }
 
         Log.i(TAG, "keyMissingCallback device: " + device + ", reason: " + reason);
-        Intent intent =
-                new Intent(BluetoothDevice.ACTION_KEY_MISSING)
-                        .putExtra(BluetoothDevice.EXTRA_DEVICE, device)
-                        .addFlags(
-                                Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
-                                        | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-
-        if (Flags.addBondLossReason()) {
-            intent.putExtra(BluetoothDevice.EXTRA_BOND_LOSS_REASON, reason);
-        }
 
         // Log transition to key missing state, if the key missing count is 0 which indicates
         // that the device is bonded until now.
@@ -1836,8 +1901,8 @@ public class RemoteDevices {
         // Some apps are not able to handle the key missing broadcast, so we need to remove
         // the bond to prevent them from misbehaving.
         // TODO (b/402854328): Remove when the misbehaving apps are updated
+        DeviceProperties deviceProperties = getDeviceProperties(device);
         if (bondLossIopFixNeeded(device)) {
-            DeviceProperties deviceProperties = getDeviceProperties(device);
             if (deviceProperties == null) {
                 return;
             }
@@ -1854,15 +1919,23 @@ public class RemoteDevices {
             }
         }
 
-        mAdapterService.sendOrderedBroadcast(
-                intent,
-                BLUETOOTH_CONNECT,
-                Utils.getTempBroadcastBundle(),
-                null /* resultReceiver */,
-                null /* scheduler */,
-                Activity.RESULT_OK /* initialCode */,
-                null /* initialData */,
-                null /* initialExtras */);
+        if (!Flags.enableAutonomousRepairing()) {
+            sendKeyMissingIntent(device, reason);
+            return;
+        }
+
+        deviceProperties.setLastBondLossReason(Optional.of(reason));
+        if (reason == BluetoothDevice.BOND_LOSS_REASON_BREDR_AUTH_FAILURE
+                || reason == BluetoothDevice.BOND_LOSS_REASON_LE_ENCRYPT_FAILURE) {
+            Log.i(
+                    TAG,
+                    "Bond loss is detected, initiating autonomous repairing for device: " + device);
+
+            // If the create bond procedure fails, that will be detected in
+            // BondStateMachine.createBond(). ACL disconnect will be initiated from that place
+            // instead.
+            mAdapterService.sendCreateBondMessage(device, TRANSPORT_AUTO, null, null);
+        }
     }
 
     void encryptionChangeCallback(
@@ -2390,6 +2463,9 @@ public class RemoteDevices {
                             : "XX:XX:XX:XX:XX:XX";
             int identityAddressType = deviceProperties.getIdentityAddress().getAddressType();
 
+            DeviceProperties.BondStatus bredrBondStatus =
+                    deviceProperties.getBondStatus(TRANSPORT_BREDR);
+            DeviceProperties.BondStatus leBondStatus = deviceProperties.getBondStatus(TRANSPORT_LE);
             boolean connectedBrEdr =
                     deviceProperties.getConnectionHandle(TRANSPORT_BREDR) != BluetoothDevice.ERROR;
             boolean connectedLe =
@@ -2410,6 +2486,10 @@ public class RemoteDevices {
                     .append(Util.deviceTypeToString(deviceProperties.getDeviceType()))
                     .append("] [0x")
                     .append(String.format("%06X", deviceProperties.getBluetoothClass()))
+                    .append("] [Pairing Algorithm BR/EDR: ")
+                    .append(bredrBondStatus == null ? "N/A" : bredrBondStatus.pairingAlgorithm)
+                    .append(" LE: ")
+                    .append(leBondStatus == null ? "N/A" : leBondStatus.pairingAlgorithm)
                     .append("] [ACL BR/EDR:")
                     .append(connectedBrEdr ? "Y" : "N")
                     .append(" LE:")
@@ -2419,8 +2499,15 @@ public class RemoteDevices {
                     .append(" LE: ")
                     .append(deviceProperties.getEncryptionStatus(TRANSPORT_LE))
                     .append("] ")
-                    .append(deviceProperties.getName())
-                    .append("\n");
+                    .append(deviceProperties.getName());
+
+            if (Flags.enableAutonomousRepairing()
+                    && deviceProperties.getLastBondLossReason().isPresent()) {
+                sb.append("[Latest bond-loss reason: ")
+                        .append(deviceProperties.getLastBondLossReason().get())
+                        .append("]");
+            }
+            sb.append("\n");
 
             ParcelUuid[] uuidsBrEdr = deviceProperties.getUuidsBrEdr();
             if (uuidsBrEdr != null) {
@@ -2460,5 +2547,29 @@ public class RemoteDevices {
         writer.println("  Other devices: " + knownCount);
         writer.println(sbKnown);
         writer.println();
+    }
+
+    // TODO: Remove this when enable_autonomous_repairing flag is removed.
+    private void sendKeyMissingIntent(BluetoothDevice device, int reason) {
+        Intent keyMissingIntent =
+                new Intent(BluetoothDevice.ACTION_KEY_MISSING)
+                        .putExtra(BluetoothDevice.EXTRA_DEVICE, device)
+                        .addFlags(
+                                Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
+                                        | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
+
+        if (Flags.addBondLossReason()) {
+            keyMissingIntent.putExtra(BluetoothDevice.EXTRA_BOND_LOSS_REASON, reason);
+        }
+
+        mAdapterService.sendOrderedBroadcast(
+                keyMissingIntent,
+                BLUETOOTH_CONNECT,
+                Utils.getTempBroadcastBundle(),
+                null /* resultReceiver */,
+                null /* scheduler */,
+                Activity.RESULT_OK /* initialCode */,
+                null /* initialData */,
+                null /* initialExtras */);
     }
 }

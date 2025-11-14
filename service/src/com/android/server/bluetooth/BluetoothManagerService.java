@@ -41,6 +41,8 @@ import static android.bluetooth.IBluetoothManager.EXTRA_STATE;
 import static android.os.PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_FOREGROUND_SERVICE_ALLOWED;
 import static android.provider.Settings.Global.DEVICE_NAME;
 
+import static com.android.bluetooth.util.Text.elapsedString;
+
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.NonNull;
@@ -77,6 +79,7 @@ import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.Text;
 import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.server.bluetooth.airplane.AirplaneModeController;
 import com.android.server.bluetooth.airplane.AirplaneModeListener;
 import com.android.server.bluetooth.satellite.SatelliteModeListener;
 
@@ -177,6 +180,7 @@ class BluetoothManagerService {
     private final boolean mIsHearingAidProfileSupported;
     private final String mHciInstanceName;
     private AutoOn mAutoOn;
+    private AirplaneModeController mAirplaneModeController;
     private SharingRestriction mSharingRestriction;
 
     private String mAddress;
@@ -246,13 +250,13 @@ class BluetoothManagerService {
                 @Override
                 public void onMediaProfileConnectionChange(boolean connected) {
                     Log.d(TAG, "IBluetoothCallback.onMediaProfileConnectionChange: " + connected);
-                    post(() -> AirplaneModeListener.setIsMediaProfileConnected(connected));
+                    post(() -> mAirplaneModeController.setIsMediaProfileConnected(connected));
                 }
 
                 @Override
                 public void onWatchConnectionChange(boolean connected) {
                     Log.d(TAG, "IBluetoothCallback.onWatchConnectionChange: " + connected);
-                    post(() -> AirplaneModeListener.setWatchConnectionState(connected));
+                    post(() -> mAirplaneModeController.setWatchConnectionState(connected));
                 }
 
                 @Override
@@ -327,7 +331,7 @@ class BluetoothManagerService {
         if (mAutoOn != null) {
             mAutoOn.factoryReset();
         }
-        AirplaneModeListener.factoryReset(mContentResolver, mUserContext);
+        mAirplaneModeController.factoryReset();
         setBtHciSnoopLogMode(-1);
 
         if (count == 10 || mState.oneOf(State.OFF)) {
@@ -381,7 +385,7 @@ class BluetoothManagerService {
                 TAG,
                 ("delayModeChangedIfNeeded(" + modeChanged + "):")
                         + (" state=" + mState)
-                        + (" Airplane.isOnOverrode=" + AirplaneModeListener.isOnOverrode())
+                        + (" Airplane.isOnForUser=" + mAirplaneModeController.isOnForUser())
                         + (" Airplane.isOn=" + AirplaneModeListener.isOn())
                         + (" isSatelliteModeOn()=" + isSatelliteModeOn())
                         + (" delayed=" + delay + "ms"));
@@ -442,7 +446,7 @@ class BluetoothManagerService {
         mBleAppManager.clearBleApps();
 
         if (reason == ENABLE_DISABLE_REASON_SATELLITE_MODE
-                || !AirplaneModeListener.hasUserToggledApm(mUserContext)) {
+                || !mAirplaneModeController.hasUserToggledApm()) {
             // AirplaneMode can have a state where it does not impact AutoOn
             if (mAutoOn != null) {
                 mAutoOn.pause();
@@ -519,7 +523,7 @@ class BluetoothManagerService {
             return false;
         }
 
-        if (AirplaneModeListener.isOnOverrode() && isBluetoothPersistedStateOnAirplane()) {
+        if (mAirplaneModeController.isOnForUser() && isBluetoothPersistedStateOnAirplane()) {
             Log.d(TAG, "shouldBluetoothBeOn: BT should be off as airplaneMode is on.");
             return false;
         }
@@ -996,8 +1000,8 @@ class BluetoothManagerService {
         return Unit.INSTANCE;
     }
 
-    private static boolean isAirplaneModeOn() {
-        return AirplaneModeListener.isOnOverrode();
+    AirplaneModeController getAirplaneModeController() {
+        return mAirplaneModeController;
     }
 
     boolean enableNoAutoConnect(String packageName) {
@@ -1047,7 +1051,7 @@ class BluetoothManagerService {
 
         mQuietEnableExternal = false;
         mEnableExternal = true;
-        AirplaneModeListener.notifyUserToggledBluetooth(mContentResolver, mUserContext, true);
+        mAirplaneModeController.notifyUserToggledBluetooth(true);
         sendEnableMsg(false, reason, packageName);
         return true;
     }
@@ -1060,7 +1064,7 @@ class BluetoothManagerService {
                         + (" isBinding=" + isBinding())
                         + (" mState=" + mState));
 
-        AirplaneModeListener.notifyUserToggledBluetooth(mContentResolver, mUserContext, false);
+        mAirplaneModeController.notifyUserToggledBluetooth(false);
 
         if (persist) {
             setBluetoothPersistedState(BLUETOOTH_OFF);
@@ -1153,6 +1157,14 @@ class BluetoothManagerService {
         mUser = userHandle;
         mUserContext = mContext.createContextAsUser(userHandle, 0);
 
+        mAirplaneModeController =
+                new AirplaneModeController(
+                        mUserContext,
+                        mState,
+                        this::onAirplaneModeChanged,
+                        this::sendToggleNotification,
+                        TimeSource.Monotonic.INSTANCE);
+
         if (mConfigAllowAutoOn) {
             mAutoOn =
                     new AutoOn(
@@ -1161,17 +1173,8 @@ class BluetoothManagerService {
                             mUser,
                             mState,
                             this::enableFromAutoOn,
-                            BluetoothManagerService::isAirplaneModeOn);
+                            mAirplaneModeController);
         }
-
-        AirplaneModeListener.initialize(
-                mLooper,
-                mContentResolver,
-                mState,
-                this::onAirplaneModeChanged,
-                this::sendToggleNotification,
-                this::getUserContext,
-                TimeSource.Monotonic.INSTANCE);
 
         mSharingRestriction =
                 new SharingRestriction(mUserContext, mLooper, mBluetoothComponent, mUser);
@@ -1296,12 +1299,7 @@ class BluetoothManagerService {
                 Log.e(TAG, "Unknown service disconnected: " + name);
                 return;
             }
-
-            if (Flags.setComponentAvailableFix()) {
-                sendMessage(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED, componentName.getPackageName());
-            } else {
-                sendMessage(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED);
-            }
+            sendMessage(MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED, componentName.getPackageName());
         }
 
         @Override
@@ -1408,7 +1406,7 @@ class BluetoothManagerService {
                         if (mHandler.hasMessages(0, ON_AIRPLANE_MODE_CHANGED_TOKEN)) {
                             mHandler.removeCallbacksAndMessages(ON_AIRPLANE_MODE_CHANGED_TOKEN);
                             Log.d(TAG, "Handling delayed airplane mode event");
-                            handleAirplaneModeChanged(AirplaneModeListener.isOnOverrode());
+                            handleAirplaneModeChanged(mAirplaneModeController.isOnForUser());
                         }
                         // When performing FactoryReset, we currently depend on this to restart
                         if (mEnable && !isBinding()) {
@@ -1427,10 +1425,7 @@ class BluetoothManagerService {
                 }
                 case MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED -> {
                     Log.e(TAG, "MESSAGE_BLUETOOTH_SERVICE_DISCONNECTED");
-
-                    if (Flags.setComponentAvailableFix()) {
-                        disableBluetoothComponents((String) msg.obj);
-                    }
+                    disableBluetoothComponents((String) msg.obj);
 
                     if (!resetAdapter()) {
                         break;
@@ -1565,6 +1560,13 @@ class BluetoothManagerService {
         mNextUser = null;
         mUserContext = mContext.createContextAsUser(mUser, 0);
 
+        mAirplaneModeController =
+                new AirplaneModeController(
+                        mUserContext,
+                        mState,
+                        this::onAirplaneModeChanged,
+                        this::sendToggleNotification,
+                        TimeSource.Monotonic.INSTANCE);
         if (mConfigAllowAutoOn) {
             mAutoOn =
                     new AutoOn(
@@ -1573,7 +1575,7 @@ class BluetoothManagerService {
                             mUser,
                             mState,
                             this::enableFromAutoOn,
-                            BluetoothManagerService::isAirplaneModeOn);
+                            mAirplaneModeController);
         }
         mSharingRestriction =
                 new SharingRestriction(mUserContext, mLooper, mBluetoothComponent, mUser);
@@ -1795,8 +1797,8 @@ class BluetoothManagerService {
 
         if (prevState == State.ON) {
             autoOnSetupTimer();
-            AirplaneModeListener.setIsMediaProfileConnected(false);
-            AirplaneModeListener.setWatchConnectionState(false);
+            mAirplaneModeController.setIsMediaProfileConnected(false);
+            mAirplaneModeController.setWatchConnectionState(false);
         }
 
         if (newState == State.ON) {
@@ -2051,7 +2053,7 @@ class BluetoothManagerService {
         prepareRestartMessage();
 
         if (repeatAirplaneRunnable) {
-            onAirplaneModeChanged(AirplaneModeListener.isOnOverrode());
+            onAirplaneModeChanged(mAirplaneModeController.isOnForUser());
         }
     }
 
@@ -2064,13 +2066,7 @@ class BluetoothManagerService {
         writer.println("  Name:          " + mName);
         writer.println("  Inner app:     " + mBluetoothComponent.getPackageName());
         if (!mState.oneOf(State.OFF)) {
-            Duration elapsed = Duration.between(mLastBindingTime, Instant.now());
-            writer.println(
-                    "  Uptime:        "
-                            + elapsed.toString()
-                                    .substring(2)
-                                    .replaceAll("(\\d[HMS])(?!$)", "$1 ")
-                                    .toLowerCase(Locale.US));
+            writer.println("  Uptime:        " + elapsedString(mLastBindingTime, Instant.now()));
         }
 
         writer.println("");
