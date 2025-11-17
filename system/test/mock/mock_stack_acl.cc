@@ -55,6 +55,7 @@ struct acl_is_role_switch_allowed acl_is_role_switch_allowed;
 struct acl_is_switch_role_idle acl_is_switch_role_idle;
 struct acl_peer_supports_ble_2m_phy acl_peer_supports_ble_2m_phy;
 struct acl_peer_supports_ble_coded_phy acl_peer_supports_ble_coded_phy;
+struct acl_peer_supports_ble_hdt_phy acl_peer_supports_ble_hdt_phy;
 struct acl_send_data_packet_br_edr acl_send_data_packet_br_edr;
 struct acl_peer_supports_ble_connection_parameters_request
         acl_peer_supports_ble_connection_parameters_request;
@@ -156,6 +157,10 @@ bool acl_peer_supports_ble_2m_phy(uint16_t hci_handle) {
 bool acl_peer_supports_ble_coded_phy(uint16_t hci_handle) {
   inc_func_call_count(__func__);
   return test::mock::stack_acl::acl_peer_supports_ble_coded_phy(hci_handle);
+}
+bool acl_peer_supports_ble_hdt_phy(uint16_t hci_handle) {
+  inc_func_call_count(__func__);
+  return test::mock::stack_acl::acl_peer_supports_ble_hdt_phy(hci_handle);
 }
 bool acl_peer_supports_ble_connection_parameters_request(const RawAddress& remote_bda) {
   inc_func_call_count(__func__);

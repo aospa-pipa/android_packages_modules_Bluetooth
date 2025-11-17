@@ -103,7 +103,6 @@ static tBTA_SERVICE_MASK btif_enabled_services = 0;
  */
 static uint8_t btif_dut_mode = 0;
 
-static base::AtExitManager* exit_manager;
 static uid_set_t* uid_set;
 
 /*******************************************************************************
@@ -148,7 +147,6 @@ void btif_init_ok() {
  ******************************************************************************/
 bt_status_t btif_init_bluetooth() {
   log::info("entered");
-  exit_manager = new base::AtExitManager();
   jni_thread_startup();
   GetInterfaceToProfiles()->events->invoke_thread_evt_cb(ASSOCIATE_JVM);
   log::info("finished");
@@ -243,8 +241,6 @@ bt_status_t btif_cleanup_bluetooth() {
   GetInterfaceToProfiles()->events->invoke_thread_evt_cb(DISASSOCIATE_JVM);
   btif_queue_release();
   jni_thread_shutdown();
-  delete exit_manager;
-  exit_manager = nullptr;
   btif_dut_mode = 0;
   log::info("finished");
   return BT_STATUS_SUCCESS;
@@ -472,6 +468,7 @@ void btif_get_adapter_property(bt_property_type_t type) {
     }
     local_le_features.le_2m_phy_supported = controller->SupportsBle2mPhy();
     local_le_features.le_coded_phy_supported = controller->SupportsBleCodedPhy();
+    local_le_features.le_hdt_phy_supported = controller->SupportsBleHDTPhy();
     local_le_features.le_extended_advertising_supported =
             controller->SupportsBleExtendedAdvertising();
     local_le_features.le_periodic_advertising_supported =

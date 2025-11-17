@@ -40,6 +40,10 @@ void bluetooth::manager::SetMockBtmInterface(MockBtmInterface* mock_btm_interfac
                                                            tBT_TRANSPORT transport) {
     return btm_interface->IsPhy2mSupported(remote_bda, transport);
   };
+  mock_btm_client_interface.peer.BTM_IsPhyHDTSupported = [](const RawAddress& remote_bda,
+                                                            tBT_TRANSPORT transport) {
+    return btm_interface->IsPhyHDTSupported(remote_bda, transport);
+  };
   mock_btm_client_interface.peer.BTM_GetHCIConnHandle = [](RawAddress const& bd_addr,
                                                            tBT_TRANSPORT transport) -> uint16_t {
     return btm_interface->GetHCIConnHandle(bd_addr, transport);

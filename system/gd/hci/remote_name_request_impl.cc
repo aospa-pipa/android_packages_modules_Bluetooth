@@ -47,12 +47,6 @@ RemoteNameRequestModuleImpl::~RemoteNameRequestModuleImpl() {
   log::info("Destructing RemoteNameRequestModuleImpl");
   hci_layer_.UnregisterEventHandler(EventCode::REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION);
   hci_layer_.UnregisterEventHandler(EventCode::REMOTE_NAME_REQUEST_COMPLETE);
-  if (!com_android_bluetooth_flags_same_handler_for_all_modules()) {
-    handler_->Clear();
-    handler_->WaitUntilStopped(std::chrono::milliseconds(2000));
-    delete handler_;
-  }
-
   log::verbose("RemoteNameRequest module stopped !!");
 }
 
@@ -135,7 +129,15 @@ void RemoteNameRequestModuleImpl::actually_start_remote_name_request(
 
 void RemoteNameRequestModuleImpl::on_start_remote_name_request_status(
         Address address, CompletionCallback on_completion, CommandStatusView status) {
-  log::assert_that(pending_ == true, "assert failed: pending_ == true");
+    // unexpectedly sent a Remote Name Req Complete HCI event without the corresponding HCI command.
+#ifndef TARGET_FLOSS
+    log::assert_that(pending_ == true, "assert failed: pending_ == true");
+#else
+    if (pending_ != true) {
+      LOG_WARN("Unexpected remote name response with no request pending");
+      return;
+    }
+#endif
   log::assert_that(status.GetCommandOpCode() == OpCode::REMOTE_NAME_REQUEST,
                    "assert failed: status.GetCommandOpCode() == OpCode::REMOTE_NAME_REQUEST");
   log::info("Started remote name request peer:{} status:{}", address.ToRedactedStringForLogging(),

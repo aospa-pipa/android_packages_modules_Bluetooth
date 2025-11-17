@@ -3166,7 +3166,7 @@ void do_le_server_add_custom_service(char* p) {
 
   uuid_len = get_int(&p, -1);  // arg1 - Size in bytes for the uuid (2, 4, or
                                // 16)
-  std::string uuid_str = get_uuid_str(&p, uuid_len_bytes);  // arg2 service uuid
+  std::string uuid_str = get_uuid_str(&p, uuid_len);  // arg2 service uuid
   printf("%s:: uuid_str=%s \n", __FUNCTION__, uuid_str.c_str());
 
   std::vector<btgatt_db_element_t> service;

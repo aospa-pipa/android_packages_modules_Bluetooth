@@ -37,6 +37,7 @@ import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UExpression
 import org.jetbrains.uast.UField
 import org.jetbrains.uast.UMethod
+import org.jetbrains.uast.UParenthesizedExpression
 import org.jetbrains.uast.getContainingUMethod
 import org.jetbrains.uast.toUElementOfType
 import org.jetbrains.uast.tryResolve
@@ -79,20 +80,13 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
     private inner class RequiresPermissionVisitor(private val context: JavaContext) :
         UElementHandler() {
         override fun visitMethod(node: UMethod) {
-            if (context.evaluator.isAbstract(node)) {
-                return
-            }
+            if (context.evaluator.isAbstract(node)) return
 
-            val containingClass = node.containingClass ?: return
-            if (context.evaluator.inheritsFrom(containingClass, CLASS_BINDER, true)) {
-                val isBinderMethod = node.name == "onTransact" || node.name == "dump"
-                val isGeneratedBinderClass =
-                    containingClass.name?.matches(BINDER_INTERNALS_REGEX) == true
+            // Ignore certain types of Binder generated code
+            if (isBinderInternals(context, node)) return
 
-                if (isBinderMethod || isGeneratedBinderClass) {
-                    return
-                }
-            }
+            // Ignore known-local methods which don't need to propagate
+            if (isLocalInternals(context, node)) return
 
             val superPermissions = getRequiredPermissionsFromSuper(context, node)
             val enforcedPermissions =
@@ -106,7 +100,7 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
             }
 
             val declaredPermissions = getRequiredPermissionsFromMethod(context, node)
-            val nodeName = "${containingClass.name}.${node.name}"
+            val nodeName = "${node.containingClass?.name}.${node.name}"
             if (!superPermissions.isEmpty() && declaredPermissions != superPermissions) {
                 context.report(
                     ISSUE_MISSING_OR_MISMATCHED_REQUIRES_PERMISSION_ANNOTATION,
@@ -146,6 +140,25 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                 )
             }
         }
+
+        private fun isBinderInternals(context: JavaContext, method: UMethod): Boolean {
+            if (context.evaluator.inheritsFrom(method.containingClass, CLASS_BINDER, true)) {
+                val isBinderMethod = method.name == "onTransact" || method.name == "dump"
+                val isGeneratedBinderClass =
+                    method.containingClass?.name?.matches(BINDER_INTERNALS_REGEX) == true
+                if (isBinderMethod || isGeneratedBinderClass) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        private fun isLocalInternals(context: JavaContext, method: UMethod): Boolean {
+            if (context.evaluator.isMemberInSubClassOf(method, CLASS_BROADCAST_RECEIVER, false)) {
+                if (method.name == "onReceive") return true
+            }
+            return false
+        }
     }
 
     private inner class PermissionEnforcementVisitor(private val context: JavaContext) :
@@ -182,16 +195,16 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
                 }
             }
 
-            // Enforcement of `@RequiresPermission` is done via `RequiresPermissionVisitor`
-            context.evaluator.getAnnotation(method, ANNOTATION_REQUIRES_PERMISSION)?.let {
-                enforcedPermissions.addAll(parseAnnotation(context, it))
-                return true
-            }
+            listOf(*method.findSuperMethods(), method).forEach { m ->
+                // Enforcement of `@RequiresPermission` is done via `RequiresPermissionVisitor`
+                context.evaluator.getAnnotation(m, ANNOTATION_REQUIRES_PERMISSION)?.let {
+                    enforcedPermissions.addAll(parseAnnotation(context, it))
+                }
 
-            // Enforcement of `@EnforcePermission` is done via `EnforcePermissionDetector`
-            context.evaluator.getAnnotation(method, ANNOTATION_ENFORCE_PERMISSION)?.let {
-                enforcedPermissions.addAll(parseAnnotation(context, it))
-                return true
+                // Enforcement of `@EnforcePermission` is done via `EnforcePermissionDetector`
+                context.evaluator.getAnnotation(m, ANNOTATION_ENFORCE_PERMISSION)?.let {
+                    enforcedPermissions.addAll(parseAnnotation(context, it))
+                }
             }
 
             node.valueArguments.forEach { argument -> argument.accept(this) }
@@ -258,6 +271,9 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
 
                 override fun visitCallExpression(node: UCallExpression): Boolean {
                     if (foundBroadcastCall) return true
+
+                    node.valueArguments.forEach { argument -> argument.accept(this) }
+
                     if (node.sourcePsi == broadcastCall.sourcePsi) {
                         foundBroadcastCall = true
                         return true
@@ -300,13 +316,12 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
             isAsUser: Boolean,
         ): PermissionHolder {
             val holder = PermissionHolder()
-            // sendBroadcast(Intent, String) -> index 1
-            // sendBroadcastAsUser(Intent, UserHandle, String) -> index 2
+            // sendBroadcast(Intent, String OR String[]) -> index 1
+            // sendBroadcastAsUser(Intent, UserHandle, String OR String[]) -> index 2
             val permissionIndex = if (isAsUser) 2 else 1
-
-            node.valueArguments.getOrNull(permissionIndex)?.let { arg ->
-                ConstantEvaluator.evaluate(context, arg)?.toString()?.let { holder.allOf.add(it) }
-            }
+            holder.allOf.addAll(
+                getPermissions(node.valueArguments.getOrNull(permissionIndex), context)
+            )
             return holder
         }
     }
@@ -332,52 +347,49 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
     }
 
     private fun parseAnnotation(context: JavaContext, annotation: UAnnotation): PermissionHolder {
-        val holder = PermissionHolder()
+        return PermissionHolder().apply {
+            allOf.addAll(getPermissions(annotation.findAttributeValue("value"), context))
+            allOf.addAll(getPermissions(annotation.findAttributeValue("allOf"), context))
+            anyOf.addAll(getPermissions(annotation.findAttributeValue("anyOf"), context))
+        }
+    }
 
-        fun getPermissions(value: UExpression?, context: JavaContext): Set<String> {
-            if (value == null) return emptySet()
+    private fun getPermissions(value: UExpression?, context: JavaContext): Set<String> {
+        if (value == null) return emptySet()
 
-            fun extractStringFromPsi(psi: PsiElement?): String? {
-                return when (psi) {
-                    is PsiReferenceExpression -> {
-                        val text = psi.text
-                        if (text.contains(".permission.")) text else null
-                    }
-                    is PsiLiteralExpression -> {
-                        psi.value as? String
-                    }
-                    else -> null
+        var expr = value
+        while (expr is UParenthesizedExpression) {
+            expr = expr.expression
+        }
+
+        fun extractStringFromPsi(psi: PsiElement?): String? {
+            return when (psi) {
+                is PsiReferenceExpression -> {
+                    val text = psi.text
+                    if (text.contains(".permission.")) text else null
                 }
-            }
-
-            if (value is UCallExpression && value.kind.name == "array_initializer") {
-                return value.valueArguments
-                    .mapNotNull { arg ->
-                        val evaluated = ConstantEvaluator.evaluate(context, arg)
-                        evaluated?.toString() ?: extractStringFromPsi(arg.sourcePsi)
-                    }
-                    .filter { it.isNotEmpty() }
-                    .toSet()
-            }
-
-            val evaluated = ConstantEvaluator.evaluate(context, value)
-            val result = evaluated?.toString() ?: extractStringFromPsi(value.sourcePsi)
-            return if (result != null && result.isNotEmpty()) {
-                setOf(result)
-            } else {
-                emptySet()
+                is PsiLiteralExpression -> psi.value as? String
+                else -> null
             }
         }
 
-        val valuePerms = getPermissions(annotation.findAttributeValue("value"), context)
-        val allOfPerms = getPermissions(annotation.findAttributeValue("allOf"), context)
-        val anyOfPerms = getPermissions(annotation.findAttributeValue("anyOf"), context)
+        if (expr is UCallExpression) {
+            return expr.valueArguments
+                .mapNotNull { arg ->
+                    val evaluated = ConstantEvaluator.evaluate(context, arg)
+                    evaluated?.toString() ?: extractStringFromPsi(arg.sourcePsi)
+                }
+                .filter { it.isNotEmpty() }
+                .toSet()
+        }
 
-        holder.allOf.addAll(valuePerms)
-        holder.allOf.addAll(allOfPerms)
-        holder.anyOf.addAll(anyOfPerms)
-
-        return holder
+        val evaluated = ConstantEvaluator.evaluate(context, expr)
+        val result = evaluated?.toString() ?: extractStringFromPsi(expr.sourcePsi)
+        return if (result != null && result.isNotEmpty()) {
+            setOf(result)
+        } else {
+            emptySet()
+        }
     }
 
     private data class PermissionHolder(
@@ -421,9 +433,10 @@ class RequiresPermissionDetector : Detector(), SourceCodeScanner {
         private val PERMISSION_CHECKER_ENFORCEMENT_METHOD_REGEX = "^check.*Permission$".toRegex()
         private val PERMISSION_MANAGER_ENFORCEMENT_METHOD_REGEX = "^checkPermission.*".toRegex()
 
-        private val SEND_BROADCAST_REGEX = "^send(Ordered|Sticky)?Broadcast$".toRegex()
+        private val SEND_BROADCAST_REGEX =
+            "^send(Ordered|Sticky)?Broadcast((With)?MultiplePermissions)?$".toRegex()
         private val SEND_BROADCAST_AS_USER_REGEX =
-            "^send(Ordered|Sticky)?BroadcastAsUser$".toRegex()
+            "^send(Ordered|Sticky)?BroadcastAsUser(MultiplePermissions)?$".toRegex()
 
         @JvmField
         val ISSUE_MISSING_OR_MISMATCHED_SEND_BROADCAST_REQUIRES_PERMISSION =

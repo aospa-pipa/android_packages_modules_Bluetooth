@@ -792,7 +792,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
         final BluetoothDevice mostRecentlyActiveA2dpDevice =
                 mDatabaseManager.getMostRecentlyConnectedA2dpDevice();
         if (mostRecentlyActiveA2dpDevice != null) {
-            Log.d(TAG, log + "Attempting most recent A2DP device" + mostRecentlyActiveA2dpDevice);
+            Log.d(TAG, log + "Most recent A2DP device " + mostRecentlyActiveA2dpDevice);
             autoConnectHeadset(mostRecentlyActiveA2dpDevice);
             //Add a delay to ensure that the HFP connection is
             //established first during auto reconnection.
@@ -805,11 +805,11 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
         final List<BluetoothDevice> mostRecentlyConnectedHfpDevices =
                 mDatabaseManager.getMostRecentlyActiveHfpDevices();
         for (BluetoothDevice hfpDevice : mostRecentlyConnectedHfpDevices) {
-            Log.d(TAG, log + "Attempting HFP device" + hfpDevice);
+            Log.d(TAG, log + "Most recent HFP device " + hfpDevice);
             autoConnectHeadset(hfpDevice);
         }
         if (mostRecentlyConnectedHfpDevices.size() == 0) {
-            Log.d(TAG, log + "No hfp device to connect");
+            Log.d(TAG, log + "There was no A2DP/HFP device to auto connect to");
         }
     }
 

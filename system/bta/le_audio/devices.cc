@@ -65,6 +65,7 @@
 
 using bluetooth::hci::kIsoCigPhy1M;
 using bluetooth::hci::kIsoCigPhy2M;
+using bluetooth::hci::kIsoCigPhyHdt;
 using bluetooth::le_audio::DeviceConnectState;
 using bluetooth::le_audio::SubrateState;
 using bluetooth::le_audio::types::ase;
@@ -1210,7 +1211,12 @@ uint8_t LeAudioDevice::GetPhyBitmask(void) const {
   if (get_btm_client_interface().peer.BTM_IsPhy2mSupported(address_, BT_TRANSPORT_LE)) {
     phy_bitfield |= kIsoCigPhy2M;
   }
-
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled &&
+        get_btm_client_interface().peer.BTM_IsPhyHDTSupported(address_, BT_TRANSPORT_LE)) {
+    phy_bitfield |= kIsoCigPhyHdt;
+  }
+  log::debug("LeAudioDevice::GetPhyBitmask mask: 0x{:02x}", static_cast<int>(phy_bitfield));
   return phy_bitfield;
 }
 
@@ -1245,8 +1251,12 @@ void LeAudioDevice::PrintDebugState(void) {
 }
 
 uint8_t LeAudioDevice::GetPreferredPhyBitmask(uint8_t preferred_phy) const {
-  // Start with full local phy support
+  // Start with full local phy support.
   uint8_t phy_bitmask = bluetooth::hci::kIsoCigPhy1M;
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
+    phy_bitmask |= bluetooth::hci::kIsoCigPhyHdt;
+  }
   if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
     phy_bitmask |= bluetooth::hci::kIsoCigPhy2M;
   }

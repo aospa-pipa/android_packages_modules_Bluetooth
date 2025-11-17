@@ -79,6 +79,7 @@ public:
   MOCK_METHOD(bool, SupportsBleStableModulationIndexTx, (), (const));
   MOCK_METHOD(bool, SupportsBleStableModulationIndexRx, (), (const));
   MOCK_METHOD(bool, SupportsBleCodedPhy, (), (const));
+  MOCK_METHOD(bool, SupportsBleHDTPhy, (), (const));
   MOCK_METHOD(bool, SupportsBleExtendedAdvertising, (), (const));
   MOCK_METHOD(bool, SupportsBlePeriodicAdvertising, (), (const));
   MOCK_METHOD(bool, SupportsBleConnectionParameterRequest, (), (const));

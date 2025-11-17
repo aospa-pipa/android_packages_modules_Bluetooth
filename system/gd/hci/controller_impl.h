@@ -94,6 +94,7 @@ public:
   virtual bool SupportsBleStableModulationIndexTx() const override;
   virtual bool SupportsBleStableModulationIndexRx() const override;
   virtual bool SupportsBleCodedPhy() const override;
+  virtual bool SupportsBleHDTPhy() const override;
   virtual bool SupportsBleExtendedAdvertising() const override;
   virtual bool SupportsBlePeriodicAdvertising() const override;
   virtual bool SupportsBleChannelSelectionAlgorithm2() const override;

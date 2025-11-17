@@ -59,7 +59,6 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.ProfileService;
-import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -209,15 +208,8 @@ public class A2dpService extends ConnectableProfile {
     public boolean connect(BluetoothDevice device) {
         Log.d(TAG, "connect(): " + device);
 
-        if (Flags.validateConnectionPolicyBeforeAcceptingConnection()) {
-            if (!okToConnect(device)) {
-                return false;
-            }
-        } else {
-            if (getConnectionPolicy(device) == CONNECTION_POLICY_FORBIDDEN) {
-                Log.e(TAG, "Cannot connect to " + device + " : CONNECTION_POLICY_FORBIDDEN");
-                return false;
-            }
+        if (!okToConnect(device)) {
+            return false;
         }
 
         if (!Utils.arrayContains(mAdapterService.getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {

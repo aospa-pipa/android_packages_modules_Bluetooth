@@ -93,6 +93,7 @@ public:
   virtual bool SupportsBleStableModulationIndexTx() const = 0;
   virtual bool SupportsBleStableModulationIndexRx() const = 0;
   virtual bool SupportsBleCodedPhy() const = 0;
+  virtual bool SupportsBleHDTPhy() const = 0;
   virtual bool SupportsBleExtendedAdvertising() const = 0;
   virtual bool SupportsBlePeriodicAdvertising() const = 0;
   virtual bool SupportsBleChannelSelectionAlgorithm2() const = 0;
