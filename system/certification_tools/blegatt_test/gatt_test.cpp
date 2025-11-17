@@ -436,14 +436,14 @@ static void connect_cb(int conn_id, int status, int client_if, int transport,
   sGapInterface->Gap_BleAttrDBUpdate(remote_bd_addr.address, 50, 70, 0, 1000);
 }
 
-static void subrate_change_cb(int conn_id, uint16_t subrate_factor,
-                              uint16_t latency, uint16_t cont_num,
-                              uint16_t timeout, uint8_t status) {
+static void subrate_change_cb(int conn_id, uint16_t subrate_factor, uint16_t latency,
+                              uint16_t cont_num, uint16_t timeout,uint8_t subrate_mode,
+                              uint8_t status) {
   printf(
       "%s: conn_id=0x%x, status=%d, subrate_factor=%d,"
-      "latency=%d, cont_num=%d, timeout=%d \n",
+      "latency=%d, cont_num=%d, timeout=%d,subrate_mode=%d\n",
       __FUNCTION__, conn_id, status, subrate_factor, latency, cont_num,
-      timeout);
+      timeout,subrate_mode);
 }
 
 static btgatt_client_callbacks_t sGattClient_cb = {
@@ -2018,7 +2018,7 @@ static void ssp_request_cb(RawAddress* remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
                            uint32_t pass_key) {
   printf("ssp_request_cb : variant=%d passkey=%u\n", pairing_variant, pass_key);
-  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
+  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(*remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
     printf("SSP Reply failed\n");
@@ -2335,7 +2335,7 @@ void do_pairing(char* p) {
   RawAddress bd_addr = {{0}};
   int transport = GATT_TRANSPORT_LE;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
-  if (BT_STATUS_SUCCESS != sBtInterface->create_bond(&bd_addr, transport)) {
+  if (BT_STATUS_SUCCESS != sBtInterface->create_bond(bd_addr, transport)) {
     printf("Failed to Initiate Pairing \n");
     return;
   }
@@ -2515,13 +2515,12 @@ void do_le_send_connect_req(int client_if, RawAddress bd_addr, int transport,
   printf("%s:: client_if=%d \n", __FUNCTION__, client_if);
    if (Btif_gatt_layer) {
     // TODO need to add phy parameter as 0x07 for connection to all types of
-    // Phys
     if (is_ext)
       Ret = sGattIfaceScan->client->connect(client_if, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251, FALSE);
+                                            transport, FALSE, 0x01, 251);
     else
       Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251, FALSE);
+                                            transport, FALSE, 0x01, 251);
   } else if (transport == BT_TRANSPORT_BR_EDR) {
     // Outgoing Connection
     g_PSM = 31;
@@ -2621,10 +2620,9 @@ void do_le_client_connect_auto(char* p) {
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
-
   if (Btif_gatt_layer) {
     Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, FALSE,
-                                          transport, FALSE, 0x01, 251, FALSE);
+                                          transport, FALSE, 0x01, 251);
   } else {
     Ret = sGattInterface->Connect(g_client_if, bd_addr.address, FALSE,
                                   BT_TRANSPORT_LE);
@@ -3780,7 +3778,7 @@ void do_remove_bond(char* p) {
   printf("%s:: remote_bd_addr=%02x:%02x:%02x:%02x:%02x:%02x \n", __FUNCTION__,
          bd_addr.address[0], bd_addr.address[1], bd_addr.address[2],
          bd_addr.address[3], bd_addr.address[4], bd_addr.address[5]);
-  sBtInterface->remove_bond(&bd_addr);
+  sBtInterface->remove_bond(bd_addr);
 }
 
 void do_le_gap_conn_param_update(char* p) {
@@ -3864,7 +3862,7 @@ static void process_cmd(char* p, unsigned char is_job) {
       pincode.pin[i] = cmd[i];
     }
     if (BT_STATUS_SUCCESS !=
-        sBtInterface->pin_reply(&remote_bd_address, TRUE,
+        sBtInterface->pin_reply(remote_bd_address, TRUE,
                                 strlen((const char*)pincode.pin), &pincode)) {
       printf("Pin Reply failed\n");
     }
