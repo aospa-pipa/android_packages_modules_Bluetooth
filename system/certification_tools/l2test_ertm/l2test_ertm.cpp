@@ -578,7 +578,7 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
 #endif
 static void ssp_request_cb(RawAddress* remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key) {
+                           uint32_t pass_key, PairingAlgorithm pairing_algo) {
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(*remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
@@ -587,8 +587,8 @@ static void ssp_request_cb(RawAddress* remote_bd_addr,
 }
 
 static void bond_state_changed_cb(bt_status_t status,
-                                  RawAddress* remote_bd_addr,
-                                  bt_bond_state_t state, int fail_reason) {
+                                  RawAddress* remote_bd_addr,tBT_TRANSPORT transport,
+                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason) {
   g_PairState = state;
 }
 
