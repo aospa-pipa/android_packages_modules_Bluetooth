@@ -2008,15 +2008,16 @@ static void discovery_state_changed(bt_discovery_state_t state) {
 }
 
 static void pin_request_cb(RawAddress* remote_bd_addr, bt_bdname_t* bd_name,
-                           uint32_t cod, bool min_16_digit) {
+                           uint32_t cod, bool min_16_digit, PairingAlgorithm pairing_algo) {
   remote_bd_address = *remote_bd_addr;
   printf(
       "Enter the pin key displayed in the remote device and terminate the key "
       "entry with .\n");
+    // Avoid unused parameter warnings if not used
 }
 static void ssp_request_cb(RawAddress* remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key) {
+                           uint32_t pass_key, PairingAlgorithm pairing_alg) {
   printf("ssp_request_cb : variant=%d passkey=%u\n", pairing_variant, pass_key);
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
@@ -2026,8 +2027,8 @@ static void ssp_request_cb(RawAddress* remote_bd_addr,
 }
 
 static void bond_state_changed_cb(bt_status_t status,
-                                  RawAddress* remote_bd_addr,
-                                  bt_bond_state_t state, int fail_reason) {
+                                  RawAddress* remote_bd_addr,tBT_TRANSPORT transport,
+                                  bt_bond_state_t state, PairingType pairing_type, int fail_reason) {
   g_PairState = state;
 }
 
