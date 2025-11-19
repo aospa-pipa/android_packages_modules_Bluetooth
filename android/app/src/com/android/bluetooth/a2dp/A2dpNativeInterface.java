@@ -141,7 +141,7 @@ public class A2dpNativeInterface extends NativeInterface<A2dpNativeCallback> {
         if (device == null) {
             return Utils.getBytesFromAddress("00:00:00:00:00:00");
         }
-        return Utils.getByteBrEdrAddress(mAdapterService, device);
+        return mAdapterService.getByteBrEdrAddress(device);
     }
 
     // Native methods that call into the JNI interface

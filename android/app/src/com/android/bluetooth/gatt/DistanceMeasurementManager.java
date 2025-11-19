@@ -114,7 +114,7 @@ public class DistanceMeasurementManager {
             mHandler = new Handler(mHandlerThread.getLooper());
         }
 
-        var nativeCallback = new DistanceMeasurementNativeCallback(this);
+        var nativeCallback = new DistanceMeasurementNativeCallback(mAdapterService, this);
         mNativeInterface =
                 requireNonNullElseGet(
                         nativeInterface,

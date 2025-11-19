@@ -24,6 +24,7 @@
  ******************************************************************************/
 
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/bluetooth_event.h>
 #include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
@@ -131,6 +132,8 @@ void rfc_mx_sm_state_idle(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* /* p_data 
       uint16_t lcid = stack::l2cap::get_interface().L2CA_ConnectReq(BT_PSM_RFCOMM, p_mcb->bd_addr);
       if (lcid == 0) {
         log::error("failed to open L2CAP channel for {}", p_mcb->bd_addr);
+        bluetooth::metrics::LogRfcommMxEvent(
+                p_mcb->bd_addr, bluetooth::metrics::State::L2CAP_CONNECT_REQUEST_FAILED);
         rfc_save_lcid_mcb(nullptr, p_mcb->lcid);
         p_mcb->lcid = 0;
         PORT_StartCnf(p_mcb, RFCOMM_ERROR);
@@ -230,6 +233,8 @@ void rfc_mx_sm_state_wait_conn_cnf(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* p
       return;
 
     case RFC_MX_EVENT_TIMEOUT:
+      bluetooth::metrics::LogRfcommMxEvent(
+              p_mcb->bd_addr, bluetooth::metrics::State::RFCOMM_MX_WAIT_CONN_CNF_TIMEOUT);
       p_mcb->state = RFC_MX_STATE_IDLE;
       if (!stack::l2cap::get_interface().L2CA_DisconnectReq(p_mcb->lcid)) {
         log::warn("Unable to send L2CAP disonnect request peer:{} cid:{}", p_mcb->bd_addr,
@@ -321,6 +326,8 @@ void rfc_mx_sm_state_configure(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* p_dat
 
     case RFC_MX_EVENT_TIMEOUT:
       log::error("L2CAP configuration timeout for {}", p_mcb->bd_addr);
+      bluetooth::metrics::LogRfcommMxEvent(
+              p_mcb->bd_addr, bluetooth::metrics::State::RFCOMM_MX_L2CAP_CONFIG_TIMEOUT);
       p_mcb->state = RFC_MX_STATE_IDLE;
       if (!stack::l2cap::get_interface().L2CA_DisconnectReq(p_mcb->lcid)) {
         log::warn("Unable to send L2CAP disconnect request peer:{} cid:{}", p_mcb->bd_addr,
@@ -391,12 +398,16 @@ void rfc_mx_sm_sabme_wait_ua(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* /* p_da
       return;
 
     case RFC_MX_EVENT_DM:
+      bluetooth::metrics::LogRfcommMxEvent(p_mcb->bd_addr,
+                                           bluetooth::metrics::State::PEER_REJECTED);
       rfc_timer_stop(p_mcb);
       [[fallthrough]];
 
     case RFC_MX_EVENT_CONF_IND: /* workaround: we don't support reconfig */
     case RFC_MX_EVENT_CONF_CNF: /* workaround: we don't support reconfig */
     case RFC_MX_EVENT_TIMEOUT:
+      bluetooth::metrics::LogRfcommMxEvent(
+              p_mcb->bd_addr, bluetooth::metrics::State::RFCOMM_MX_SABME_WAIT_UA_TIMEOUT);
       p_mcb->state = RFC_MX_STATE_IDLE;
       if (!stack::l2cap::get_interface().L2CA_DisconnectReq(p_mcb->lcid)) {
         log::warn("Unable to send L2CAP disonnect request peer:{} cid:{}", p_mcb->bd_addr,
@@ -457,6 +468,8 @@ void rfc_mx_sm_state_wait_sabme(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* p_da
 
     case RFC_MX_EVENT_START_RSP:
       if (*((uint16_t*)p_data) != RFCOMM_SUCCESS) {
+        bluetooth::metrics::LogRfcommMxEvent(p_mcb->bd_addr,
+                                             bluetooth::metrics::State::HOST_REJECTED);
         rfc_send_dm(p_mcb, RFCOMM_MX_DLCI, true);
       } else {
         rfc_send_ua(p_mcb, RFCOMM_MX_DLCI);
@@ -477,6 +490,8 @@ void rfc_mx_sm_state_wait_sabme(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* p_da
     case RFC_MX_EVENT_CONF_IND: /* workaround: we don't support reconfig */
     case RFC_MX_EVENT_CONF_CNF: /* workaround: we don't support reconfig */
     case RFC_MX_EVENT_TIMEOUT:
+      bluetooth::metrics::LogRfcommMxEvent(p_mcb->bd_addr,
+                                           bluetooth::metrics::State::RFCOMM_MX_WAIT_SABME_TIMEOUT);
       p_mcb->state = RFC_MX_STATE_IDLE;
 
       if (com_android_bluetooth_flags_rfcomm_fix_mux_collision_handling() &&
@@ -580,6 +595,8 @@ void rfc_mx_sm_state_disc_wait_ua(tRFC_MCB* p_mcb, tRFC_MX_EVENT event, void* p_
         uint16_t lcid =
                 stack::l2cap::get_interface().L2CA_ConnectReq(BT_PSM_RFCOMM, p_mcb->bd_addr);
         if (lcid == 0) {
+          bluetooth::metrics::LogRfcommMxEvent(
+                  p_mcb->bd_addr, bluetooth::metrics::State::L2CAP_CONNECT_REQUEST_FAILED);
           rfc_save_lcid_mcb(nullptr, p_mcb->lcid);
           p_mcb->lcid = 0;
           PORT_StartCnf(p_mcb, RFCOMM_ERROR);
@@ -650,6 +667,8 @@ void rfc_on_l2cap_error(uint16_t lcid, uint16_t result) {
     for (auto& [cid, mcb] : rfc_lcid_mcb) {
       if (mcb != nullptr && mcb->collision_outgoing_lcid == lcid) {
         // outgoing connection failed - clear cache (and continue with incoming connection)
+        bluetooth::metrics::LogRfcommMxEvent(
+                mcb->bd_addr, bluetooth::metrics::State::COLLISION_RETRY_AS_ACCEPTOR);
         mcb->collision_outgoing_lcid = 0;
         mcb->collision_outgoing_conn_cnf = false;
         mcb->collision_outgoing_cfg_complete = false;
@@ -659,6 +678,10 @@ void rfc_on_l2cap_error(uint16_t lcid, uint16_t result) {
     }
     return;
   }
+
+  bluetooth::metrics::LogRfcommL2capEvent(p_mcb->bd_addr,
+                                          bluetooth::metrics::EventType::RFCOMM_ON_L2CAP_ERROR,
+                                          to_l2cap_result_code(result));
 
   if (static_cast<uint16_t>(result) & L2CAP_CONN_INTERNAL_MASK) {
     /* if peer rejects our connect request but peer's connect request is pending
@@ -769,6 +792,9 @@ static void rfc_mx_retry_with_cached_lcid(tRFC_MCB* p_mcb) {
     log::warn("Unable to send L2CAP disconnect request peer:{} cid:{}", p_mcb->bd_addr,
               p_mcb->lcid);
   }
+
+  bluetooth::metrics::LogRfcommMxEvent(p_mcb->bd_addr,
+                                       bluetooth::metrics::State::COLLISION_RETRY_AS_INITIATOR);
 
   rfc_save_lcid_mcb(nullptr, p_mcb->lcid);
   p_mcb->lcid = p_mcb->collision_outgoing_lcid;
