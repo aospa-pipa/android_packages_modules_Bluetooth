@@ -43,6 +43,7 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
+import android.bluetooth.BondStatus;
 import android.bluetooth.EncryptionStatus;
 import android.bluetooth.IBluetoothConnectionCallback;
 import android.content.Intent;
@@ -392,9 +393,7 @@ public class RemoteDevices {
         @VisibleForTesting int mDiscoveryResultType = BluetoothDevice.DEVICE_TYPE_UNKNOWN;
         @VisibleForTesting boolean mHfpBatteryIndicator = false;
         private BluetoothSinkAudioPolicy mAudioPolicy;
-        private Optional<Integer> mLastBondLossReason;
-
-        private record BondStatus(int pairingAlgorithm, int pairingVariant) {}
+        private Optional<Integer> mLastBondLossReason = Optional.empty();
 
         private BondStatus mBredrBond;
         private BondStatus mLeBond;
@@ -1787,7 +1786,7 @@ public class RemoteDevices {
 
         // Send the ACTION_KEY_MISSING Intent here if the link is disconnected in a bond-loss
         // scenario.
-        if (Flags.enableAutonomousRepairing()
+        if (Flags.autonomousRepairingInitiation()
                 && mAdapterService.isBondLost(device)
                 && newState == AbstractionLayer.BT_ACL_STATE_DISCONNECTED
                 && deviceProperties.getLastBondLossReason().isPresent()) {
@@ -1919,7 +1918,7 @@ public class RemoteDevices {
             }
         }
 
-        if (!Flags.enableAutonomousRepairing()) {
+        if (!Flags.autonomousRepairingInitiation()) {
             sendKeyMissingIntent(device, reason);
             return;
         }
@@ -2463,9 +2462,8 @@ public class RemoteDevices {
                             : "XX:XX:XX:XX:XX:XX";
             int identityAddressType = deviceProperties.getIdentityAddress().getAddressType();
 
-            DeviceProperties.BondStatus bredrBondStatus =
-                    deviceProperties.getBondStatus(TRANSPORT_BREDR);
-            DeviceProperties.BondStatus leBondStatus = deviceProperties.getBondStatus(TRANSPORT_LE);
+            BondStatus bredrBondStatus = deviceProperties.getBondStatus(TRANSPORT_BREDR);
+            BondStatus leBondStatus = deviceProperties.getBondStatus(TRANSPORT_LE);
             boolean connectedBrEdr =
                     deviceProperties.getConnectionHandle(TRANSPORT_BREDR) != BluetoothDevice.ERROR;
             boolean connectedLe =
@@ -2487,9 +2485,9 @@ public class RemoteDevices {
                     .append("] [0x")
                     .append(String.format("%06X", deviceProperties.getBluetoothClass()))
                     .append("] [Pairing Algorithm BR/EDR: ")
-                    .append(bredrBondStatus == null ? "N/A" : bredrBondStatus.pairingAlgorithm)
+                    .append(bredrBondStatus == null ? "N/A" : bredrBondStatus.getPairingAlgorithm())
                     .append(" LE: ")
-                    .append(leBondStatus == null ? "N/A" : leBondStatus.pairingAlgorithm)
+                    .append(leBondStatus == null ? "N/A" : leBondStatus.getPairingAlgorithm())
                     .append("] [ACL BR/EDR:")
                     .append(connectedBrEdr ? "Y" : "N")
                     .append(" LE:")
@@ -2501,7 +2499,7 @@ public class RemoteDevices {
                     .append("] ")
                     .append(deviceProperties.getName());
 
-            if (Flags.enableAutonomousRepairing()
+            if (Flags.autonomousRepairingInitiation()
                     && deviceProperties.getLastBondLossReason().isPresent()) {
                 sb.append("[Latest bond-loss reason: ")
                         .append(deviceProperties.getLastBondLossReason().get())
@@ -2549,7 +2547,7 @@ public class RemoteDevices {
         writer.println();
     }
 
-    // TODO: Remove this when enable_autonomous_repairing flag is removed.
+    // TODO: Remove this when use_autonomous_repairing flag is removed.
     private void sendKeyMissingIntent(BluetoothDevice device, int reason) {
         Intent keyMissingIntent =
                 new Intent(BluetoothDevice.ACTION_KEY_MISSING)

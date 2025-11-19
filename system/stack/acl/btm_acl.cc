@@ -835,7 +835,7 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_numbe
     log::warn("Checking remote features but remote feature read is incomplete");
   }
 
-  p_device = btm_find_dev(p_acl_cb->link_spec.addrt.bda);
+  p_device = btm_get_dev(p_acl_cb->link_spec.addrt.bda);
 
   if (p_device == nullptr) {
     log::warn("Unable to find p_device");
@@ -1951,7 +1951,7 @@ bool acl_peer_supports_ble_connection_subrating_host(const RawAddress& remote_bd
  ******************************************************************************/
 void BTM_ReadConnectionAddr(const RawAddress& remote_bda, RawAddress& local_conn_addr,
                             tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  BtmDevice* p_device = btm_find_dev(remote_bda);
+  const BtmDevice* p_device = btm_find_dev(remote_bda);
   if (p_device == nullptr) {
     log::warn("No matching known device {} in record", remote_bda);
     return;
@@ -2015,7 +2015,7 @@ bool acl_is_switch_role_idle(const RawAddress& bd_addr, tBT_TRANSPORT transport)
  ******************************************************************************/
 bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr, RawAddress& conn_addr,
                                   tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  BtmDevice* p_device = btm_find_dev(pseudo_addr);
+  const BtmDevice* p_device = btm_find_dev(pseudo_addr);
   if (p_device == nullptr) {
     log::warn("No matching known device {} in record", pseudo_addr);
     return false;

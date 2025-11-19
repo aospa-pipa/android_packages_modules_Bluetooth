@@ -36,7 +36,6 @@ import android.annotation.RequiresPermission;
 import android.app.Activity;
 import android.app.BroadcastOptions;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.companion.AssociationInfo;
 import android.companion.CompanionDeviceManager;
@@ -66,8 +65,6 @@ import android.util.Log;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.graphics.Insets;
-
-import com.android.bluetooth.btservice.AdapterService;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -147,31 +144,6 @@ public final class Utils {
     }
 
     /**
-     * Checks CoD and metadata to determine if the remote device is a watch
-     *
-     * @return whether it's a watch or not
-     */
-    public static boolean remoteDeviceIsWatch(
-            @NonNull AdapterService service, @NonNull BluetoothDevice device) {
-        // Check CoD
-        BluetoothClass deviceClass = new BluetoothClass(service.getRemoteClass(device));
-        if (deviceClass.getDeviceClass() == BluetoothClass.Device.WEARABLE_WRIST_WATCH) {
-            return true;
-        }
-
-        // Check metadata
-        byte[] deviceType = service.getMetadata(device, BluetoothDevice.METADATA_DEVICE_TYPE);
-        if (deviceType == null) {
-            return false;
-        }
-        String deviceTypeStr = new String(deviceType);
-        if (deviceTypeStr.equals(BluetoothDevice.DEVICE_TYPE_WATCH)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Only exposed for testing, do not invoke this method outside of tests.
      *
      * @param enabled true if the dual mode state is enabled, false otherwise
@@ -205,40 +177,6 @@ public final class Utils {
         }
 
         return String.format("XX:XX:XX:XX:%02X:%02X", address[4], address[5]);
-    }
-
-    /**
-     * Returns the correct device address to be used for connections over BR/EDR transport.
-     *
-     * @param address the device address for which to obtain the connection address
-     * @param service the adapter service to make the identity address retrieval call
-     * @return either identity address or device address in String format
-     */
-    public static String getBrEdrAddress(String address, AdapterService service) {
-        String identity = service.getIdentityAddress(address);
-        return identity != null ? identity : address;
-    }
-
-    /** {@link #getBrEdrAddress(String, AdapterService)} */
-    public static String getBrEdrAddress(BluetoothDevice device, AdapterService service) {
-        return getBrEdrAddress(device.getAddress(), service);
-    }
-
-    /**
-     * Returns the correct device address to be used for connections over BR/EDR transport.
-     *
-     * @param service the provided AdapterService
-     * @param device the device for which to obtain the connection address
-     * @return either identity address or device address as a byte array
-     */
-    public static byte[] getByteBrEdrAddress(AdapterService service, BluetoothDevice device) {
-        // If dual mode device bonded over BLE first, BR/EDR address will be identity address
-        // Otherwise, BR/EDR address will be same address as in BluetoothDevice#getAddress
-        byte[] address = service.getByteIdentityAddress(device);
-        if (address == null) {
-            address = getByteAddress(device);
-        }
-        return address;
     }
 
     public static byte[] getByteAddress(BluetoothDevice device) {
@@ -794,7 +732,7 @@ public final class Utils {
      */
     public static boolean isBapNoPacsPtsTestMode() {
         return SystemProperties.getBoolean(BAP_NO_PACS_PTS_MODE_PROPERTY, false);
-		}
+    }
 
     /**
      * Check if we are running in PTS TBS test mode. To enable/disable TBS PTS test mode, invoke
@@ -802,19 +740,9 @@ public final class Utils {
      *
      * @return true if in PTS Test mode, false otherwise
      */
-     public static boolean isTbsPtsTestMode() {
+    public static boolean isTbsPtsTestMode() {
         return SystemProperties.getBoolean(TBS_PTS_MODE_PROPERTY, false);
     }
-
-    /**
-     * Get uid/pid string in a binder call
-     *
-     * @return "uid/pid=xxxx/yyyy"
-     */
-    public static String getUidPidString() {
-        return "uid/pid=" + Binder.getCallingUid() + "/" + Binder.getCallingPid();
-    }
-
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
 

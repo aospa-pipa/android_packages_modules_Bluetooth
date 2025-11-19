@@ -492,9 +492,9 @@ public:
     data.resize(evt.len);
     std::copy(evt.value, evt.value + evt.len, data.begin());
     bool is_last = (data[0] >> 1 & 0x01);
-    alarm_cancel(tracker->ranging_data_timeout_timer_);
+    CancelRangingTimer(tracker);
     if (!is_last) {
-      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      const BtmDevice* p_device = btm_find_dev(tracker->address_);
       if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
         log::info("Low Power Mode Timer: {}", p_device->conn_params.peripheral_latency);
         SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs_lowpower, TimeoutType::FOLLOWING_SEGMENT);
@@ -534,7 +534,7 @@ public:
     // Send get ranging data command
     tracker->latest_ranging_counter_ = ranging_counter;
     if (tracker->timeout_type_ == TimeoutType::RANGING_DATA_READY) {
-      alarm_cancel(tracker->ranging_data_timeout_timer_);
+      CancelRangingTimer(tracker);
     }
     GetRangingData(ranging_counter, tracker);
   }
@@ -843,7 +843,7 @@ public:
         return;
       }
       uint16_t first_segment_timeout_ms = kFirstSegmentRangingDataTimeoutMs;
-      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      const BtmDevice* p_device = btm_find_dev(tracker->address_);
       if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
         first_segment_timeout_ms = kLowPowerFirstSegmentRangingDataTimeoutMs;
       }
@@ -896,6 +896,15 @@ public:
         }
       }
     }
+  }
+
+  void CancelRangingTimer(std::shared_ptr<RasTracker> tracker) {
+    if (tracker->ranging_data_timeout_timer_ != nullptr) {
+      alarm_cancel(tracker->ranging_data_timeout_timer_);
+      alarm_free(tracker->ranging_data_timeout_timer_);
+      tracker->ranging_data_timeout_timer_ = nullptr;
+    }
+    tracker->timeout_type_ = TimeoutType::TIMEOUT_NONE;
   }
 
   std::string GetFeaturesString(uint32_t value) {
@@ -963,6 +972,8 @@ public:
     }
     log::debug("ranging_type_: {}, timeout_type: {}", (uint8_t)tracker->ranging_type_,
                (uint8_t)timeout_type);
+    // Clean up any previous timer first
+    CancelRangingTimer(tracker);
     tracker->timeout_type_ = timeout_type;
     tracker->ranging_data_timeout_timer_ = alarm_new("Ranging Data Timeout");
     alarm_set_on_mloop(

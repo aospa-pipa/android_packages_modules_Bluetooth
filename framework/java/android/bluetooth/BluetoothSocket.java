@@ -595,7 +595,7 @@ public final class BluetoothSocket implements Closeable {
             throw new BluetoothSocketException(BluetoothSocketException.BLUETOOTH_OFF_FAILURE);
         }
         try {
-            if (!mRemoteDevice.isPresent()) {
+            if (mRemoteDevice.isEmpty()) {
                 throw new BluetoothSocketException(BluetoothSocketException.NULL_DEVICE);
             }
             BluetoothDevice remoteDevice = mRemoteDevice.get();
@@ -1113,7 +1113,7 @@ public final class BluetoothSocket implements Closeable {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public void requestMaximumTxDataLength() throws IOException {
-        if (!mRemoteDevice.isPresent()) {
+        if (mRemoteDevice.isEmpty()) {
             throw new IOException("requestMaximumTxDataLength is called on null device");
         }
 

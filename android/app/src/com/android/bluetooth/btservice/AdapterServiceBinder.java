@@ -21,16 +21,18 @@ import static android.Manifest.permission.DUMP;
 import static android.Manifest.permission.MODIFY_PHONE_STATE;
 import static android.bluetooth.BluetoothAdapter.SCAN_MODE_NONE;
 import static android.bluetooth.BluetoothDevice.TRANSPORT_AUTO;
+import static android.bluetooth.BluetoothDevice.TRANSPORT_BREDR;
+import static android.bluetooth.BluetoothDevice.TRANSPORT_LE;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.ChangeIds.BONDING_APIS_REQUIRE_PRIVILEGED_PERMISSION;
 import static com.android.bluetooth.ChangeIds.ENFORCE_CONNECT;
 import static com.android.bluetooth.Util.enforceConnectPermissionForDataDelivery;
 import static com.android.bluetooth.Util.enforceScanPermissionForDataDelivery;
+import static com.android.bluetooth.Util.getUidPidString;
 import static com.android.bluetooth.Utils.callerIsSystem;
 import static com.android.bluetooth.Utils.callerIsSystemOrActiveOrManagedUser;
 import static com.android.bluetooth.Utils.getBytesFromAddress;
-import static com.android.bluetooth.Utils.getUidPidString;
 
 import static java.util.Objects.requireNonNull;
 
@@ -48,6 +50,7 @@ import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothStatusCodes;
+import android.bluetooth.BondStatus;
 import android.bluetooth.EncryptionStatus;
 import android.bluetooth.GattOffloadCapabilities;
 import android.bluetooth.IBluetooth;
@@ -462,7 +465,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         Optional<String> packageName =
                 service.getCallingPackageName(deviceProp.getDevice().getAddress());
 
-        if (!packageName.isPresent()) {
+        if (packageName.isEmpty()) {
             return false;
         }
 
@@ -891,8 +894,43 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
+    public boolean fetchRemoteUuidsWithSdp(
+            BluetoothDevice device, int transport, AttributionSource source) {
+        requireNonNull(device);
+        AdapterService service = getService();
+        if (service == null
+                || !callerIsSystemOrActiveOrManagedUser(service, TAG, "fetchRemoteUuidsWithSdp")
+                || !enforceConnectPermissionForDataDelivery(
+                        service, source, TAG, "fetchRemoteUuidsWithSdp")) {
+            return false;
+        }
+        if (transport != TRANSPORT_AUTO) {
+            service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        }
+
+        Log.i(
+                TAG,
+                "fetchRemoteUuidsWithSdp: device="
+                        + device
+                        + ", transport="
+                        + transport
+                        + ", from "
+                        + getUidPidString());
+
+        service.addAssociatedPackage(device, source.getPackageName());
+        service.getRemoteDevices().fetchUuids(device, transport);
+        MetricsLogger.getInstance().cacheCount(BluetoothProtoEnums.SDP_FETCH_UUID_REQUEST, 1);
+        return true;
+    }
+
+    @Override
     public boolean fetchRemoteUuids(
             BluetoothDevice device, int transport, AttributionSource source) {
+        if (transport != TRANSPORT_AUTO
+                && transport != TRANSPORT_BREDR
+                && transport != TRANSPORT_LE) {
+            throw new IllegalArgumentException("invalid transport: " + transport);
+        }
         requireNonNull(device);
         AdapterService service = getService();
         if (service == null
@@ -900,9 +938,6 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 || !enforceConnectPermissionForDataDelivery(
                         service, source, TAG, "fetchRemoteUuids")) {
             return false;
-        }
-        if (transport != TRANSPORT_AUTO) {
-            service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         }
 
         Log.i(
@@ -1900,7 +1935,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
         Optional<byte[]> cookie =
                 service.getBluetoothHciVendorSpecificDispatcher().getRegisteredCookie(callback);
-        if (!cookie.isPresent()) {
+        if (cookie.isEmpty()) {
             Log.e(TAG, "send command without registered callback");
             throw new IllegalStateException("callback not registered");
         }
@@ -2212,6 +2247,21 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         }
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         return service.getSupportedGattOffloadCapabilities();
+    }
+
+    @Override
+    public BondStatus.InnerParcel getBondStatus(
+            BluetoothDevice device, AttributionSource source, int transport) {
+        requireNonNull(device);
+        AdapterService service = getService();
+        if (service == null) {
+            return null;
+        }
+        if (!enforceConnectPermissionForDataDelivery(service, source, TAG, "getBondStatus")) {
+            return null;
+        }
+        BondStatus bondStatus = service.getBondStatus(device, transport);
+        return bondStatus != null ? bondStatus.getParcel() : null;
     }
 
     // Either implement these custom methods, or remove them from IBluetooth.
