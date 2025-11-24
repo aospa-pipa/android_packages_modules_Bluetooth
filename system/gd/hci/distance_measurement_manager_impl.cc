@@ -1219,7 +1219,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
             min_subevent_len,
 	    max_subevent_len,
            // kToneAntennaConfigSelection,
-	    procedure_setting.tone_ant_cfg_selection,
+	    tone_antenna_config_selection,
             (CsPhy)procedure_setting.phy,
             procedure_setting.tx_pwr_delta,
             preferred_peer_antenna,
