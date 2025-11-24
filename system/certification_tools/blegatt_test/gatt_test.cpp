@@ -1026,7 +1026,7 @@ static void request_read_cb(int conn_id, int trans_id, const RawAddress& bda,
                             int attr_handle, int offset, bool is_long) {
   printf("%s:: conn_id=%d, attr_handle=%d \n", __FUNCTION__, conn_id,
          attr_handle);
-  bt_status_t Ret;
+  //BtStatus Ret = 0;
   int len = len_short_char;
   btgatt_response_t gatt_resp;
   int status = BT_STATUS_SUCCESS;
@@ -1088,7 +1088,7 @@ static void request_read_cb(int conn_id, int trans_id, const RawAddress& bda,
     }
   }
   g_conn_id = conn_id;
-  Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
+  BtStatus Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
                                               gatt_resp);
 }
 
@@ -1098,7 +1098,7 @@ static void request_write_cb(int conn_id, int trans_id, const RawAddress& bda,
                              size_t value_count) {
   printf("%s:: conn_id=%d, trans_id=%d, attr_handle=%d \n", __FUNCTION__,
          conn_id, trans_id, attr_handle);
-  bt_status_t Ret;
+ // BtStatus Ret;
   int status = BT_STATUS_SUCCESS;
   uint8_t cccd_val[2] = {};
   btgatt_response_t gatt_resp;
@@ -1165,14 +1165,14 @@ static void request_write_cb(int conn_id, int trans_id, const RawAddress& bda,
 
   g_conn_id = conn_id;
 
-  Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
+ BtStatus Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
                                               gatt_resp);
 }
 
 static void request_exec_write_cb(int conn_id, int trans_id,
                                   const RawAddress& bda, int exec_write) {
   printf("%s:: conn_id=%d, trans_id=%d \n", __FUNCTION__, conn_id, trans_id);
-  bt_status_t Ret;
+  //BtStatus Ret;
   int status = BT_STATUS_SUCCESS;
   btgatt_response_t gatt_resp;
 
@@ -1197,7 +1197,7 @@ static void request_exec_write_cb(int conn_id, int trans_id,
     }
   }
 
-  Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
+  BtStatus Ret = sGattIfaceScan->server->send_response(conn_id, trans_id, status,
                                               gatt_resp);
 }
 
@@ -2386,7 +2386,7 @@ void do_disable(char* p) { bdt_disable(); }
 void do_cleanup(char* p) { bdt_cleanup(); }
 
 void do_le_cl_register(int idx, bool eatt_support) {
-  bt_status_t Ret;
+  //BtStatus Ret;
   Uuid uuid;
   Uuid bt_uuid;
   bool is_valid = false;
@@ -2414,11 +2414,11 @@ void do_le_cl_register(int idx, bool eatt_support) {
   }
   if (Btif_gatt_layer) {
 #if (EATT_IF_SUPPORTED == TRUE)
-    Ret = sGattIfaceScan->client->register_client(bt_uuid,"gatt_test_app", eatt_support);
+    BtStatus Ret = sGattIfaceScan->client->register_client(bt_uuid,"gatt_test_app", eatt_support);
 #else
-    Ret = sGattIfaceScan->client->register_client(bt_uuid, "gatt_test_app", false);
+    BtStatus Ret = sGattIfaceScan->client->register_client(bt_uuid, "gatt_test_app", false);
 #endif
-    printf("%s:: ret value %d\n", __FUNCTION__, Ret);
+    //printf("%s:: ret value %d\n", __FUNCTION__, Ret);
   } else {
     g_client_if = sGattInterface->Register(uuid, &sGattCB, eatt_support);
     sleep(2);
@@ -2427,7 +2427,7 @@ void do_le_cl_register(int idx, bool eatt_support) {
 }
 
 void do_le_client_register(char* p) {
-  bt_status_t Ret;
+  //BtStatus Ret;
   int idx;
   bool is_valid = false;
   bool eatt_support = false;
@@ -2440,7 +2440,7 @@ void do_le_client_register(char* p) {
 }
 
 void do_le_client_register_ext(char* p) {
-  bt_status_t Ret;
+  //BtStatus Ret;
   int idx;
   Uuid uuid;
   Uuid bt_uuid;
@@ -2464,7 +2464,7 @@ void do_le_client_register_ext(char* p) {
 }
 
 void do_le_cl_deregister(int client_if, bool is_ext) {
-  bt_status_t Ret;
+  //BtStatus Ret;
 
   if (Btif_gatt_layer) {
     if (is_ext) {
@@ -2472,15 +2472,15 @@ void do_le_cl_deregister(int client_if, bool is_ext) {
         printf("%s:: ERROR: no application registered\n", __FUNCTION__);
         return;
       }
-      Ret = sGattIfaceScan->client->unregister_client(client_if);
+      BtStatus Ret = sGattIfaceScan->client->unregister_client(client_if);
     } else {
       if (0 == g_client_if_scan) {
         printf("%s:: ERROR: no application registered\n", __FUNCTION__);
         return;
       }
-      Ret = sGattIfaceScan->client->unregister_client(g_client_if_scan);
+      BtStatus Ret = sGattIfaceScan->client->unregister_client(g_client_if_scan);
     }
-    printf("%s:: Ret=%d\n", __FUNCTION__, Ret);
+    //printf("%s:: Ret=%d\n", __FUNCTION__, Ret);
   } else {
     if (is_ext) {
       if (0 == client_if) {
@@ -2511,17 +2511,17 @@ void do_le_client_deregister_ext(char* p) {
 
 void do_le_send_connect_req(int client_if, RawAddress bd_addr, int transport,
                             bool is_ext) {
-  bool Ret = false;
 
   printf("%s:: client_if=%d \n", __FUNCTION__, client_if);
+  bool ret = -1;
    if (Btif_gatt_layer) {
     // TODO need to add phy parameter as 0x07 for connection to all types of
     if (is_ext)
-      Ret = sGattIfaceScan->client->connect(client_if, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251);
+       BtStatus Ret = sGattIfaceScan->client->connect(client_if, bd_addr, 0, TRUE,
+                                            transport, FALSE, 0x01, 251, FALSE);
     else
-      Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, TRUE,
-                                            transport, FALSE, 0x01, 251);
+      BtStatus Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, TRUE,
+                                            transport, FALSE, 0x01, 251, FALSE);
   } else if (transport == BT_TRANSPORT_BR_EDR) {
     // Outgoing Connection
     g_PSM = 31;
@@ -2534,13 +2534,13 @@ void do_le_send_connect_req(int client_if, RawAddress bd_addr, int transport,
     l2c_connect(bd_addr);
   } else {
     if (is_ext)
-      Ret =
+      ret =
           sGattInterface->Connect(client_if, bd_addr.address, TRUE, (tBT_TRANSPORT)transport);
     else
-      Ret = sGattInterface->Connect(g_client_if, bd_addr.address, TRUE,
+      ret = sGattInterface->Connect(g_client_if, bd_addr.address, TRUE,
                                     (tBT_TRANSPORT)transport);
   }
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+ printf("%s:: Ret=%d \n", __FUNCTION__, ret);
 }
 
 void do_le_client_connect(char* p) {
@@ -2565,18 +2565,18 @@ void do_le_client_connect_ext(char* p) {
 }
 
 void do_le_client_refresh(char* p) {
-  bool Ret;
+  //bool Ret;
   RawAddress bd_addr = {{0}};
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
 
   if (Btif_gatt_layer) {
-    Ret = sGattIfaceScan->client->refresh(g_client_if_scan, bd_addr);
-    printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+   BtStatus Ret = sGattIfaceScan->client->refresh(g_client_if_scan, bd_addr);
+    //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
   }
 }
 
 void do_le_conn_param_update(char* p) {
-  bool Ret;
+//  bool Ret;
   RawAddress bd_addr = {{0}};
   int min_interval = 24;
   int max_interval = 40;
@@ -2589,13 +2589,13 @@ void do_le_conn_param_update(char* p) {
   timeout = get_hex(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
 
-  Ret = sGattIfaceScan->client->conn_parameter_update(
+  BtStatus Ret = sGattIfaceScan->client->conn_parameter_update(
       bd_addr, min_interval, max_interval, latency, timeout, 0, 0);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_conn_subrate_req(char* p) {
-  bool Ret;
+  //bool Ret;
   RawAddress bd_addr = {{0}};
   int subrate_min = 5;
   int subrate_max = 10;
@@ -2610,29 +2610,29 @@ void do_le_conn_subrate_req(char* p) {
   timeout = get_hex(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
 
-  Ret = sGattIfaceScan->client->subrate_request(
+  BtStatus Ret = sGattIfaceScan->client->subrate_request(
       bd_addr, subrate_min, subrate_max, max_latency, cont_num, timeout);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_client_connect_auto(char* p) {
-  bool Ret;
+  bool ret = -1;
   RawAddress bd_addr = {{0}};
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   if (Btif_gatt_layer) {
-    Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, FALSE,
-                                          transport, FALSE, 0x01, 251);
+    BtStatus Ret = sGattIfaceScan->client->connect(g_client_if_scan, bd_addr, 0, FALSE,
+                                          transport, FALSE, 0x01, 251, FALSE);
   } else {
-    Ret = sGattInterface->Connect(g_client_if, bd_addr.address, FALSE,
+    ret = sGattInterface->Connect(g_client_if, bd_addr.address, FALSE,
                                   BT_TRANSPORT_LE);
   }
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  printf("%s:: ret=%d \n", __FUNCTION__, ret);
 }
 
 void do_le_cl_disconnect(int conn_id, bool is_ext, char* p) {
-  int Ret = -1;
+  int ret = -1;
   bool return_status;
   RawAddress bd_addr = {{0}};
   int transport = BT_TRANSPORT_BR_EDR;
@@ -2643,19 +2643,19 @@ void do_le_cl_disconnect(int conn_id, bool is_ext, char* p) {
   if (Btif_gatt_layer) {
     if (is_ext) {
       printf("%s:: is_ext =%d, conn_id=%d \n", __FUNCTION__, is_ext, conn_id);
-      Ret = sGattIfaceScan->client->disconnect(conn_id, bd_addr, conn_id);
+    BtStatus  Ret = sGattIfaceScan->client->disconnect(conn_id, bd_addr, conn_id);
     } else
-      Ret = sGattIfaceScan->client->disconnect(g_client_if_scan, bd_addr,
+     BtStatus Ret = sGattIfaceScan->client->disconnect(g_client_if_scan, bd_addr,
                                                g_conn_id);
   } else if (transport == BT_TRANSPORT_BR_EDR) {
     return_status = sL2capInterface->DisconnectReq(g_lcid);
   } else {
     if (is_ext)
-      Ret = sGattInterface->Disconnect(conn_id);
+    ret = sGattInterface->Disconnect(conn_id);
     else
-      Ret = sGattInterface->Disconnect(g_conn_id);
+     ret = sGattInterface->Disconnect(g_conn_id);
   }
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  printf("%s:: ret=%d \n", __FUNCTION__, ret);
 }
 
 void do_le_client_disconnect(char* p) {
@@ -2985,7 +2985,7 @@ void do_le_set_idle_timeout(char* p) {
  ** GATT SERVER API commands
  *******************************************************************************/
 void do_le_sr_register(int idx, bool eatt_support) {
-  bt_status_t Ret;
+ // BtStatus Ret;
   bool is_valid = false;
   Uuid uuid;
   Uuid bt_uuid;
@@ -3056,11 +3056,11 @@ void do_le_sr_register(int idx, bool eatt_support) {
 
   if (Btif_gatt_layer) {
 #if (EATT_IF_SUPPORTED == TRUE)
-    Ret = sGattIfaceScan->server->register_server(bt_uuid, eatt_support);
+    BtStatus Ret = sGattIfaceScan->server->register_server(bt_uuid, eatt_support);
 #else
-    Ret = sGattIfaceScan->server->register_server(bt_uuid, false);
+    BtStatus Ret = sGattIfaceScan->server->register_server(bt_uuid, false);
 #endif
-    printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+    //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
   } else {
     g_server_if = sGattInterface->Register(uuid, &sGattCB, eatt_support);
     printf("%s:: g_server_if=%d \n", __FUNCTION__, g_server_if);
@@ -3080,7 +3080,7 @@ void do_le_server_register(char* p) {
 }
 
 void do_le_server_register_ext(char* p) {
-  bt_status_t Ret;
+ // BtStatus Ret;
   bool is_valid = false;
   int idx;
   Uuid uuid;
@@ -3103,7 +3103,7 @@ void do_le_server_register_ext(char* p) {
 }
 
 void do_le_sr_deregister(int server_if, bool is_ext) {
-  bt_status_t Ret;
+  //BtStatus Ret;
 
   if (is_ext) {
     if (0 == server_if) {
@@ -3111,16 +3111,16 @@ void do_le_sr_deregister(int server_if, bool is_ext) {
       return;
     }
     sGattInterface->Deregister(server_if);
-    Ret = sGattIfaceScan->server->unregister_server(server_if);
-    printf("%s::Ret = %d\n", __FUNCTION__, Ret);
+    BtStatus Ret = sGattIfaceScan->server->unregister_server(server_if);
+    //printf("%s::Ret = %d\n", __FUNCTION__, Ret);
   } else {
     if (0 == g_server_if) {
       printf("%s:: ERROR: no application registered\n", __FUNCTION__);
       return;
     }
     sGattInterface->Deregister(g_server_if);
-    Ret = sGattIfaceScan->server->unregister_server(g_server_if_scan);
-    printf("%s::Ret = %d\n", __FUNCTION__, Ret);
+    BtStatus Ret = sGattIfaceScan->server->unregister_server(g_server_if_scan);
+    //printf("%s::Ret = %d\n", __FUNCTION__, Ret);
   }
 }
 
@@ -3135,7 +3135,7 @@ void do_le_server_deregister_ext(char* p) {
 }
 
 void do_le_server_add_service(char* p) {
-  int Ret = 0;
+  //int Ret = 0;
   bool is_valid = false;
 
   std::vector<btgatt_db_element_t> service;
@@ -3155,13 +3155,13 @@ void do_le_server_add_service(char* p) {
   svc2.type = BTGATT_DB_PRIMARY_SERVICE;
   service.push_back(svc2);
 
-  Ret = sGattIfaceScan->server->add_service(g_server_if_scan, service.data(),
-                                            service.size());
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+ BtStatus Ret = sGattIfaceScan->server->add_service(g_server_if_scan, service.data(),
+                                             service.size());
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_server_add_custom_service(char* p) {
-  int Ret = 0;
+  //int Ret = 0;
   bool is_valid = false;
   int uuid_len = 0, uuid_len_bytes = 0;
 
@@ -3177,22 +3177,22 @@ void do_le_server_add_custom_service(char* p) {
   svc1.type = BTGATT_DB_PRIMARY_SERVICE;
   service.push_back(svc1);
 
-  Ret = sGattIfaceScan->server->add_service(g_server_if_scan, service.data(),
-                                            service.size());
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  BtStatus Ret = sGattIfaceScan->server->add_service(g_server_if_scan, service.data(),
+                                             service.size());
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_sr_connect(int server_if, char* p) {
-  bool Ret;
+  //bool Ret;
   RawAddress bd_addr = {{0}};
   uint8_t addr_type;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   addr_type = (uint8_t)get_int(&p, 1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
-  Ret = sGattIfaceScan->server->connect(server_if, bd_addr, addr_type, TRUE,
-                                        transport);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  BtStatus Ret = sGattIfaceScan->server->connect(server_if, bd_addr, addr_type, TRUE,
+                                         transport);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_server_connect(char* p) { do_le_sr_connect(g_server_if_scan, p); }
@@ -3203,28 +3203,28 @@ void do_le_server_connect_ext(char* p) {
 }
 
 void do_le_server_connect_auto(char* p) {
-  bool Ret;
+ // bool Ret;
   RawAddress bd_addr = {{0}};
   uint8_t addr_type = (uint8_t)get_int(&p, 1);
   ;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
-  Ret = sGattIfaceScan->server->connect(g_server_if_scan, bd_addr, addr_type,
-                                        FALSE, BT_TRANSPORT_LE);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+ BtStatus Ret = sGattIfaceScan->server->connect(g_server_if_scan, bd_addr, addr_type,
+                                         FALSE, BT_TRANSPORT_LE);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_sr_disconnect(int server_if, bool is_ext, char* p) {
-  bt_status_t Ret;
+  //BtStatus Ret;
   RawAddress bd_addr = {{0}};
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   if (is_ext)
-    Ret = sGattIfaceScan->server->disconnect(server_if, bd_addr, server_if);
+    BtStatus Ret = sGattIfaceScan->server->disconnect(server_if, bd_addr, server_if);
   else
-    Ret = sGattIfaceScan->server->disconnect(g_server_if_scan, bd_addr,
+    BtStatus Ret = sGattIfaceScan->server->disconnect(g_server_if_scan, bd_addr,
                                              g_conn_id);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_server_disconnect(char* p) {
@@ -3237,7 +3237,7 @@ void do_le_server_disconnect_ext(char* p) {
 }
 
 void do_le_server_send_indication(char* p) {
-  bt_status_t Ret;
+  //BtStatus Ret;
   int attr_handle;
   int confirm = 0;
   uint8_t arr[] = {1, 2, 3, 4};
@@ -3245,10 +3245,10 @@ void do_le_server_send_indication(char* p) {
 
   attr_handle = get_hex(&p, -1);
   confirm = get_int(&p, -1);
-  Ret = sGattIfaceScan->server->send_indication(g_server_if_scan, attr_handle,
+  BtStatus Ret = sGattIfaceScan->server->send_indication(g_server_if_scan, attr_handle,
                                                 g_conn_id, confirm,
                                                 value.data(), value.size());
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  //printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
 
 void do_le_server_send_multi_notification(char* p) {
