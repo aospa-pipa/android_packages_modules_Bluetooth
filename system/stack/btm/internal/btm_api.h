@@ -274,7 +274,7 @@ extern tBTM_STATUS BTM_FlowSpec(const RawAddress& bd, tBT_FLOW_SPEC* p_flow, tBT
  ******************************************************************************/
 [[nodiscard]] tBTM_STATUS BTM_CreateSco(const RawAddress* remote_bda, bool is_orig,
                                         uint16_t pkt_types, uint16_t* p_sco_inx,
-                                        tBTM_SCO_CB* p_conn_cb, tBTM_SCO_CB* p_disc_cb);
+                                        tBTM_SCO_CB* p_conn_cb, tBTM_SCO_WITH_REASON_CB* p_disc_cb);
 
 /*******************************************************************************
  *
