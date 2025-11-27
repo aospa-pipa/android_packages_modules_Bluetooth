@@ -6448,8 +6448,9 @@ public:
       return false;
     }
 
-    if (group->GetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
-      log::debug("Group is not streaming");
+    if (group->GetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING &&
+        group->GetTargetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
+      log::debug("Group is not streaming and target state is not streaming");
       return false;
     }
 
