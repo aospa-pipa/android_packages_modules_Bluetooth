@@ -2468,10 +2468,9 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   /* tell role manager to check M/S role */
   bta_sys_conn_open(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
 
-        bta_sys_idle(BTA_ID_AV,
-                     com_android_bluetooth_flags_a2dp_pm_app_id() ? p_scb->app_id
-                                                                  : p_scb->hdi,
-                     p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com_android_bluetooth_flags_a2dp_pm_app_id() ? p_scb->app_id : p_scb->hdi,
+               p_scb->PeerAddress());
 
   if (p_scb->media_type == AVDT_MEDIA_TYPE_AUDIO) {
     /* in normal logic, conns should be bta_av_cb.audio_count - 1,
