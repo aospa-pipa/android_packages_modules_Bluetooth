@@ -27,6 +27,7 @@
 #include <cerrno>
 #include <cstdint>
 
+#include "bt_status.h"
 #include "btif/include/btif_common.h"
 #include "btif/include/btif_storage.h"
 #include "btif/include/core_callbacks.h"
@@ -761,6 +762,32 @@ static void CategorizeBqrEvent(uint8_t length, const uint8_t* p_bqr_event) {
       }
       break;
 
+    case QUALITY_REPORT_ID_LEA_BROADCAST_SOURCE:
+      if (vendor_cap_supported_version >= kBqrVersion8_0) {
+        if (length < kLeaBisSourceParamTotalLen) {
+          log::fatal(
+                  "Event {} Parameter total length: {} is abnormal. It shall be not shorter "
+                  "than: {}",
+                  quality_report_id, length, kLeaBisSourceParamTotalLen);
+          return;
+        }
+        // Reserved space for the Function DRI's Parser code implementation
+      }
+      break;
+
+    case QUALITY_REPORT_ID_CHANNEL_SOUNDING:
+      if (vendor_cap_supported_version >= kBqrVersion8_0) {
+        if (length < kCSParamTotalLen) {
+          log::fatal(
+                  "Event {} Parameter total length: {} is abnormal. It shall be not shorter "
+                  "than: {}",
+                  quality_report_id, length, kCSParamTotalLen);
+          return;
+        }
+        // Reserved space for the Function DRI's Parser code implementation
+      }
+      break;
+
     default:
       log::warn("Unknown ID: 0x{:x}", quality_report_id);
       break;
@@ -990,7 +1017,7 @@ static bt_remote_version_t btif_get_remote_version(const RawAddress& bd_addr) {
           .val = reinterpret_cast<void*>(&info),
   };
 
-  if (btif_storage_get_remote_device_property(&bd_addr, &prop) == BT_STATUS_SUCCESS) {
+  if (btif_storage_get_remote_device_property(&bd_addr, &prop)) {
     return info;
   }
   return {};
@@ -1153,12 +1180,20 @@ static void vendor_specific_event_callback(
       break;
 
     case QUALITY_REPORT_ID_LE_AUDIO_CHOPPY:
-      if (com_android_bluetooth_flags_bqr_lea_choppy_deliver()) {
+      if (com_android_bluetooth_flags_bqr_lea_choppy_deliver() &&
+          !com_android_bluetooth_flags_bluetooth_quality_report_v8()) {
         log::info("LE Audio Choppy event 0x{:02x}", quality_report_id);
       } else {
         if (com_android_bluetooth_flags_fix_unhandled_bqr_subevent()) {
           CategorizeBqrEvent(bytes.size(), bytes.data());
         }
+      }
+      break;
+
+    case QUALITY_REPORT_ID_LEA_BROADCAST_SOURCE:
+    case QUALITY_REPORT_ID_CHANNEL_SOUNDING:
+      if (com_android_bluetooth_flags_bluetooth_quality_report_v8()) {
+        CategorizeBqrEvent(bytes.size(), bytes.data());
       }
       break;
 

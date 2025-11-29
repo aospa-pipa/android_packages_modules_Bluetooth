@@ -813,8 +813,7 @@ static void hh_get_dscp_handler(tBTA_HH_DEV_DSCP_INFO& dscp_info) {
   bt_bdname_t bdname = {};
   bt_property_t prop_name = {};
   BTIF_STORAGE_FILL_PROPERTY(&prop_name, BT_PROPERTY_BDNAME, sizeof(bt_bdname_t), &bdname);
-  if (btif_storage_get_remote_device_property(&p_dev->link_spec.addrt.bda, &prop_name) ==
-      BT_STATUS_SUCCESS) {
+  if (btif_storage_get_remote_device_property(&p_dev->link_spec.addrt.bda, &prop_name)) {
     cached_name = (char*)bdname.name;
   } else {
     cached_name = "Bluetooth HID";
@@ -827,11 +826,11 @@ static void hh_get_dscp_handler(tBTA_HH_DEV_DSCP_INFO& dscp_info) {
     BtStatus ret = BtifStatus();
     BTA_HhAddDev(p_dev->link_spec, p_dev->attr_mask, p_dev->sub_class, p_dev->app_id, dscp_info);
     // Save HID info in the persistent storage
-    ret = BtifStatus(static_cast<BtifStatusCode>(btif_storage_add_hid_device_info(
+    ret = btif_storage_add_hid_device_info(
             p_dev->link_spec, p_dev->attr_mask, p_dev->sub_class, p_dev->app_id,
             dscp_info.vendor_id, dscp_info.product_id, dscp_info.version, dscp_info.ctry_code,
             dscp_info.ssr_max_latency, dscp_info.ssr_min_tout, dscp_info.descriptor.dl_len,
-            dscp_info.descriptor.dsc_list)));
+            dscp_info.descriptor.dsc_list);
 
     // Allow incoming connections
     btif_storage_set_hid_connection_policy(p_dev->link_spec, true);
@@ -888,7 +887,8 @@ static void hh_vc_unplug_handler(tBTA_HH_CBDATA& dev_status) {
 
   // Remove the HID device
   btif_hh_remove_device(p_dev->link_spec);
-  if (p_dev->local_vup || btif_check_cod_hid(p_dev->link_spec.addrt.bda)) {
+  if (com::android::bluetooth::flags::hid_always_unbond_on_virtual_unplug() || p_dev->local_vup ||
+      btif_check_cod_hid(p_dev->link_spec.addrt.bda)) {
     // Remove the bond if locally initiated or remote device has major class HID
     p_dev->local_vup = false;
     BTA_DmRemoveDevice(p_dev->link_spec.addrt.bda);
@@ -915,10 +915,15 @@ void btif_hh_load_bonded_dev(const AclLinkSpec& link_spec_ref, tBTA_HH_ATTR_MASK
   }
 
   if (hh_add_device(link_spec, attr_mask, reconnect_allowed)) {
+    BTA_HhAddDev(link_spec, attr_mask, sub_class, app_id, dscp_info);
     if (reconnect_allowed) {
       BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_ACCEPTING, BTHH_OK);
+      if (com_android_bluetooth_flags_hogp_cancel_gatt_if_policy_forbidden() &&
+          link_spec.transport == BT_TRANSPORT_LE) {
+        // Trigger the background connection of HoGP devices.
+        BTA_HhOpen(link_spec, false);
+      }
     }
-    BTA_HhAddDev(link_spec, attr_mask, sub_class, app_id, dscp_info);
   }
 }
 
