@@ -16,8 +16,8 @@
 
 package com.android.bluetooth.le_scan;
 
+import static com.android.bluetooth.Util.checkCallerTargetSdk;
 import static com.android.bluetooth.Utils.callbackToApp;
-import static com.android.bluetooth.Utils.checkCallerTargetSdk;
 import static com.android.bluetooth.le_scan.BatchScanUtil.permittedResults;
 import static com.android.bluetooth.le_scan.ScanUtil.SCAN_RESULT_TYPE_TRUNCATED;
 
@@ -27,9 +27,7 @@ import static java.util.Objects.requireNonNullElseGet;
 import android.annotation.Nullable;
 import android.app.AppOpsManager;
 import android.app.PendingIntent;
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothUtils;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.IPeriodicAdvertisingCallback;
@@ -65,8 +63,6 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
-
-import libcore.util.HexEncoding;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -109,7 +105,6 @@ public class ScanController {
     private final Object mTestModeLock = new Object();
 
     private final AdapterService mAdapterService;
-    private final BluetoothAdapter mAdapter;
     private final AppOpsManager mAppOps;
     private final CompanionDeviceManager mCompanionManager;
     private final ScanBinder mBinder;
@@ -164,7 +159,6 @@ public class ScanController {
             TimeProvider timeProvider) {
         Log.i(TAG, "Created with Flags.scanControllerThread: " + Flags.scanControllerThread());
         mAdapterService = requireNonNull(service);
-        mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
         mAppOps = mAdapterService.getSystemService(AppOpsManager.class);
         mCompanionManager = companionDeviceManager;
         mBinder = new ScanBinder(mAdapterService, this);
@@ -264,16 +258,6 @@ public class ScanController {
         return mScanRadioStats;
     }
 
-    /** Example raw beacons captured from a Blue Charm BC011 */
-    private static final String[] TEST_MODE_BEACONS =
-            new String[] {
-                "020106",
-                "0201060303AAFE1716AAFE10EE01626C7565636861726D626561636F6E730009168020691E0EFE13551109426C7565436861726D5F313639363835000000",
-                "0201060303AAFE1716AAFE00EE626C7565636861726D31000000000001000009168020691E0EFE13551109426C7565436861726D5F313639363835000000",
-                "0201060303AAFE1116AAFE20000BF017000008874803FB93540916802069080EFE13551109426C7565436861726D5F313639363835000000000000000000",
-                "0201061AFF4C000215426C7565436861726D426561636F6E730EFE1355C509168020691E0EFE13551109426C7565436861726D5F31363936383500000000",
-            };
-
     /** onDisplayChanged notifies ScanManager when the screen status changes. */
     public void onDisplayChanged(boolean screenOn) {
         enforceScanThread();
@@ -303,20 +287,7 @@ public class ScanController {
                                     if (!mTestModeEnabled) {
                                         return;
                                     }
-                                    for (String test : TEST_MODE_BEACONS) {
-                                        onScanResultInternal(
-                                                0x1b,
-                                                0x1,
-                                                "DD:34:02:05:5C:4D",
-                                                1,
-                                                0,
-                                                0xff,
-                                                127,
-                                                -54,
-                                                0x0,
-                                                HexEncoding.decode(test),
-                                                "DD:34:02:05:5C:4E");
-                                    }
+                                    ScanTestUtil.runTestCycle(ScanController.this);
                                     sendEmptyMessageDelayed(0, DateUtils.SECOND_IN_MILLIS);
                                 }
                             }
@@ -390,7 +361,7 @@ public class ScanController {
                 originalAddress);
     }
 
-    private void onScanResultInternal(
+    void onScanResultInternal(
             int eventType,
             int addressType,
             String address,
@@ -404,8 +375,8 @@ public class ScanController {
             String originalAddress) {
         Log.v(
                 TAG,
-                "onScanResult() -"
-                        + (" eventType=0x" + Integer.toHexString(eventType))
+                "onScanResult(): "
+                        + ("eventType=0x" + Integer.toHexString(eventType))
                         + (", addressType=" + addressType)
                         + (", address=" + BluetoothUtils.toAnonymizedAddress(address))
                         + (", primaryPhy=" + primaryPhy)
@@ -429,9 +400,7 @@ public class ScanController {
         }
 
         byte[] legacyAdvData = Arrays.copyOfRange(advData, 0, 62);
-
-        BluetoothDevice device = mAdapter.getRemoteLeDevice(address, addressType);
-
+        var device = mAdapterService.getRemoteDevice(address, addressType);
         var noFilterMatchedClients = new ArrayList<ScanClient>();
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
             var app = mScannerMap.getById(client.getScannerId());
@@ -800,8 +769,8 @@ public class ScanController {
         enforceScanThread();
         Log.d(
                 TAG,
-                "onTrackAdvFoundLost() -"
-                        + (" scannerId=" + trackingInfo.scannerId())
+                "onTrackAdvFoundLost(): "
+                        + ("scannerId=" + trackingInfo.scannerId())
                         + (", address=" + trackingInfo.address())
                         + (", addressType=" + trackingInfo.addressType())
                         + (", adv_state=" + trackingInfo.advState()));
@@ -812,8 +781,8 @@ public class ScanController {
             return;
         }
 
-        BluetoothDevice device =
-                mAdapter.getRemoteLeDevice(trackingInfo.address(), trackingInfo.addressType());
+        var device =
+                mAdapterService.getRemoteDevice(trackingInfo.address(), trackingInfo.addressType());
         int advertiserState = trackingInfo.advState();
         ScanResult result =
                 new ScanResult(
@@ -864,7 +833,7 @@ public class ScanController {
     /** Callback method for configuration of scan parameters. */
     void onScanParamSetupCompleted(int status, int scannerId) {
         enforceScanThread();
-        Log.d(TAG, "onScanParamSetupCompleted() - scannerId=" + scannerId + ", status=" + status);
+        Log.d(TAG, "onScanParamSetupCompleted(): scannerId=" + scannerId + ", status=" + status);
         var app = mScannerMap.getById(scannerId);
         if (app == null || app.getCallback() == null) {
             Log.e(TAG, "Advertise app or callback is null");
@@ -1093,7 +1062,7 @@ public class ScanController {
         mAppOps.checkPackage(uid, callingPackage);
         var hasDisavowedLocation =
                 Utils.hasDisavowedLocationForScan(mAdapterService, source, mTestModeEnabled);
-        var isQApp = checkCallerTargetSdk(mAdapterService, callingPackage, Build.VERSION_CODES.Q);
+        var isQApp = checkCallerTargetSdk(mAdapterService, source, Build.VERSION_CODES.Q);
         var userHandle = Binder.getCallingUserHandle();
         var hasLocationPermission = false; // Unacted upon if `hasDisavowedLocation` is true
         if (!hasDisavowedLocation) {
@@ -1207,7 +1176,7 @@ public class ScanController {
                 Utils.hasDisavowedLocationForScan(mAdapterService, source, mTestModeEnabled));
         if (!app.getHasDisavowedLocation()) {
             try {
-                if (checkCallerTargetSdk(mAdapterService, callingPackage, Build.VERSION_CODES.Q)) {
+                if (checkCallerTargetSdk(mAdapterService, source, Build.VERSION_CODES.Q)) {
                     app.setHasLocationPermission(
                             Utils.checkCallerHasFineLocation(
                                     mAdapterService, source, app.getUserHandle()));
