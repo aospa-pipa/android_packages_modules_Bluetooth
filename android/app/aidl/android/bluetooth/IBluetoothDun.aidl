@@ -34,7 +34,7 @@ import android.bluetooth.BluetoothDevice;
 /**
  * API for Bluetooth Dun service
  *
- * {@hide}
+ *
  */
 interface IBluetoothDun {
     // Public API

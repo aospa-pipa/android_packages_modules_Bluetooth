@@ -81,6 +81,7 @@ import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.le_scan.ScanUtil;
 
 import libcore.util.SneakyThrow;
 
@@ -103,8 +104,6 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     private static final String TAG = Util.BT_PREFIX + AdapterServiceBinder.class.getSimpleName();
 
     private static final int MIN_ADVT_INSTANCES_FOR_MA = 5;
-    private static final int MIN_OFFLOADED_FILTERS = 10;
-    private static final int MIN_OFFLOADED_SCAN_STORAGE_BYTES = 1024;
 
     private final AdapterService mService;
 
@@ -1226,9 +1225,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         if (service == null) {
             return false;
         }
-
-        int val = service.getNumOfOffloadedScanFilterSupported();
-        return val >= MIN_OFFLOADED_FILTERS;
+        return ScanUtil.isOffloadedFilteringSupported(service);
     }
 
     @Override
@@ -1237,9 +1234,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         if (service == null) {
             return false;
         }
-
-        int val = service.getOffloadedScanResultStorage();
-        return val >= MIN_OFFLOADED_SCAN_STORAGE_BYTES;
+        return ScanUtil.isOffloadedScanBatchingSupported(service);
     }
 
     @Override
