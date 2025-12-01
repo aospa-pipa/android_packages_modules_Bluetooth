@@ -1171,8 +1171,14 @@ public class MediaPlayerList {
                     }
 
                     MediaPlayerWrapper player = getActivePlayer();
-                    if (player != null && player.getPlaybackState() != null
-                            && player.getPlaybackState().getState() == PlaybackState.STATE_PLAYING
+                    int active_player_state = PlaybackState.STATE_STOPPED;
+                    if (player != null) {
+                      PlaybackState state = player.getPlaybackState();
+                      if (state != null)
+                        active_player_state = state.getState();
+                    }
+
+                    if (active_player_state == PlaybackState.STATE_PLAYING
                             && (data.state.getState() != PlaybackState.STATE_PLAYING)) {
                         Log.d(TAG, "Some audio playbacks are still active, drop it");
                         return;
