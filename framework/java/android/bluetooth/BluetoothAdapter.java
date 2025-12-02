@@ -971,7 +971,6 @@ public final class BluetoothAdapter {
     @Deprecated
     @RequiresNoPermission
     public static synchronized BluetoothAdapter getDefaultAdapter() {
-        Log.e(TAG, "BluetoothAdapter.getDefaultAdapter is deprecated.", new Throwable());
         if (sAdapter == null) {
             sAdapter = createAdapter(null);
         }
@@ -1094,7 +1093,7 @@ public final class BluetoothAdapter {
     @RequiresNoPermission
     public BluetoothDevice getRemoteDevice(String address) {
         //android.util.SeempLog.record(62);
-        final BluetoothDevice res = new BluetoothDevice(address);
+        final BluetoothDevice res = new BluetoothDevice(this, address);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -1118,7 +1117,7 @@ public final class BluetoothAdapter {
     @NonNull
     public BluetoothDevice getRemoteLeDevice(
             @NonNull String address, @AddressType int addressType) {
-        final BluetoothDevice res = new BluetoothDevice(address, addressType);
+        final BluetoothDevice res = new BluetoothDevice(this, address, addressType);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -1141,17 +1140,17 @@ public final class BluetoothAdapter {
         if (address == null || address.length != 6) {
             throw new IllegalArgumentException("Bluetooth address must have 6 bytes");
         }
-        final BluetoothDevice res =
-                new BluetoothDevice(
-                        String.format(
-                                Locale.US,
-                                "%02X:%02X:%02X:%02X:%02X:%02X",
-                                address[0],
-                                address[1],
-                                address[2],
-                                address[3],
-                                address[4],
-                                address[5]));
+        final String addressString =
+                String.format(
+                        Locale.US,
+                        "%02X:%02X:%02X:%02X:%02X:%02X",
+                        address[0],
+                        address[1],
+                        address[2],
+                        address[3],
+                        address[4],
+                        address[5]);
+        final BluetoothDevice res = new BluetoothDevice(this, addressString);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -2805,7 +2804,13 @@ public final class BluetoothAdapter {
         int channel = SOCKET_CHANNEL_AUTO_STATIC_NO_SDP;
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_RFCOMM, true, true, channel, mitm, min16DigitPin);
+                        this,
+                        BluetoothSocket.TYPE_RFCOMM,
+                        true,
+                        true,
+                        channel,
+                        mitm,
+                        min16DigitPin);
         int errno = socket.mSocket.bindListen();
         socket.setChannel(socket.mSocket.getPort());
         if (errno != 0) {
@@ -2941,7 +2946,7 @@ public final class BluetoothAdapter {
             case BluetoothStatusCodes.SUCCESS -> {
                 try {
                     yield BluetoothSocket.createSocketFromOpenFd(
-                            socketInfo.pfd, socketInfo.bluetoothDevice, new ParcelUuid(uuid));
+                            this, socketInfo.pfd, socketInfo.bluetoothDevice, new ParcelUuid(uuid));
                 } catch (IOException e) {
                     yield null;
                 }
@@ -3047,12 +3052,12 @@ public final class BluetoothAdapter {
 
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    private static BluetoothServerSocket createNewRfcommSocketAndRecord(
+    private BluetoothServerSocket createNewRfcommSocketAndRecord(
             String name, UUID uuid, boolean auth, boolean encrypt) throws IOException {
         BluetoothServerSocket socket;
         socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_RFCOMM, auth, encrypt, new ParcelUuid(uuid));
+                        this, BluetoothSocket.TYPE_RFCOMM, auth, encrypt, new ParcelUuid(uuid));
         socket.setServiceName(name);
         int errno = socket.mSocket.bindListen();
         if (errno != 0) {
@@ -3078,7 +3083,7 @@ public final class BluetoothAdapter {
     public BluetoothServerSocket listenUsingInsecureRfcommOn() throws IOException {
         int port = SOCKET_CHANNEL_AUTO_STATIC_NO_SDP;
         BluetoothServerSocket socket =
-                new BluetoothServerSocket(BluetoothSocket.TYPE_RFCOMM, false, false, port);
+                new BluetoothServerSocket(this, BluetoothSocket.TYPE_RFCOMM, false, false, port);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             socket.setChannel(socket.mSocket.getPort());
@@ -3113,7 +3118,7 @@ public final class BluetoothAdapter {
             throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_L2CAP, true, true, port, mitm, min16DigitPin);
+                        this, BluetoothSocket.TYPE_L2CAP, true, true, port, mitm, min16DigitPin);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             int assignedChannel = socket.mSocket.getPort();
@@ -3167,7 +3172,7 @@ public final class BluetoothAdapter {
         Log.d(TAG, "listenUsingInsecureL2capOn: port=" + port);
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_L2CAP, false, false, port, false, false);
+                        this, BluetoothSocket.TYPE_L2CAP, false, false, port, false, false);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             int assignedChannel = socket.mSocket.getPort();
@@ -4234,6 +4239,7 @@ public final class BluetoothAdapter {
     public @NonNull BluetoothServerSocket listenUsingL2capChannel() throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
+                        this,
                         BluetoothSocket.TYPE_LE,
                         true,
                         true,
@@ -4287,6 +4293,7 @@ public final class BluetoothAdapter {
     public @NonNull BluetoothServerSocket listenUsingInsecureL2capChannel() throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
+                        this,
                         BluetoothSocket.TYPE_LE,
                         false,
                         false,
@@ -4359,6 +4366,7 @@ public final class BluetoothAdapter {
             if (settings.getDataPath() == BluetoothSocketSettings.DATA_PATH_NO_OFFLOAD) {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4366,6 +4374,7 @@ public final class BluetoothAdapter {
             } else {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4388,6 +4397,7 @@ public final class BluetoothAdapter {
                 }
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4397,6 +4407,7 @@ public final class BluetoothAdapter {
             } else {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -5370,7 +5381,6 @@ public final class BluetoothAdapter {
     /**
      * Callbacks for receiving response of HCI Vendor-Specific Commands and Vendor-Specific Events
      * that arise from the controller.
-     *
      */
     @Hide
     @SystemApi
@@ -5567,7 +5577,7 @@ public final class BluetoothAdapter {
                     throw new IllegalArgumentException("Only one registration allowed");
                 }
                 mHciVendorSpecificCallbackRegistration.set(
-                        callback, eventCodeSet, Collections.emptySet(),executor);
+                        callback, eventCodeSet, Collections.emptySet(), executor);
                 try {
                     mHciVendorSpecificCallbackRegistration.registerToService(
                             mService, mHciVendorSpecificCallbackStub);

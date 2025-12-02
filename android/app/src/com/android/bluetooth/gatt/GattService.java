@@ -209,8 +209,6 @@ public class GattService extends ProfileService {
     /** HashMap used for storing RSSI cache entries */
     @VisibleForTesting final Map<String, RssiCacheEntry> mRssiCache = new HashMap<>();
 
-    final Object mOffloadLock = new Object();
-
     private final CompanionDeviceManager mCompanionDeviceManager;
     private final GattServerManager mServerManager;
     private final GattNativeInterface mNativeInterface;
@@ -457,9 +455,10 @@ public class GattService extends ProfileService {
         } else {
             app.setId(clientIf);
             var message = "Unregistering client " + app + ", callback=" + callback;
-            Runnable onDeathAction =
-                    () -> unregisterClient(callback, getAttributionSource(), REASON_BINDER_DIED);
-            app.linkToDeath(new ActionOnDeathRecipient(TAG, message, onDeathAction));
+            var source = getAttributionSource();
+            var died = REASON_BINDER_DIED;
+            Runnable action = () -> doOnGattThread(() -> unregisterClient(callback, source, died));
+            app.linkToDeath(new ActionOnDeathRecipient(TAG, message, action));
         }
         callbackToApp(() -> callback.onClientRegistered(status));
     }
@@ -487,7 +486,7 @@ public class GattService extends ProfileService {
         }
 
         var app = mClientMap.getById(clientIf);
-        mMetricsReporter.logGattConnectionStateChange(device, clientIf, connectionState, status);
+        mMetricsReporter.logConnectionStateChange(device, clientIf, connectionState, status);
         if (app == null) {
             return;
         }
@@ -524,7 +523,7 @@ public class GattService extends ProfileService {
             }
         }
 
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTED, status);
         if (app == null) {
             return;
@@ -1075,7 +1074,7 @@ public class GattService extends ProfileService {
                         + (", autoMtuEnabled=" + autoMtuEnabled));
         mMetricsReporter.logAppPackage(clientIf, device, source.getUid());
         mMetricsReporter.logClientForegroundInfo(source.getUid(), isDirect);
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_CONNECTING, -1);
         mMetricsReporter.logConnect(device, isDirect, source.getUid());
         int preferredMtu = 0;
@@ -1146,7 +1145,7 @@ public class GattService extends ProfileService {
             int clientIf, BluetoothDevice device, AttributionSource source) {
         final var connId = getFirstConnectionIdForDevice(clientIf, device);
         Log.d(TAG, "clientDisconnectInternal(): device=" + device + ", connId=" + connId);
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTING, -1);
         mMetricsReporter.logDisconnectStart(device, source.getUid());
         getAdapterService().notifyGattClientDisconnect(clientIf, device);

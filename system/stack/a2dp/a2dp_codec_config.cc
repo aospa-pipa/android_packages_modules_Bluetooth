@@ -199,7 +199,7 @@ A2dpCodecConfig* A2dpCodecConfig::createCodec(btav_a2dp_codec_index_t codec_inde
   // management of the codec is moved under the ProviderInfo
   // class of the aidl audio HAL client.
   if (::bluetooth::audio::a2dp::provider::supports_codec(codec_index)) {
-    return new A2dpCodecConfigExt(codec_index, true);
+    return new A2dpCodecConfigExt(codec_index, codec_index < BTAV_A2DP_CODEC_INDEX_SOURCE_EXT_MAX);
   }
 
   A2dpCodecConfig* codec_config = nullptr;
@@ -1075,28 +1075,17 @@ bool A2dpCodecs::setPeerSinkCodecCapabilities(const uint8_t* p_peer_codec_capabi
     return false;
   }
 
-  // Bypass the validation for codecs that are offloaded:
-  // the stack does not need to know about the peer capabilities,
-  // since the validation and selection will be performed by the
-  // bluetooth audio HAL for offloaded codecs.
-  if (!a2dp_codec_config->isHardwareProviderCodec() &&
-      !A2DP_IsPeerSinkCodecValid(p_peer_codec_capabilities)) {
-    return false;
-  }
-
   return a2dp_codec_config->setPeerCodecCapabilities(p_peer_codec_capabilities);
 }
 
 bool A2dpCodecs::setPeerSourceCodecCapabilities(const uint8_t* p_peer_codec_capabilities) {
   std::lock_guard<std::recursive_mutex> lock(codec_mutex_);
 
-  if (!A2DP_IsPeerSourceCodecValid(p_peer_codec_capabilities)) {
-    return false;
-  }
   A2dpCodecConfig* a2dp_codec_config = findSinkCodecConfig(p_peer_codec_capabilities);
   if (a2dp_codec_config == nullptr) {
     return false;
   }
+
   return a2dp_codec_config->setPeerCodecCapabilities(p_peer_codec_capabilities);
 }
 

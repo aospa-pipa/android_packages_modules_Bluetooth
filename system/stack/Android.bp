@@ -1371,6 +1371,7 @@ cc_test {
         ":TestMockBta",
         ":TestMockBtif",
         ":TestMockStackA2dpApi",
+        ":TestMockStackAvdt",
         ":TestMockStackBtmInterface",
         "a2dp/a2dp_aac.cc",
         "a2dp/a2dp_aac_decoder.cc",

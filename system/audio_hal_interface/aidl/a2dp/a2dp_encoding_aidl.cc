@@ -700,9 +700,14 @@ provider::get_a2dp_configuration(
         std::vector<::bluetooth::audio::a2dp::provider::a2dp_remote_capabilities> const&
                 remote_seps,
         btav_a2dp_codec_config_t const& user_preferences,
-        ::bluetooth::a2dp::CodecId user_preferred_codec_id) {
+        ::bluetooth::a2dp::CodecId user_preferred_codec_id, bool is_source) {
   using ::aidl::android::hardware::bluetooth::audio::A2dpRemoteCapabilities;
   using ::aidl::android::hardware::bluetooth::audio::CodecId;
+
+  if (offloading_hal_interface == nullptr) {
+    log::error("the offloading HAL interface is not opened");
+    return std::nullopt;
+  }
 
   // Convert the remote audio capabilities to the exchange format used
   // by the HAL.
@@ -859,18 +864,12 @@ provider::get_a2dp_configuration(
     }
   }
 
-  log::info("remote capabilities:");
+  log::info("local: {}, remote capabilities:", is_source ? "source" : "sink");
+
   for (auto const& sep : a2dp_remote_capabilities) {
     log::info("- {}", sep.toString());
   }
   log::info("hint: {}", hint.toString());
-
-  if (offloading_hal_interface == nullptr &&
-      (offloading_hal_interface = new_hal_interface(
-               SessionType::A2DP_HARDWARE_OFFLOAD_ENCODING_DATAPATH)) == nullptr) {
-    log::error("the offloading HAL interface cannot be opened");
-    return std::nullopt;
-  }
 
   // Invoke the HAL GetAdpCapabilities method with the
   // remote capabilities.
@@ -885,7 +884,8 @@ provider::get_a2dp_configuration(
   log::info("provider selected {}", result->toString());
   auto a2dp_configuration = convertA2dpConfiguration(result.value());
   a2dp_configuration.codec_parameters.codec_type =
-          provider_info->SourceCodecIndex(result->id).value();
+          is_source ? provider_info->SourceCodecIndex(result->id).value()
+                    : provider_info->SinkCodecIndex(result->id).value();
   a2dp_configuration.codec_parameters.codec_specific_1 = user_preferences.codec_specific_1;
   if (result->parameters.lossless) {
     a2dp_configuration.codec_parameters.codec_specific_3 &=
@@ -922,7 +922,9 @@ tA2DP_STATUS provider::parse_a2dp_configuration(::bluetooth::a2dp::CodecId codec
     return A2DP_FAIL;
   }
 
-  convertCodecParameters(codec_parameters_aidl, codec_parameters);
+  if (codec_parameters != nullptr) {
+    convertCodecParameters(codec_parameters_aidl, codec_parameters);
+  }
 
   if (vendor_specific_parameters != nullptr) {
     *vendor_specific_parameters = codec_parameters_aidl.vendorSpecificParameters;

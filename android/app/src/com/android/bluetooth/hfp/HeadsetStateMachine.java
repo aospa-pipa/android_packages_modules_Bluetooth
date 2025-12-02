@@ -934,7 +934,7 @@ class HeadsetStateMachine extends StateMachine {
                         }
                         case HeadsetStackEvent.EVENT_TYPE_BIND ->
                                 processAtBind(event.valueString, event.device);
-                        // Unexpected AT commands, we only handle them for comparability reasons
+                        // Unexpected AT commands, we only handle them for compatibility reasons
                         case HeadsetStackEvent.EVENT_TYPE_VR_STATE_CHANGED -> {
                             stateLogW(
                                     "Unexpected VR event, device="
@@ -1569,15 +1569,19 @@ class HeadsetStateMachine extends StateMachine {
                 case HeadsetHalConstants.AUDIO_STATE_CONNECTED -> {
                     if (mHeadsetService.isScoAcceptable(mDevice) != BluetoothStatusCodes.SUCCESS) {
                         stateLogW("processAudioEvent: reject incoming audio connection");
-                        if (!mNativeInterface.disconnectAudio(mDevice)) {
-                            stateLogE("processAudioEvent: failed to disconnect audio");
+                        sendScoConnectionFailureToAudio(
+                                AudioManager.HFP_AUDIO_DISCONNECT_PRECONDITION_FAILED, mDevice);
+                        if (!mSystemInterface.isScoManagedByAudioEnabled()) {
+                            if (!mNativeInterface.disconnectAudio(mDevice)) {
+                                stateLogE("processAudioEvent: failed to disconnect audio");
+                            }
+                            // Indicate rejection to other components.
+                            broadcastAudioState(
+                                    mDevice,
+                                    BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
+                                    BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
                         }
-                        // Indicate rejection to other components.
-                        broadcastAudioState(
-                                mDevice,
-                                BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
-                                BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
-			break;
+                        break;
                     }
                     stateLogI("processAudioEvent: audio connected");
                     transitionTo(mAudioOn);
@@ -1585,15 +1589,19 @@ class HeadsetStateMachine extends StateMachine {
                 case HeadsetHalConstants.AUDIO_STATE_CONNECTING -> {
                     if (mHeadsetService.isScoAcceptable(mDevice) != BluetoothStatusCodes.SUCCESS) {
                         stateLogW("processAudioEvent: reject incoming pending audio connection");
-                        if (!mNativeInterface.disconnectAudio(mDevice)) {
-                            stateLogE("processAudioEvent: failed to disconnect pending audio");
+                        sendScoConnectionFailureToAudio(
+                                AudioManager.HFP_AUDIO_DISCONNECT_PRECONDITION_FAILED, mDevice);
+                        if (!mSystemInterface.isScoManagedByAudioEnabled()) {
+                            if (!mNativeInterface.disconnectAudio(mDevice)) {
+                                stateLogE("processAudioEvent: failed to disconnect pending audio");
+                            }
+                            // Indicate rejection to other components.
+                            broadcastAudioState(
+                                    mDevice,
+                                    BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
+                                    BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
                         }
-                        // Indicate rejection to other components.
-                        broadcastAudioState(
-                                mDevice,
-                                BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
-                                BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
-			break;
+                        break;
                     }
                     stateLogI("processAudioEvent: audio connecting");
                     transitionTo(mAudioConnecting);
@@ -1660,9 +1668,7 @@ class HeadsetStateMachine extends StateMachine {
             switch (state) {
                 case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED -> {
                     stateLogW("processAudioEvent: audio connection failed");
-                    if (reason != HeadsetService.ScoConnectionFailures.NO_FAILURE.getReason()) {
-                        sendScoConnectionFailureToAudio(reason, mDevice);
-                    }
+                    sendScoConnectionFailureToAudio(reason, mDevice);
                     if ((mIsBlacklistedDeviceforRetrySCO == true) && (mIsRetrySco == true)) {
                         Log.d(TAG, "blacklisted device, retry SCO after " +
                                      RETRY_SCO_CONNECTION_DELAY + " msec");
@@ -1853,9 +1859,7 @@ class HeadsetStateMachine extends StateMachine {
             switch (state) {
                 case HeadsetHalConstants.AUDIO_STATE_DISCONNECTED -> {
                     stateLogI("processAudioEvent: audio disconnected by remote");
-                    if (reason != HeadsetService.ScoConnectionFailures.NO_FAILURE.getReason()) {
-                        sendScoConnectionFailureToAudio(reason, mDevice);
-                    }
+                    sendScoConnectionFailureToAudio(reason, mDevice);
 
                     if ((mIsBlacklistedDeviceforRetrySCO == true) && (mIsRetrySco == true)) {
                         Log.d(TAG, "blacklisted device, retry SCO after " +
@@ -1864,13 +1868,12 @@ class HeadsetStateMachine extends StateMachine {
                         sendMessageDelayed(m, RETRY_SCO_CONNECTION_DELAY);
                         mIsRetrySco = false;
                     }
+
                     transitionTo(mConnected);
                 }
                 case HeadsetHalConstants.AUDIO_STATE_DISCONNECTING -> {
                     stateLogI("processAudioEvent: audio being disconnected by remote");
-                    if (reason != HeadsetService.ScoConnectionFailures.NO_FAILURE.getReason()) {
-                        sendScoConnectionFailureToAudio(reason, mDevice);
-                    }
+                    sendScoConnectionFailureToAudio(reason, mDevice);
                     transitionTo(mAudioDisconnecting);
                 }
                 default -> stateLogE("processAudioEvent: bad state: " + state);
@@ -2920,11 +2923,18 @@ class HeadsetStateMachine extends StateMachine {
 
     private void sendScoConnectionFailureToAudio(int reason, BluetoothDevice device) {
         if (android.media.audio.Flags.btAudioDisconnectApi()) return;
-        if (reason == HeadsetService.ScoConnectionFailures.CODEC_NEGOTIATION_FAIL.getReason()) {
-            mSystemInterface
-                    .getAudioManager()
-                    .handleBluetoothHfpAudioDisconnected(
-                            device, AudioManager.HFP_AUDIO_DISCONNECT_CODEC_NEGOTIATION_FAILED);
+        if (reason == 0 /* NO_FAILURE */) return;
+        switch (reason) {
+            case AudioManager.HFP_AUDIO_DISCONNECT_CODEC_NEGOTIATION_FAILED,
+                    AudioManager.HFP_AUDIO_DISCONNECT_REMOTE_INITIATED,
+                    AudioManager.HFP_AUDIO_DISCONNECT_PRECONDITION_FAILED,
+                    AudioManager.HFP_AUDIO_DISCONNECT_INTERNAL_ERROR ->
+                    mSystemInterface
+                            .getAudioManager()
+                            .handleBluetoothHfpAudioDisconnected(device, reason);
+            default -> {
+                Log.w(TAG, "Received unknown reason: " + reason);
+            }
         }
     }
 
@@ -3183,7 +3193,8 @@ class HeadsetStateMachine extends StateMachine {
         }
         mAgIndicatorEnableState = agIndicatorEnableState;
         int events = PhoneStateListener.LISTEN_NONE;
-        if (mAgIndicatorEnableState != null && mAgIndicatorEnableState.service) {
+        if (mAgIndicatorEnableState != null
+                && (mAgIndicatorEnableState.service || mAgIndicatorEnableState.roam)) {
             events |= PhoneStateListener.LISTEN_SERVICE_STATE;
         }
         if (mAgIndicatorEnableState != null && mAgIndicatorEnableState.signal) {

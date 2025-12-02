@@ -581,24 +581,25 @@ public class AdapterService extends Service {
 
         @Override
         public void handleMessage(Message msg) {
+            var header = "handleMessage(): ";
             switch (msg.what) {
                 case MESSAGE_PROFILE_SERVICE_STATE_CHANGED -> {
-                    Log.v(TAG, "handleMessage() - MESSAGE_PROFILE_SERVICE_STATE_CHANGED");
-                    processProfileServiceStateChanged((ProfileService) msg.obj, msg.arg1);
+                    var profile = (ProfileService) msg.obj;
+                    Log.v(TAG, header + "MESSAGE_PROFILE_SERVICE_STATE_CHANGED for " + profile);
+                    processProfileServiceStateChanged(profile, msg.arg1);
                 }
                 case MESSAGE_PROFILE_SERVICE_REGISTERED -> {
-                    Log.v(TAG, "handleMessage() - MESSAGE_PROFILE_SERVICE_REGISTERED");
-                    registerProfileService((ProfileService) msg.obj);
+                    var profile = (ProfileService) msg.obj;
+                    Log.v(TAG, header + "MESSAGE_PROFILE_SERVICE_REGISTERED for " + profile);
+                    registerProfileService(profile);
                 }
                 case MESSAGE_PROFILE_SERVICE_UNREGISTERED -> {
-                    Log.v(TAG, "handleMessage() - MESSAGE_PROFILE_SERVICE_UNREGISTERED");
-                    unregisterProfileService((ProfileService) msg.obj);
+                    var profile = (ProfileService) msg.obj;
+                    Log.v(TAG, header + "MESSAGE_PROFILE_SERVICE_UNREGISTERED for " + profile);
+                    unregisterProfileService(profile);
                 }
                 case MESSAGE_PREFERRED_AUDIO_PROFILES_AUDIO_FRAMEWORK_TIMEOUT -> {
-                    Log.e(
-                            TAG,
-                            "handleMessage() - "
-                                    + "MESSAGE_PREFERRED_PROFILE_CHANGE_AUDIO_FRAMEWORK_TIMEOUT");
+                    Log.e(TAG, header + "MESSAGE_PREFERRED_PROFILE_CHANGE_AUDIO_FRAMEWORK_TIMEOUT");
                     int groupId = (int) msg.obj;
 
                     synchronized (mCsipGroupsPendingAudioProfileChanges) {
@@ -617,7 +618,7 @@ public class AdapterService extends Service {
                         }
                     }
                 }
-                default -> Log.e(TAG, "handleMessage() - Unknown message: " + msg.what);
+                default -> Log.e(TAG, header + "Unknown message: " + msg.what);
             }
         }
 
@@ -1263,7 +1264,9 @@ public class AdapterService extends Service {
     }
 
     private void startScanController() {
-        Log.i(TAG, "startScanController()");
+        Instant start = Instant.now();
+        var header = "startScanController(): ";
+        Log.i(TAG, header + "Starting…");
         mScanController =
                 new ScanController(
                         this,
@@ -1271,15 +1274,21 @@ public class AdapterService extends Service {
                         mPeriodicScanNativeInterface,
                         mCompanionDeviceManager);
         mNativeInterface.enable(mLocalName);
+        Instant end = Instant.now();
+        Log.i(TAG, header + "Completed in " + Duration.between(start, end).toMillis() + "ms");
     }
 
     private void startGattProfileService() {
-        Log.i(TAG, "startGattProfileService()");
+        Instant start = Instant.now();
+        var header = "startGattProfileService(): ";
+        Log.i(TAG, header + "Starting…");
         constructProfile(BluetoothProfile.GATT);
         mStartedProfiles.put(BluetoothProfile.GATT, mGattService);
         addProfile(mGattService);
         mGattService.setAvailable(true);
         onProfileServiceStateChanged(mGattService, BluetoothAdapter.STATE_ON);
+        Instant end = Instant.now();
+        Log.i(TAG, header + "Completed in " + Duration.between(start, end).toMillis() + "ms");
     }
 
     void ssrCleanupCallback() {
@@ -1465,7 +1474,9 @@ public class AdapterService extends Service {
     }
 
     private void stopScanController() {
-        Log.i(TAG, "stopScanController()");
+        Instant start = Instant.now();
+        var header = "stopScanController(): ";
+        Log.i(TAG, header + "Stopping…");
         setScanMode(SCAN_MODE_NONE, "stopScanController");
         final var scanController = getBluetoothScanController();
         if (scanController != null) {
@@ -1473,10 +1484,14 @@ public class AdapterService extends Service {
             scanController.cleanup();
         }
         mNativeInterface.disable();
+        Instant end = Instant.now();
+        Log.i(TAG, header + "Completed in " + Duration.between(start, end).toMillis() + "ms");
     }
 
     private void stopGattProfileService() {
-        Log.i(TAG, "stopGattProfileService()");
+        Instant start = Instant.now();
+        var header = "stopGattProfileService(): ";
+        Log.i(TAG, header + "Stopping…");
 
         if (mGattService != null) {
             mGattService.setAdvertiseManagerAvailable(false);
@@ -1493,6 +1508,8 @@ public class AdapterService extends Service {
             gattService.cleanup();
             gattService.getBinder().ifPresent(ProfileService.IProfileServiceBinder::cleanup);
         }
+        Instant end = Instant.now();
+        Log.i(TAG, header + "Completed in " + Duration.between(start, end).toMillis() + "ms");
     }
 
     void stopProfileServices() {
@@ -2859,7 +2876,7 @@ public class AdapterService extends Service {
             permission = android.Manifest.permission.NETWORK_SETUP_WIZARD;
         } else if (!hasDisavowedLocation) {
             if (isQApp) {
-                if (!Utils.checkCallerHasFineLocation(this, source, callingUser)) {
+                if (!Util.checkCallerHasFineLocation(this, source, callingUser)) {
                     return false;
                 }
                 permission = android.Manifest.permission.ACCESS_FINE_LOCATION;
@@ -2938,8 +2955,9 @@ public class AdapterService extends Service {
     /**
      * Same as API method {@link BluetoothAdapter#getBondedDevices()}
      *
-     * @return array of bonded {@link BluetoothDevice} or null on error
+     * @return array of bonded {@link BluetoothDevice}
      */
+    @NonNull
     public BluetoothDevice[] getBondedDevices() {
         return mAdapterProperties.getBondedDevices();
     }
@@ -3236,10 +3254,6 @@ public class AdapterService extends Service {
     public void updateUuids() {
         Log.d(TAG, "updateUuids() - Updating UUIDs for bonded devices");
         BluetoothDevice[] bondedDevices = getBondedDevices();
-        if (bondedDevices == null) {
-            return;
-        }
-
         for (BluetoothDevice device : bondedDevices) {
             mRemoteDevices.updateUuids(device);
         }
