@@ -169,8 +169,7 @@ static int getPriority(AudioContext context) {
 }
 
 BluetoothAudioPortImpl::BluetoothAudioPortImpl(
-        IBluetoothTransportInstance* transport_instance,
-        const std::shared_ptr<IBluetoothAudioProvider>& provider)
+        A2dpTransport* transport_instance, const std::shared_ptr<IBluetoothAudioProvider>& provider)
     : transport_instance_(transport_instance), provider_(provider) {}
 
 BluetoothAudioPortImpl::~BluetoothAudioPortImpl() {}

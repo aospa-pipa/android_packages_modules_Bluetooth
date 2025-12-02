@@ -55,6 +55,8 @@ void Thread::run(std::promise<void> start_promise) {
   }
   prctl(PR_SET_NAME, name_.c_str());
   start_promise.set_value();
+  log::info("Thread: {} started with tid: {}", name_, linux_tid_);
+
   reactor_.Run();
 }
 

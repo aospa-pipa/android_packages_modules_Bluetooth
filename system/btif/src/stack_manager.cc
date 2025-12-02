@@ -339,7 +339,9 @@ static void clean_up_stack(ProfileStopCallback stopProfiles) {
 
   btif_cleanup_bluetooth();
 
-  if (com_android_bluetooth_flags_shutdown_main_thread_before_cleanup()) {
+  if (com_android_bluetooth_flags_replace_message_loop_thread_with_gd_handler()) {
+    main_thread_suspend();
+  } else if (com_android_bluetooth_flags_shutdown_main_thread_before_cleanup()) {
     main_thread_shut_down();
   }
 

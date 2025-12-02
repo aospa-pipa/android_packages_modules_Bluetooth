@@ -733,7 +733,7 @@ void Device::HandleVolumeChanged(uint8_t label,
     volume_ = VOL_REGISTRATION_FAILED;
     log::error("device rejected register Volume changed notification request.");
     log::error("Putting Device in ABSOLUTE_VOLUME rejectlist");
-    interop_database_add(INTEROP_DISABLE_ABSOLUTE_VOLUME, &address_, 3);
+    interop_database_add(INTEROP_DISABLE_ABSOLUTE_VOLUME, address_, 3);
     volume_interface_->DeviceConnected(GetAddress());
     return;
   }

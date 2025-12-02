@@ -1810,7 +1810,7 @@ public class RemoteDevices {
 
         // Send the ACTION_KEY_MISSING Intent here if the link is disconnected in a bond-loss
         // scenario.
-        if (Flags.autonomousRepairingInitiation()
+        if (Utils.isAutonomousRepairingSupported()
                 && mAdapterService.isBondLost(device)
                 && newState == AbstractionLayer.BT_ACL_STATE_DISCONNECTED
                 && deviceProperties.getLastBondLossReason().isPresent()) {
@@ -1942,7 +1942,7 @@ public class RemoteDevices {
             }
         }
 
-        if (!Flags.autonomousRepairingInitiation()) {
+        if (!Utils.isAutonomousRepairingSupported()) {
             sendKeyMissingIntent(device, reason);
             return;
         }
@@ -1966,7 +1966,7 @@ public class RemoteDevices {
             int status,
             boolean encryptionEnable,
             int transport,
-            boolean secureConnection,
+            int encryptionAlgo,
             int keySize) {
         BluetoothDevice bluetoothDevice = getDevice(address);
         if (bluetoothDevice == null) {
@@ -1985,21 +1985,12 @@ public class RemoteDevices {
                         + encryptionEnable
                         + ", transport: "
                         + transport
-                        + ", secureConnection: "
-                        + secureConnection
+                        + ", encryptionAlgo: "
+                        + encryptionAlgo
                         + ", keySize: "
                         + keySize);
 
-        int algorithm = BluetoothDevice.ENCRYPTION_ALGORITHM_NONE;
         if (encryptionEnable) {
-            if (secureConnection || transport == TRANSPORT_LE) {
-                /* LE link or Classic Secure Connections */
-                algorithm = BluetoothDevice.ENCRYPTION_ALGORITHM_AES;
-            } else {
-                /* Classic link using non-secure connections mode */
-                algorithm = BluetoothDevice.ENCRYPTION_ALGORITHM_E0;
-            }
-
             // Log transition to encryption change state (bonded), if the key missing count is > 0
             //  which indicates that the device is in key missing state.
             if (mAdapterService.getKeyMissingCount(bluetoothDevice) > 0) {
@@ -2018,7 +2009,8 @@ public class RemoteDevices {
         }
 
         if (Flags.linkStatusApi()) {
-            getDeviceProperties(bluetoothDevice).setEncryptionStatus(transport, keySize, algorithm);
+            getDeviceProperties(bluetoothDevice)
+                    .setEncryptionStatus(transport, keySize, encryptionAlgo);
         }
 
         Intent intent =
@@ -2028,7 +2020,7 @@ public class RemoteDevices {
                         .putExtra(BluetoothDevice.EXTRA_ENCRYPTION_STATUS, status)
                         .putExtra(BluetoothDevice.EXTRA_ENCRYPTION_ENABLED, encryptionEnable)
                         .putExtra(BluetoothDevice.EXTRA_KEY_SIZE, keySize)
-                        .putExtra(BluetoothDevice.EXTRA_ENCRYPTION_ALGORITHM, algorithm);
+                        .putExtra(BluetoothDevice.EXTRA_ENCRYPTION_ALGORITHM, encryptionAlgo);
 
         mAdapterService.sendBroadcast(intent, BLUETOOTH_CONNECT);
     }
@@ -2519,7 +2511,7 @@ public class RemoteDevices {
                     .append("] ")
                     .append(deviceProperties.getName());
 
-            if (Flags.autonomousRepairingInitiation()
+            if (Utils.isAutonomousRepairingSupported()
                     && deviceProperties.getLastBondLossReason().isPresent()) {
                 sb.append("[Latest bond-loss reason: ")
                         .append(deviceProperties.getLastBondLossReason().get())
