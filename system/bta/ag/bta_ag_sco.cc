@@ -658,7 +658,7 @@ static void bta_ag_codec_negotiation_timer_cback(void* data) {
   if (is_blacklisted == false) {
     log::verbose("blacklisting device {} for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
-    interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr, 3);
+    interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr, 3);
   } else {
     log::verbose("dev {} is already blacklisted for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
@@ -864,12 +864,18 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
                 /* If SCO disconnected during codec negotiation, just go back to listening to allow
                  * SCO reconnection */
                 p_sco->state = BTA_AG_SCO_LISTEN_ST;
-                p_sco->p_curr_scb = nullptr;
+                if (!com_android_bluetooth_flags_sco_state_machine_update_revision()) {
+                  p_sco->p_curr_scb = nullptr;
+                }
               }
             } else {
               /* just go back to listening */
               p_sco->state = BTA_AG_SCO_LISTEN_ST;
             }
+          }
+          if (com_android_bluetooth_flags_sco_state_machine_update_revision() &&
+              p_scb == p_sco->p_curr_scb) {
+            p_sco->p_curr_scb = nullptr;
           }
           break;
 

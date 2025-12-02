@@ -713,10 +713,6 @@ public class AdapterService extends Service {
         Log.d(TAG, "onCreate()");
         // OnCreate must perform the minimum of infallible and mandatory initialization
         // This is the first method call with a context attached
-        if (Flags.mainlineBetaStorage()) {
-            factoryResetIfNeeded();
-            mStorage.initialize();
-        }
         mUserManager = requireNonNull(getSystemService(UserManager.class));
         mAppOps = requireNonNull(getSystemService(AppOpsManager.class));
         mPowerManager = requireNonNull(getSystemService(PowerManager.class));
@@ -1021,13 +1017,15 @@ public class AdapterService extends Service {
     private void init(String hciInstanceName) {
         Log.d(TAG, "init(instance=" + hciInstanceName + ")");
 
+        factoryResetIfNeeded();
         if (!Flags.mainlineBetaStorage()) {
-            factoryResetIfNeeded();
             try {
                 DataMigration.run(this);
             } catch (Exception e) {
                 Log.e(TAG, "Migration failure: ", e);
             }
+        } else {
+            mStorage.initialize();
         }
 
         Config.init(this);
