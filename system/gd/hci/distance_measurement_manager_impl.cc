@@ -60,6 +60,8 @@ static constexpr int kInvalidAzimuthAngleDegree = -1;
 static constexpr int kInvalidAltitudeAngleDegree = -91;
 static constexpr double kInvalidDelayedSpreadMeters = -1.0;
 static constexpr int8_t kInvalidConfidenceLevel = -1;
+static constexpr int8_t kInvalidRemoteTxPower = 127;
+static constexpr int8_t kInvalidRssi = 127;
 static constexpr double kInvalidVelocityMetersPerSecond = -1.0;
 static constexpr uint16_t kIllegalConnectionHandle = 0xffff;
 static constexpr uint8_t kTxPowerNotAvailable = 0xfe;
@@ -247,6 +249,8 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     uint16_t max_procedure_count = 1;
     bool waiting_for_start_callback = false;
     std::unique_ptr<os::Alarm> procedure_schedule_guard_alarm = nullptr;
+    int reflector_rssi_sum;
+    int reflector_rssi_count;
     uint8_t min_main_mode_steps = 0;
     uint8_t max_main_mode_steps = 0;
     uint8_t main_mode_repetition = 0;
@@ -377,12 +381,23 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     log::info("address:{}, resultMeters:{}, confidence_level_:{}, elapsedRealtimeNanos:{}",
               cs_requester_trackers_[connection_handle].address, ranging_result.result_meters_,
               ranging_result.confidence_level_, elapsedRealtimeNanos);
+
+    int reflector_rssi = kInvalidRssi;
+    if (com::android::bluetooth::flags::add_rssi_and_power_in_distance_measurement_result()) {
+      int rssi_count = cs_requester_trackers_[connection_handle].reflector_rssi_count;
+      if (rssi_count > 0) {
+        reflector_rssi = cs_requester_trackers_[connection_handle].reflector_rssi_sum / rssi_count;
+      }
+      cs_requester_trackers_[connection_handle].reflector_rssi_sum = 0;
+      cs_requester_trackers_[connection_handle].reflector_rssi_count = 0;
+    }
+
     distance_measurement_callbacks_->OnDistanceMeasurementResult(
             cs_requester_trackers_[connection_handle].address, ranging_result.result_meters_,
             ranging_result.error_meters_ * 100, kInvalidAzimuthAngleDegree,
             kInvalidAzimuthAngleDegree, kInvalidAltitudeAngleDegree, kInvalidAltitudeAngleDegree,
-            elapsedRealtimeNanos, ranging_result.confidence_level_,
-            ranging_result.delay_spread_meters_,
+            elapsedRealtimeNanos, kInvalidRemoteTxPower, reflector_rssi,
+            ranging_result.confidence_level_, ranging_result.delay_spread_meters_,
             static_cast<DistanceMeasurementDetectedAttackLevel>(
                     ranging_result.detected_attack_level_),
             ranging_result.velocity_meters_per_second_, DistanceMeasurementMethod::METHOD_CS);
@@ -2629,7 +2644,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                 log::verbose("step_data: {}", tone_data_view.ToString());
                 permutation_index = tone_data_view.antenna_permutation_index_;
                 procedure_data->antenna_permutation_index_reflector.push_back(permutation_index);
-                procedure_data->rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
                 procedure_data->toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
                 procedure_data->packet_nadm_initiator.push_back((int8_t)tone_data_view.packet_nadm_);
                 procedure_data->packet_quality_initiator.emplace_back(
@@ -2652,7 +2666,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                 parse_index += data_len;
                 log::verbose("step_data: {}", tone_data_view.ToString());
                 permutation_index = tone_data_view.antenna_permutation_index_;
-                procedure_data->rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
                 procedure_data->toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
                 procedure_data->packet_nadm_initiator.push_back((int8_t)tone_data_view.packet_nadm_);
                 procedure_data->packet_quality_initiator.emplace_back(
@@ -2971,6 +2984,14 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
       procedure_data->procedure_data_v2_.procedure_sequence_ =
               live_tracker->procedure_sequence_after_enable;
     }
+
+    if (com::android::bluetooth::flags::add_rssi_and_power_in_distance_measurement_result()) {
+      for (size_t i = 0; i < procedure_data->rssi_reflector.size(); i++) {
+        live_tracker->reflector_rssi_sum = procedure_data->rssi_reflector[i];
+      }
+      live_tracker->reflector_rssi_count += procedure_data->rssi_reflector.size();
+    }
+
     try_send_data_to_hal(connection_handle, live_tracker, procedure_data);
 
     // If the procedure is completed or aborted, delete all previous data
@@ -3079,7 +3100,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                 continue;
               }
               log::verbose("step_data: {}", tone_data_view.ToString());
-              procedure_data.rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
               procedure_data.toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
               procedure_data.packet_quality_initiator.emplace_back(tone_data_view.packet_quality_);
               if (is_hal_v2() && local_subevent_data) {
@@ -3096,7 +3116,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
                 continue;
               }
               log::verbose("step_data: {}", tone_data_view.ToString());
-              procedure_data.rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
               procedure_data.toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
               procedure_data.packet_quality_initiator.emplace_back(tone_data_view.packet_quality_);
               if (is_hal_v2() && local_subevent_data) {
@@ -3217,7 +3236,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
               }
               log::verbose("step_data: {}", tone_data_view.ToString());
               permutation_index = tone_data_view.antenna_permutation_index_;
-              procedure_data.rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
               procedure_data.toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
               procedure_data.packet_quality_initiator.emplace_back(tone_data_view.packet_quality_);
               procedure_data.packet_nadm_initiator.push_back((int8_t)tone_data_view.packet_nadm_);
@@ -3238,7 +3256,6 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
               }
               log::verbose("step_data: {}", tone_data_view.ToString());
               permutation_index = tone_data_view.antenna_permutation_index_;
-              procedure_data.rssi_initiator.emplace_back(tone_data_view.packet_rssi_);
               procedure_data.toa_tod_initiators.emplace_back(tone_data_view.toa_tod_initiator_);
               procedure_data.packet_quality_initiator.emplace_back(tone_data_view.packet_quality_);
               procedure_data.packet_nadm_initiator.push_back((int8_t)tone_data_view.packet_nadm_);
@@ -3486,7 +3503,8 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     distance_measurement_callbacks_->OnDistanceMeasurementResult(
             address, distance, distance * 100, kInvalidAzimuthAngleDegree,
             kInvalidAzimuthAngleDegree, kInvalidAltitudeAngleDegree, kInvalidAltitudeAngleDegree,
-            elapsedRealtimeNanos, kInvalidConfidenceLevel, kInvalidDelayedSpreadMeters,
+            elapsedRealtimeNanos, remote_tx_power, rssi, kInvalidConfidenceLevel,
+            kInvalidDelayedSpreadMeters,
             DistanceMeasurementDetectedAttackLevel::NADM_ATTACK_UNKNOWN,
             kInvalidVelocityMetersPerSecond, DistanceMeasurementMethod::METHOD_RSSI);
   }

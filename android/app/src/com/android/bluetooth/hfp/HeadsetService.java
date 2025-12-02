@@ -34,6 +34,7 @@ import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.BluetoothUuid;
@@ -183,22 +184,6 @@ public class HeadsetService extends ConnectableProfile {
 
     @VisibleForTesting boolean mIsAptXSwbEnabled = false;
     @VisibleForTesting boolean mIsAptXSwbPmEnabled = false;
-
-    // Mirrored from bta_ag_api.h in native
-    public enum ScoConnectionFailures {
-        NO_FAILURE(0),
-        CODEC_NEGOTIATION_FAIL(1);
-
-        private final int mReason;
-
-        ScoConnectionFailures(int reason) {
-            this.mReason = reason;
-        }
-
-        public int getReason() {
-            return mReason;
-        }
-    }
 
     private final HeadsetCallState mDsDaCallIndicators =
                   new HeadsetCallState(0, 0, 0, "", 0, "");
@@ -377,7 +362,7 @@ public class HeadsetService extends ConnectableProfile {
                     try {
                         mSystemInterface.getVoiceRecognitionWakeLock().release();
                     } catch (RuntimeException e) {
-                        Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
+                        Log.d(TAG, "cleanup: could not release getVoiceRecognitionWakeLock", e);
                     }
                 }
             }
@@ -812,9 +797,6 @@ public class HeadsetService extends ConnectableProfile {
                 return devices;
             }
             final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
-            if (bondedDevices == null) {
-                return devices;
-            }
             for (BluetoothDevice device : bondedDevices) {
                 final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
                 if (!BluetoothUuid.containsAnyUuid(featureUuids, HEADSET_UUIDS)) {
@@ -893,6 +875,8 @@ public class HeadsetService extends ConnectableProfile {
             // TODO(b/79660380): Workaround in case voice recognition was not terminated properly
             if (mVoiceRecognitionStarted) {
                 boolean status = stopVoiceRecognition(mActiveDevice);
+                MetricsLogger.getInstance()
+                        .count(BluetoothProtoEnums.HFP_START_VOICE_RECOGNITION_ALREADY_STARTED, 1);
                 Log.w(
                         TAG,
                         "startVoiceRecognition: voice recognition is still active, just called "
@@ -958,7 +942,10 @@ public class HeadsetService extends ConnectableProfile {
                     try {
                         mSystemInterface.getVoiceRecognitionWakeLock().release();
                     } catch (RuntimeException e) {
-                        Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
+                        Log.d(
+                                TAG,
+                                "startVoiceRecognition: could not release voiceRecognitionWakeLock",
+                                e);
                     }
                 }
                 pendingRequestByHeadset = true;
@@ -1539,6 +1526,11 @@ public class HeadsetService extends ConnectableProfile {
             // TODO(b/79660380): Workaround in case voice recognition was not terminated properly
             if (mVoiceRecognitionStarted) {
                 boolean status = stopVoiceRecognition(mActiveDevice);
+                MetricsLogger.getInstance()
+                        .count(
+                                BluetoothProtoEnums
+                                        .HFP_START_SCO_USING_VIRTUAL_VOICE_CALL_ALREADY_STARTED,
+                                1);
                 Log.w(
                         TAG,
                         "startScoUsingVirtualVoiceCall: voice recognition is still active, "
@@ -1579,7 +1571,6 @@ public class HeadsetService extends ConnectableProfile {
                                 + " audio is enabled, not disconnecting audio, active device is "
                                     + mActiveDevice);
                 }
-
             }
             if (mActiveDevice == null) {
                 Log.w(TAG, "startScoUsingVirtualVoiceCall: no active device");
@@ -1766,7 +1757,7 @@ public class HeadsetService extends ConnectableProfile {
                     try {
                         mSystemInterface.getVoiceRecognitionWakeLock().release();
                     } catch (RuntimeException e) {
-                        Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
+                        Log.d(TAG, "could not properly release getVoiceRecognitionWakeLock", e);
                     }
                 }
                 mVoiceRecognitionTimeoutEvent = null;
@@ -1798,6 +1789,11 @@ public class HeadsetService extends ConnectableProfile {
             // TODO(b/79660380): Workaround in case voice recognition was not terminated properly
             if (mVoiceRecognitionStarted) {
                 boolean status = stopVoiceRecognition(mActiveDevice);
+                MetricsLogger.getInstance()
+                        .count(
+                                BluetoothProtoEnums
+                                        .HFP_START_VOICE_RECOGNITION_BY_HEADSET_ALREADY_STARTED,
+                                1);
                 Log.w(
                         TAG,
                         "startVoiceRecognitionByHeadset: voice recognition is still active, "

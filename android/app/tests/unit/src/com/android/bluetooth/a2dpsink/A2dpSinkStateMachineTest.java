@@ -93,8 +93,7 @@ public class A2dpSinkStateMachineTest {
     }
 
     private void sendAudioConfigChangedEvent(int sampleRate, int channelCount) {
-        mStateMachine.sendMessage(
-                A2dpSinkStateMachine.MESSAGE_AUDIO_CONFIG_CHANGED, sampleRate, channelCount);
+        mStateMachine.onAudioConfigChanged(sampleRate, channelCount);
         syncHandler(A2dpSinkStateMachine.MESSAGE_AUDIO_CONFIG_CHANGED);
     }
 
@@ -241,7 +240,7 @@ public class A2dpSinkStateMachineTest {
     }
 
     @Test
-    public void testAudioStateChangeInConnecting() {
+    public void testAudioConfigChangeInConnecting() {
         testConnectInDisconnected();
 
         sendAudioConfigChangedEvent(44, 1);
@@ -305,7 +304,7 @@ public class A2dpSinkStateMachineTest {
     }
 
     @Test
-    public void testAudioStateChangeInConnected() {
+    public void testAudioConfigChangeInConnected() {
         testConnectedInConnecting();
 
         sendAudioConfigChangedEvent(44, 1);

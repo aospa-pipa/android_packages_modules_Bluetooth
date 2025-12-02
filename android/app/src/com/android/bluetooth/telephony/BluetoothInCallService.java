@@ -935,7 +935,9 @@ public class BluetoothInCallService extends InCallService {
                 /* Find active call other than conference */
                 call = getNonConferenceActiveCall();
             }
-            if (call.getState() == Call.STATE_RINGING) {
+            if (call.getState() == Call.STATE_RINGING
+                    || (Flags.hangupCallstateSimulatedRinging()
+                            && call.getState() == Call.STATE_SIMULATED_RINGING)) {
               if (mEnableDsdaMode) {
                 if (mDsDaTwoIncomingCallsFlag == 1) {
                  mTempCall = getBluetoothCallById(mFirstIncomingCallId);

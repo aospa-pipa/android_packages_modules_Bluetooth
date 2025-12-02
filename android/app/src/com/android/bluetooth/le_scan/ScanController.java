@@ -401,11 +401,17 @@ public class ScanController {
 
         byte[] legacyAdvData = Arrays.copyOfRange(advData, 0, 62);
         var device = mAdapterService.getRemoteDevice(address, addressType);
-        var noFilterMatchedClients = new ArrayList<ScanClient>();
+        // Aggregate skipped clients to reduce log spam
+        var scanTypeMismatch = new ArrayList<ScanClient>();
+        var legacyScanNonLegacyResult = new ArrayList<ScanClient>();
+        var locationDenyList = new ArrayList<ScanClient>();
+        var noPermission = new ArrayList<ScanClient>();
+        var noFilterMatched = new ArrayList<ScanClient>();
+        var notAllMatches = new ArrayList<ScanClient>();
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
             var app = mScannerMap.getById(client.getScannerId());
             if (app == null) {
-                Log.v(TAG, "App is null for " + client + "; Skip");
+                Log.v(TAG, "App not found for " + client + "; Skip");
                 continue;
             }
 
@@ -422,13 +428,15 @@ public class ScanController {
                                     && requiresScanResponse)
                             || (settings.getScanType() == ScanSettings.SCAN_TYPE_PASSIVE
                                     && isScanResponse))) {
+                scanTypeMismatch.add(client);
                 continue;
             }
+
             // This is for compatibility with applications that assume fixed size scan data.
             if (settings.getLegacy()) {
                 if ((eventType & ET_LEGACY_MASK) == 0) {
                     // If this is legacy scan, but nonlegacy result - skip.
-                    Log.v(TAG, "Legacy scan, non legacy result; Skip");
+                    legacyScanNonLegacyResult.add(client);
                     continue;
                 } else {
                     // Some apps are used to fixed-size advertise data.
@@ -454,7 +462,7 @@ public class ScanController {
 
             if (client.getHasDisavowedLocation()) {
                 if (mLocationDenylistPredicate.test(result)) {
-                    Log.i(TAG, "Location deny list for " + client + "; Skip");
+                    locationDenyList.add(client);
                     continue;
                 }
             }
@@ -476,18 +484,18 @@ public class ScanController {
                 }
             }
             if (!hasPermission) {
-                Log.v(TAG, "No permission for " + client + "; Skip");
+                noPermission.add(client);
                 continue;
             }
             if (!matchesFilters(client, result, originalAddress)) {
-                noFilterMatchedClients.add(client);
+                noFilterMatched.add(client);
                 continue;
             }
 
             final int callbackType = settings.getCallbackType();
             if (!(callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES
                     || callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH)) {
-                Log.v(TAG, "Not CALLBACK_TYPE_ALL_MATCHES for " + client + "; Skip");
+                notAllMatches.add(client);
                 continue;
             }
 
@@ -506,8 +514,25 @@ public class ScanController {
                 handleDeadScanClient(client);
             }
         }
-        if (!noFilterMatchedClients.isEmpty()) {
-            Log.v(TAG, "No filter match for " + noFilterMatchedClients + "; Skip");
+        if (!scanTypeMismatch.isEmpty()) {
+            Log.v(TAG, "Scan type mismatch for " + scanTypeMismatch + "; Skip");
+        }
+        if (!legacyScanNonLegacyResult.isEmpty()) {
+            Log.v(
+                    TAG,
+                    "Legacy scan, non legacy result for " + legacyScanNonLegacyResult + "; Skip");
+        }
+        if (!locationDenyList.isEmpty()) {
+            Log.i(TAG, "Location deny list for " + locationDenyList + "; Skip");
+        }
+        if (!noPermission.isEmpty()) {
+            Log.v(TAG, "No permission for " + noPermission + "; Skip");
+        }
+        if (!noFilterMatched.isEmpty()) {
+            Log.v(TAG, "No filter match for " + noFilterMatched + "; Skip");
+        }
+        if (!notAllMatches.isEmpty()) {
+            Log.v(TAG, "Not CALLBACK_TYPE_ALL_MATCHES for " + notAllMatches + "; Skip");
         }
     }
 
@@ -554,7 +579,7 @@ public class ScanController {
 
         var app = mScannerMap.getByUuid(uuid);
         if (app == null) {
-            Log.e(TAG, header + "ScannerApp not found in ScannerMap");
+            Log.e(TAG, header + "App not found");
             return;
         }
         if (app.getCallback() != null) {
@@ -667,8 +692,10 @@ public class ScanController {
                 BatchScanUtil.parseResults(mAdapterService, numRecords, reportType, recordData);
         if (reportType == SCAN_RESULT_TYPE_TRUNCATED) {
             // We only support single client for truncated mode.
+            var header = "onBatchScanReportsInternal(): ";
             var app = mScannerMap.getById(scannerId);
             if (app == null) {
+                Log.e(TAG, header + "App not found for scannerId=" + scannerId);
                 return;
             }
 
@@ -697,7 +724,7 @@ public class ScanController {
                             permittedResults,
                             ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
                 } catch (PendingIntent.CanceledException e) {
-                    Log.e(TAG, "Error sending result via PendingIntent: " + e);
+                    Log.e(TAG, header + "Error sending result via PendingIntent: " + e);
                     handleDeadScanClient(client);
                 }
             }
@@ -714,6 +741,7 @@ public class ScanController {
     private void deliverBatchScan(ScanClient client, Set<ScanResult> allResults) {
         var app = mScannerMap.getById(client.getScannerId());
         if (app == null) {
+            Log.e(TAG, "deliverBatchScan(): App not found for scannerId=" + client.getScannerId());
             return;
         }
 
@@ -767,17 +795,18 @@ public class ScanController {
 
     void onTrackAdvFoundLost(AdvtFilterOnFoundOnLostInfo trackingInfo) {
         enforceScanThread();
+        int scannerId = trackingInfo.scannerId();
         Log.d(
                 TAG,
                 "onTrackAdvFoundLost(): "
-                        + ("scannerId=" + trackingInfo.scannerId())
+                        + ("scannerId=" + scannerId)
                         + (", address=" + trackingInfo.address())
                         + (", addressType=" + trackingInfo.addressType())
                         + (", adv_state=" + trackingInfo.advState()));
 
-        var app = mScannerMap.getById(trackingInfo.scannerId());
+        var app = mScannerMap.getById(scannerId);
         if (app == null) {
-            Log.e(TAG, "app is null");
+            Log.e(TAG, "onTrackAdvFoundLost(): App not found for scannerId=" + scannerId);
             return;
         }
 
@@ -792,7 +821,7 @@ public class ScanController {
                         SystemClock.elapsedRealtimeNanos());
 
         for (ScanClient client : mScanManager.getRegularScanQueue()) {
-            if (client.getScannerId() == trackingInfo.scannerId()) {
+            if (client.getScannerId() == scannerId) {
                 ScanSettings settings = client.getSettings();
                 if ((advertiserState == ADVT_STATE_ONFOUND)
                         && ((settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_FIRST_MATCH)
@@ -835,18 +864,20 @@ public class ScanController {
         enforceScanThread();
         Log.d(TAG, "onScanParamSetupCompleted(): scannerId=" + scannerId + ", status=" + status);
         var app = mScannerMap.getById(scannerId);
-        if (app == null || app.getCallback() == null) {
-            Log.e(TAG, "Advertise app or callback is null");
-            return;
+        if (app == null) {
+            Log.e(TAG, "onScanParamSetupCompleted(): App not found for scannerId=" + scannerId);
+        } else if (app.getCallback() == null) {
+            Log.e(TAG, "onScanParamSetupCompleted(): App callback null for " + app);
         }
     }
 
     // callback from ScanManager for dispatch of errors apps.
     void onScanManagerErrorCallback(int scannerId, int errorCode) {
         enforceScanThread();
+        var header = "onScanManagerErrorCallback(): ";
         var app = mScannerMap.getById(scannerId);
         if (app == null) {
-            Log.e(TAG, "App null");
+            Log.e(TAG, header + "App not found for scannerId=" + scannerId);
             return;
         }
         if (app.getCallback() != null) {
@@ -855,7 +886,7 @@ public class ScanController {
             try {
                 sendErrorByPendingIntent(app.getInfo(), errorCode);
             } catch (PendingIntent.CanceledException e) {
-                Log.e(TAG, "Error sending error code via PendingIntent: " + e);
+                Log.e(TAG, header + "Error sending error code via PendingIntent: " + e);
                 handleDeadScanClient(scannerId);
             }
         }
@@ -1055,7 +1086,7 @@ public class ScanController {
             List<ScanFilter> filters,
             AttributionSource source) {
         enforceScanThread();
-        Log.d(TAG, "Start scan with filters");
+        Log.d(TAG, "startScan(scannerId=" + scannerId + ")");
         String callingPackage = source.getPackageName();
         settings = BatchScanUtil.enforceReportDelayFloor(settings);
         final int uid = Flags.scanControllerThread() ? source.getUid() : Binder.getCallingUid();
@@ -1068,10 +1099,10 @@ public class ScanController {
         if (!hasDisavowedLocation) {
             if (isQApp) {
                 hasLocationPermission =
-                        Utils.checkCallerHasFineLocation(mAdapterService, source, userHandle);
+                        Util.checkCallerHasFineLocation(mAdapterService, source, userHandle);
             } else {
                 hasLocationPermission =
-                        Utils.checkCallerHasCoarseOrFineLocation(
+                        Util.checkCallerHasCoarseOrFineLocation(
                                 mAdapterService, source, userHandle);
             }
         }
@@ -1178,11 +1209,11 @@ public class ScanController {
             try {
                 if (checkCallerTargetSdk(mAdapterService, source, Build.VERSION_CODES.Q)) {
                     app.setHasLocationPermission(
-                            Utils.checkCallerHasFineLocation(
+                            Util.checkCallerHasFineLocation(
                                     mAdapterService, source, app.getUserHandle()));
                 } else {
                     app.setHasLocationPermission(
-                            Utils.checkCallerHasCoarseOrFineLocation(
+                            Util.checkCallerHasCoarseOrFineLocation(
                                     mAdapterService, source, app.getUserHandle()));
                 }
             } catch (SecurityException se) {
@@ -1255,7 +1286,7 @@ public class ScanController {
         enforceScanThread();
         var app = mScannerMap.getByPendingIntentInfo(intent);
         if (app == null) {
-            Log.e(TAG, "stopScan(PendingIntent): Cannot find app for intent=" + intent);
+            Log.e(TAG, "stopScan(PendingIntent): App not found for intent=" + intent);
             return;
         }
         var scannerId = app.getId();

@@ -315,7 +315,7 @@ public final class BluetoothLeScanner {
             throw new IllegalArgumentException("settings is null");
         }
         if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-            Log.w(TAG, "BLE is not available");
+            Log.w(TAG, "doStartScan(): BLE is not available");
             return postCallbackErrorOrReturn(callback, ScanCallback.SCAN_FAILED_INTERNAL_ERROR);
         }
         synchronized (mLeScanClients) {
@@ -387,7 +387,7 @@ public final class BluetoothLeScanner {
     @RequiresPermission(BLUETOOTH_SCAN)
     public void stopScan(ScanCallback callback) {
         if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-            Log.w(TAG, "BLE is not available");
+            Log.w(TAG, "stopScan(callback): BLE is not available");
             return;
         }
         synchronized (mLeScanClients) {
@@ -413,7 +413,7 @@ public final class BluetoothLeScanner {
     @RequiresPermission(BLUETOOTH_SCAN)
     public void stopScan(PendingIntent callbackIntent) {
         if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-            Log.w(TAG, "BLE is not available");
+            Log.w(TAG, "stopScan(callbackIntent): BLE is not available");
             return;
         }
         try {
@@ -441,7 +441,7 @@ public final class BluetoothLeScanner {
     @RequiresPermission(BLUETOOTH_SCAN)
     public void flushPendingScanResults(ScanCallback callback) {
         if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-            Log.w(TAG, "BLE is not available");
+            Log.w(TAG, "flushPendingScanResults(): BLE is not available");
             return;
         }
         if (callback == null) {

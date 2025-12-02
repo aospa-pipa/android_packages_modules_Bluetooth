@@ -16,6 +16,7 @@
 
 package com.android.bluetooth.bass_client;
 
+import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED;
 import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
@@ -48,6 +49,10 @@ import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanRecord;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -196,6 +201,59 @@ public class BassClientService extends ConnectableProfile {
     private DialingOutTimeoutEvent mDialingOutTimeoutEvent = null;
     private final Map<Integer, ReactivateGroupMonitor> mReactivateGroupMonitors =
             new ConcurrentHashMap<>();
+    private final Map<BluetoothDevice, Boolean> mEncryptionStates = new ConcurrentHashMap<>();
+
+    private final BroadcastReceiver mEncryptionStateReceiver =
+            new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String action = intent.getAction();
+                    if (BluetoothDevice.ACTION_ENCRYPTION_CHANGE.equals(action)) {
+                        BluetoothDevice device =
+                                intent.getParcelableExtra(
+                                        BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
+                        if (device == null) {
+                            return;
+                        }
+                        int transport =
+                                intent.getIntExtra(
+                                        BluetoothDevice.EXTRA_TRANSPORT,
+                                        BluetoothDevice.TRANSPORT_AUTO);
+                        if (transport != BluetoothDevice.TRANSPORT_LE) {
+                            // BASS is a LE only profile
+                            return;
+                        }
+
+                        boolean encrypted =
+                                intent.getBooleanExtra(
+                                        BluetoothDevice.EXTRA_ENCRYPTION_ENABLED, false);
+                        int status =
+                                intent.getIntExtra(
+                                        BluetoothDevice.EXTRA_ENCRYPTION_STATUS,
+                                        BluetoothStatusCodes.ERROR_UNKNOWN);
+
+                        boolean encryptionState =
+                                (encrypted && status == BluetoothStatusCodes.SUCCESS);
+                        Log.d(
+                                TAG,
+                                "Received ACTION_ENCRYPTION_CHANGE for "
+                                        + device
+                                        + " state: "
+                                        + encryptionState);
+                        mEncryptionStates.put(device, encryptionState);
+                        synchronized (mStateMachines) {
+                            BassClientStateMachine sm = mStateMachines.get(device);
+                            if (sm != null) {
+                                sm.sendMessage(
+                                        BassClientStateMachine.ENCRYPTION_STATE_CHANGED,
+                                        encryptionState
+                                                ? BassConstants.ENCRYPTED
+                                                : BassConstants.NOT_ENCRYPTED);
+                            }
+                        }
+                    }
+                }
+            };
 
     /* Caching the PeriodicAdvertisementResult from Broadcast source */
     /* This is stored at service so that each device state machine can access
@@ -561,6 +619,10 @@ public class BassClientService extends ConnectableProfile {
         }
     }
 
+    public Boolean isEncrypted(BluetoothDevice device) {
+        return mEncryptionStates.get(device);
+    }
+
     public BassClientService(AdapterService adapterService, ScanController scanController) {
         this(adapterService, scanController, null);
     }
@@ -589,6 +651,10 @@ public class BassClientService extends ConnectableProfile {
         }
 
         setBassClientService(this);
+        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_ENCRYPTION_CHANGE);
+        if (Flags.leaudioBassReadCharacteristicsAfterEncryption())
+            adapterService.registerReceiver(
+                    mEncryptionStateReceiver, filter, BLUETOOTH_CONNECT, null);
     }
 
     public static boolean isEnabled() {
@@ -847,6 +913,10 @@ public class BassClientService extends ConnectableProfile {
             mDialingOutTimeoutEvent = null;
         }
 
+        if (Flags.leaudioBassReadCharacteristicsAfterEncryption()) {
+            getAdapterService().unregisterReceiver(mEncryptionStateReceiver);
+        }
+        mEncryptionStates.clear();
         mReactivateGroupMonitors.forEach((k, v) -> mHandler.removeCallbacks(v));
         mReactivateGroupMonitors.clear();
         mSyncStatusMap.clear();
@@ -2043,6 +2113,7 @@ public class BassClientService extends ConnectableProfile {
 
         // Check if the device is disconnected - if unbond, remove the state machine
         if (toState == STATE_DISCONNECTED) {
+            mEncryptionStates.remove(device);
             synchronized (mPendingGroupOp) {
                 mPendingGroupOp.remove(device);
             }
@@ -2228,9 +2299,6 @@ public class BassClientService extends ConnectableProfile {
             return devices;
         }
         final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
-        if (bondedDevices == null) {
-            return devices;
-        }
         synchronized (mStateMachines) {
             for (BluetoothDevice device : bondedDevices) {
                 final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
@@ -3974,6 +4042,34 @@ public class BassClientService extends ConnectableProfile {
         }
     }
 
+    private void removeSinkMetadataForRemovedBroadcasts(BluetoothDevice device) {
+        Map<Integer, BluetoothLeBroadcastMetadata> entry = mBroadcastMetadataMap.get(device);
+        if (entry == null) {
+            return;
+        }
+
+        BassClientStateMachine sm = mStateMachines.get(device);
+        if (sm == null) {
+            removeSinkMetadata(device);
+            return;
+        }
+
+        Set<Integer> currentBroadcastIds =
+                getAllSources(device).stream()
+                        .map(BluetoothLeBroadcastReceiveState::getBroadcastId)
+                        .collect(Collectors.toUnmodifiableSet());
+
+        entry.keySet().stream()
+                .filter(
+                        broadcastId ->
+                                !currentBroadcastIds.contains(broadcastId)
+                                        && (!sm.hasPendingSourceOperation(broadcastId))
+                                        && (!sm.hasPendingSwitchingSourceOperation(broadcastId)))
+                .collect(Collectors.toList()) // Collect to avoid ConcurrentModificationException
+                .forEach(staleBroadcastId -> removeSinkMetadata(device, staleBroadcastId));
+    }
+
+    // TODO Delete it on leaudioBroadcastTreatEmptyRsExplicitly flag cleanup
     private void checkIfBroadcastIsSuspendedBySourceRemovalAndClearData(
             BluetoothDevice device, BassClientStateMachine stateMachine, int broadcastId) {
         if (!mPausedBroadcastSinks.contains(device)) {
@@ -4208,11 +4304,13 @@ public class BassClientService extends ConnectableProfile {
                 continue;
             }
 
-            // Even if there is a room for broadcast, it could happen that all broadcasts were
-            // suspended via removing source. In that case, we have to found such broadcast and
-            // remove it from metadata.
-            checkIfBroadcastIsSuspendedBySourceRemovalAndClearData(
-                    device, stateMachine, broadcastId);
+            if (!Flags.leaudioBroadcastTreatEmptyRsExplicitly()) {
+                // Even if there is a room for broadcast, it could happen that all broadcasts were
+                // suspended via removing source. In that case, we have to found such broadcast and
+                // remove it from metadata.
+                checkIfBroadcastIsSuspendedBySourceRemovalAndClearData(
+                        device, stateMachine, broadcastId);
+            }
 
             /* Store metadata for sink device */
             storeSinkMetadata(device, broadcastId, sourceMetadata);
@@ -5321,6 +5419,12 @@ public class BassClientService extends ConnectableProfile {
                 synchronized (mSinksWaitingForPast) {
                     mSinksWaitingForPast.remove(sink);
                 }
+            }
+            if (Flags.leaudioBroadcastTreatEmptyRsExplicitly()) {
+                mPausedBroadcastSinks.remove(sink);
+                mSinksToRestoreFromPeer.remove(sink);
+                removeSinkMetadataForRemovedBroadcasts(sink);
+                logPausedBroadcastsAndSinks();
             }
             synchronized (mSinksWaitingForMetadata) {
                 Integer broadcastIdForMetadata = mSinksWaitingForMetadata.remove(sink);
