@@ -157,7 +157,7 @@ class AdapterBinder extends IAdapter.Stub {
         if (service == null) {
             return;
         }
-        service.setName(name);
+        service.getHandler().post(() -> service.setName(name));
     }
 
     @Override
