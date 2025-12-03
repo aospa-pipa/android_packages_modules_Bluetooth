@@ -64,6 +64,7 @@
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_api_types.h"
 #include "stack/include/bt_hdr.h"
+#include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/main_thread.h"
@@ -560,35 +561,41 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
   btif_a2dp_source_cb.encoder_interval_ms =
           btif_a2dp_source_cb.encoder_interface->get_encoder_interval_ms();
 
-  tBT_FLOW_SPEC flow_spec;
-  memset(&flow_spec, 0x00, sizeof(flow_spec));
+  tBTM_BLE_VSC_CB vsc_cb = {};
+  BTM_BleGetVendorCapabilities(&vsc_cb);
+  bool supports_a2dp_hw_offload_v2 = vsc_cb.a2dp_offload_v2_support;
 
-  flow_spec.flow_direction = 0x00;    /* flow direction - out going */
-  flow_spec.service_type = 0x02;      /* Guaranteed */
-  flow_spec.token_rate = 0x00;        /* bytes/second - no token rate is specified*/
-  flow_spec.token_bucket_size = 0x00; /* bytes - no token bucket is needed*/
-  flow_spec.latency = 0xFFFFFFFF;     /* microseconds - default value */
+  if (!supports_a2dp_hw_offload_v2) {
+    tBT_FLOW_SPEC flow_spec;
+    memset(&flow_spec, 0x00, sizeof(flow_spec));
 
-  if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_AAC) {
-    char prop_value[PROPERTY_VALUE_MAX] = "false";
-    osi_property_get("persist.vendor.qcom.bluetooth.aac_abr_support", prop_value, "false");
-    if (!strcmp(prop_value, "true")) {
-      flow_spec.peak_bandwidth = 0;  // ABR enabled
-    } else {
-      flow_spec.peak_bandwidth = (165 * 1000) / 8; /* bytes/second */
-    }
-    tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
-    if (status != tBTM_STATUS::BTM_CMD_STARTED) {
-      log::warn("Cannot send FlowSpec: status {}", status);
-    }
-  } else if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC) {
-    /* For ABR mode default peak bandwidth is 0, for static it will be fetched */
-    uint32_t bitrate = 0;
-    bitrate = a2dp_codec_config->getTrackBitRate();
-    flow_spec.peak_bandwidth = bitrate / 8; /* bytes/second */
-    tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
-    if (status != tBTM_STATUS::BTM_CMD_STARTED) {
-      log::warn("Cannot send FlowSpec: status {}", status);
+    flow_spec.flow_direction = 0x00;    /* flow direction - out going */
+    flow_spec.service_type = 0x02;      /* Guaranteed */
+    flow_spec.token_rate = 0x00;        /* bytes/second - no token rate is specified*/
+    flow_spec.token_bucket_size = 0x00; /* bytes - no token bucket is needed*/
+    flow_spec.latency = 0xFFFFFFFF;     /* microseconds - default value */
+
+    if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_AAC) {
+      char prop_value[PROPERTY_VALUE_MAX] = "false";
+      osi_property_get("persist.vendor.qcom.bluetooth.aac_abr_support", prop_value, "false");
+      if (!strcmp(prop_value, "true")) {
+        flow_spec.peak_bandwidth = 0;  // ABR enabled
+      } else {
+        flow_spec.peak_bandwidth = (165 * 1000) / 8; /* bytes/second */
+      }
+      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
+      if (status != tBTM_STATUS::BTM_CMD_STARTED) {
+        log::warn("Cannot send FlowSpec: status {}", status);
+      }
+    } else if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC) {
+      /* For ABR mode default peak bandwidth is 0, for static it will be fetched */
+      uint32_t bitrate = 0;
+      bitrate = a2dp_codec_config->getTrackBitRate();
+      flow_spec.peak_bandwidth = bitrate / 8; /* bytes/second */
+      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
+      if (status != tBTM_STATUS::BTM_CMD_STARTED) {
+        log::warn("Cannot send FlowSpec: status {}", status);
+      }
     }
   }
 
