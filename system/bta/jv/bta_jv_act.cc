@@ -441,6 +441,10 @@ static void bta_jv_clear_pm_cb(tBTA_JV_PM_CB* p_pm_cb, bool close_conn) {
   p_pm_cb->app_id = BTA_JV_PM_ALL;
   p_pm_cb->handle = BTA_JV_PM_HANDLE_CLEAR;
   p_pm_cb->peer_bd_addr = RawAddress::kEmpty;
+  if (com::android::bluetooth::flags::delay_jv_pm_idle()) {
+    alarm_free(p_pm_cb->idle_timer);
+    p_pm_cb->idle_timer = nullptr;
+  }
 }
 
 /*******************************************************************************
@@ -574,8 +578,10 @@ static tBTA_JV_PM_CB* bta_jv_alloc_set_pm_profile_cb(uint32_t jv_handle, tBTA_JV
     bta_jv_cb.pm_cb[i].app_id = app_id;
     bta_jv_cb.pm_cb[i].peer_bd_addr = peer_bd_addr;
     bta_jv_cb.pm_cb[i].state = BTA_JV_PM_IDLE_ST;
-    bta_jv_cb.pm_cb[i].idle_timer = alarm_new("bta.jv_idle_timer");
-    log::verbose("bta_jv_alloc_set_pm_profile_cb: {}", i);
+    if (com::android::bluetooth::flags::delay_jv_pm_idle()) {
+      bta_jv_cb.pm_cb[i].idle_timer = alarm_new("bta.jv_idle_timer");
+      log::verbose("bta_jv_alloc_set_pm_profile_cb: {}", i);
+    }
     return &bta_jv_cb.pm_cb[i];
   }
   log::warn("jv_handle=0x{:x}, app_id={}, return NULL", jv_handle, app_id);
@@ -727,7 +733,8 @@ static uint16_t bta_jv_allocate_l2cap_classic_psm() {
 /** Obtain a free SCN (Server Channel Number) (RFCOMM channel or L2CAP PSM) */
 void bta_jv_get_channel_id(tBTA_JV_CONN_TYPE type /* One of BTA_JV_CONN_TYPE_ */,
                            int32_t channel /* optionally request a specific channel */,
-                           uint32_t l2cap_socket_id, uint32_t rfcomm_slot_id) {
+                           uint32_t l2cap_socket_id, uint32_t rfcomm_slot_id,
+                           uint32_t lecoc_fixed_psm_slots) {
   uint16_t psm = 0;
 
   switch (type) {
@@ -760,7 +767,7 @@ void bta_jv_get_channel_id(tBTA_JV_CONN_TYPE type /* One of BTA_JV_CONN_TYPE_ */
       }
       break;
     case tBTA_JV_CONN_TYPE::L2CAP_LE:
-      psm = stack::l2cap::get_interface().L2CA_AllocateLePSM();
+      psm = stack::l2cap::get_interface().L2CA_AllocateLePSM(lecoc_fixed_psm_slots);
       if (psm == 0) {
         log::error("Error: No free LE PSM available");
       }
@@ -990,10 +997,6 @@ static void bta_jv_l2cap_client_cback(uint16_t gap_handle, uint16_t event, tGAP_
       if (!GAP_IsTransportLe(gap_handle)) {
         evt_data.l2c_open.rem_bda = *GAP_ConnGetRemoteAddr(gap_handle);
         evt_data.l2c_open.tx_mtu = GAP_ConnGetRemMtuSize(gap_handle);
-        if (data != nullptr) {
-          evt_data.l2c_open.local_cid = data->l2cap_cids.local_cid;
-          evt_data.l2c_open.remote_cid = data->l2cap_cids.remote_cid;
-        }
       } else {
         uint16_t remote_mtu, local_mps, remote_mps, local_credit, remote_credit;
         uint16_t local_cid, remote_cid, acl_handle;
@@ -1044,11 +1047,10 @@ static void bta_jv_l2cap_client_cback(uint16_t gap_handle, uint16_t event, tGAP_
     case GAP_EVT_CONN_CONGESTED:
     case GAP_EVT_CONN_UNCONGESTED:
       p_cb->cong = (event == GAP_EVT_CONN_CONGESTED) ? true : false;
-      if (NULL != p_cb->p_pm_cb) {
+      if (com::android::bluetooth::flags::delay_jv_pm_idle() && p_cb->cong &&
+          p_cb->p_pm_cb != nullptr) {
         p_cb->p_pm_cb->cong = p_cb->cong;
-      }
-      if (p_cb->cong == true) {
-        bta_jv_pm_conn_congested(p_cb->p_pm_cb);
+        bta_jv_pm_conn_busy(p_cb->p_pm_cb);
       }
       evt_data.l2c_cong.cong = p_cb->cong;
       p_cb->p_cback(BTA_JV_L2CAP_CONG_EVT, &evt_data, p_cb->l2cap_socket_id);
@@ -1159,7 +1161,8 @@ void bta_jv_l2cap_close(uint32_t handle, tBTA_JV_L2C_CB* p_cb) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_jv_l2cap_server_cback(uint16_t gap_handle, uint16_t event, tGAP_CB_DATA* data) {
+static void bta_jv_l2cap_server_cback(uint16_t gap_handle, uint16_t event,
+                                      tGAP_CB_DATA* /* data */) {
   tBTA_JV_L2C_CB* p_cb = &bta_jv_cb.l2c_cb[gap_handle];
   tBTA_JV evt_data;
   tBTA_JV_L2CAP_CBACK* p_cback;
@@ -1178,10 +1181,6 @@ static void bta_jv_l2cap_server_cback(uint16_t gap_handle, uint16_t event, tGAP_
       if (!GAP_IsTransportLe(gap_handle)) {
         evt_data.l2c_open.rem_bda = *GAP_ConnGetRemoteAddr(gap_handle);
         evt_data.l2c_open.tx_mtu = GAP_ConnGetRemMtuSize(gap_handle);
-        if (data != nullptr) {
-          evt_data.l2c_open.local_cid = data->l2cap_cids.local_cid;
-          evt_data.l2c_open.remote_cid = data->l2cap_cids.remote_cid;
-        }
       } else {
         uint16_t remote_mtu, local_mps, remote_mps, local_credit, remote_credit;
         uint16_t local_cid, remote_cid, acl_handle;
@@ -1232,11 +1231,10 @@ static void bta_jv_l2cap_server_cback(uint16_t gap_handle, uint16_t event, tGAP_
     case GAP_EVT_CONN_CONGESTED:
     case GAP_EVT_CONN_UNCONGESTED:
       p_cb->cong = (event == GAP_EVT_CONN_CONGESTED) ? true : false;
-      if (NULL != p_cb->p_pm_cb) {
+      if (com::android::bluetooth::flags::delay_jv_pm_idle() && p_cb->cong &&
+          p_cb->p_pm_cb != nullptr) {
         p_cb->p_pm_cb->cong = p_cb->cong;
-      }
-      if (p_cb->cong == true) {
-        bta_jv_pm_conn_congested(p_cb->p_pm_cb);
+        bta_jv_pm_conn_busy(p_cb->p_pm_cb);
       }
       evt_data.l2c_cong.cong = p_cb->cong;
       p_cb->p_cback(BTA_JV_L2CAP_CONG_EVT, &evt_data, p_cb->l2cap_socket_id);
@@ -1523,11 +1521,10 @@ static void bta_jv_port_event_cl_cback(uint32_t code, uint16_t port_handle) {
 
   if (code & PORT_EV_FC) {
     p_pcb->cong = (code & PORT_EV_FCS) ? false : true;
-    if (NULL != p_pcb->p_pm_cb) {
+    if (com::android::bluetooth::flags::delay_jv_pm_idle() && p_pcb->cong &&
+        p_pcb->p_pm_cb != nullptr) {
       p_pcb->p_pm_cb->cong = p_pcb->cong;
-    }
-    if (p_pcb->cong == true) {
-      bta_jv_pm_conn_congested(p_pcb->p_pm_cb);
+      bta_jv_pm_conn_busy(p_pcb->p_pm_cb);
     }
     evt_data.rfc_cong.cong = p_pcb->cong;
     evt_data.rfc_cong.handle = p_cb->handle;
@@ -1562,12 +1559,14 @@ void bta_jv_rfcomm_connect(tBTA_SEC sec_mask, uint8_t remote_scn, const RawAddre
                   },
   };
 
-  // Update security service record for RFCOMM client so that
-  // secure RFCOMM connection will be authenticated with MTIM protection
-  // while creating the L2CAP connection.
-  get_btm_client_interface().security.BTM_SetSecurityLevel(true, "RFC_MUX", BTM_SEC_SERVICE_RFC_MUX,
-                                                           sec_mask, BT_PSM_RFCOMM,
-                                                           BTM_SEC_PROTO_RFCOMM, 0);
+  if (!com_android_bluetooth_flags_upgrade_temp_bonding_on_auth_req()) {
+    // Update security service record for RFCOMM client so that
+    // secure RFCOMM connection will be authenticated with MTIM protection
+    // while creating the L2CAP connection.
+    get_btm_client_interface().security.BTM_SetSecurityLevel(
+            true, "RFC_MUX", BTM_SEC_SERVICE_RFC_MUX, sec_mask, BT_PSM_RFCOMM, BTM_SEC_PROTO_RFCOMM,
+            0);
+  }
 
   port_status = RFCOMM_CreateConnectionWithSecurity(UUID_SERVCLASS_SERIAL_PORT, remote_scn, false,
                                                     BTA_JV_DEF_RFC_MTU, peer_bd_addr, &handle,
@@ -1780,11 +1779,10 @@ static void bta_jv_port_event_sr_cback(uint32_t code, uint16_t port_handle) {
 
   if (code & PORT_EV_FC) {
     p_pcb->cong = (code & PORT_EV_FCS) ? false : true;
-    if (NULL != p_pcb->p_pm_cb) {
+    if (com::android::bluetooth::flags::delay_jv_pm_idle() && p_pcb->cong &&
+        p_pcb->p_pm_cb != nullptr) {
       p_pcb->p_pm_cb->cong = p_pcb->cong;
-    }
-    if (p_pcb->cong == true) {
-      bta_jv_pm_conn_congested(p_pcb->p_pm_cb);
+      bta_jv_pm_conn_busy(p_pcb->p_pm_cb);
     }
     evt_data.rfc_cong.cong = p_pcb->cong;
     evt_data.rfc_cong.handle = p_cb->handle;
@@ -2094,17 +2092,31 @@ static void bta_jv_pm_conn_congested(tBTA_JV_PM_CB* p_cb) {
  *
  ******************************************************************************/
 static void bta_jv_pm_conn_busy(tBTA_JV_PM_CB* p_cb) {
-  if ((NULL != p_cb) && (BTA_JV_PM_IDLE_ST == p_cb->state)) {
-    tBTM_PM_MODE mode = BTM_PM_MD_ACTIVE;
-    if (BTM_ReadPowerMode(p_cb->peer_bd_addr, &mode)) {
-      if (mode == BTM_PM_MD_SNIFF) {
-        bta_jv_pm_state_change(p_cb, BTA_JV_CONN_BUSY);
+  if (p_cb == nullptr) {
+    return;
+  }
+  if (com::android::bluetooth::flags::delay_jv_pm_idle()) {
+    if (BTA_JV_PM_BUSY_ST == p_cb->state) {
+      return;
+    }
+    if (BTA_JV_PM_BUSY_TO_IDLE_ST == p_cb->state) {
+      p_cb->state = BTA_JV_PM_BUSY_ST;
+      return;
+    }
+    bta_jv_pm_state_change(p_cb, BTA_JV_CONN_BUSY);
+  } else {
+    if (BTA_JV_PM_IDLE_ST == p_cb->state) {
+      tBTM_PM_MODE mode = BTM_PM_MD_ACTIVE;
+      if (BTM_ReadPowerMode(p_cb->peer_bd_addr, &mode)) {
+        if (mode == BTM_PM_MD_SNIFF) {
+          bta_jv_pm_state_change(p_cb, BTA_JV_CONN_BUSY);
+        } else {
+          p_cb->state = BTA_JV_PM_BUSY_ST;
+          log::verbose("bta_jv_pm_conn_busy:power mode: {}", mode);
+        }
       } else {
-        p_cb->state = BTA_JV_PM_BUSY_ST;
-        log::verbose("bta_jv_pm_conn_busy:power mode: {}", mode);
+        bta_jv_pm_state_change(p_cb, BTA_JV_CONN_BUSY);
       }
-    } else {
-      bta_jv_pm_state_change(p_cb, BTA_JV_CONN_BUSY);
     }
   }
 }
@@ -2121,14 +2133,22 @@ static void bta_jv_pm_conn_busy(tBTA_JV_PM_CB* p_cb) {
  *
  ******************************************************************************/
 static void bta_jv_pm_conn_idle(tBTA_JV_PM_CB* p_cb) {
-  if ((NULL != p_cb) && (BTA_JV_PM_IDLE_ST != p_cb->state)) {
-    log::verbose("bta_jv_pm_conn_idle, p_cb: {}", std::format_ptr(p_cb));
-    p_cb->state = BTA_JV_PM_IDLE_ST;
+  if (p_cb == nullptr) {
+    return;
+  }
 
-    // start intermediate idle timer for 1s
-    if (!alarm_is_scheduled(p_cb->idle_timer)) {
-      alarm_set_on_mloop(p_cb->idle_timer, BTA_JV_IDLE_TIMEOUT_MS, bta_jv_idle_timeout_handler,
-                         p_cb);
+  if (com::android::bluetooth::flags::delay_jv_pm_idle()) {
+    if (p_cb->state != BTA_JV_PM_IDLE_ST && p_cb->state != BTA_JV_PM_BUSY_TO_IDLE_ST) {
+      p_cb->state = BTA_JV_PM_BUSY_TO_IDLE_ST;
+      // When busy -> idle -> busy -> idle, the alarm can be already scheduled.
+      if (!alarm_is_scheduled(p_cb->idle_timer)) {
+        alarm_set_on_mloop(p_cb->idle_timer, BTA_JV_PM_IDLE_TIMEOUT_MS, bta_jv_idle_timeout_handler,
+                           p_cb);
+      }
+    }
+  } else {
+    if (BTA_JV_PM_IDLE_ST != p_cb->state) {
+      bta_jv_pm_state_change(p_cb, BTA_JV_CONN_IDLE);
     }
   }
 }
@@ -2207,16 +2227,6 @@ static void bta_jv_reset_sniff_timer(tBTA_JV_PM_CB* p_cb) {
     bta_sys_reset_sniff(BTA_ID_JV, p_cb->app_id, p_cb->peer_bd_addr);
   }
 }
-/******************************************************************************/
-
-namespace bluetooth::legacy::testing {
-
-void bta_jv_start_discovery_cback(uint32_t rfcomm_slot_id, const RawAddress& bd_addr,
-                                  tSDP_RESULT result) {
-  ::bta_jv_start_discovery_cback(rfcomm_slot_id, bd_addr, result);
-}
-
-}  // namespace bluetooth::legacy::testing
 
 /*******************************************************************************
 **
@@ -2228,27 +2238,28 @@ void bta_jv_start_discovery_cback(uint32_t rfcomm_slot_id, const RawAddress& bd_
 ** Returns          void
 **
 *******************************************************************************/
-void bta_jv_idle_timeout_handler(void* tle) {
-  tBTA_JV_PM_CB* p_cb = (tBTA_JV_PM_CB*)tle;
-  log::verbose("p_cb: {}", std::format_ptr(p_cb));
-
-  if (NULL != p_cb) {
-    if (p_cb->cong == TRUE) {
-      p_cb->state = BTA_JV_PM_BUSY_ST;
-      bta_jv_pm_conn_idle(p_cb);
-      log::warn(": {}", p_cb->cong);
-      return;
-    }
-
-    tBTM_PM_MODE mode = BTM_PM_MD_ACTIVE;
-    if (BTM_ReadPowerMode(p_cb->peer_bd_addr, &mode)) {
-      if (mode == BTM_PM_MD_SNIFF) {
-        log::warn("mode: {}", mode);
-        return;
-      }
-    } else {
-      log::warn("Read power mode failed: {}", mode);
-    }
-    bta_jv_pm_state_change(p_cb, BTA_JV_CONN_IDLE);
+void bta_jv_idle_timeout_handler(void* data) {
+  if (data == nullptr) {
+    return;
   }
+
+  tBTA_JV_PM_CB* p_cb = (tBTA_JV_PM_CB*)data;
+
+  // The state has been changed
+  if (p_cb->state != BTA_JV_PM_BUSY_TO_IDLE_ST) {
+    return;
+  }
+  bta_jv_pm_state_change(p_cb, BTA_JV_CONN_IDLE);
 }
+
+/******************************************************************************/
+
+namespace bluetooth::legacy::testing {
+
+void bta_jv_start_discovery_cback(uint32_t rfcomm_slot_id, const RawAddress& bd_addr,
+                                  tSDP_RESULT result) {
+  ::bta_jv_start_discovery_cback(rfcomm_slot_id, bd_addr, result);
+}
+
+}  // namespace bluetooth::legacy::testing
+

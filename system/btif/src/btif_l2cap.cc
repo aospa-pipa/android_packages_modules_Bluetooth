@@ -383,7 +383,7 @@ static bt_status_t L2cap_DeRegister(uint16_t psm) {
 
 static uint16_t L2cap_AllocatePSM(void) {
   log::debug("L2cap_AllocatePSM");
-  return L2CA_AllocateLePSM();
+  return L2CA_AllocateLePSM(LECOC_FIXED_PSM_SLOTS_DEFAULT);
 }
 
 static uint16_t L2cap_Connect(uint16_t psm, RawAddress* bd_addr) {

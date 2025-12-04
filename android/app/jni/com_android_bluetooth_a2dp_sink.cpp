@@ -28,6 +28,7 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include "bt_status.h"
 #include "btif/include/btif_av.h"
 #include "com_android_bluetooth.h"
 #include "hardware/bluetooth.h"
@@ -39,6 +40,7 @@ static jmethodID method_onAudioStateChanged;
 static jmethodID method_onAudioConfigChanged;
 
 static jobject mCallbacksObj = NULL;
+static jfieldID sCallbacksField;
 static std::shared_timed_mutex callbacks_mutex;
 
 static void a2dp_sink_connection_state_callback(const RawAddress& bd_addr,
@@ -131,13 +133,16 @@ static void initNative(JNIEnv* env, jobject object, jint maxConnectedAudioDevice
     mCallbacksObj = NULL;
   }
 
-  bt_status_t status = btif_av_sink_init(&sBluetoothA2dpCallbacks, maxConnectedAudioDevices);
-  if (status != BT_STATUS_SUCCESS) {
-    log::error("Failed to initialize Bluetooth A2DP Sink, status: {}", bt_status_text(status));
+  BtStatus status = btif_av_sink_init(&sBluetoothA2dpCallbacks, maxConnectedAudioDevices);
+  if (!status) {
+    log::error("Failed to initialize Bluetooth A2DP Sink, status: {}", status);
     return;
   }
 
-  mCallbacksObj = env->NewGlobalRef(object);
+  if ((mCallbacksObj = env->NewGlobalRef(env->GetObjectField(object, sCallbacksField))) ==
+      nullptr) {
+    log::fatal("Failed to allocate Global Ref for A2DP Sink Callbacks");
+  }
 }
 
 static void cleanupNative(JNIEnv* env, jobject /* object */) {
@@ -158,41 +163,27 @@ static void cleanupNative(JNIEnv* env, jobject /* object */) {
 }
 
 static jboolean connectA2dpNative(JNIEnv* env, jobject /* object */, jbyteArray address) {
-  jbyte* addr = env->GetByteArrayElements(address, NULL);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress bd_addr = RawAddress::FromOctets(reinterpret_cast<const uint8_t*>(addr));
+  RawAddress bd_addr = addressFromJByteArray(env, address);
 
   log::info("{}", bd_addr);
-  bt_status_t status = btif_av_sink_connect(bd_addr);
-  if (status != BT_STATUS_SUCCESS) {
-    log::error("Failed HF connection, status: {}", bt_status_text(status));
+  BtStatus status = btif_av_sink_connect(bd_addr);
+  if (!status) {
+    log::error("Failed HF connection, status: {}", status);
   }
 
-  env->ReleaseByteArrayElements(address, addr, 0);
-  return (status == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
+  return status ? JNI_TRUE : JNI_FALSE;
 }
 
 static jboolean disconnectA2dpNative(JNIEnv* env, jobject /* object */, jbyteArray address) {
-  jbyte* addr = env->GetByteArrayElements(address, NULL);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress bd_addr = RawAddress::FromOctets(reinterpret_cast<const uint8_t*>(addr));
+  RawAddress bd_addr = addressFromJByteArray(env, address);
 
   log::info("{}", bd_addr);
-  bt_status_t status = btif_av_sink_disconnect(bd_addr);
-  if (status != BT_STATUS_SUCCESS) {
-    log::error("Failed HF disconnection, status: {}", bt_status_text(status));
+  BtStatus status = btif_av_sink_disconnect(bd_addr);
+  if (!status) {
+    log::error("Failed HF disconnection, status: {}", status);
   }
 
-  env->ReleaseByteArrayElements(address, addr, 0);
-  return (status == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
+  return status ? JNI_TRUE : JNI_FALSE;
 }
 
 static void informAudioFocusStateNative(JNIEnv* /* env */, jobject /* object */, jint focus_state) {
@@ -204,24 +195,18 @@ static void informAudioTrackGainNative(JNIEnv* /* env */, jobject /* object */, 
 }
 
 static jboolean setActiveDeviceNative(JNIEnv* env, jobject /* object */, jbyteArray address) {
-  jbyte* addr = env->GetByteArrayElements(address, NULL);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+
+  log::info("{}", bd_addr);
+  BtStatus status = btif_av_sink_set_active_device(bd_addr);
+  if (!status) {
+    log::error("Failed sending passthru command, status: {}", status);
   }
 
-  RawAddress rawAddress = RawAddress::FromOctets(reinterpret_cast<const uint8_t*>(addr));
-
-  log::info("{}", rawAddress);
-  bt_status_t status = btif_av_sink_set_active_device(rawAddress);
-  if (status != BT_STATUS_SUCCESS) {
-    log::error("Failed sending passthru command, status: {}", bt_status_text(status));
-  }
-
-  env->ReleaseByteArrayElements(address, addr, 0);
-  return (status == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
+  return status ? JNI_TRUE : JNI_FALSE;
 }
 
+// JNI functions defined in A2dpSinkNativeInterface
 int register_com_android_bluetooth_a2dp_sink(JNIEnv* env) {
   const JNINativeMethod methods[] = {
           {"initNative", "(I)V", reinterpret_cast<void*>(initNative)},
@@ -234,18 +219,21 @@ int register_com_android_bluetooth_a2dp_sink(JNIEnv* env) {
            reinterpret_cast<void*>(informAudioTrackGainNative)},
           {"setActiveDeviceNative", "([B)Z", reinterpret_cast<void*>(setActiveDeviceNative)},
   };
-  const int result = REGISTER_NATIVE_METHODS(
-          env, "com/android/bluetooth/a2dpsink/A2dpSinkNativeInterface", methods);
+  const char* jniNativeInterfaceClass = "com/android/bluetooth/a2dpsink/A2dpSinkNativeInterface";
+  const int result = REGISTER_NATIVE_METHODS(env, jniNativeInterfaceClass, methods);
   if (result != 0) {
     return result;
   }
 
+  sCallbacksField = getNativeCallbackField(env, jniNativeInterfaceClass);
+
+  // Client callback functions defined in A2dpSinkNativeCallback
   const JNIJavaMethod javaMethods[] = {
           {"onConnectionStateChanged", "([BI)V", &method_onConnectionStateChanged},
           {"onAudioStateChanged", "(I)V", &method_onAudioStateChanged},
           {"onAudioConfigChanged", "([BII)V", &method_onAudioConfigChanged},
   };
-  GET_JAVA_METHODS(env, "com/android/bluetooth/a2dpsink/A2dpSinkNativeInterface", javaMethods);
+  GET_JAVA_METHODS(env, "com/android/bluetooth/a2dpsink/A2dpSinkNativeCallback", javaMethods);
 
   return 0;
 }

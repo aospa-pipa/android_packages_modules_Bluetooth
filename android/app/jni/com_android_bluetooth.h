@@ -19,6 +19,8 @@
 
 #include <bluetooth/log.h>
 
+#include <optional>
+
 #include "hardware/bluetooth.h"
 #include "hardware/hardware.h"
 #include "jni.h"
@@ -27,6 +29,16 @@
 namespace log = bluetooth::log;
 
 namespace android {
+
+/// Convert a bluetooth address encoded as jbyte array to the address
+/// type used in the native stack. This function will panic if the
+/// input object is null or invalid.
+RawAddress addressFromJByteArray(JNIEnv* env, jbyteArray object);
+
+/// Convert a bluetooth address encoded as jbyte array to the address
+/// type used in the native stack. Returns the none if the input
+/// input object is null.
+std::optional<RawAddress> addressFromNullableJByteArray(JNIEnv* env, jbyteArray object);
 
 JNIEnv* getCallbackEnv();
 bool isCallbackThread();
@@ -185,5 +197,7 @@ void jniGetMethodsOrDie(JNIEnv* env, const char* className, const JNIJavaMethod*
 
 #define GET_JAVA_METHODS(env, classname, methodsArray) \
   jniGetMethodsOrDie(env, classname, methodsArray, NELEM(methodsArray))
+
+jfieldID getNativeCallbackField(JNIEnv* env, const char* className);
 
 }  // namespace android

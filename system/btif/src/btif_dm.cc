@@ -175,7 +175,7 @@ struct btif_dm_pairing_cb_t {
   uint8_t pin_code_len;
   uint8_t is_ssp;
   uint8_t auth_req;
-  uint8_t io_cap;
+  BtIoCap io_cap;
   uint8_t autopair_attempts;
   uint8_t timeout_retries;
   uint8_t is_local_initiated;
@@ -286,7 +286,7 @@ static size_t btif_events_end_index = 0;
 /******************************************************************************
  *  Static functions
  *****************************************************************************/
-static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent);
+static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool consent);
 static void btif_dm_remove_ble_bonding_keys(void);
 static void btif_dm_save_ble_bonding_keys(RawAddress& bd_addr);
 static btif_dm_pairing_cb_t pairing_cb;
@@ -2104,7 +2104,9 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
    * before before passing services to upper layers. */
   if (results_for_bonding_device && a2dp_sink_capable &&
       pairing_cb.gatt_over_le != btif_dm_pairing_cb_t::ServiceDiscoveryState::FINISHED &&
-      is_le_audio_capable_during_service_discovery(bd_addr)) {
+      is_le_audio_capable_during_service_discovery(bd_addr) &&
+      get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE) &&
+      !interop_match_addr(INTEROP_SKIP_WAIT_FOR_LE_SERVICE_SEARCH, &bd_addr)) {
     skip_reporting_wait_for_le = true;
   }
 
@@ -2429,8 +2431,7 @@ static void btif_add_local_irk_to_resolving_list() {
   if (bluetooth::shim::GetController()->IsRpaGenerationSupported()) {
     const Octet16 all_zero_peer_irk = {0};
 
-    if (com_android_bluetooth_flags_non_zero_local_irk() &&
-        ble_local_key_cb.id_keys.irk == all_zero_peer_irk) {
+    if (ble_local_key_cb.id_keys.irk == all_zero_peer_irk) {
       log::debug("Local IRK is all-zero, wait for it be generated");
       return;
     }
@@ -2539,7 +2540,7 @@ void BTIF_dm_disable() {
 void btif_dm_sec_evt(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data) {
   RawAddress bd_addr;
   uint8_t auth_req = pairing_cb.auth_req;
-  uint8_t io_cap = pairing_cb.io_cap;
+  BtIoCap io_cap = pairing_cb.io_cap;
 
   log::verbose("ev:{}", dump_dm_event(event));
 
@@ -2682,9 +2683,7 @@ void btif_dm_sec_evt(tBTA_DM_SEC_EVT event, tBTA_DM_SEC* p_data) {
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.irk, BTIF_DM_LE_LOCAL_KEY_IRK);
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.ir, BTIF_DM_LE_LOCAL_KEY_IR);
       btif_storage_add_ble_local_key(ble_local_key_cb.id_keys.dhk, BTIF_DM_LE_LOCAL_KEY_DHK);
-      if (com_android_bluetooth_flags_non_zero_local_irk()) {
-        btif_add_local_irk_to_resolving_list();
-      }
+      btif_add_local_irk_to_resolving_list();
       break;
     case BTA_DM_BLE_LOCAL_ER_EVT:
       log::verbose("BTA_DM_BLE_LOCAL_ER_EVT");
@@ -3100,23 +3099,6 @@ void btif_dm_cancel_bond(const RawAddress bd_addr) {
 
 /*******************************************************************************
  *
- * Function         btif_dm_hh_open_failed
- *
- * Description      informs the upper layers if the HH have failed during
- *                  bonding
- *
- * Returns          none
- *
- ******************************************************************************/
-// TODO: Remove when simpler_hid_connection_policy is released
-void btif_dm_hh_open_failed(RawAddress* bdaddr) {
-  if (pairing_cb.state == BT_BOND_STATE_BONDING && *bdaddr == pairing_cb.bd_addr) {
-    bond_state_changed(BT_STATUS_RMT_DEV_DOWN, *bdaddr, BT_BOND_STATE_NONE);
-  }
-}
-
-/*******************************************************************************
- *
  * Function         btif_dm_remove_bond
  *
  * Description      Removes bonding with the specified device
@@ -3433,7 +3415,7 @@ void btif_dm_proc_io_req(tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
 
     /* copy over the MITM bit as well. In addition if the peer has DisplayYesNo,
      * force MITM */
-    if ((yes_no_bit) || (pairing_cb.io_cap & BTM_IO_CAP_IO)) {
+    if (yes_no_bit || pairing_cb.io_cap == BtIoCap::DISPLAY_YES_NO) {
       *p_auth_req |= BTA_AUTH_SP_YES;
     }
   } else if (yes_no_bit) {
@@ -3443,7 +3425,7 @@ void btif_dm_proc_io_req(tBTM_AUTH_REQ* p_auth_req, bool is_orig) {
   log::verbose("updated p_auth_req={}", *p_auth_req);
 }
 
-void btif_dm_proc_io_rsp(const RawAddress& /* bd_addr */, tBTM_IO_CAP io_cap,
+void btif_dm_proc_io_rsp(const RawAddress& /* bd_addr */, BtIoCap io_cap,
                          tBTM_OOB_DATA /* oob_data */, tBTM_AUTH_REQ auth_req) {
   if (auth_req & BTA_AUTH_BONDS) {
     log::debug("auth_req:{}", auth_req);
@@ -3801,6 +3783,12 @@ static void btif_dm_ble_passkey_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif)
 
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_BOND_STATE_BONDING);
   pairing_cb.is_ssp = false;
+
+  if (com_android_bluetooth_flags_passkey_entry_pairing_approval()) {
+    pairing_cb.is_le_only = true;
+    pairing_cb.is_le_nc = false;
+  }
+
   if (com_android_bluetooth_flags_temporary_pairing_tracking()) {
     pairing_cb.bond_type = BOND_TYPE_PERSISTENT;
   }
@@ -4095,17 +4083,15 @@ static void btif_dm_remove_ble_bonding_keys(void) {
  * Returns          void
  *
  ******************************************************************************/
-static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_consent) {
-  int dev_type;
-
-  log::verbose("addr:{}", p_ble_req->bd_addr);
-
-  if (!is_consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
-    log::warn("Discard security request");
+static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool consent) {
+  if (!consent && pairing_cb.state == BT_BOND_STATE_BONDING) {
+    log::warn("Discard security request from {}", p_ble_req->bd_addr);
     return;
   }
+  log::verbose("addr:{} consent={}", p_ble_req->bd_addr, consent);
 
   /* Remote name update */
+  int dev_type;
   if (!btif_get_device_type(p_ble_req->bd_addr, &dev_type)) {
     dev_type = BT_DEVICE_TYPE_BLE;
   }
@@ -4124,9 +4110,11 @@ static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool is_cons
     btm_set_bond_type_dev(p_ble_req->bd_addr, pairing_cb.bond_type);
   }
 
-  BTM_LogHistory(kBtmLogTagCallback, bd_addr, "SSP ble request", "BT_SSP_VARIANT_CONSENT");
+  BTM_LogHistory(kBtmLogTagCallback, bd_addr, "SSP ble request",
+                 consent ? "BT_SSP_VARIANT_CONSENT" : "BT_SSP_VARIANT_PARTICIPATION");
 
-  GetInterfaceToProfiles()->events->invoke_ssp_request_cb(bd_addr, BT_SSP_VARIANT_CONSENT, 0);
+  GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
+          bd_addr, consent ? BT_SSP_VARIANT_CONSENT : BT_SSP_VARIANT_PARTICIPATION, 0);
 }
 
 /*******************************************************************************

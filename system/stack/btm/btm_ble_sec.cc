@@ -387,18 +387,18 @@ void BTM_BleSecureConnectionOobDataReply(const RawAddress& bd_addr, uint8_t* p_c
  *                  and returns the appropriate action that needs to be
  *                  taken to achieve the required security.
  *
- * Parameter        is_originator - True if outgoing connection
+ * Parameter        outgoing: True if outgoing connection
  *                  bdaddr: remote device address
  *                  security_required: Security required for the service.
  *
  * Returns          The appropriate security action required.
  *
  ******************************************************************************/
-static tBTM_SEC_ACTION btm_ble_determine_security_act(bool is_originator, const RawAddress& bdaddr,
+static tBTM_SEC_ACTION btm_ble_determine_security_act(bool outgoing, const RawAddress& bdaddr,
                                                       uint16_t security_required) {
   tBTM_LE_AUTH_REQ auth_req = 0x00;
 
-  if (is_originator) {
+  if (outgoing) {
     if ((security_required & BTM_SEC_OUT_FLAGS) == 0 &&
         (security_required & BTM_SEC_OUT_MITM) == 0) {
       log::info("No security required for outgoing connection");
@@ -464,17 +464,17 @@ static tBTM_SEC_ACTION btm_ble_determine_security_act(bool is_originator, const 
  *
  * Parameter        bdaddr: remote device address.
  *                  psm : PSM of the LE COC service.
- *                  is_originator: true if outgoing connection.
+ *                  outgoing: true if outgoing connection.
  *                  p_callback : Pointer to the callback function.
  *                  p_ref_data : Pointer to be returned along with the callback.
  *
  * Returns          Returns  - tBTM_STATUS
  *
  ******************************************************************************/
-tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, bool is_originator,
+tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, bool outgoing,
                                     tBTM_SEC_CALLBACK* p_callback, void* p_ref_data) {
   /* Find the service record for the PSM */
-  tBTM_SEC_SERV_REC* p_serv_rec = btm_sec_cb.find_first_serv_rec(is_originator, psm);
+  tBTM_SEC_SERV_REC* p_serv_rec = btm_sec_cb.find_first_serv_rec(outgoing, psm);
 
   /* If there is no application registered with this PSM do not allow connection
    */
@@ -489,7 +489,7 @@ tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, boo
   bool is_authenticated = BTM_IsAuthenticated(bd_addr, BT_TRANSPORT_LE);
   bool is_bonded = BTM_IsBonded(bd_addr, BT_TRANSPORT_LE);
 
-  if (!is_originator) {
+  if (!outgoing) {
     if (!com_android_bluetooth_flags_donot_mandate_auth_along_with_encryption()) {
       if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
         log::error("BTM_NOT_ENCRYPTED. service security_flags=0x{:x}", p_serv_rec->security_flags);
@@ -515,7 +515,7 @@ tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, boo
   }
 
   tBTM_SEC_ACTION sec_act =
-          btm_ble_determine_security_act(is_originator, bd_addr, p_serv_rec->security_flags);
+          btm_ble_determine_security_act(outgoing, bd_addr, p_serv_rec->security_flags);
 
   tBTM_BLE_SEC_ACT ble_sec_act = BTM_BLE_SEC_NONE;
 
@@ -764,7 +764,7 @@ void btm_ble_update_sec_key_size(const RawAddress& bd_addr, uint8_t enc_key_size
 
   p_rec = btm_find_dev(bd_addr);
   if (p_rec != NULL) {
-    p_rec->sec_rec.enc_key_size = enc_key_size;
+    p_rec->sec_rec.le_enc_key_size = enc_key_size;
   }
 }
 
@@ -782,7 +782,7 @@ uint8_t btm_ble_read_sec_key_size(const RawAddress& bd_addr) {
 
   p_rec = btm_find_dev(bd_addr);
   if (p_rec != NULL) {
-    return p_rec->sec_rec.enc_key_size;
+    return p_rec->sec_rec.le_enc_key_size;
   } else {
     return 0;
   }
@@ -1052,8 +1052,8 @@ void btm_ble_link_encrypted(const RawAddress& bd_addr, uint8_t encr_enable) {
 
   log::verbose("p_dev_rec->sec_rec.sec_flags=0x{:x}", p_dev_rec->sec_rec.sec_flags);
 
-  if (encr_enable && p_dev_rec->sec_rec.enc_key_size == 0) {
-    p_dev_rec->sec_rec.enc_key_size = p_dev_rec->sec_rec.ble_keys.key_size;
+  if (encr_enable && p_dev_rec->sec_rec.le_enc_key_size == 0) {
+    p_dev_rec->sec_rec.le_enc_key_size = p_dev_rec->sec_rec.ble_keys.key_size;
   }
 
   p_dev_rec->sec_rec.le_link = tSECURITY_STATE::IDLE;
@@ -1235,7 +1235,7 @@ static tBTM_STATUS btm_ble_io_capabilities_req(tBTM_SEC_DEV_REC* p_dev_rec,
   log::verbose("5:p_data->io_cap={} auth_req:{}", p_data->io_cap, p_data->auth_req);
 
   /* remove MITM protection requirement if IO cap does not allow it */
-  if ((p_data->io_cap == BTM_IO_CAP_NONE) && p_data->oob_data == SMP_OOB_NONE) {
+  if (p_data->io_cap == BtIoCap::NO_INPUT_NO_OUTPUT && p_data->oob_data == SMP_OOB_NONE) {
     p_data->auth_req &= ~BTM_LE_AUTH_REQ_MITM;
   }
 
@@ -1269,7 +1269,7 @@ static tBTM_STATUS btm_ble_br_keys_req(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_LE_IO_R
   tBTM_STATUS callback_rc = tBTM_STATUS::BTM_SUCCESS;
   log::verbose("p_dev_rec->bd_addr:{}", p_dev_rec->bd_addr);
   *p_data = tBTM_LE_IO_REQ{
-          .io_cap = BTM_IO_CAP_UNKNOWN,
+          .io_cap = BtIoCap::IO_CAP_UNKNOWN,
           .oob_data = false,
           .auth_req = BTM_LE_AUTH_REQ_SC_MITM_BOND,
           .max_key_size = BTM_BLE_MAX_KEY_SIZE,
@@ -1420,7 +1420,7 @@ static void btm_ble_user_confirmation_req(const RawAddress& bd_addr, tBTM_SEC_DE
 static void btm_ble_sec_req(const RawAddress& bd_addr, tBTM_SEC_DEV_REC* p_dev_rec,
                             tBTM_LE_EVT_DATA* p_data) {
   if (btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
-    log::warn("Ignoring SMP Security request");
+    log::warn("Already in pairing state, ignoring pairing request from {}", bd_addr);
     return;
   }
   btm_sec_cb.link_spec.addrt.bda = bd_addr;

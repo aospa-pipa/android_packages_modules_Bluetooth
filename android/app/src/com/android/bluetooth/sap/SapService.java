@@ -53,7 +53,7 @@ import android.util.Log;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ConnectableProfile;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.IOException;
@@ -548,6 +548,12 @@ public class SapService extends ConnectableProfile
 
     public static String getRemoteDeviceName() {
         return sRemoteDeviceName;
+    }
+
+    @Override
+    public boolean connect(BluetoothDevice device) {
+        Log.w(TAG, "connect() was called but not implemented");
+        return false;
     }
 
     @Override

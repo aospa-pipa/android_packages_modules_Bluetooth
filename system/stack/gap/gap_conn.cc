@@ -274,6 +274,14 @@ uint16_t GAP_ConnOpen(const char* /* p_serv_name */, uint8_t service_id, bool is
   }
 
   if (transport == BT_TRANSPORT_LE) {
+    if (com::android::bluetooth::flags::lecoc_with_fixed_psm()) {
+      p_ccb->local_coc_cfg.lecoc_fixed_psm_slots = p_cfg->lecoc_fixed_psm_slots;
+      p_ccb->local_coc_cfg.lecoc_assigned_psm = p_cfg->lecoc_assigned_psm;
+    } else {
+      // forcing to initial values
+      p_ccb->local_coc_cfg.lecoc_fixed_psm_slots = 0;
+      p_ccb->local_coc_cfg.lecoc_assigned_psm = false;
+    }
     p_ccb->psm = stack::l2cap::get_interface().L2CA_RegisterLECoc(psm, conn.reg_info, security,
                                                                   p_ccb->local_coc_cfg);
     if (p_ccb->psm == 0) {
@@ -760,21 +768,11 @@ static void gap_connect_ind(const RawAddress& bd_addr, uint16_t l2cap_cid, uint1
 static void gap_checks_con_flags(tGAP_CCB* p_ccb) {
   /* if all the required con_flags are set, report the OPEN event now */
   if ((p_ccb->con_flags & GAP_CCB_FLAGS_CONN_DONE) == GAP_CCB_FLAGS_CONN_DONE) {
-    tGAP_CB_DATA* cb_data_ptr = nullptr;
-    tGAP_CB_DATA cb_data;
-    uint16_t l2cap_remote_cid;
-    if (com_android_bluetooth_flags_bt_socket_api_l2cap_cid() &&
-        stack::l2cap::get_interface().L2CA_GetRemoteChannelId(p_ccb->local_cid,
-                                                              &l2cap_remote_cid)) {
-      cb_data.l2cap_cids.local_cid = p_ccb->local_cid;
-      cb_data.l2cap_cids.remote_cid = l2cap_remote_cid;
-      cb_data_ptr = &cb_data;
-    }
     stack::l2cap::get_interface().L2CA_GetRemoteChannelId(p_ccb->local_cid, &p_ccb->remote_cid);
     stack::l2cap::get_interface().L2CA_GetAclHandle(p_ccb->local_cid, &p_ccb->acl_handle);
     p_ccb->con_state = GAP_CCB_STATE_CONNECTED;
 
-    p_ccb->p_callback(p_ccb->gap_handle, GAP_EVT_CONN_OPENED, cb_data_ptr);
+    p_ccb->p_callback(p_ccb->gap_handle, GAP_EVT_CONN_OPENED, nullptr);
   }
 }
 

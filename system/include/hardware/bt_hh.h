@@ -57,7 +57,7 @@ inline std::string bthh_connection_state_text(const bthh_connection_state_t& sta
 
 __BEGIN_DECLS
 
-typedef enum {
+typedef enum : uint8_t {
   BTHH_OK = 0,
   BTHH_HS_HID_NOT_READY,  /* handshake error : device not ready */
   BTHH_HS_INVALID_RPT_ID, /* handshake error : invalid report ID */
@@ -73,8 +73,38 @@ typedef enum {
   BTHH_ERR_TOD_UNSPT,     /* type of device not supported */
   BTHH_ERR_NO_RES,        /* out of system resources */
   BTHH_ERR_AUTH_FAILED,   /* authentication fail */
-  BTHH_ERR_HDL
+  BTHH_ERR_HDL,
+
+  BTHH_ERR_SEC,
+  BTHH_ERR_SERVICE_CHANGED /* GATT service changed on the peer */
 } bthh_status_t;
+
+__END_DECLS
+
+inline std::string bthh_status_text(const bthh_status_t& status) {
+  switch (status) {
+    CASE_RETURN_TEXT(BTHH_OK);
+    CASE_RETURN_TEXT(BTHH_HS_HID_NOT_READY);
+    CASE_RETURN_TEXT(BTHH_HS_INVALID_RPT_ID);
+    CASE_RETURN_TEXT(BTHH_HS_TRANS_NOT_SPT);
+    CASE_RETURN_TEXT(BTHH_HS_INVALID_PARAM);
+    CASE_RETURN_TEXT(BTHH_HS_ERROR);
+    CASE_RETURN_TEXT(BTHH_ERR);
+    CASE_RETURN_TEXT(BTHH_ERR_SDP);
+    CASE_RETURN_TEXT(BTHH_ERR_PROTO);
+    CASE_RETURN_TEXT(BTHH_ERR_DB_FULL);
+    CASE_RETURN_TEXT(BTHH_ERR_TOD_UNSPT);
+    CASE_RETURN_TEXT(BTHH_ERR_NO_RES);
+    CASE_RETURN_TEXT(BTHH_ERR_AUTH_FAILED);
+    CASE_RETURN_TEXT(BTHH_ERR_HDL);
+    CASE_RETURN_TEXT(BTHH_ERR_SEC);
+    CASE_RETURN_TEXT(BTHH_ERR_SERVICE_CHANGED);
+    default:
+      return std::format("UNKNOWN[{}]", static_cast<int>(status));
+  }
+}
+
+__BEGIN_DECLS
 
 /* Protocol modes */
 typedef enum {
@@ -109,7 +139,8 @@ typedef struct {
  */
 typedef void (*bthh_connection_state_callback)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type,
                                                tBT_TRANSPORT transport,
-                                               bthh_connection_state_t state);
+                                               bthh_connection_state_t state,
+                                               bthh_status_t hh_status);
 
 /** Callback for vitual unplug api.
  *  the status of the vitual unplug
@@ -174,50 +205,49 @@ typedef struct {
   BtStatus (*init)(bthh_callbacks_t* callbacks);
 
   /** connect to hid device */
-  BtStatus (*connect)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
+  BtStatus (*connect)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
 
   /** dis-connect from hid device */
-  BtStatus (*disconnect)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*disconnect)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                          bool reconnect_allowed);
 
   /** Virtual UnPlug (VUP) the specified HID device */
-  BtStatus (*virtual_unplug)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type,
-                             tBT_TRANSPORT transport);
+  BtStatus (*virtual_unplug)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
 
   /** Set the HID device descriptor for the specified HID device. */
-  BtStatus (*set_info)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*set_info)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                        bthh_hid_info_t hid_info);
 
   /** Get the HID proto mode. */
-  BtStatus (*get_protocol)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*get_protocol)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                            bthh_protocol_mode_t protocolMode);
 
   /** Set the HID proto mode. */
-  BtStatus (*set_protocol)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*set_protocol)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                            bthh_protocol_mode_t protocolMode);
 
   /** Get the HID Idle Time */
-  BtStatus (*get_idle_time)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
+  BtStatus (*get_idle_time)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
 
   /** Set the HID Idle Time */
-  BtStatus (*set_idle_time)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*set_idle_time)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                             uint8_t idleTime);
 
   /** Send a GET_REPORT to HID device. */
-  BtStatus (*get_report)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*get_report)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                          bthh_report_type_t reportType, uint8_t reportId, int bufferSize);
 
   /** Send a GET_REPORT_REPLY to HID driver. */
-  BtStatus (*get_report_reply)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type,
+  BtStatus (*get_report_reply)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type,
                                tBT_TRANSPORT transport, bthh_status_t status, char* report,
                                uint16_t size);
 
   /** Send a SET_REPORT to HID device. */
-  BtStatus (*set_report)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*set_report)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                          bthh_report_type_t reportType, char* report);
 
   /** Send data to HID device. */
-  BtStatus (*send_data)(RawAddress* bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+  BtStatus (*send_data)(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
                         char* data);
 
   /** Closes the interface. */
@@ -233,11 +263,23 @@ __END_DECLS
 
 namespace std {
 template <>
-struct formatter<bthh_connection_state_t> : enum_formatter<bthh_connection_state_t> {};
+struct formatter<bthh_connection_state_t> : formatter<std::string> {
+  template <class Context>
+  typename Context::iterator format(const bthh_connection_state_t& state, Context& ctx) const {
+    return std::formatter<std::string>::format(bthh_connection_state_text(state), ctx);
+  }
+};
 template <>
 struct formatter<bthh_protocol_mode_t> : enum_formatter<bthh_protocol_mode_t> {};
 template <>
 struct formatter<bthh_report_type_t> : enum_formatter<bthh_report_type_t> {};
+template <>
+struct formatter<bthh_status_t> : formatter<std::string> {
+  template <class Context>
+  typename Context::iterator format(const bthh_status_t& status, Context& ctx) const {
+    return std::formatter<std::string>::format(bthh_status_text(status), ctx);
+  }
+};
 }  // namespace std
 
 #endif  // __has_include(<bluetooth/log.h>)

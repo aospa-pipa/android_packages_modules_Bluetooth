@@ -165,6 +165,7 @@ public:
   void MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt);
   void BrowseMessageReceived(uint8_t label, std::shared_ptr<BrowsePacket> pkt);
   void VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pkt);
+  void SetRcFeatures(RcFeature feature);
 
   /********************
    * MESSAGE RESPONSES
@@ -347,6 +348,7 @@ private:
 
   bool IsPendingPlay_ = false;
 
+  bool pushed_already = false;
   // Enables AVRCP 1.3 Compatibility mode. This disables any AVRCP 1.4+ features
   // such as browsing and playlists but has the highest chance of working.
   bool avrcp13_compatibility_ = false;
@@ -396,8 +398,12 @@ private:
   // pending interim labels for VolumeChanged notification
   std::set<uint8_t> pending_interim_labels_;
 
+  RcFeature peer_feature_ = RcFeature::RC_FEAT_NONE;
+
   int8_t volume_ = -1;
   std::optional<int8_t> pending_volume_ = {};
+
+  bool pending_track_changed_ = false;
   bool fast_forwarding_ = false;
   bool fast_rewinding_  = false;
 };

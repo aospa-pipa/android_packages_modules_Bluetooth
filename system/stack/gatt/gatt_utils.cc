@@ -33,6 +33,7 @@
 
 #include "hardware/bt_gatt_types.h"
 #include "internal_include/bt_target.h"
+#include "internal_include/stack_config.h"
 #include "main/shim/acl_api.h"
 #include "main/shim/dumpsys.h"
 #include "osi/include/allocator.h"
@@ -51,6 +52,7 @@
 #include "stack/include/btm_sec_api.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/sdp_api.h"
+#include "btif/include/btif_storage.h"
 
 using namespace bluetooth::legacy::stack::sdp;
 using namespace bluetooth;
@@ -171,8 +173,8 @@ void gatt_delete_dev_from_srv_chg_clt_list(const RawAddress& bd_addr) {
  * Returns        None
  *
  ******************************************************************************/
-void gatt_set_srv_chg(void) {
-  log::verbose("");
+void gatt_set_srv_chg(uint16_t start_handle) {
+  log::verbose("start_handle {:#x}", start_handle);
 
   if (fixed_queue_is_empty(gatt_cb.srv_chg_clt_q)) {
     return;
@@ -183,9 +185,10 @@ void gatt_set_srv_chg(void) {
     log::verbose("found a srv_chg clt");
 
     tGATTS_SRV_CHG* p_buf = (tGATTS_SRV_CHG*)list_node(node);
-    if (!p_buf->srv_changed) {
-      log::verbose("set srv_changed to true");
+    if (!p_buf->srv_changed || (start_handle < p_buf->start_handle)) {
       p_buf->srv_changed = true;
+      p_buf->start_handle = start_handle;
+      log::verbose("set srv_changed to true from {:#x}", p_buf->start_handle);
       tGATTS_SRV_CHG_REQ req;
       memcpy(&req.srv_chg, p_buf, sizeof(tGATTS_SRV_CHG));
       if (gatt_cb.cb_info.p_srv_chg_callback) {
@@ -532,6 +535,9 @@ tGATT_TCB* gatt_allocate_tcb_by_bdaddr(const RawAddress& bda, tBT_TRANSPORT tran
     p_tcb->pending_user_mtu_exchange_value = 0;
     p_tcb->conn_ids_waiting_for_mtu_exchange = std::list<tCONN_ID>();
     p_tcb->max_user_mtu = 0;
+    if (stack_config_get_interface()->get_pts_configure_svc_chg_indication()) {
+      p_tcb->svc_chg_cccd = btif_storage_get_svc_chg_cccd(bda);
+    }
     gatt_sr_init_cl_status(*p_tcb);
     gatt_cl_init_sr_status(*p_tcb);
 

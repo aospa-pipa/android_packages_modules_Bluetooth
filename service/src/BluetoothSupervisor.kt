@@ -16,17 +16,26 @@
 
 package com.android.server.bluetooth
 
+import android.bluetooth.IBluetoothManagerCallback
 import android.content.Context
+import android.os.IBinder
 import android.os.Looper
 import android.os.UserHandle
 import com.android.bluetooth.flags.Flags
+import com.android.bluetooth.util.TimeProvider
+import java.io.FileDescriptor
+import java.io.PrintWriter
+
+private const val TAG = "BluetoothSupervisor"
 
 class BluetoothSupervisor(
     context: Context,
     val looper: Looper,
-    bluetoothComponent: BluetoothComponent?,
+    bluetoothComponent: BluetoothComponent,
 ) {
     private val bms: BluetoothManagerService
+    private var mInitialized = false
+    val api: BluetoothManagerServiceApi = Api(BmsProvider())
 
     init {
         val hciInstance =
@@ -36,12 +45,15 @@ class BluetoothSupervisor(
                 "default"
             }
 
-        bms = BluetoothManagerService(context, looper, hciInstance, bluetoothComponent)
-        Log.i("Created BluetoothSupervisor")
-    }
-
-    fun api(): BluetoothManagerServiceApi {
-        return bms.api
+        bms =
+            BluetoothManagerService(
+                context,
+                looper,
+                hciInstance,
+                bluetoothComponent,
+                TimeProvider.systemClock,
+            )
+        Log.i(TAG, "Created BluetoothSupervisor")
     }
 
     fun onBluetoothDisallowed() {
@@ -49,13 +61,21 @@ class BluetoothSupervisor(
         bms.onBluetoothDisallowed()
     }
 
-    fun handleOnBootPhase(userHandle: UserHandle) {
+    fun onUserStarting(userHandle: UserHandle) {
         enforceCorrectThread()
+        if (mInitialized) {
+            Log.i(TAG, "onUserStarting($userHandle) but already initialized")
+            return
+        }
         bms.handleOnBootPhase(userHandle)
+        mInitialized = true
     }
 
     fun onUserSwitching(userHandle: UserHandle) {
         enforceCorrectThread()
+        if (!mInitialized) {
+            throw IllegalStateException("Initialize did not happen")
+        }
         bms.onUserSwitching(userHandle)
     }
 
@@ -64,5 +84,67 @@ class BluetoothSupervisor(
             return
         }
         throw IllegalThreadStateException("Must be called on BluetoothSystemServer looper")
+    }
+
+    private inner class BmsProvider {
+        fun bms(): BluetoothManagerService {
+            enforceCorrectThread()
+            return bms
+        }
+
+        fun multithreadBms() = bms
+    }
+
+    private class Api(private val bmsProvider: BmsProvider) : BluetoothManagerServiceApi {
+        private fun bms() = bmsProvider.bms()
+
+        private fun multithreadBms() = bmsProvider.multithreadBms()
+
+        override fun getState() = multithreadBms().getState()
+
+        override fun waitForState(state: Int) = multithreadBms().waitForState(state)
+
+        override fun registerAdapter(callback: IBluetoothManagerCallback) =
+            bms().registerAdapter(callback)
+
+        override fun unregisterAdapter(callback: IBluetoothManagerCallback) =
+            bms().unregisterAdapter(callback)
+
+        override fun getAddress() = bms().getAddress()
+
+        override fun getName() = bms().getName()
+
+        override fun isBleScanAvailable() = bms().isBleScanAvailable()
+
+        override fun isHearingAidProfileSupported() = bms().isHearingAidProfileSupported()
+
+        override fun enable(reason: Int, packageName: String) = bms().enable(reason, packageName)
+
+        override fun enableBle(packageName: String, token: IBinder) =
+            bms().enableBle(packageName, token)
+
+        override fun enableNoAutoConnect(packageName: String) =
+            bms().enableNoAutoConnect(packageName)
+
+        override fun disable(packageName: String, persist: Boolean) =
+            bms().disable(packageName, persist)
+
+        override fun disableBle(packageName: String, token: IBinder) =
+            bms().disableBle(packageName, token)
+
+        override fun factoryReset() = bms().factoryReset(0)
+
+        override fun setBtHciSnoopLogMode(mode: Int) = bms().setBtHciSnoopLogMode(mode)
+
+        override fun getBtHciSnoopLogMode() = bms().getBtHciSnoopLogMode()
+
+        override fun isAutoOnSupported() = bms().isAutoOnSupported()
+
+        override fun isAutoOnEnabled() = bms().isAutoOnEnabled()
+
+        override fun setAutoOnEnabled(status: Boolean) = bms().setAutoOnEnabled(status)
+
+        override fun dump(fd: FileDescriptor?, writer: PrintWriter?, args: Array<String?>?) =
+            bms().dump(fd, writer, args)
     }
 }

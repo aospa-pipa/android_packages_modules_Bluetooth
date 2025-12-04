@@ -2,35 +2,33 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "leaudio_broadcast_monitor_source_sync_status"
-    is_exported: true
+    name: "leaudio_improve_state_machine_invalid_status"
     namespace: "bluetooth"
-    description: "New APIs to improve broadcast source sync"
-    bug: "307406671"
+    description: "Improve handling state machine internal invalid status"
+    bug: "447120781"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
-    name: "leaudio_broadcast_volume_control_for_connected_devices"
-    is_exported: true
+    name: "leaudio_support_confirm_suspend"
     namespace: "bluetooth"
-    description: "Allow volume control for connected devices"
-    bug: "307408418"
+    description: "Add support for confirm suspend"
+    bug: "446634001"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
-    name: "metadata_api_inactive_audio_device_upon_connection"
-    is_exported: true
+    name: "leaudio_software_bt_request_lock_fix"
     namespace: "bluetooth"
-    description: "API to set device as inactive audio device upon connection"
-    bug: "322387487"
-}
-
-flag {
-    name: "leaudio_multiple_vocs_instances_api"
-    is_exported: true
-    namespace: "bluetooth"
-    description: "Support multiple audio outputs for volume offset"
-    bug: "323156655"
+    description: "Fix minor locking issue"
+    bug: "446619006"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
 
 flag {
@@ -41,23 +39,6 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
-}
-
-flag {
-    name: "le_ase_read_multiple_variable"
-    namespace: "bluetooth"
-    description: "Use GATT read multiple variable length characteristic values"
-    bug: "352085435"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_set_codec_config_preference"
-    namespace: "bluetooth"
-    description: "New apis to set codec config preference"
-    bug: "353909820"
 }
 
 flag {
@@ -318,6 +299,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_always_use_group_size_to_check_audio_config"
+    namespace: "bluetooth"
+    description: "When checking support for audio configuration, take into account all the devices"
+    bug: "441436893"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_intent_broadcast_in_state_machine_cleanup"
     namespace: "bluetooth"
     description: "Broadcast connection changed intent when state machine is cleaned up"
@@ -385,4 +376,48 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "leaudio_fallback_group_selection"
+    namespace: "bluetooth"
+    description: "Allow only local broadcast receiver device to be select as fallback"
+    bug: "445133566"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_add_source_from_peer_device"
+    namespace: "bluetooth"
+    description: "After connected adding broadcast source from the peer device"
+    bug: "447646642"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_cancel_stream_request_when_invalid_group"
+    namespace: "bluetooth"
+    description: "Cancel stream request when active group is invalid"
+    bug: "447083886"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_sink_feature"
+    namespace: "bluetooth"
+    description: "LE Audio Broadcast Sink Feature"
+    bug: "452247122"
+}
+
+flag {
+    name: "core_ipu_support"
+    namespace: "bluetooth"
+    description: "Update CIG/CIS parameter without destroying the group"
+    bug: "450606834"
 }

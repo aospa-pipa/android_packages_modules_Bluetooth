@@ -48,7 +48,6 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.flags.Flags;
-import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +61,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /** Manages distance measurement operations and interacts with Gabeldorsche stack. */
-@VisibleForTesting(visibility = VisibleForTesting.Visibility.PACKAGE)
 public class DistanceMeasurementManager {
     private static final String TAG =
             GattUtil.TAG_PREFIX + DistanceMeasurementManager.class.getSimpleName();
@@ -115,9 +113,11 @@ public class DistanceMeasurementManager {
             mHandler = new Handler(mHandlerThread.getLooper());
         }
 
+        var nativeCallback = new DistanceMeasurementNativeCallback(this);
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new DistanceMeasurementNativeInterface(this));
+                        nativeInterface,
+                        () -> new DistanceMeasurementNativeInterface(nativeCallback));
         mNativeInterface.init();
         mDistanceMeasurementBinder = new DistanceMeasurementBinder(adapterService, this);
         mHasChannelSoundingFeature =
@@ -568,7 +568,7 @@ public class DistanceMeasurementManager {
 
     void onDistanceMeasurementResult(
             String address,
-            int centimeter,
+            double meter,
             int errorCentimeter,
             int azimuthAngle,
             int errorAzimuthAngle,
@@ -584,12 +584,12 @@ public class DistanceMeasurementManager {
         logd(
                 "onDistanceMeasurementResult "
                         + BluetoothUtils.toAnonymizedAddress(address)
-                        + ", centimeter "
-                        + centimeter
+                        + ", meter "
+                        + meter
                         + ", confidenceLevel "
                         + confidenceLevel);
         DistanceMeasurementResult.Builder builder =
-                new DistanceMeasurementResult.Builder(centimeter / 100.0, errorCentimeter / 100.0)
+                new DistanceMeasurementResult.Builder(meter, errorCentimeter / 100.0)
                         .setMeasurementTimestampNanos(elapsedRealtimeNanos);
 
         switch (method) {

@@ -195,7 +195,7 @@ protected:
     btif_hh_cb.devices[0].link_spec.addrt.bda = kDeviceAddress;
     btif_hh_cb.devices[0].link_spec.addrt.type = kDeviceAddrType;
     btif_hh_cb.devices[0].link_spec.transport = kDeviceTransport;
-    btif_hh_cb.devices[0].dev_status = BTHH_CONN_STATE_CONNECTED;
+    btif_hh_cb.devices[0].state = BTHH_CONN_STATE_CONNECTED;
     btif_hh_cb.devices[0].dev_handle = kHhHandle;
   }
 
@@ -210,7 +210,7 @@ TEST_F(BtifHhWithDevice, BTA_HH_GET_RPT_EVT) {
   tBTA_HH data = {
           .hs_data =
                   {
-                          .status = BTA_HH_OK,
+                          .status = BTHH_OK,
                           .handle = kHhHandle,
                           .rsp_data =
                                   {
@@ -258,7 +258,8 @@ protected:
     BtifHhAdapterReady::SetUp();
     bthh_callbacks.connection_state_cb = [](RawAddress* bd_addr, tBLE_ADDR_TYPE /* addr_type */,
                                             tBT_TRANSPORT /* transport */,
-                                            bthh_connection_state_t state) {
+                                            bthh_connection_state_t state,
+                                            bthh_status_t /* hh_status */) {
       connection_state_cb_t connection_state = {
               .raw_address = *bd_addr,
               .state = state,
@@ -270,7 +271,8 @@ protected:
   void TearDown() override {
     bthh_callbacks.connection_state_cb =
             [](RawAddress* /* bd_addr */, tBLE_ADDR_TYPE /* addr_type */,
-               tBT_TRANSPORT /* transport */, bthh_connection_state_t /* state */) {};
+               tBT_TRANSPORT /* transport */, bthh_connection_state_t /* state */,
+               bthh_status_t /* hh_status */) {};
     BtifHhAdapterReady::TearDown();
   }
 };

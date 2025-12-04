@@ -132,8 +132,7 @@
    }
 
    if ((mCallbacksObj = env->NewGlobalRef(env->GetObjectField(obj, sCallbacksField))) == nullptr) {
-     log::error("Failed to allocate Global Ref for VAPS Server Callbacks");
-     return;
+     log::fatal("Failed to allocate Global Ref for VAPS Server Callbacks");
    }
 
    sVapsServerInterface =
@@ -207,17 +206,13 @@
            {"setVaeNameNative", "(Ljava/lang/String;)V", reinterpret_cast<void*>(setVaeNameNative)},
            {"cleanupNative", "()V", reinterpret_cast<void*>(cleanupNative)},
    };
-   const int result = REGISTER_NATIVE_METHODS(
-           env, "com/android/bluetooth/vaps/VapsServerNativeInterface", methods);
+   const char* jniNativeInterfaceClass = "com/android/bluetooth/vaps/VapsServerNativeInterface";
+   const int result = REGISTER_NATIVE_METHODS(env, jniNativeInterfaceClass, methods);
    if (result != 0) {
      return result;
    }
 
-   jclass jniVapsServerNativeInterfaceClass =
-           env->FindClass("com/android/bluetooth/vaps/VapsServerNativeInterface");
-   sCallbacksField = env->GetFieldID(jniVapsServerNativeInterfaceClass, "mVapsServerNativeCallback",
-                                     "Lcom/android/bluetooth/vaps/VapsServerNativeCallback;");
-   env->DeleteLocalRef(jniVapsServerNativeInterfaceClass);
+   sCallbacksField = getNativeCallbackField(env, jniNativeInterfaceClass);
 
    const JNIJavaMethod javaMethods[] = {
            {"onInitialized", "()V", &method_onInitialized},

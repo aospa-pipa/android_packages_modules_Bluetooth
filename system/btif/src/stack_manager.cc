@@ -120,12 +120,7 @@ static bool stack_is_initialized;
 // If running, the stack is fully up and able to bluetooth.
 static bool stack_is_running;
 
-static void event_init_stack(std::promise<void> promise, bluetooth::core::CoreInterface* interface);
-static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
-                                 ProfileStartCallback startProfiles,
-                                 ProfileStopCallback stopProfiles);
-static void event_shut_down_stack(ProfileStopCallback stopProfiles);
-static void event_clean_up_stack(std::promise<void> promise, ProfileStopCallback stopProfiles);
+static void stop_stack(ProfileStopCallback stopProfiles);
 
 static void event_signal_stack_up(void* context);
 static void event_signal_stack_down(void* context);
@@ -138,32 +133,6 @@ bluetooth::core::CoreInterface* GetInterfaceToProfiles() { return interfaceToPro
 // future
 static future_t* hack_future;
 // End unvetted section
-
-// Interface functions
-
-static void init_stack(bluetooth::core::CoreInterface* interface) {
-  // This code is executed on the Java main thread
-  std::promise<void> promise;
-  event_init_stack(std::move(promise), interface);
-}
-
-static void start_up_stack_async(bluetooth::core::CoreInterface* interface,
-                                 ProfileStartCallback startProfiles,
-                                 ProfileStopCallback stopProfiles) {
-  // This code is executed on the Java main thread
-  event_start_up_stack(interface, startProfiles, stopProfiles);
-}
-
-static void shut_down_stack_async(ProfileStopCallback stopProfiles) {
-  // This code is executed on the Java main thread
-  event_shut_down_stack(stopProfiles);
-}
-
-static void clean_up_stack(ProfileStopCallback stopProfiles) {
-  // This code is executed on the Java main thread
-  std::promise<void> promise;
-  event_clean_up_stack(std::move(promise), stopProfiles);
-}
 
 static bool get_stack_is_running() { return stack_is_running; }
 
@@ -226,8 +195,7 @@ static void init_stack_internal(bluetooth::core::CoreInterface* interface) {
 }
 
 // Synchronous function to initialize the stack
-static void event_init_stack(std::promise<void> promise,
-                             bluetooth::core::CoreInterface* interface) {
+static void init_stack(bluetooth::core::CoreInterface* interface) {
   info("is initializing the stack");
 
   if (stack_is_initialized) {
@@ -237,14 +205,11 @@ static void event_init_stack(std::promise<void> promise,
   }
 
   info("finished");
-
-  promise.set_value();
 }
 
 // Synchronous function to start up the stack
-static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
-                                 ProfileStartCallback startProfiles,
-                                 ProfileStopCallback stopProfiles) {
+static void start_stack(bluetooth::core::CoreInterface* interface,
+                        ProfileStartCallback startProfiles, ProfileStopCallback stopProfiles) {
   if (stack_is_running) {
     info("stack already brought up");
     return;
@@ -290,7 +255,7 @@ static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
   if (future_await(local_hack_future) != FUTURE_SUCCESS) {
     error("failed to start up the stack");
     stack_is_running = true;  // So stack shutdown actually happens
-    event_shut_down_stack(stopProfiles);
+    stop_stack(stopProfiles);
     return;
   }
 
@@ -304,7 +269,7 @@ static void event_start_up_stack(bluetooth::core::CoreInterface* interface,
 }
 
 // Synchronous function to shut down the stack
-static void event_shut_down_stack(ProfileStopCallback stopProfiles) {
+static void stop_stack(ProfileStopCallback stopProfiles) {
   if (!stack_is_running) {
     info("stack is already brought down");
     return;
@@ -345,6 +310,7 @@ static void event_shut_down_stack(ProfileStopCallback stopProfiles) {
   l2c_free();
   get_btm_client_interface().lifecycle.btm_ble_free();
 
+  // btm_free() is called in main thread, and is a blocking call.
   do_in_main_thread(base::BindOnce(get_btm_client_interface().lifecycle.btm_free));
 
   hack_future = future_new();
@@ -356,15 +322,15 @@ static void event_shut_down_stack(ProfileStopCallback stopProfiles) {
 static void ensure_stack_is_not_running(ProfileStopCallback stopProfiles) {
   if (stack_is_running) {
     warn("found the stack was still running. Bringing it down now.");
-    event_shut_down_stack(stopProfiles);
+    stop_stack(stopProfiles);
   }
 }
 
 // Synchronous function to clean up the stack
-static void event_clean_up_stack(std::promise<void> promise, ProfileStopCallback stopProfiles) {
+static void clean_up_stack(ProfileStopCallback stopProfiles) {
   if (!stack_is_initialized) {
     info("found the stack already in a clean state");
-    goto cleanup;
+    return;
   }
 
   ensure_stack_is_not_running(stopProfiles);
@@ -391,9 +357,6 @@ static void event_clean_up_stack(std::promise<void> promise, ProfileStopCallback
 
   module_management_stop();
   info("finished");
-
-cleanup:
-  promise.set_value();
 }
 
 static void event_signal_stack_up(void* /* context */) {
@@ -408,8 +371,8 @@ static void event_signal_stack_down(void* /* context */) {
   future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
 }
 
-static const stack_manager_t interface = {init_stack, start_up_stack_async, shut_down_stack_async,
-                                          clean_up_stack, get_stack_is_running};
+static const stack_manager_t interface = {init_stack, start_stack, stop_stack, clean_up_stack,
+                                          get_stack_is_running};
 
 const stack_manager_t* stack_manager_get_interface() { return &interface; }
 

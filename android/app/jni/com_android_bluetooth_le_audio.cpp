@@ -458,8 +458,7 @@ static void initNative(JNIEnv* env, jobject object, jobjectArray codecOffloading
   }
 
   if ((mCallbacksObj = env->NewGlobalRef(object)) == nullptr) {
-    log::error("Failed to allocate Global Ref for LeAudio Callbacks");
-    return;
+    log::fatal("Failed to allocate Global Ref for LeAudio Callbacks");
   }
 
   android_bluetooth_BluetoothLeAudioCodecConfig.clazz = (jclass)env->NewGlobalRef(
@@ -513,15 +512,8 @@ static jboolean connectLeAudioNative(JNIEnv* env, jobject /* object */, jbyteArr
     return JNI_FALSE;
   }
 
-  jbyte* addr = env->GetByteArrayElements(address, nullptr);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress* tmpraw = (RawAddress*)addr;
-  sLeAudioClientInterface->Connect(*tmpraw);
-  env->ReleaseByteArrayElements(address, addr, 0);
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+  sLeAudioClientInterface->Connect(bd_addr);
   return JNI_TRUE;
 }
 
@@ -532,58 +524,34 @@ static jboolean disconnectLeAudioNative(JNIEnv* env, jobject /* object */, jbyte
     return JNI_FALSE;
   }
 
-  jbyte* addr = env->GetByteArrayElements(address, nullptr);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress* tmpraw = (RawAddress*)addr;
-  sLeAudioClientInterface->Disconnect(*tmpraw);
-  env->ReleaseByteArrayElements(address, addr, 0);
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+  sLeAudioClientInterface->Disconnect(bd_addr);
   return JNI_TRUE;
 }
 
 static jboolean setEnableStateNative(JNIEnv* env, jobject /* object */, jbyteArray address,
                                      jboolean enabled) {
   std::shared_lock<std::shared_timed_mutex> lock(interface_mutex);
-  jbyte* addr = env->GetByteArrayElements(address, nullptr);
-
   if (!sLeAudioClientInterface) {
     log::error("Failed to get the Bluetooth LeAudio Interface");
     return JNI_FALSE;
   }
 
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress* tmpraw = (RawAddress*)addr;
-  sLeAudioClientInterface->SetEnableState(*tmpraw, enabled);
-  env->ReleaseByteArrayElements(address, addr, 0);
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+  sLeAudioClientInterface->SetEnableState(bd_addr, enabled);
   return JNI_TRUE;
 }
 
 static jboolean groupAddNodeNative(JNIEnv* env, jobject /* object */, jint group_id,
                                    jbyteArray address) {
   std::shared_lock<std::shared_timed_mutex> lock(interface_mutex);
-  jbyte* addr = env->GetByteArrayElements(address, nullptr);
-
   if (!sLeAudioClientInterface) {
     log::error("Failed to get the Bluetooth LeAudio Interface");
     return JNI_FALSE;
   }
 
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress* tmpraw = (RawAddress*)addr;
-  sLeAudioClientInterface->GroupAddNode(group_id, *tmpraw);
-  env->ReleaseByteArrayElements(address, addr, 0);
-
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+  sLeAudioClientInterface->GroupAddNode(group_id, bd_addr);
   return JNI_TRUE;
 }
 
@@ -595,15 +563,8 @@ static jboolean groupRemoveNodeNative(JNIEnv* env, jobject /* object */, jint gr
     return JNI_FALSE;
   }
 
-  jbyte* addr = env->GetByteArrayElements(address, nullptr);
-  if (!addr) {
-    jniThrowIOException(env, EINVAL);
-    return JNI_FALSE;
-  }
-
-  RawAddress* tmpraw = (RawAddress*)addr;
-  sLeAudioClientInterface->GroupRemoveNode(group_id, *tmpraw);
-  env->ReleaseByteArrayElements(address, addr, 0);
+  RawAddress bd_addr = addressFromJByteArray(env, address);
+  sLeAudioClientInterface->GroupRemoveNode(group_id, bd_addr);
   return JNI_TRUE;
 }
 
@@ -716,15 +677,15 @@ static void setInCallNative(JNIEnv* /* env */, jobject /* object */, jboolean in
   sLeAudioClientInterface->SetInCall(inCall);
 }
 
-static void setUnicastMonitorModeNative(JNIEnv* /* env */, jobject /* object */, jint direction,
-                                        jboolean enable) {
+static void setUnicastMonitorModeNative(JNIEnv* /* env */, jobject /* object */,
+                                        jint local_directions, jboolean enable) {
   std::shared_lock<std::shared_timed_mutex> lock(interface_mutex);
   if (!sLeAudioClientInterface) {
     log::error("Failed to get the Bluetooth LeAudio Interface");
     return;
   }
 
-  sLeAudioClientInterface->SetUnicastMonitorMode(direction, enable);
+  sLeAudioClientInterface->SetUnicastMonitorMode(local_directions, enable);
 }
 
 static void sendAudioProfilePreferencesNative(JNIEnv* /* env */, jobject /* object */, jint groupId,
@@ -1270,8 +1231,7 @@ static void BroadcasterInitNative(JNIEnv* env, jobject object) {
   }
 
   if ((sBroadcasterCallbacksObj = env->NewGlobalRef(object)) == nullptr) {
-    log::error("Failed to allocate Global Ref for LeAudio Broadcaster Callbacks");
-    return;
+    log::fatal("Failed to allocate Global Ref for LeAudio Broadcaster Callbacks");
   }
 
   sLeAudioBroadcasterInterface = (LeAudioBroadcasterInterface*)btInf->get_profile_interface(

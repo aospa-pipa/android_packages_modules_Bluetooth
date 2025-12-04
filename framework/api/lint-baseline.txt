@@ -30,5 +30,110 @@ BroadcastBehavior: android.bluetooth.BluetoothDevice#ACTION_PAIRING_REQUEST:
 BroadcastBehavior: android.bluetooth.BluetoothDevice#ACTION_UUID:
     Field 'ACTION_UUID' is missing @BroadcastBehavior
 
+
+InvalidHideDocTag: /src/out/soong/.temp/sbox/ad262403378504a5437ed5b878f2ed1097234ea1/frameworks/libs/modules-utils/java/android/annotation/Hide.java:
+    Invalid @hide syntax, it is ignored as it must be a block tag
+InvalidHideDocTag: /src/out/soong/.temp/sbox/ad262403378504a5437ed5b878f2ed1097234ea1/out/srcjars/android/bluetooth/IBluetoothDun.java:
+    Invalid @hide syntax, it is ignored as it must be a block tag
+
+
+MissingNullability: android.bluetooth.IBluetoothDun#disconnect(android.bluetooth.BluetoothDevice) parameter #0:
+    Missing nullability on parameter `device` in method `disconnect`
+MissingNullability: android.bluetooth.IBluetoothDun#getConnectedDevices():
+    Missing nullability on method `getConnectedDevices` return
+MissingNullability: android.bluetooth.IBluetoothDun#getConnectionState(android.bluetooth.BluetoothDevice) parameter #0:
+    Missing nullability on parameter `device` in method `getConnectionState`
+MissingNullability: android.bluetooth.IBluetoothDun#getDevicesMatchingConnectionStates(int[]):
+    Missing nullability on method `getDevicesMatchingConnectionStates` return
+MissingNullability: android.bluetooth.IBluetoothDun#getDevicesMatchingConnectionStates(int[]) parameter #0:
+    Missing nullability on parameter `states` in method `getDevicesMatchingConnectionStates`
+MissingNullability: android.bluetooth.IBluetoothDun.Default#asBinder():
+    Missing nullability on method `asBinder` return
+MissingNullability: android.bluetooth.IBluetoothDun.Default#disconnect(android.bluetooth.BluetoothDevice) parameter #0:
+    Missing nullability on parameter `device` in method `disconnect`
+MissingNullability: android.bluetooth.IBluetoothDun.Default#getConnectedDevices():
+    Missing nullability on method `getConnectedDevices` return
+MissingNullability: android.bluetooth.IBluetoothDun.Default#getConnectionState(android.bluetooth.BluetoothDevice) parameter #0:
+    Missing nullability on parameter `device` in method `getConnectionState`
+MissingNullability: android.bluetooth.IBluetoothDun.Default#getDevicesMatchingConnectionStates(int[]):
+    Missing nullability on method `getDevicesMatchingConnectionStates` return
+MissingNullability: android.bluetooth.IBluetoothDun.Default#getDevicesMatchingConnectionStates(int[]) parameter #0:
+    Missing nullability on parameter `states` in method `getDevicesMatchingConnectionStates`
+MissingNullability: android.bluetooth.IBluetoothDun.Stub#asBinder():
+    Missing nullability on method `asBinder` return
+MissingNullability: android.bluetooth.IBluetoothDun.Stub#asInterface(android.os.IBinder):
+    Missing nullability on method `asInterface` return
+MissingNullability: android.bluetooth.IBluetoothDun.Stub#asInterface(android.os.IBinder) parameter #0:
+    Missing nullability on parameter `obj` in method `asInterface`
+MissingNullability: android.bluetooth.IBluetoothDun.Stub#onTransact(int, android.os.Parcel, android.os.Parcel, int) parameter #1:
+    Missing nullability on parameter `data` in method `onTransact`
+MissingNullability: android.bluetooth.IBluetoothDun.Stub#onTransact(int, android.os.Parcel, android.os.Parcel, int) parameter #2:
+    Missing nullability on parameter `reply` in method `onTransact`
+
+
+NotCloseable: android.bluetooth.IBluetoothDun:
+    Classes that release resources (disconnect()) should implement AutoCloseable and CloseGuard: class android.bluetooth.IBluetoothDun
+NotCloseable: android.bluetooth.IBluetoothDun.Default:
+    Classes that release resources (disconnect()) should implement AutoCloseable and CloseGuard: class android.bluetooth.IBluetoothDun.Default
+
+
+RawAidl: android.bluetooth.IBluetoothDun:
+    Raw AIDL interfaces must not be exposed: IBluetoothDun implements IInterface
+RawAidl: android.bluetooth.IBluetoothDun.Stub:
+    Raw AIDL interfaces must not be exposed: Stub extends Binder
+
+
+RethrowRemoteException: android.bluetooth.IBluetoothDun#disconnect(android.bluetooth.BluetoothDevice):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun#getConnectedDevices():
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun#getConnectionState(android.bluetooth.BluetoothDevice):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun#getDevicesMatchingConnectionStates(int[]):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun.Default#disconnect(android.bluetooth.BluetoothDevice):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun.Default#getConnectedDevices():
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun.Default#getConnectionState(android.bluetooth.BluetoothDevice):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun.Default#getDevicesMatchingConnectionStates(int[]):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+RethrowRemoteException: android.bluetooth.IBluetoothDun.Stub#onTransact(int, android.os.Parcel, android.os.Parcel, int):
+    Methods calling system APIs should rethrow `RemoteException` as `RuntimeException` (but do not list it in the throws clause)
+
+
+UnflaggedApi: android.bluetooth.IBluetoothDun:
+    New API must be flagged with @FlaggedApi: class android.bluetooth.IBluetoothDun
+UnflaggedApi: android.bluetooth.IBluetoothDun#disconnect(android.bluetooth.BluetoothDevice):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.disconnect(android.bluetooth.BluetoothDevice)
+UnflaggedApi: android.bluetooth.IBluetoothDun#getConnectedDevices():
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.getConnectedDevices()
+UnflaggedApi: android.bluetooth.IBluetoothDun#getConnectionState(android.bluetooth.BluetoothDevice):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.getConnectionState(android.bluetooth.BluetoothDevice)
+UnflaggedApi: android.bluetooth.IBluetoothDun#getDevicesMatchingConnectionStates(int[]):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.getDevicesMatchingConnectionStates(int[])
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default:
+    New API must be flagged with @FlaggedApi: class android.bluetooth.IBluetoothDun.Default
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default#asBinder():
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Default.asBinder()
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default#disconnect(android.bluetooth.BluetoothDevice):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Default.disconnect(android.bluetooth.BluetoothDevice)
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default#getConnectedDevices():
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Default.getConnectedDevices()
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default#getConnectionState(android.bluetooth.BluetoothDevice):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Default.getConnectionState(android.bluetooth.BluetoothDevice)
+UnflaggedApi: android.bluetooth.IBluetoothDun.Default#getDevicesMatchingConnectionStates(int[]):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Default.getDevicesMatchingConnectionStates(int[])
+UnflaggedApi: android.bluetooth.IBluetoothDun.Stub:
+    New API must be flagged with @FlaggedApi: class android.bluetooth.IBluetoothDun.Stub
+UnflaggedApi: android.bluetooth.IBluetoothDun.Stub#Stub():
+    New API must be flagged with @FlaggedApi: constructor android.bluetooth.IBluetoothDun.Stub()
+UnflaggedApi: android.bluetooth.IBluetoothDun.Stub#asBinder():
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Stub.asBinder()
+UnflaggedApi: android.bluetooth.IBluetoothDun.Stub#asInterface(android.os.IBinder):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Stub.asInterface(android.os.IBinder)
+UnflaggedApi: android.bluetooth.IBluetoothDun.Stub#onTransact(int, android.os.Parcel, android.os.Parcel, int):
+    New API must be flagged with @FlaggedApi: method android.bluetooth.IBluetoothDun.Stub.onTransact(int,android.os.Parcel,android.os.Parcel,int)
 UnflaggedApi: android.bluetooth.le.ScanResult#isDirected():
     New API must be flagged with @FlaggedApi: method android.bluetooth.le.ScanResult.isDirected()

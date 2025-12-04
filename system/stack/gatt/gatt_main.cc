@@ -1086,12 +1086,14 @@ void gatt_add_a_bonded_dev_for_srv_chg(const RawAddress& bda) {
 
   srv_chg_clt.bda = bda;
   srv_chg_clt.srv_changed = false;
+  srv_chg_clt.start_handle = 0xFFFF;
   if (!gatt_add_srv_chg_clt(&srv_chg_clt)) {
     return;
   }
 
   req.srv_chg.bda = bda;
   req.srv_chg.srv_changed = false;
+  req.srv_chg.start_handle = 0xFFFF;
   if (gatt_cb.cb_info.p_srv_chg_callback) {
     (*gatt_cb.cb_info.p_srv_chg_callback)(GATTS_SRV_CHG_CMD_ADD_CLIENT, &req, NULL);
   }
@@ -1099,7 +1101,7 @@ void gatt_add_a_bonded_dev_for_srv_chg(const RawAddress& bda) {
 
 /** This function is called to send a service changed indication to the
  * specified bd address */
-void gatt_send_srv_chg_ind(const RawAddress& peer_bda) {
+void gatt_send_srv_chg_ind(const RawAddress& peer_bda, uint16_t start_handle) {
   static const uint16_t sGATT_DEFAULT_START_HANDLE = (uint16_t)osi_property_get_int32(
           "bluetooth.gatt.default_start_handle_for_srvc_change.value", GATT_GATT_START_HANDLE);
   static const uint16_t sGATT_LAST_HANDLE = (uint16_t)osi_property_get_int32(
@@ -1119,7 +1121,12 @@ void gatt_send_srv_chg_ind(const RawAddress& peer_bda) {
 
   uint8_t handle_range[GATT_SIZE_OF_SRV_CHG_HNDL_RANGE];
   uint8_t* p = handle_range;
-  UINT16_TO_STREAM(p, sGATT_DEFAULT_START_HANDLE);
+
+  if (com_android_bluetooth_flags_gatt_use_better_start_handle_in_service_changed()) {
+    UINT16_TO_STREAM(p, start_handle);
+  } else {
+    UINT16_TO_STREAM(p, sGATT_DEFAULT_START_HANDLE);
+  }
   UINT16_TO_STREAM(p, sGATT_LAST_HANDLE);
   if (GATTS_HandleValueIndication(conn_id, gatt_cb.handle_of_h_r, GATT_SIZE_OF_SRV_CHG_HNDL_RANGE,
                                   handle_range) != GATT_SUCCESS) {
@@ -1130,15 +1137,23 @@ void gatt_send_srv_chg_ind(const RawAddress& peer_bda) {
 /** Check sending service changed Indication is required or not if required then
  * send the Indication */
 void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt) {
-  log::verbose("srv_changed={}", p_srv_chg_clt->srv_changed);
+  log::verbose("srv_changed={}, start_handle: {:#x}", p_srv_chg_clt->srv_changed,
+               p_srv_chg_clt->start_handle);
 
   if (p_srv_chg_clt->srv_changed) {
     char remote_name[BD_NAME_LEN] = "";
+    if (stack_config_get_interface()->get_pts_configure_svc_chg_indication()) {
+      uint8_t svc_chg_cccd = btif_storage_get_svc_chg_cccd(p_srv_chg_clt->bda);
+      if (svc_chg_cccd != GATT_CHAR_CLIENT_CONFIG_INDICTION) {
+        log::verbose("discard srv chg - CCCD disabled");
+        return;
+      }
+    }
     if (btif_storage_get_stored_remote_name(p_srv_chg_clt->bda, remote_name) &&
         (interop_match_name(INTEROP_GATTC_NO_SERVICE_CHANGED_IND, remote_name))) {
       VLOG(1) << "discard srv chg - interop matched " << remote_name;
     } else {
-      gatt_send_srv_chg_ind(p_srv_chg_clt->bda);
+      gatt_send_srv_chg_ind(p_srv_chg_clt->bda, p_srv_chg_clt->start_handle);
     }
   }
 }
@@ -1180,7 +1195,7 @@ void gatt_init_srv_chg(void) {
 }
 
 /**This function is process the service changed request */
-void gatt_proc_srv_chg(void) {
+void gatt_proc_srv_chg(uint16_t start_handle) {
   RawAddress bda;
   tBT_TRANSPORT transport;
   uint8_t found_idx;
@@ -1191,11 +1206,20 @@ void gatt_proc_srv_chg(void) {
     return;
   }
 
-  gatt_set_srv_chg();
+  gatt_set_srv_chg(start_handle);
   uint8_t start_idx = 0;
   while (gatt_find_the_connected_bda(start_idx, bda, &found_idx, &transport)) {
     tGATT_TCB* p_tcb = &gatt_cb.tcb[found_idx];
-
+    if (stack_config_get_interface()->get_pts_configure_svc_chg_indication()) {
+      if (p_tcb) {
+        // Get the CCCD value from the TCB which was initialized during connection
+        if (p_tcb->svc_chg_cccd != GATT_CHAR_CLIENT_CONFIG_INDICTION) {
+          start_idx = ++found_idx;
+          log::verbose("discard srv chg - CCCD not configured");
+          continue;
+        }
+      }
+    }
     bool send_indication = true;
 
     if (gatt_is_srv_chg_ind_pending(p_tcb)) {
@@ -1213,7 +1237,7 @@ void gatt_proc_srv_chg(void) {
     }
 
     if (send_indication) {
-      gatt_send_srv_chg_ind(bda);
+      gatt_send_srv_chg_ind(bda, start_handle);
     }
 
     start_idx = ++found_idx;

@@ -34,7 +34,7 @@ import android.os.Message;
 import android.util.Log;
 
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.btservice.ProfileService;
+import com.android.bluetooth.profile.ProfileService;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -57,7 +57,6 @@ class A2dpSinkStateMachine extends StateMachine {
     static final int CONNECT_TIMEOUT_MS = 10000;
 
     protected final BluetoothDevice mDevice;
-    protected final byte[] mDeviceAddress;
     protected final A2dpSinkService mService;
     protected final A2dpSinkNativeInterface mNativeInterface;
     protected final Disconnected mDisconnected;
@@ -75,7 +74,6 @@ class A2dpSinkStateMachine extends StateMachine {
             A2dpSinkNativeInterface nativeInterface) {
         super(TAG, looper);
         mDevice = device;
-        mDeviceAddress = Utils.getByteAddress(mDevice);
         mService = service;
         mNativeInterface = nativeInterface;
 
@@ -166,8 +164,10 @@ class A2dpSinkStateMachine extends StateMachine {
                     Log.d(TAG, "[" + mDevice + "] Connect");
                     transitionTo(mConnecting);
                 }
-                // TODO(b/445793206): Use internal APIs instead of framework APIs
-                case CLEANUP -> mService.removeStateMachine(A2dpSinkStateMachine.this);
+                case CLEANUP -> {
+                    mService.removeStateMachine(A2dpSinkStateMachine.this);
+                    Log.d(TAG, "[" + mDevice + "] State machine removed");
+                }
                 default -> {
                     return false;
                 }

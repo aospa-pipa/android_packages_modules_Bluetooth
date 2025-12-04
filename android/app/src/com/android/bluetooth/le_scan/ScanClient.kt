@@ -27,11 +27,11 @@ import kotlin.jvm.optionals.getOrNull
 /** Helper class identifying a client that has requested LE scan results. */
 class ScanClient
 private constructor(
+    val appUid: Int,
     val scannerId: Int,
     var settings: ScanSettings,
     val scanModeApp: Int,
     val filters: List<ScanFilter>,
-    val appUid: Int,
     val userHandle: UserHandle?,
     val isInternalClient: Boolean,
     var started: Boolean = false,
@@ -50,21 +50,13 @@ private constructor(
 ) {
     @JvmOverloads
     constructor(
-        scannerId: Int,
-        settings: ScanSettings,
-        filterList: List<ScanFilter>?,
         appUid: Int,
+        scannerId: Int,
+        settings: ScanSettings = ScanSettings.Builder().build(),
+        filters: List<ScanFilter> = emptyList(),
         userHandle: UserHandle? = null,
         isInternalClient: Boolean = false,
-    ) : this(
-        scannerId,
-        settings,
-        settings.scanMode,
-        filterList ?: emptyList(),
-        appUid,
-        userHandle,
-        isInternalClient,
-    )
+    ) : this(appUid, scannerId, settings, settings.scanMode, filters, userHandle, isInternalClient)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) {
@@ -80,14 +72,11 @@ private constructor(
         return Objects.hash(scannerId)
     }
 
-    override fun toString(): String {
-        val sb = StringBuilder("ScanClient(")
-        sb.append("scannerId=").append(scannerId)
-        sb.append(", scanModeApp=").append(scanModeToString(scanModeApp))
-        sb.append(", scanModeUsed=").append(scanModeToString(settings.scanMode))
-        appScanStats.getOrNull()?.let { stats -> sb.append(", appName=").append(stats.mAppName) }
-        return sb.append(")").toString()
-    }
+    override fun toString() =
+        "ScanClient(" +
+            (appScanStats.getOrNull()?.let { "${it.name}, " } ?: "") +
+            "id=$scannerId, " +
+            "mode[${scanModeToString(scanModeApp)}, used=${scanModeToString(settings.scanMode)}])"
 
     /**
      * Update scan settings with the new scan mode.

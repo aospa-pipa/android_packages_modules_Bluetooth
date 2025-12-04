@@ -55,6 +55,7 @@
 #include "btm_api_types.h"
 #include "btm_ble_api_types.h"
 #include "btm_iso_api.h"
+#include "btm_iso_api_types.h"
 #include "btm_sec_api_types.h"
 #include "embdrv/g722/g722_enc_dec.h"
 #include "gap_api.h"
@@ -82,7 +83,9 @@
 
 namespace bluetooth::asha {
 
-using base::Closure;
+using bluetooth::hci::iso_manager::IsoClientHandle;
+using bluetooth::hci::iso_manager::IsoManagerCallbacks;
+using bluetooth::hci::iso_manager::kInvalidIsoClientHandle;
 using hci::IsoManager;
 
 // The MIN_CE_LEN parameter for Connection Parameters based on the current
@@ -295,10 +298,17 @@ private:
   // connected.
   std::unique_ptr<bluetooth::audio::asrc::SourceAudioHalAsrc> asrc;
 
-public:
-  ~HearingAidImpl() override = default;
+  IsoManagerCallbacks iso_callbacks_;
+  IsoClientHandle iso_client_handle_ = kInvalidIsoClientHandle;
 
-  HearingAidImpl(HearingAidCallbacks* callbacks, Closure initCb)
+public:
+  ~HearingAidImpl() override {
+    if (iso_client_handle_ != kInvalidIsoClientHandle) {
+      IsoManager::GetInstance()->DeregisterCallbacks(iso_client_handle_);
+    }
+  }
+
+  HearingAidImpl(HearingAidCallbacks* callbacks, base::OnceClosure initCb)
       : audio_running(false),
         overwrite_min_ce_len(-1),
         overwrite_max_ce_len(-1),
@@ -324,25 +334,27 @@ public:
 
     BTA_GATTC_AppRegister(
             "asha", hearingaid_gattc_callback,
-            base::Bind(
-                    [](Closure initCb, uint8_t client_id, uint8_t status) {
+            base::BindOnce(
+                    [](base::OnceClosure initCb, uint8_t client_id, uint8_t status) {
                       if (status != GATT_SUCCESS) {
                         log::error("Can't start Hearing Aid profile - no gatt clients left!");
                         return;
                       }
                       instance->gatt_if = client_id;
-                      initCb.Run();
+                      std::move(initCb).Run();
                     },
-                    initCb),
+                    std::move(initCb)),
             false);
 
-    IsoManager::GetInstance()->Start();
-    IsoManager::GetInstance()->RegisterOnIsoTrafficActiveCallback([](bool is_active) {
+    iso_callbacks_.iso_traffic_active_callback = [](bool is_active) {
       if (!instance) {
         return;
       }
       instance->IsoTrafficEventCb(is_active);
-    });
+    };
+
+    IsoManager::GetInstance()->Start();
+    iso_client_handle_ = IsoManager::GetInstance()->RegisterCallbacks(iso_callbacks_);
   }
 
   void IsoTrafficEventCb(bool is_active) {
@@ -1799,10 +1811,10 @@ public:
 
       char eventtime[20];
       char temptime[20];
-      struct tm* tstamp = localtime(&rssi_logs.timestamp.tv_sec);
-      if (!strftime(temptime, sizeof(temptime), "%H:%M:%S", tstamp)) {
-        log::error("strftime fails. tm_sec={}, tm_min={}, tm_hour={}", tstamp->tm_sec,
-                   tstamp->tm_min, tstamp->tm_hour);
+      struct tm tstamp;
+      if (localtime_r(&rssi_logs.timestamp.tv_sec, &tstamp) == nullptr ||
+          !strftime(temptime, sizeof(temptime), "%H:%M:%S", &tstamp)) {
+        log::error("Failed to format time for sec: %ld", (long)rssi_logs.timestamp.tv_sec);
         osi_strlcpy(temptime, "UNKNOWN TIME", sizeof(temptime));
       }
       snprintf(eventtime, sizeof(eventtime), "%s.%03ld", temptime,
@@ -2250,7 +2262,7 @@ HearingAidAudioReceiverImpl audioReceiverImpl;
 
 }  // namespace
 
-void HearingAid::Initialize(HearingAidCallbacks* callbacks, Closure initCb) {
+void HearingAid::Initialize(HearingAidCallbacks* callbacks, base::OnceClosure initCb) {
   std::scoped_lock<std::mutex> lock(instance_mutex);
 
   if (instance) {
@@ -2259,7 +2271,7 @@ void HearingAid::Initialize(HearingAidCallbacks* callbacks, Closure initCb) {
   }
 
   audioReceiver = &audioReceiverImpl;
-  instance = new HearingAidImpl(callbacks, initCb);
+  instance = new HearingAidImpl(callbacks, std::move(initCb));
   HearingAidAudioSource::Initialize();
 }
 

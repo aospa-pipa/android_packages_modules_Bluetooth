@@ -100,7 +100,7 @@ const uint8_t MSFT_FILTER_ENABLE_CMD_DISALLOWED = 0x0C;
 #endif
 
 static void btm_ble_start_scan();
-static void btm_ble_stop_scan();
+static void btm_ble_stop_scan(bool update_scan_filter_policy);
 
 static ::BleScannerInterface* scanner = bluetooth::shim::get_ble_scanner_instance();
 
@@ -284,6 +284,9 @@ static void btm_ble_stop_observe(void);
 static void btm_ble_inquiry_timer_timeout(void* data);
 static void btm_ble_observer_timer_timeout(void* data);
 static DEV_CLASS btm_ble_appearance_to_cod(uint16_t appearance);
+static void btm_ble_msft_adv_mon_enable(bool enable, bool restart_scan);
+static void btm_update_scanner_filter_policy(uint8_t policy);
+static bool use_msft_filtering();
 
 enum : uint8_t {
   BTM_BLE_NOT_SCANNING = 0x00,
@@ -405,12 +408,17 @@ tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration, tBTM_INQ_RESULTS_CB* p_
               (btm_cb.ble_ctr_cb.inq_var.scan_type == BTM_BLE_SCAN_MODE_NONE)
                       ? BTM_BLE_SCAN_MODE_ACTI
                       : btm_cb.ble_ctr_cb.inq_var.scan_type;
+      uint8_t scan_filter_policy = use_msft_filtering() ? SP_ACCEPT_LIST_ONLY : BTM_BLE_DEFAULT_SFP;
       btm_send_hci_set_scan_params(
               btm_cb.ble_ctr_cb.inq_var.scan_type, (uint16_t)ll_scan_interval,
               (uint8_t)ll_scan_window, btm_cb.ble_ctr_cb.inq_var.scan_interval_coded,
               btm_cb.ble_ctr_cb.inq_var.scan_window_coded, (uint16_t)scan_phy,
-              btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, BTM_BLE_DEFAULT_SFP);
-      btm_ble_start_scan();
+              btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, scan_filter_policy);
+      if (use_msft_filtering()) {
+        btm_ble_msft_adv_mon_enable(/*enable=*/true, /*restart_scan=*/true);
+      } else {
+        btm_ble_start_scan();
+      }
     }
 
     btm_cb.neighbor.le_observe = {
@@ -962,55 +970,54 @@ void btm_send_hci_set_scan_params(uint8_t scan_type, uint16_t scan_int_1m, uint1
   }
 }
 
+/* Whether or not to use MSFT-based scan filtering */
+static bool use_msft_filtering() {
+  // We prefer to use APCF-based filtering over MSFT if it's available, so only use MSFT
+  // filtering if APCF is not supported.
+  return !BTM_BleIsFilteringSupported() && scanner->IsMsftSupported();
+}
+
 /* MSFT advertisement enable callback */
-static void msft_adv_mon_enable_cb(bool /* enable */, uint8_t status) {
-  if (status == MSFT_FILTER_ENABLE_SUCCESS) {
+static void msft_adv_mon_enable_cb(bool restart_scan, bool enable, uint8_t status) {
+  if (status == MSFT_FILTER_ENABLE_CMD_DISALLOWED) {
+    log::warn("MSFT: Advertisement monitor is already {}", enable ? "enabled" : "disabled");
     return;
   }
-
-  if (status == MSFT_FILTER_ENABLE_CMD_DISALLOWED) {
-    log::warn("Toggling MSFT advertisement monitor failed because it's already enabled/disabled");
-  } else {
-    log::error("Toggling MSFT advertisement monitor failed with status: {}", status);
+  if (status != MSFT_FILTER_ENABLE_SUCCESS) {
+    log::error("MSFT: {} advertisement monitor failed with status: {}",
+               enable ? "Enabling" : "Disabling", status);
+    return;
   }
+  log::debug("MSFT: Advertisement monitor {}", enable ? "enabled" : "disabled");
+
+  // To retain the correct command sequencing, only re-enable LE scanning now
+  // that we know MSFT filtered scanning has been re-enabled.
+  if (!restart_scan) {
+    return;
+  }
+  log::debug("MSFT: Restarting LE scan");
+  btm_ble_start_scan();
 }
 
 /* Update MSFT-based scan to align with active scan requirements */
-static void btm_ble_update_msft_scan(tBTM_BLE_SCAN_COND_OP action) {
-  if (!com_android_bluetooth_flags_le_scan_msft_support() ||
-      !osi_property_get_bool("bluetooth.core.le.use_msft_hci_ext", false) ||
-      !scanner->IsMsftSupported()) {
+static void btm_ble_msft_adv_mon_enable(bool enable, bool restart_scan) {
+  if (!use_msft_filtering()) {
     return;
   }
 
-  switch (action) {
-    case BTM_BLE_SCAN_COND_ADD:
-      log::debug("Disabling MSFT advertisement monitor");
-      scanner->MsftAdvMonitorEnable(false, base::Bind(msft_adv_mon_enable_cb));
-      break;
-
-    case BTM_BLE_SCAN_COND_DELETE:
-      log::debug("Enabling MSFT advertisement monitor");
-      scanner->MsftAdvMonitorEnable(true, base::Bind(msft_adv_mon_enable_cb));
-      break;
-
-    default:
-      break;
-  }
+  log::debug("MSFT: {} advertisement monitor", enable ? "Enabling" : "Disabling");
+  scanner->MsftAdvMonitorEnable(enable, base::Bind(msft_adv_mon_enable_cb, restart_scan));
 }
 
 /* Scan filter param config event */
 static void btm_ble_scan_filt_param_cfg_evt(uint8_t /* avbl_space */,
-                                            tBTM_BLE_SCAN_COND_OP action_type,
+                                            tBTM_BLE_SCAN_COND_OP /* action_type */,
                                             tBTM_STATUS btm_status) {
   if (btm_status == tBTM_STATUS::BTM_SUCCESS) {
     log::verbose("");
     return;
   }
   log::warn("{}", btm_status_text(btm_status));
-
-  // If APCF-based scan filtering is not supported, try MSFT-based filtering
-  btm_ble_update_msft_scan(action_type);
 }
 
 /*******************************************************************************
@@ -1064,18 +1071,27 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t duration) {
     btm_send_hci_set_scan_params(BTM_BLE_SCAN_MODE_ACTI, scan_interval, scan_window, 0, 0, scan_phy,
                                  btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, SP_ADV_ALL);
     btm_cb.ble_ctr_cb.inq_var.scan_type = BTM_BLE_SCAN_MODE_ACTI;
-    btm_ble_start_scan();
+
+    if (use_msft_filtering()) {
+      btm_ble_msft_adv_mon_enable(/*enable=*/false, /*restart_scan=*/true);
+    } else {
+      btm_ble_start_scan();
+    }
   } else if (!btm_cb.ble_ctr_cb.inq_var.is_1m_phy_configured() ||
              (btm_cb.ble_ctr_cb.inq_var.scan_interval_1m != scan_interval) ||
              (btm_cb.ble_ctr_cb.inq_var.scan_window_1m != scan_window)) {
     log::verbose("restart LE scan with low latency scan params");
-    btm_send_hci_scan_enable(BTM_BLE_SCAN_DISABLE, BTM_BLE_DUPLICATE_ENABLE);
+    btm_ble_stop_scan(/*update_scan_filter_policy=*/false);
     btm_send_hci_set_scan_params(BTM_BLE_SCAN_MODE_ACTI, scan_interval, scan_window,
                                  btm_cb.ble_ctr_cb.inq_var.scan_interval_coded,
                                  btm_cb.ble_ctr_cb.inq_var.scan_window_coded,
                                  btm_cb.ble_ctr_cb.inq_var.scan_phy | scan_phy,
                                  btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, SP_ADV_ALL);
-    btm_send_hci_scan_enable(BTM_BLE_SCAN_ENABLE, BTM_BLE_DUPLICATE_DISABLE);
+    if (use_msft_filtering()) {
+      btm_ble_msft_adv_mon_enable(/*enable=*/false, /*restart_scan=*/true);
+    } else {
+      btm_ble_start_scan();
+    }
   }
 
   btm_cb.btm_inq_vars.inq_active |= BTM_BLE_GENERAL_INQUIRY;
@@ -1959,7 +1975,7 @@ static void btm_update_scanner_filter_policy(tBTM_BLE_SFP scan_policy) {
  * Returns          void
  *
  ******************************************************************************/
-static void btm_ble_stop_scan(void) {
+static void btm_ble_stop_scan(bool update_scan_filter_policy = true) {
   /* Clear the inquiry callback if set */
   btm_cb.ble_ctr_cb.inq_var.scan_type = BTM_BLE_SCAN_MODE_NONE;
 
@@ -1972,7 +1988,13 @@ static void btm_ble_stop_scan(void) {
                       btm_cb.neighbor.le_legacy_scan.results));
   btm_send_hci_scan_enable(BTM_BLE_SCAN_DISABLE, BTM_BLE_DUPLICATE_ENABLE);
 
-  btm_update_scanner_filter_policy(SP_ADV_ALL);
+  if (update_scan_filter_policy) {
+    btm_update_scanner_filter_policy(SP_ADV_ALL);
+  }
+
+  // For simplicity, disable MSFT filtered scan whenever we stop LE scanning.
+  // Defer the decision on whether or not to re-enable it for later.
+  btm_ble_msft_adv_mon_enable(/*enable=*/false, /*restart_scan=*/false);
 }
 /*******************************************************************************
  *
@@ -2006,12 +2028,17 @@ void btm_ble_stop_inquiry(void) {
                                                         btm_cb.ble_ctr_cb.inq_var.scan_window_1m)) {
     log::verbose("Setting scan parameters to values requested previously from ongoing observer");
     btm_ble_stop_scan();
+    uint8_t scan_filter_policy = use_msft_filtering() ? SP_ACCEPT_LIST_ONLY : SP_ADV_ALL;
     btm_send_hci_set_scan_params(
             BTM_BLE_SCAN_MODE_ACTI, btm_cb.ble_ctr_cb.inq_var.scan_interval_1m,
             btm_cb.ble_ctr_cb.inq_var.scan_window_1m, btm_cb.ble_ctr_cb.inq_var.scan_interval_coded,
             btm_cb.ble_ctr_cb.inq_var.scan_window_coded, btm_cb.ble_ctr_cb.inq_var.scan_phy,
-            btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, SP_ADV_ALL);
-    btm_ble_start_scan();
+            btm_cb.ble_ctr_cb.addr_mgnt_cb.own_addr_type, scan_filter_policy);
+    if (use_msft_filtering()) {
+      btm_ble_msft_adv_mon_enable(/*enable=*/true, /*restart_scan=*/true);
+    } else {
+      btm_ble_start_scan();
+    }
   }
 
   /* If we have a callback registered for inquiry complete, call it */

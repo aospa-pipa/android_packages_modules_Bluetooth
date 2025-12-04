@@ -29,7 +29,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
 
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
@@ -68,11 +67,12 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
-import com.android.bluetooth.btservice.ConnectableProfile;
 import com.android.bluetooth.btservice.MetricsLogger;
-import com.android.bluetooth.btservice.ProfileService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfpclient.HeadsetClientStateMachine;
+import com.android.bluetooth.profile.ConnectableProfile;
+import com.android.bluetooth.profile.ProfileService;
+import com.android.bluetooth.storage.BluetoothStorageManager;
 import com.android.bluetooth.telephony.BluetoothInCallService;
 import com.android.internal.annotations.VisibleForTesting;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -82,7 +82,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
@@ -190,28 +189,32 @@ public class HeadsetService extends ConnectableProfile {
     //ConcurrentLinkeQueue is used so that it is threadsafe
      private final ConcurrentLinkedQueue<HeadsetCallState> mDsDaDelayedCallStates =
                              new ConcurrentLinkedQueue<HeadsetCallState>();
-    public HeadsetService(AdapterService adapterService) {
-        this(adapterService, null, null);
+    public HeadsetService(AdapterService adapterService, BluetoothStorageManager storage) {
+        this(adapterService, storage, null, null);
     }
 
     @VisibleForTesting
     HeadsetService(
             AdapterService adapterService,
+            BluetoothStorageManager storage,
             HeadsetNativeInterface nativeInterface,
             HeadsetSystemInterface systemInterface) {
-        this(adapterService, nativeInterface, systemInterface, null);
+        this(adapterService, storage, nativeInterface, systemInterface, null);
     }
 
     @VisibleForTesting
     HeadsetService(
             AdapterService adapterService,
+            BluetoothStorageManager storage,
             HeadsetNativeInterface nativeInterface,
             HeadsetSystemInterface systemInterface,
             Looper looper) {
-        super(BluetoothProfile.HEADSET, requireNonNull(adapterService));
+        super(BluetoothProfile.HEADSET, adapterService, storage);
+        var nativeCallback = new HeadsetNativeCallback(mAdapterService, this);
         mNativeInterface =
                 requireNonNullElseGet(
-                        nativeInterface, () -> new HeadsetNativeInterface(mAdapterService, this));
+                        nativeInterface,
+                        () -> new HeadsetNativeInterface(nativeCallback, mAdapterService));
         if (looper != null) {
             mHandler = new Handler(looper);
             mStateMachinesThread = null;
@@ -307,7 +310,7 @@ public class HeadsetService extends ConnectableProfile {
     }
 
     @Override
-    public IProfileServiceBinder initBinder() {
+    protected IProfileServiceBinder initBinder() {
         return new HeadsetServiceBinder(this);
     }
 
@@ -381,15 +384,6 @@ public class HeadsetService extends ConnectableProfile {
 
         // Step 1: Clear
         setComponentAvailable(HFP_AG_IN_CALL_SERVICE, false);
-    }
-
-    /**
-     * Checks if this service object is able to accept binder calls
-     *
-     * @return True if the object can accept binder calls, False otherwise
-     */
-    public boolean isAlive() {
-        return isAvailable();
     }
 
     /**
@@ -494,6 +488,7 @@ public class HeadsetService extends ConnectableProfile {
                                                     mStateMachinesLooper,
                                                     this,
                                                     mAdapterService,
+                                                    getStorage(),
                                                     mNativeInterface,
                                                     mSystemInterface);
                             mStateMachines.put(stackEvent.device, stateMachine);
@@ -683,6 +678,7 @@ public class HeadsetService extends ConnectableProfile {
                                         mStateMachinesLooper,
                                         this,
                                         mAdapterService,
+                                        getStorage(),
                                         mNativeInterface,
                                         mSystemInterface);
                 mStateMachines.put(device, stateMachine);
@@ -1098,33 +1094,6 @@ public class HeadsetService extends ConnectableProfile {
     @VisibleForTesting
     public boolean getForceScoAudio() {
         return mForceScoAudio;
-    }
-
-    /**
-     * Get first available device for SCO audio
-     *
-     * @return first connected headset device
-     */
-    @VisibleForTesting
-    @Nullable
-    public BluetoothDevice getFirstConnectedAudioDevice() {
-        ArrayList<HeadsetStateMachine> stateMachines = new ArrayList<>();
-        synchronized (mStateMachines) {
-            List<BluetoothDevice> availableDevices =
-                    getDevicesMatchingConnectionStates(CONNECTING_CONNECTED_STATES);
-            for (BluetoothDevice device : availableDevices) {
-                final HeadsetStateMachine stateMachine = mStateMachines.get(device);
-                if (stateMachine == null) {
-                    continue;
-                }
-                stateMachines.add(stateMachine);
-            }
-        }
-        stateMachines.sort(Comparator.comparingLong(HeadsetStateMachine::getConnectingTimestampMs));
-        if (stateMachines.size() > 0) {
-            return stateMachines.get(0).getDevice();
-        }
-        return null;
     }
 
     /**
@@ -2166,9 +2135,8 @@ public class HeadsetService extends ConnectableProfile {
                 Log.d(TAG, "phoneStateChanged: CALL_STATE_IDLE, mActiveDevice is Null");
             } else {
                 BluetoothSinkAudioPolicy currentPolicy = stateMachine.getHfpCallAudioPolicy();
-                if (currentPolicy != null
-                        && currentPolicy.getActiveDevicePolicyAfterConnection()
-                                == BluetoothSinkAudioPolicy.POLICY_NOT_ALLOWED) {
+                if (currentPolicy.getActiveDevicePolicyAfterConnection()
+                        == BluetoothSinkAudioPolicy.POLICY_NOT_ALLOWED) {
                     /*
                      * If the active device was set because of the pick up audio policy and the
                      * connecting policy is NOT_ALLOWED, then after the call is terminated, we must
@@ -2261,9 +2229,8 @@ public class HeadsetService extends ConnectableProfile {
         if (audioConnectableDevices.size() == 1) {
             BluetoothDevice connectedDevice = audioConnectableDevices.get(0);
             BluetoothSinkAudioPolicy callAudioPolicy = getHfpCallAudioPolicy(connectedDevice);
-            if (callAudioPolicy != null
-                    && callAudioPolicy.getInBandRingtonePolicy()
-                            == BluetoothSinkAudioPolicy.POLICY_NOT_ALLOWED) {
+            if (callAudioPolicy.getInBandRingtonePolicy()
+                    == BluetoothSinkAudioPolicy.POLICY_NOT_ALLOWED) {
                 inbandRingtoneAllowedByPolicy = false;
             }
         }
@@ -2866,9 +2833,13 @@ public class HeadsetService extends ConnectableProfile {
 
     /** Retrieves the most recently connected device in the A2DP connected devices list. */
     public BluetoothDevice getFallbackDevice() {
-        BluetoothDevice mostRecentDevice =
-            mDatabaseManager
-                .getMostRecentlyConnectedDevicesInList(getFallbackCandidates());
+        BluetoothDevice mostRecentDevice;
+        if (Flags.mainlineBetaStorage()) {
+            mostRecentDevice = getStorage().getMostRecentlyConnectedDeviceInList(getFallbackCandidates());
+        } else {
+            mostRecentDevice = getDatabaseManager() // Migrating
+                    .getMostRecentlyConnectedDevicesInList(getFallbackCandidates());
+        }
         if (mostRecentDevice != null) {
             return mostRecentDevice.equals(getActiveDevice()) ? null : mostRecentDevice;
         }

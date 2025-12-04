@@ -43,6 +43,7 @@
 #include "osi/include/fixed_queue.h"
 #include "stack/include/bt_hdr.h"
 
+#define GATT_TRANS_ID_INVALID 0x0
 #define GATT_TRANS_ID_MAX 0x0fffffff /* 4 MSB is reserved */
 #define GATT_CL_RCB_MAX 255          /* Maximum number of cl_rcb */
 
@@ -331,6 +332,7 @@ typedef struct {
   uint8_t cl_supp_feat;
   /* Server supported features */
   uint8_t sr_supp_feat;
+  uint8_t svc_chg_cccd;
   /* Use for server. if false, should handle database out of sync. */
   bool is_robust_cache_change_aware;
 
@@ -450,6 +452,7 @@ typedef struct {
 
   tGATT_PROFILE_CLCB profile_clcb[GATT_MAX_APPS];
   uint16_t handle_of_h_r; /* Handle of the handles reused characteristic value */
+  uint16_t handle_svc_chg_cccd;
   uint16_t handle_cl_supported_feat;
   uint16_t handle_sr_supported_feat;
   uint8_t gatt_svr_supported_feat_mask; /* Local supported features as a server */
@@ -523,8 +526,8 @@ void gatt_profile_db_init(void);
 void gatt_set_ch_state(tGATT_TCB* p_tcb, tGATT_CH_STATE ch_state);
 tGATT_CH_STATE gatt_get_ch_state(tGATT_TCB* p_tcb);
 void gatt_init_srv_chg(void);
-void gatt_proc_srv_chg(void);
-void gatt_send_srv_chg_ind(const RawAddress& peer_bda);
+void gatt_proc_srv_chg(uint16_t start_handle);
+void gatt_send_srv_chg_ind(const RawAddress& peer_bda, uint16_t start_handle);
 void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt);
 void gatt_add_a_bonded_dev_for_srv_chg(const RawAddress& bda);
 
@@ -581,7 +584,7 @@ tGATTS_SRV_CHG* gatt_is_bda_in_the_srv_chg_clt_list(const RawAddress& bda);
 
 bool gatt_find_the_connected_bda(uint8_t start_idx, RawAddress& bda, uint8_t* p_found_idx,
                                  tBT_TRANSPORT* p_transport);
-void gatt_set_srv_chg(void);
+void gatt_set_srv_chg(uint16_t start_handle);
 void gatt_delete_dev_from_srv_chg_clt_list(const RawAddress& bd_addr);
 void gatt_add_pending_ind(tGATT_TCB* p_tcb, tGATT_VALUE* p_ind);
 void gatt_free_srvc_db_buffer_app_id(const bluetooth::Uuid& app_id);

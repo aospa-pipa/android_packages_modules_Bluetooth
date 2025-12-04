@@ -48,12 +48,12 @@ class AdvertiseSuspendManager(
         RESUMING, // Enable all paused advertisements.
     }
 
-    class AdvertiserSuspendInfo(var mDuration: Int, var mMaxExtAdvEvents: Int) {
-        var currentlyEnabled: Boolean = false
-        var needEnableOnResume: Boolean = false
+    class AdvertiserSuspendInfo(val duration: Int, val maxExtAdvEvents: Int) {
+        var currentlyEnabled = false
+        var needEnableOnResume = false
         // The number of ongoing start/enable/disable operations for this advertiser.
         // Initially, this advertiser is waiting to be started.
-        var numOfOngoingOperations: Int = 1
+        var numOfOngoingOperations = 1
     }
 
     private var suspendState = SuspendState.NORMAL
@@ -73,13 +73,13 @@ class AdvertiseSuspendManager(
 
     data class StartAdvertisingSetCommand(
         val parameters: AdvertisingSetParameters,
-        val advertiseData: AdvertiseData,
-        val scanResponse: AdvertiseData,
-        val periodicParameters: PeriodicAdvertisingParameters,
-        val periodicData: AdvertiseData,
+        val advertiseData: AdvertiseData?,
+        val scanResponse: AdvertiseData?,
+        val periodicParameters: PeriodicAdvertisingParameters?,
+        val periodicData: AdvertiseData?,
         val duration: Int,
         val maxExtAdvEvents: Int,
-        val gattServerCallback: IBluetoothGattServerCallback,
+        val gattServerCallback: IBluetoothGattServerCallback?,
         val callback: IAdvertisingSetCallback,
         val source: AttributionSource,
     ) : PendingAdvertiseCommand
@@ -96,10 +96,10 @@ class AdvertiseSuspendManager(
         val maxExtAdvEvents: Int,
     ) : PendingAdvertiseCommand
 
-    data class SetAdvertisingDataCommand(val advertiserId: Int, val data: AdvertiseData) :
+    data class SetAdvertisingDataCommand(val advertiserId: Int, val data: AdvertiseData?) :
         PendingAdvertiseCommand
 
-    data class SetScanResponseDataCommand(val advertiserId: Int, val data: AdvertiseData) :
+    data class SetScanResponseDataCommand(val advertiserId: Int, val data: AdvertiseData?) :
         PendingAdvertiseCommand
 
     data class SetAdvertisingParametersCommand(
@@ -109,16 +109,16 @@ class AdvertiseSuspendManager(
 
     data class SetPeriodicAdvertisingParametersCommand(
         val advertiserId: Int,
-        val parameters: PeriodicAdvertisingParameters,
+        val parameters: PeriodicAdvertisingParameters?,
     ) : PendingAdvertiseCommand
 
-    data class SetPeriodicAdvertisingDataCommand(val advertiserId: Int, val data: AdvertiseData) :
+    data class SetPeriodicAdvertisingDataCommand(val advertiserId: Int, val data: AdvertiseData?) :
         PendingAdvertiseCommand
 
     data class SetPeriodicAdvertisingEnableCommand(val advertiserId: Int, val enable: Boolean) :
         PendingAdvertiseCommand
 
-    private fun runPendingCommand(command: PendingAdvertiseCommand) {
+    private fun runPendingCommand(command: PendingAdvertiseCommand) =
         when (command) {
             is StartAdvertisingSetCommand ->
                 advertiseManager.startAdvertisingSet(
@@ -158,7 +158,6 @@ class AdvertiseSuspendManager(
             is SetPeriodicAdvertisingEnableCommand ->
                 advertiseManager.setPeriodicAdvertisingEnable(command.advertiserId, command.enable)
         }
-    }
 
     /** Returns whether advertising commands should be queued, which is true during suspend. */
     fun shouldQueueCommand(): Boolean {
@@ -168,13 +167,13 @@ class AdvertiseSuspendManager(
     /** Queue a Start Advertising Set command (during suspend). */
     fun queueStartAdvertisingSet(
         parameters: AdvertisingSetParameters,
-        advertiseData: AdvertiseData,
-        scanResponse: AdvertiseData,
-        periodicParameters: PeriodicAdvertisingParameters,
-        periodicData: AdvertiseData,
+        advertiseData: AdvertiseData?,
+        scanResponse: AdvertiseData?,
+        periodicParameters: PeriodicAdvertisingParameters?,
+        periodicData: AdvertiseData?,
         duration: Int,
         maxExtAdvEvents: Int,
-        gattServerCallback: IBluetoothGattServerCallback,
+        gattServerCallback: IBluetoothGattServerCallback?,
         callback: IAdvertisingSetCallback,
         source: AttributionSource,
     ) {
@@ -217,12 +216,12 @@ class AdvertiseSuspendManager(
     }
 
     /** Queue a Set Scan Advertising Data command (during suspend). */
-    fun queueSetAdvertisingData(advertiserId: Int, data: AdvertiseData) {
+    fun queueSetAdvertisingData(advertiserId: Int, data: AdvertiseData?) {
         pendingCommands.add(SetAdvertisingDataCommand(advertiserId, data))
     }
 
     /** Queue a Set Scan Response Data command (during suspend). */
-    fun queueSetScanResponseData(advertiserId: Int, data: AdvertiseData) {
+    fun queueSetScanResponseData(advertiserId: Int, data: AdvertiseData?) {
         pendingCommands.add(SetScanResponseDataCommand(advertiserId, data))
     }
 
@@ -234,13 +233,13 @@ class AdvertiseSuspendManager(
     /** Queue a Set Periodic Advertising Parameters command (during suspend). */
     fun queueSetPeriodicAdvertisingParameters(
         advertiserId: Int,
-        parameters: PeriodicAdvertisingParameters,
+        parameters: PeriodicAdvertisingParameters?,
     ) {
         pendingCommands.add(SetPeriodicAdvertisingParametersCommand(advertiserId, parameters))
     }
 
     /** Queue a Set Periodic Advertising Data command (during suspend). */
-    fun queueSetPeriodicAdvertisingData(advertiserId: Int, data: AdvertiseData) {
+    fun queueSetPeriodicAdvertisingData(advertiserId: Int, data: AdvertiseData?) {
         pendingCommands.add(SetPeriodicAdvertisingDataCommand(advertiserId, data))
     }
 
@@ -255,7 +254,7 @@ class AdvertiseSuspendManager(
         duration: Int,
         maxExtAdvEvents: Int,
     ) {
-        // skip the state check when en/disabling advertisement internally.
+        // Skip the state check when en/disabling advertisement internally.
         forceNoQueue = true
         advertiseManager.enableAdvertisingSet(advertiserId, enable, duration, maxExtAdvEvents)
         forceNoQueue = false
@@ -336,8 +335,8 @@ class AdvertiseSuspendManager(
                 enableAdvertisingSet(
                     advertiserId,
                     true,
-                    suspendInfo.mDuration,
-                    suspendInfo.mMaxExtAdvEvents,
+                    suspendInfo.duration,
+                    suspendInfo.maxExtAdvEvents,
                 )
             }
         }
@@ -448,12 +447,7 @@ class AdvertiseSuspendManager(
             } else {
                 Log.w(
                     TAG,
-                    "Unexpected event when resuming: need " +
-                        needEnable +
-                        " was " +
-                        wasEnabled +
-                        " now " +
-                        enable,
+                    "Unexpected event when resuming: need $needEnable was $wasEnabled now $enable",
                 )
             }
 

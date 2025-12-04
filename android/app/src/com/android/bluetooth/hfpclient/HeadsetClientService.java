@@ -46,7 +46,7 @@ import android.util.Log;
 
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.btservice.ConnectableProfile;
+import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -137,7 +137,7 @@ public class HeadsetClientService extends ConnectableProfile {
     }
 
     @Override
-    public IProfileServiceBinder initBinder() {
+    protected IProfileServiceBinder initBinder() {
         return new HeadsetClientServiceBinder(this);
     }
 
@@ -722,10 +722,6 @@ public class HeadsetClientService extends ConnectableProfile {
         msg.arg1 = code;
         sm.sendMessage(msg);
         return true;
-    }
-
-    boolean getLastVoiceTagNumber(BluetoothDevice device) {
-        return false;
     }
 
     List<HfpClientCall> getCurrentCalls(BluetoothDevice device) {

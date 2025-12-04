@@ -572,8 +572,20 @@ void Device::HandleGetCapabilities(uint8_t label,
   }
 }
 
+void Device::SetRcFeatures(RcFeature feature) {
+  log::info("feature={}", static_cast<std::underlying_type_t<RcFeature>>(feature));
+  peer_feature_ = feature;
+}
+
 void Device::HandleNotification(uint8_t label,
                                 const std::shared_ptr<RegisterNotificationRequest>& pkt) {
+  if (pkt->GetLength() == 0) {
+    log::error("invalid param length");
+    auto response =
+            RejectBuilder::MakeBuilder((CommandPdu)pkt->GetCommandPdu(), Status::INTERNAL_ERROR);
+    send_message(label, false, std::move(response));
+    return;
+  }
   if (!pkt->IsValid()) {
     log::warn("{}: Request packet is not valid", address_);
     auto response = RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::INVALID_PARAMETER);
@@ -892,6 +904,12 @@ void Device::TrackChangedNotificationResponse(uint8_t label, bool interim, std::
 
   auto response = RegisterNotificationResponseBuilder::MakeTrackChangedBuilder(interim, uid);
   send_message_cb_.Run(label, false, std::move(response));
+
+  // Send pending track changed Changed notification
+  if (interim && pending_track_changed_) {
+    log::warn("{}: Sending pending TrackChange notification", address_);
+    HandleTrackUpdate();
+  }
 }
 
 void Device::PlaybackStatusNotificationResponse(uint8_t label, bool interim, PlayStatus status) {
@@ -927,29 +945,20 @@ void Device::PlaybackStatusNotificationResponse(uint8_t label, bool interim, Pla
     return;
   }
 
-  log::verbose("last_play_status_.state: {}", last_play_status_.state);
+  log::verbose("last playstate: {}, new playstate: {}, interim: {}", last_play_status_.state,
+               state_to_send, interim);
+
+  // If the state has changed after the last changed event and before the interim, send the last
+  // state as interim and the new state as changed.
   if (interim && last_play_status_.state != state_to_send &&
       (last_play_status_.state == PlayState::PAUSED ||
        last_play_status_.state == PlayState::PLAYING)) {
-    log::verbose("playback Status has changed from last playstatus response");
-    auto lastresponse =
-       RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
-         interim, last_play_status_.state);
+    log::verbose("Sending interim with last state and changed with new state");
+    auto lastresponse = RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
+            interim, last_play_status_.state);
     send_message_cb_.Run(label, false, std::move(lastresponse));
-
-    last_play_status_.state = state_to_send;
-
-    log::verbose("Send new playback Status CHANGED");
-    auto newresponse =
-        RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
-            false, IsActive() ? state_to_send : PlayState::PAUSED);
-    send_message_cb_.Run(label, false, std::move(newresponse));
-
-    active_labels_.erase(label);
-    play_status_changed_ = Notification(false, 0);
-    return;
+    interim = false;
   }
-
   last_play_status_.state = state_to_send;
 
   auto response = RegisterNotificationResponseBuilder::MakePlaybackStatusBuilder(
@@ -1066,7 +1075,8 @@ void Device::GetPlayStatusResponse(uint8_t label, PlayStatus status) {
     status.state = PlayState::REV_SEEK;
   }
   auto response = GetPlayStatusResponseBuilder::MakeBuilder(
-          status.duration, status.position, IsActive() ? status.state : PlayState::PAUSED);
+          status.duration, status.position, (IsActive() &&
+          bluetooth::headset::IsCallIdle()) ? status.state : PlayState::PAUSED);
   send_message(label, false, std::move(response));
 }
 
@@ -1252,9 +1262,15 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
         return;
       }
 
+      if((pass_through_packet->GetOperationId() == uint8_t(OperationID::PLAY) &&
+          pass_through_packet->GetKeyState() == KeyState::PUSHED)) {
+          log::warn("Play push received");
+          pushed_already = true;
+      }
       // TODO (apanicke): Use an enum for media key ID's
       if (pass_through_packet->GetOperationId() == uint8_t(OperationID::PLAY) &&
-          pass_through_packet->GetKeyState() == KeyState::PUSHED) {
+          (pass_through_packet->GetKeyState() == KeyState::PUSHED ||
+          (!pushed_already && pass_through_packet->GetKeyState() == KeyState::RELEASED))) {
         fast_forwarding_ = false;
         fast_rewinding_ = false;
         // We need to get the play status since we need to know
@@ -2066,9 +2082,11 @@ void Device::HandleTrackUpdate() {
   log::verbose("");
   if (!track_changed_.first) {
     log::warn("Device is not registered for track changed updates");
+    pending_track_changed_ = true;
     return;
   }
 
+  pending_track_changed_ = false;
   media_interface_->GetNowPlayingList(base::Bind(&Device::TrackChangedNotificationResponse,
                                                  weak_ptr_factory_.GetWeakPtr(),
                                                  track_changed_.second, false));
@@ -2260,6 +2278,8 @@ void Device::DeviceDisconnected() {
   // to reset the local volume var to be sure we send the correct value
   // to the remote device on the next connection.
   volume_ = VOL_NOT_SUPPORTED;
+
+  pending_track_changed_ = false;
   fast_forwarding_ = false;
   fast_rewinding_ = false;
 }

@@ -39,6 +39,7 @@
 namespace bluetooth {
 namespace common {
 
+tBlockedThreads MessageLoopThread::blocked_threads_;
 static constexpr int kRealTimeFifoSchedulingPriority = 1;
 
 static base::TimeDelta timeDeltaFromMicroseconds(std::chrono::microseconds t) {
@@ -71,6 +72,9 @@ MessageLoopThread::MessageLoopThread(const std::string& thread_name,
 MessageLoopThread::~MessageLoopThread() { ShutDown(); }
 
 void MessageLoopThread::StartUp() {
+  std::promise<void> start_up_promise;
+  std::future<void> start_up_future = start_up_promise.get_future();
+
   if (com_android_bluetooth_flags_replace_message_loop_thread_with_gd_handler()) {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
     if (handler_thread_ != nullptr) {
@@ -78,15 +82,10 @@ void MessageLoopThread::StartUp() {
       return;
     }
 
-    handler_thread_ = new os::Thread(thread_name_, handler_thread_priority_);
+    handler_thread_ =
+            new os::Thread(thread_name_, handler_thread_priority_, std::move(start_up_promise));
     handler_ = new os::Handler(handler_thread_);
-    log::info("MessageLoopThread {} started", thread_name_);
-    return;
-  }
-
-  std::promise<void> start_up_promise;
-  std::future<void> start_up_future = start_up_promise.get_future();
-  {
+  } else {
     std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
     if (thread_ != nullptr) {
       log::warn("thread {} is already started", *this);
@@ -95,7 +94,9 @@ void MessageLoopThread::StartUp() {
     }
     thread_ = new std::thread(&MessageLoopThread::RunThread, this, std::move(start_up_promise));
   }
+
   start_up_future.wait();
+  log::info("MessageLoopThread {} started", thread_name_);
 }
 
 bool MessageLoopThread::DoInThread(base::OnceClosure task) {
@@ -140,30 +141,38 @@ bool MessageLoopThread::DoInThreadDelayed(base::OnceClosure task, std::chrono::m
 
 void MessageLoopThread::ShutDown() {
   if (com_android_bluetooth_flags_replace_message_loop_thread_with_gd_handler()) {
-    std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
-    if (handler_ == nullptr) {  // or (handler_thread_ == nullptr)
-      log::error("handler is already stopped for thread {}", *this);
-      return;
+    std::future<void> future;
+    {
+      std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
+      if (handler_ == nullptr) {  // or (handler_thread_ == nullptr)
+        log::error("handler is already stopped for thread {}", *this);
+        return;
+      }
+
+      /**
+       * Waiting for the handler to be idle.
+       * This replicates RunLoop::QuitWhenIdle() functionality.
+       */
+      future = handler_->NotifyWhenIdle();
     }
 
-    /**
-     * Waiting for the handler to be idle.
-     * This replicates RunLoop::QuitWhenIdle() functionality.
-     */
-    auto future = handler_->NotifyWhenIdle();
+    // Let this thread finish with `api_mutex_` released.
     log::assert_that(future.wait_for(kHandlerStopTimeout) == std::future_status::ready,
                      "assert failed: Thread {} is not idle after waiting for {} ms",
                      handler_thread_->GetThreadName(), kHandlerStopTimeout.count());
-    handler_->Clear();
-    handler_->WaitUntilStopped(
-            kHandlerStopTimeout);  // this should be quick as the handler is already synchronized.
-    delete handler_;
-    delete handler_thread_;
-    // The destructor of os::Thread will stop and join the thread.
+    {
+      std::lock_guard<std::recursive_mutex> api_lock(api_mutex_);
+      handler_->Clear();
+      handler_->WaitUntilStopped(
+              kHandlerStopTimeout);  // this should be quick as the handler is already synchronized.
+      delete handler_;
+      delete handler_thread_;
+      // The destructor of os::Thread will stop and join the thread.
 
-    handler_ = nullptr;
-    handler_thread_ = nullptr;
-    return;
+      handler_ = nullptr;
+      handler_thread_ = nullptr;
+      return;
+    }
   }
 
   {
@@ -214,7 +223,7 @@ base::PlatformThreadId MessageLoopThread::GetThreadId() const {
 
 bool MessageLoopThread::IsRunningOnSameThread() const {
   if (com_android_bluetooth_flags_replace_message_loop_thread_with_gd_handler()) {
-    return handler_thread_->IsSameThread();
+    return handler_thread_ != nullptr && handler_thread_->IsSameThread();
   }
 
   return thread_id_ == base::PlatformThread::CurrentId();
@@ -272,13 +281,7 @@ bool MessageLoopThread::EnableRealTimeScheduling() {
   }
 
   if (com_android_bluetooth_flags_replace_message_loop_thread_with_gd_handler()) {
-    // If the handler thread is already having the real time scheduling priority,
-    // then we don't need to do anything, else false.
-    // This is a temp log, should be removed before merging.
-    log::debug(
-            "MessageLoopThread priority: {}, while request priority: REAL_TIME",
-            handler_thread_priority_ == os::Thread::Priority::REAL_TIME ? "REAL_TIME" : "NORMAL");
-    return handler_thread_priority_ == os::Thread::Priority::REAL_TIME;
+    return handler_thread_->GetPriority() == os::Thread::Priority::REAL_TIME;
   }
 
   struct sched_param rt_params = {.sched_priority = kRealTimeFifoSchedulingPriority};
@@ -341,6 +344,14 @@ PostableContext* MessageLoopThread::Postable() {
   }
 
   return this;
+}
+
+pid_t MessageLoopThread::GetLinuxThreadId(MessageLoopThread* context) {
+  if (com::android::bluetooth::flags::replace_message_loop_thread_with_gd_handler()) {
+    return context == nullptr ? static_cast<pid_t>(syscall(SYS_gettid))
+                              : context->handler_thread_->GetLinuxTid();
+  }
+  return context == nullptr ? static_cast<pid_t>(syscall(SYS_gettid)) : context->GetLinuxTid();
 }
 
 }  // namespace common

@@ -80,13 +80,9 @@ import android.os.ResultReceiver;
 
 parcelable BluetoothDevice.BluetoothAddress;
 
-/**
- * System private API for talking with the Bluetooth service.
- *
- * @hide
- */
-interface IBluetooth
-{
+/** Binder method of AdapterService. */
+@JavaPassthrough(annotation="@android.annotation.Hide")
+interface IBluetooth {
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     List<ParcelUuid> getUuids(in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
@@ -167,8 +163,6 @@ interface IBluetooth
 
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
     boolean setPin(in BluetoothDevice device, boolean accept, int len, in byte[] pinCode, in AttributionSource attributionSource);
-    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
-    boolean setPasskey(in BluetoothDevice device, boolean accept, int len, in byte[] passkey, in AttributionSource attributionSource);
     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.BLUETOOTH_PRIVILEGED})")
     boolean setPairingConfirmation(in BluetoothDevice device, boolean accept, in AttributionSource attributionSource);
 

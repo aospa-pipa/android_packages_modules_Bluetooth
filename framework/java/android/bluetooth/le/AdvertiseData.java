@@ -258,8 +258,6 @@ public final class AdvertiseData implements Parcelable {
     public boolean getPublicBroadcastDeviceNameEnc() {
         return mPublicBroadcastDeviceNameEnc;
     }
-
-    /** @hide */
     @Override
     @SuppressWarnings("ArrayHashCode")
     public int hashCode() {
@@ -283,7 +281,6 @@ public final class AdvertiseData implements Parcelable {
                 mPublicBroadcastDeviceNameEnc);
     }
 
-    /** @hide */
     @Override
     public boolean equals(@Nullable Object obj) {
         if (this == obj) {
@@ -332,7 +329,7 @@ public final class AdvertiseData implements Parcelable {
                 + (", mIncludeDeviceName=" + mIncludeDeviceName)
                 + (", mDeviceNameEnc=" + mDeviceNameEnc)
                 + (", mIncludePublicBroadcastDeviceName=" + mIncludePublicBroadcastDeviceName)
-                + mIncludePublicBroadcastDeviceName + ", mPublicBroadcastDeviceName="
+                + (", mPublicBroadcastDeviceName=" + mPublicBroadcastDeviceName)
                 + (", mPublicBroadcastDeviceNameEnc=" + mPublicBroadcastDeviceNameEnc)
                 + "]";
     }

@@ -83,9 +83,36 @@ class ActiveLogs {
     fun dump(writer: PrintWriter) {
         if (activeLogs.isEmpty()) {
             writer.println("Bluetooth never enabled!")
-        } else {
-            writer.println("Enable log:")
-            activeLogs.forEach { writer.println("  $it") }
+            return
+        }
+
+        writer.println("Enable log:")
+
+        val timeColWidth = 18 // "08-30 12:00:00.000"
+        val actionColWidth = 10 // Longest: "DisableBle"
+        val reasonColWidth = 20 // Longest: "RESTORE_USER_SETTING"
+
+        val headerTime = "TIMESTAMP".padEnd(timeColWidth)
+        val headerAction = "ACTION".padEnd(actionColWidth)
+        val headerReason = "REASON".padEnd(reasonColWidth)
+        val headerPackage = "PACKAGE" // Last column doesn't need padding
+
+        writer.println("  $headerTime $headerAction $headerReason $headerPackage")
+
+        val timeSep = "-".repeat(timeColWidth)
+        val actionSep = "-".repeat(actionColWidth)
+        val reasonSep = "-".repeat(reasonColWidth)
+        val packageSep = "-".repeat(30) // A fixed length for the package separator is fine
+
+        writer.println("  $timeSep $actionSep $reasonSep $packageSep")
+
+        activeLogs.forEach { log ->
+            val time = Log.timeToStringWithZone(log.timestamp).padEnd(timeColWidth)
+            val action = (if (log.enable) "Enable" else "Disable") + (if (log.isBle) "Ble" else "")
+            val actionStr = action.padEnd(actionColWidth)
+            val reason = getEnableDisableReasonString(log.reason).padEnd(reasonColWidth)
+
+            writer.println("  $time $actionStr $reason ${log.packageName}")
         }
     }
 
@@ -96,10 +123,10 @@ class ActiveLogs {
 
 @VisibleForTesting
 internal class ActiveLog(
-    private val reason: Int,
-    private val packageName: String,
-    val enable: Boolean,
-    private val isBle: Boolean,
+    internal val reason: Int,
+    internal val packageName: String,
+    internal val enable: Boolean,
+    internal val isBle: Boolean,
 ) {
     val timestamp = System.currentTimeMillis()
 

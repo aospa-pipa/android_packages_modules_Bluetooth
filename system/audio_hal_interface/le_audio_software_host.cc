@@ -234,7 +234,8 @@ void LeAudioClientInterface::Sink::StopSession() {
   log::info("");
 
   if (host::le_audio::LeAudioSinkTransport::instance) {
-    host::le_audio::LeAudioSinkTransport::instance->ClearStartRequestState();
+    host::le_audio::LeAudioSinkTransport::instance->ClearBluetoothRequestState(
+            BluetoothRequest::RESUME);
   }
 
   host::le_audio::LeAudioSinkTransport::stream_started = btle_stream_started_status::IDLE;
@@ -254,25 +255,26 @@ void LeAudioClientInterface::Sink::ConfirmStreamingRequest(bool force) {
   log::info("");
 
   auto instance = host::le_audio::LeAudioSinkTransport::instance;
-  auto start_request_state = instance->GetStartRequestState();
+  auto start_request_state = instance->GetBluetoothRequestState(BluetoothRequest::RESUME);
 
   switch (start_request_state) {
-    case StartRequestState::IDLE:
+    case BluetoothRequestState::IDLE:
       log::warn(", no pending start stream request");
       return;
-    case StartRequestState::PENDING_BEFORE_RESUME:
+    case BluetoothRequestState::PENDING_BEFORE_REQUEST:
       log::info("Response before sending PENDING to audio HAL");
-      instance->SetStartRequestState(StartRequestState::CONFIRMED);
+      instance->SetBluetoothRequestState(BluetoothRequest::RESUME,
+                                         BluetoothRequestState::CONFIRMED);
       lea_data_path_open();
       return;
-    case StartRequestState::PENDING_AFTER_RESUME:
+    case BluetoothRequestState::PENDING_AFTER_REQUEST:
       log::info("Response after sending PENDING to audio HAL");
-      instance->ClearStartRequestState();
+      instance->ClearBluetoothRequestState(BluetoothRequest::RESUME);
       lea_data_path_open();
       host::le_audio::LeAudioSinkTransport::stream_started = btle_stream_started_status::STARTED;
       return;
-    case StartRequestState::CONFIRMED:
-    case StartRequestState::CANCELED:
+    case BluetoothRequestState::CONFIRMED:
+    case BluetoothRequestState::CANCELED:
       log::error("Invalid state, start stream already confirmed");
       return;
   }
@@ -287,23 +289,23 @@ void LeAudioClientInterface::Sink::CancelStreamingRequest() {
   log::info("");
 
   auto instance = host::le_audio::LeAudioSinkTransport::instance;
-  auto start_request_state = instance->GetStartRequestState();
+  auto start_request_state = instance->GetBluetoothRequestState(BluetoothRequest::RESUME);
 
   switch (start_request_state) {
-    case StartRequestState::IDLE:
+    case BluetoothRequestState::IDLE:
       log::warn(", no pending start stream request");
       return;
-    case StartRequestState::PENDING_BEFORE_RESUME:
+    case BluetoothRequestState::PENDING_BEFORE_REQUEST:
       log::info("Response before sending PENDING to audio HAL");
-      instance->SetStartRequestState(StartRequestState::CANCELED);
+      instance->SetBluetoothRequestState(BluetoothRequest::RESUME, BluetoothRequestState::CANCELED);
       return;
-    case StartRequestState::PENDING_AFTER_RESUME:
+    case BluetoothRequestState::PENDING_AFTER_REQUEST:
       log::info("Response after sending PENDING to audio HAL");
-      instance->ClearStartRequestState();
+      instance->ClearBluetoothRequestState(BluetoothRequest::RESUME);
       host::le_audio::LeAudioSinkTransport::stream_started = btle_stream_started_status::CANCELED;
       return;
-    case StartRequestState::CONFIRMED:
-    case StartRequestState::CANCELED:
+    case BluetoothRequestState::CONFIRMED:
+    case BluetoothRequestState::CANCELED:
       log::error("Invalid state, start stream already confirmed");
       break;
   }
@@ -414,7 +416,8 @@ void LeAudioClientInterface::Source::StopSession() {
   log::info("");
 
   if (host::le_audio::LeAudioSourceTransport::instance) {
-    host::le_audio::LeAudioSourceTransport::instance->ClearStartRequestState();
+    host::le_audio::LeAudioSourceTransport::instance->ClearBluetoothRequestState(
+            BluetoothRequest::RESUME);
   }
 
   host::le_audio::LeAudioSourceTransport::stream_started = btle_stream_started_status::IDLE;
@@ -434,25 +437,26 @@ void LeAudioClientInterface::Source::ConfirmStreamingRequest(bool force) {
   log::info("");
 
   auto instance = host::le_audio::LeAudioSourceTransport::instance;
-  auto start_request_state = instance->GetStartRequestState();
+  auto start_request_state = instance->GetBluetoothRequestState(BluetoothRequest::RESUME);
 
   switch (start_request_state) {
-    case StartRequestState::IDLE:
+    case BluetoothRequestState::IDLE:
       log::warn(", no pending start stream request");
       return;
-    case StartRequestState::PENDING_BEFORE_RESUME:
+    case BluetoothRequestState::PENDING_BEFORE_REQUEST:
       log::info("Response before sending PENDING to audio HAL");
-      instance->SetStartRequestState(StartRequestState::CONFIRMED);
+      instance->SetBluetoothRequestState(BluetoothRequest::RESUME,
+                                         BluetoothRequestState::CONFIRMED);
       lea_data_path_open();
       return;
-    case StartRequestState::PENDING_AFTER_RESUME:
+    case BluetoothRequestState::PENDING_AFTER_REQUEST:
       log::info("Response after sending PENDING to audio HAL");
-      instance->ClearStartRequestState();
+      instance->ClearBluetoothRequestState(BluetoothRequest::RESUME);
       lea_data_path_open();
       host::le_audio::LeAudioSourceTransport::stream_started = btle_stream_started_status::STARTED;
       return;
-    case StartRequestState::CONFIRMED:
-    case StartRequestState::CANCELED:
+    case BluetoothRequestState::CONFIRMED:
+    case BluetoothRequestState::CANCELED:
       log::error("Invalid state, start stream already confirmed");
       return;
   }
@@ -467,23 +471,23 @@ void LeAudioClientInterface::Source::CancelStreamingRequest() {
   log::info("");
 
   auto instance = host::le_audio::LeAudioSourceTransport::instance;
-  auto start_request_state = instance->GetStartRequestState();
+  auto start_request_state = instance->GetBluetoothRequestState(BluetoothRequest::RESUME);
 
   switch (start_request_state) {
-    case StartRequestState::IDLE:
+    case BluetoothRequestState::IDLE:
       log::warn(", no pending start stream request");
       return;
-    case StartRequestState::PENDING_BEFORE_RESUME:
+    case BluetoothRequestState::PENDING_BEFORE_REQUEST:
       log::info("Response before sending PENDING to audio HAL");
-      instance->SetStartRequestState(StartRequestState::CANCELED);
+      instance->SetBluetoothRequestState(BluetoothRequest::RESUME, BluetoothRequestState::CANCELED);
       return;
-    case StartRequestState::PENDING_AFTER_RESUME:
+    case BluetoothRequestState::PENDING_AFTER_REQUEST:
       log::info("Response after sending PENDING to audio HAL");
-      instance->ClearStartRequestState();
+      instance->ClearBluetoothRequestState(BluetoothRequest::RESUME);
       host::le_audio::LeAudioSourceTransport::stream_started = btle_stream_started_status::CANCELED;
       return;
-    case StartRequestState::CANCELED:
-    case StartRequestState::CONFIRMED:
+    case BluetoothRequestState::CANCELED:
+    case BluetoothRequestState::CONFIRMED:
       log::error("Invalid state, start stream already confirmed");
       break;
   }

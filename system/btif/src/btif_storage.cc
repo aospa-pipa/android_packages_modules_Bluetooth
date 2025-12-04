@@ -650,7 +650,7 @@ bt_status_t btif_storage_get_adapter_property(bt_property_t* property) {
     for (uint32_t i = 0; i < bonded_devices.num_devices; ++i) {
       bonded_devices_serialized.push_back(bonded_devices.devices[i].ToSerialized());
     }
-    property->len = bonded_devices.num_devices * bonded_devices_serialized.size();
+    property->len = bonded_devices_serialized.size() * sizeof(tBLE_BD_ADDR_SERIALIZED);
     memcpy(property->val, bonded_devices_serialized.data(), property->len);
 
     /* if there are no bonded_devices, then length shall be 0 */
@@ -1494,6 +1494,34 @@ void btif_storage_remove_gatt_cl_db_hash(const RawAddress& bd_addr) {
             }
           },
           bd_addr));
+}
+
+/** Store service changed CCCD value for remote client */
+void btif_storage_set_svc_chg_cccd(const RawAddress& bd_addr, uint8_t cccd) {
+  do_in_jni_thread(Bind([](const RawAddress& bd_addr, uint8_t cccd) {
+       auto bdstr = bd_addr.ToString();
+       btif_config_set_int(bdstr.c_str(), BTIF_STORAGE_KEY_SVC_CHG_CCCD, cccd);
+  },
+  bd_addr, cccd));
+}
+
+/** Get service changed CCCD value for remote client */
+uint8_t btif_storage_get_svc_chg_cccd(const RawAddress& bda) {
+  std::string bda_str = bda.ToString();
+  int cccd = 0;
+  btif_config_get_int(bda_str.c_str(), BTIF_STORAGE_KEY_SVC_CHG_CCCD, &cccd);
+  return cccd;
+}
+
+/** Remove service changed CCCD value for remote client */
+void btif_storage_remove_svc_chg_cccd(const RawAddress& bd_addr) {
+  do_in_jni_thread(Bind([](const RawAddress& bd_addr) {
+    auto bdstr = bd_addr.ToString();
+    if (btif_config_exist(bdstr.c_str(), BTIF_STORAGE_KEY_SVC_CHG_CCCD)) {
+      btif_config_remove(bdstr.c_str(), BTIF_STORAGE_KEY_SVC_CHG_CCCD);
+    }
+  },
+  bd_addr));
 }
 
 std::vector<bluetooth::Uuid> btif_storage_get_services(const RawAddress& bd_addr,

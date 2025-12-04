@@ -459,17 +459,10 @@ void PORT_DlcEstablishInd(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu) {
     (p_port->p_callback)(PORT_EV_CONNECTED, p_port->handle);
   }
 
-  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
-    if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
-        p_port->p_mgmt_callback) {
-      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_IND);
-    }
-  } else {
-    if (p_port->p_mgmt_callback) {
-      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_IND);
-    }
+  if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
+      p_port->p_mgmt_callback) {
+    p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
+    bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_IND);
   }
 
   p_port->state = PORT_CONNECTION_STATE_OPENED;
@@ -514,17 +507,10 @@ void PORT_DlcEstablishCnf(tRFC_MCB* p_mcb, uint8_t dlci, uint16_t mtu, uint16_t 
     (p_port->p_callback)(PORT_EV_CONNECTED, p_port->handle);
   }
 
-  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
-    if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
-        p_port->p_mgmt_callback) {
-      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_CNF);
-    }
-  } else {
-    if (p_port->p_mgmt_callback) {
-      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_CNF);
-    }
+  if (p_port->rfc_cfg_info.data_path != BTSOCK_DATA_PATH_HARDWARE_OFFLOAD &&
+      p_port->p_mgmt_callback) {
+    p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
+    bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_CNF);
   }
 
   p_port->state = PORT_CONNECTION_STATE_OPENED;
@@ -661,12 +647,10 @@ void PORT_ControlInd(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* p_pars) {
                (p_port->peer_ctrl.modem_signal & MODEM_SIGNAL_RI) ? 1 : 0,
                (p_port->peer_ctrl.modem_signal & MODEM_SIGNAL_DCD) ? 1 : 0);
 
-  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
-    if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
-      if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
-        p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-        bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_IND);
-      }
+  if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
+    if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
+      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
+      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_IND);
     }
   }
 }
@@ -708,12 +692,10 @@ void PORT_ControlCnf(tRFC_MCB* p_mcb, uint8_t dlci, tPORT_CTRL* /* p_pars */) {
     (p_port->p_callback)(event, p_port->handle);
   }
 
-  if (com_android_bluetooth_flags_indicate_rfcomm_connection_complete_after_msc()) {
-    if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
-      if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
-        p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
-        bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_CNF);
-      }
+  if (p_port->rfc_cfg_info.data_path == BTSOCK_DATA_PATH_HARDWARE_OFFLOAD) {
+    if (p_port->port_ctrl == PORT_CTRL_SETUP_COMPLETED && p_port->p_mgmt_callback) {
+      p_port->p_mgmt_callback(PORT_SUCCESS, p_port->handle);
+      bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::RFCOMM_CONNECTION_SUCCESS_CNF);
     }
   }
 }

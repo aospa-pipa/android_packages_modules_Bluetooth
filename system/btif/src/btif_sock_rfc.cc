@@ -396,7 +396,7 @@ bt_status_t btsock_rfc_listen(const char* service_name, const Uuid* service_uuid
     return BT_STATUS_NOMEM;
   }
   log::info("Adding listening socket service_name: {} - channel: {}", service_name, channel);
-  BTA_JvGetChannelId(tBTA_JV_CONN_TYPE::RFCOMM, slot->id, channel);
+  BTA_JvGetChannelId(tBTA_JV_CONN_TYPE::RFCOMM, slot->id, channel, 0);
   *sock_fd = slot->app_fd;  // Transfer ownership of fd to caller.
   /*TODO:
    * We are leaking one of the app_fd's - either the listen socket, or the
@@ -598,8 +598,6 @@ static bool send_app_connect_signal(int fd, const RawAddress* addr, int channel,
   cs.status = status;
   cs.max_rx_packet_size = 0;  // not used for RFCOMM
   cs.max_tx_packet_size = 0;  // not used for RFCOMM
-  cs.conn_uuid_lsb = 0;       // not used for RFCOMM
-  cs.conn_uuid_msb = 0;       // not used for RFCOMM
   cs.socket_id = socket_id;
   if (send_fd == INVALID_FD) {
     return sock_send_all(fd, (const uint8_t*)&cs, sizeof(cs)) == sizeof(cs);

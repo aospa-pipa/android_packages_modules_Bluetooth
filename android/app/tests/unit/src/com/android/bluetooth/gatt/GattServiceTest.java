@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
@@ -67,10 +68,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
-import com.android.bluetooth.TestUtils.FakeTimeProvider;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.flags.Flags;
+import com.android.tests.bluetooth.FakeTimeProvider;
 import com.android.tests.bluetooth.MockitoRule;
 
 import org.junit.After;
@@ -106,11 +107,11 @@ public class GattServiceTest {
     @Mock private IBluetoothGattServerCallback mGattServerCallback2;
     @Mock private ContextMap<IBluetoothGattServerCallback> mServerMap;
     @Mock private Set<BluetoothDevice> mReliableQueue;
+    @Mock private GattNativeInterface mNativeInterface;
     @Mock private AdvertiseManagerNativeInterface mAdvertiseManagerNativeInterface;
     @Mock private DistanceMeasurementNativeInterface mDistanceMeasurementNativeInterface;
     @Mock private Resources mResources;
     @Mock private AdapterService mAdapterService;
-    @Mock private GattNativeInterface mNativeInterface;
 
     private GattService mService;
 
@@ -168,6 +169,9 @@ public class GattServiceTest {
         clientApp.id = CLIENT_IF;
         doReturn(clientApp).when(mClientMap).getByCallbackId(mGattCallback);
         doReturn(clientApp).when(mClientMap).getById(CLIENT_IF);
+        doReturn(clientApp, (Object[]) null)
+                .when(mClientMap)
+                .remove(anyInt(), any(ContextMap.RemoveReason.class));
 
         doAnswer(
                         (Answer<Void>)
@@ -235,12 +239,11 @@ public class GattServiceTest {
                         mNativeInterface,
                         mAdvertiseManagerNativeInterface,
                         mDistanceMeasurementNativeInterface,
+                        mClientMap,
+                        mServerMap,
+                        mReliableQueue,
                         mCompanionDeviceManager,
                         mTimeProvider);
-
-        mService.mClientMap = mClientMap;
-        mService.mReliableQueue = mReliableQueue;
-        mService.mServerMap = mServerMap;
 
         mockGetRemoteDevice(mAdapterService, mDevice);
     }
@@ -264,6 +267,9 @@ public class GattServiceTest {
                             mNativeInterface,
                             mAdvertiseManagerNativeInterface,
                             mDistanceMeasurementNativeInterface,
+                            mClientMap,
+                            mServerMap,
+                            mReliableQueue,
                             mCompanionDeviceManager,
                             mTimeProvider);
         }
@@ -375,6 +381,24 @@ public class GattServiceTest {
                 ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         verify(mClientMap).remove(CLIENT_IF, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
         verify(mNativeInterface).gattClientUnregisterApp(CLIENT_IF);
+    }
+
+    @Test
+    public void unregisterClientTwice() {
+        // Simulate simultaneous unregistering from different threads by mocking mClientMap.
+        mService.unregisterClient(
+                mGattCallback,
+                mAttributionSource,
+                ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+        mService.unregisterClient(
+                mGattCallback,
+                mAttributionSource,
+                ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+        verify(mClientMap, atLeastOnce())
+                .remove(CLIENT_IF, ContextMap.RemoveReason.REASON_UNREGISTER_CLIENT);
+
+        // The second call is not propagated to the native stack.
+        verify(mNativeInterface, times(1)).gattClientUnregisterApp(CLIENT_IF);
     }
 
     @Test

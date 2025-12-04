@@ -209,7 +209,7 @@ struct tBTM_SEC_REC {
 
   bool link_key_not_sent;          /* link key notification has not been sent waiting for
                                       name */
-  tBTM_IO_CAP rmt_io_caps;         /* IO capability of the peer device */
+  BtIoCap rmt_io_caps;             /* IO capability of the peer device */
   tBTM_AUTH_REQ rmt_auth_req;      /* the auth_req flag as in the IO caps rsp evt */
   bool new_encryption_key_is_p256; /* Set to true when the newly generated LK
                                    ** is generated from P-256.
@@ -219,7 +219,8 @@ struct tBTM_SEC_REC {
   // BREDR Link Key Info
   LinkKey link_key;      /* Device link key */
   uint8_t link_key_type; /* Type of key used in pairing */
-  uint8_t enc_key_size;  /* current link encryption key size */
+  uint8_t enc_key_size;  /* current link encryption key size for BR/EDR */
+  uint8_t le_enc_key_size;  /* current link encryption key size for LE */
   tBTM_BOND_TYPE bond_type; /* Whether the BR/EDR pairing was persistent or temporary */
 
   // LE Link Key Info
@@ -292,11 +293,12 @@ public:
   std::string ToString() const {
     return std::format(
             "bredr_linkkey_known:{:c},le_linkkey_known:{:c},bond_type:{},bredr_linkkey_type:{},ble_"
-            "enc_key_size:{},bredr_authenticated:{:c},le_authenticated:{:c},16_digit_key_"
-            "authenticated:{:c},bredr_encrypted:{:c},le_encrypted:{:c}",
+            "enc_key_size:{},le_enc_key_size:{},bredr_authenticated:{:c},le_authenticated:{:c},16_"
+            "digit_key_authenticated:{:c},bredr_encrypted:{:c},le_encrypted:{:c}",
             is_link_key_known() ? 'T' : 'F', is_le_link_key_known() ? 'T' : 'F',
             bond_type_text(bond_type), linkkey_type_text(link_key_type), enc_key_size,
-            is_device_authenticated() ? 'T' : 'F', is_le_device_authenticated() ? 'T' : 'F',
+            le_enc_key_size, is_device_authenticated() ? 'T' : 'F',
+            is_le_device_authenticated() ? 'T' : 'F',
             is_le_link_16_digit_key_authenticated() ? 'T' : 'F', is_device_encrypted() ? 'T' : 'F',
             is_le_device_encrypted() ? 'T' : 'F');
   }
@@ -310,7 +312,7 @@ public:
   void set_suggested_tx_octect(uint16_t octets) { suggested_tx_octets = octets; }
 
   uint16_t get_suggested_tx_octets() const { return suggested_tx_octets; }
-  bool IsLocallyInitiated() const { return is_originator; }
+  bool IsLocallyInitiated() const { return outgoing; }
 
   uint16_t get_br_edr_hci_handle() const { return hci_handle; }
   uint16_t get_ble_hci_handle() const { return ble_hci_handle; }
@@ -329,6 +331,8 @@ public:
   bool SupportsSecureConnections() const {
     return HostSupportsSecureConnections() && ControllerSupportsSecureConnections();
   }
+
+  bool IsInitialized() const { return !bd_addr.IsEmpty(); }
 
   std::string ToString() const {
     return std::format(
@@ -375,7 +379,7 @@ public:
   tREMOTE_VERSION_INFO remote_version_info;
 
   bool role_central;  /* true if current mode is central (BLE) */
-  bool is_originator; /* true if device is originating ACL connection */
+  bool outgoing;      /* true if device is originating ACL connection */
   enum class RoleSwitchPending { kNone = 0, kAfterEnc, kAfterCtkd } role_switch_pending;
 
   // BLE connection parameters

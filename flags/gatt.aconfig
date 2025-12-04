@@ -87,3 +87,23 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "gatt_thread"
+    namespace: "bluetooth"
+    description: "Run all gatt functions on a single thread"
+    bug: "449681465"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "gatt_add_cccd_on_service_changed"
+    namespace: "bluetooth"
+    description: "Add CCCD to the service changed"
+    bug: "450918251"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

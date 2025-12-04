@@ -114,7 +114,6 @@ final class AvrcpCoverArtStorage {
             mImages.clear();
             mImageHandles.clear();
         }
-
     }
 
     private void trimToSize() {
@@ -139,7 +138,6 @@ final class AvrcpCoverArtStorage {
      */
     private String getNextImageHandle() {
         synchronized (mHandlesLock) {
-
             /*  Random may retrun duplicate values,
              *  so genearte new value if handle is present with same value
              */

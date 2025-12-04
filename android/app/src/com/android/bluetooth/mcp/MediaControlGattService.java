@@ -52,6 +52,7 @@ import com.android.bluetooth.BluetoothEventLogger;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.le_audio.LeAudioService;
+import com.android.bluetooth.util.Text;
 import com.android.internal.annotations.VisibleForTesting;
 
 import com.google.protobuf.ByteString;
@@ -1263,10 +1264,9 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                             + Request.Opcodes.toString(opcode)
                             + " not supported");
             mHandler.post(
-                    () -> {
-                        setMediaControlRequestResult(
-                                new Request(opcode, 0), Request.Results.OPCODE_NOT_SUPPORTED);
-                    });
+                    () ->
+                            setMediaControlRequestResult(
+                                    new Request(opcode, 0), Request.Results.OPCODE_NOT_SUPPORTED));
             return BluetoothGatt.GATT_SUCCESS;
         }
 
@@ -1981,8 +1981,9 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
     private String getTrackTitleChar() {
         if (isFeatureSupported(ServiceFeature.TRACK_TITLE)) {
             BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.TRACK_TITLE);
-            if (characteristic.getValue() != null) {
-                return characteristic.getStringValue(0);
+            byte[] value = characteristic.getValue();
+            if (value != null && value.length > 0) {
+                return new String(value);
             }
         }
 
@@ -1992,14 +1993,18 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
     @VisibleForTesting
     void updateTrackTitleChar(String title, boolean notify) {
         Log.d(TAG, "updateTrackTitleChar: " + title);
-        if (isFeatureSupported(ServiceFeature.TRACK_TITLE)) {
-            BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.TRACK_TITLE);
-            characteristic.setValue(title);
-            if (notify && isFeatureSupported(ServiceFeature.TRACK_TITLE_NOTIFY)) {
-                notifyCharacteristic(characteristic, null);
-            }
-            mEventLogger.logd(TAG, "updateTrackTitleChar: title= '" + title + "'");
+        if (!isFeatureSupported(ServiceFeature.TRACK_TITLE)) return;
+
+        if (title.getBytes().length > bluetooth.constants.Core.GATT_MAX_ATTR_LEN) {
+            title = Text.truncateUtf8String(title, bluetooth.constants.Core.GATT_MAX_ATTR_LEN);
+            Log.w(TAG, "updateTrackTitleChar, value to long, cutting it to " + title);
         }
+        BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.TRACK_TITLE);
+        characteristic.setValue(title);
+        if (notify && isFeatureSupported(ServiceFeature.TRACK_TITLE_NOTIFY)) {
+            notifyCharacteristic(characteristic, null);
+        }
+        mEventLogger.logd(TAG, "updateTrackTitleChar: title= '" + title + "'");
     }
 
     @VisibleForTesting
@@ -2092,20 +2097,27 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
 
     private void updatePlayerIconUrlChar(String url) {
         Log.d(TAG, "updatePlayerIconUrlChar: " + url);
-        if (isFeatureSupported(ServiceFeature.PLAYER_ICON_URL)) {
-            mCharacteristics.get(CharId.PLAYER_ICON_URL).setValue(url);
-            mEventLogger.logd(TAG, "updatePlayerIconUrlChar: " + url);
+        if (!isFeatureSupported(ServiceFeature.PLAYER_ICON_URL)) return;
+
+        if (url.getBytes().length > bluetooth.constants.Core.GATT_MAX_ATTR_LEN) {
+            url = Text.truncateUtf8String(url, bluetooth.constants.Core.GATT_MAX_ATTR_LEN);
+            Log.w(TAG, "updatePlayerIconUrlChar, value to long, cutting it to " + url);
         }
+        mCharacteristics.get(CharId.PLAYER_ICON_URL).setValue(url);
+        mEventLogger.logd(TAG, "updatePlayerIconUrlChar: " + url);
     }
 
     private String getPlayerNameChar() {
+        // If not support then return null, otherwise return gatt char value or default empty string
         if (!isFeatureSupported(ServiceFeature.PLAYER_NAME)) return null;
 
         BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.PLAYER_NAME);
-        if (characteristic.getValue() != null) {
-            return characteristic.getStringValue(0);
+        byte[] value = characteristic.getValue();
+        if (value != null && value.length > 0) {
+            return new String(value);
         }
-        return null;
+
+        return "";
     }
 
     @VisibleForTesting
@@ -2113,6 +2125,11 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
         Log.d(TAG, "updatePlayerNameChar: " + name);
 
         if (!isFeatureSupported(ServiceFeature.PLAYER_NAME)) return;
+
+        if (name.getBytes().length > bluetooth.constants.Core.GATT_MAX_ATTR_LEN) {
+            name = Text.truncateUtf8String(name, bluetooth.constants.Core.GATT_MAX_ATTR_LEN);
+            Log.w(TAG, "updatePlayerNameChar, value to long, cutting it to " + name);
+        }
 
         BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.PLAYER_NAME);
         characteristic.setValue(name);

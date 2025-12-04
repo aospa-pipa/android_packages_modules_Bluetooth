@@ -26,6 +26,7 @@ import static android.bluetooth.BluetoothUtils.executeFromBinder;
 
 import static java.util.Objects.requireNonNull;
 
+import android.annotation.Hide;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
@@ -87,11 +88,8 @@ public final class BluetoothLeAdvertiser {
     private final AttributionSource mAttributionSource;
     private final Handler mHandler;
 
-    /**
-     * Use BluetoothAdapter.getLeAdvertiser() instead.
-     *
-     * @hide
-     */
+    /** Use BluetoothAdapter.getLeAdvertiser() instead. */
+    @Hide
     public BluetoothLeAdvertiser(BluetoothAdapter bluetoothAdapter) {
         mBluetoothAdapter = requireNonNull(bluetoothAdapter);
         mAttributionSource = mBluetoothAdapter.getAttributionSource();
@@ -544,8 +542,8 @@ public final class BluetoothLeAdvertiser {
      *     Advertising feature is made when it's not supported by the controller, or when
      *     maxExtendedAdvertisingEvents is used on a controller that doesn't support the LE Extended
      *     Advertising
-     * @hide
      */
+    @Hide
     @SystemApi
     @SuppressLint("ExecutorRegistration")
     @RequiresBluetoothAdvertisePermission
@@ -700,11 +698,8 @@ public final class BluetoothLeAdvertiser {
         }
     }
 
-    /**
-     * Cleans up advertisers. Should be called when bluetooth is down.
-     *
-     * @hide
-     */
+    /** Cleans up advertisers. Should be called when bluetooth is down. */
+    @Hide
     @RequiresNoPermission
     public void cleanup() {
         mLegacyAdvertisers.clear();

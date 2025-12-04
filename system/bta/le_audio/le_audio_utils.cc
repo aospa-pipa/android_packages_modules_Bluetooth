@@ -73,7 +73,7 @@ LeAudioContextType AudioContentToLeAudioContext(audio_content_type_t content_typ
     case AUDIO_USAGE_MEDIA:
       return LeAudioContextType::MEDIA;
     case AUDIO_USAGE_ASSISTANT:
-      return LeAudioContextType::VOICEASSISTANTS;
+    /*  return LeAudioContextType::VOICEASSISTANTS;*/
     case AUDIO_USAGE_VOICE_COMMUNICATION:
     case AUDIO_USAGE_CALL_ASSISTANT:
       return LeAudioContextType::CONVERSATIONAL;
@@ -164,7 +164,8 @@ AudioContexts GetAudioContextsFromSinkMetadata(
        * This will handle also a case when the device is
        * AUDIO_SOURCE_VOICE_RECOGNITION
        */
-      track_context = LeAudioContextType::VOICEASSISTANTS;
+     /* track_context = LeAudioContextType::VOICEASSISTANTS;*/
+      track_context = LeAudioContextType::CONVERSATIONAL;
       log::warn(
               "Could not match the recording track type to group available "
               "context. Using context {}.",
@@ -420,9 +421,11 @@ types::LeAudioConfigurationStrategy GetStrategyForAseConfig(
     return types::LeAudioConfigurationStrategy::STEREO_ONE_CIS_PER_DEVICE;
   }
 
-  // We need at least 2 ASEs in the group config to set up more than one device
-  if (cfgs.size() == 1) {
-    return types::LeAudioConfigurationStrategy::RFU;
+  if (!com_android_bluetooth_flags_leaudio_always_use_group_size_to_check_audio_config()) {
+    // We need at least 2 ASEs in the group config to set up more than one device
+    if (cfgs.size() == 1) {
+      return types::LeAudioConfigurationStrategy::RFU;
+    }
   }
 
   log::debug("Strategy set to one channel per device topology ");

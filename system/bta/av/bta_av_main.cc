@@ -573,13 +573,13 @@ static void bta_av_api_register(tBTA_AV_DATA* p_data) {
 
     if (profile_initialized == UUID_SERVCLASS_AUDIO_SOURCE) {
       avdtp_stream_config.tsep = AVDT_TSEP_SRC;
-      codec_index_min = BTAV_A2DP_CODEC_INDEX_SOURCE_MIN;
-      codec_index_max = BTAV_A2DP_CODEC_INDEX_SOURCE_EXT_MIN;
+      codec_index_min = BTAV_A2DP_CODEC_INDEX_SOURCE_EXT_MIN;
+      codec_index_max = BTAV_A2DP_CODEC_INDEX_SOURCE_EXT_MAX;
     } else if (profile_initialized == UUID_SERVCLASS_AUDIO_SINK) {
       avdtp_stream_config.tsep = AVDT_TSEP_SNK;
       avdtp_stream_config.p_sink_data_cback = bta_av_sink_data_cback;
       codec_index_min = BTAV_A2DP_CODEC_INDEX_SINK_MIN;
-      codec_index_max = BTAV_A2DP_CODEC_INDEX_SINK_MAX;
+      codec_index_max = BTAV_A2DP_CODEC_INDEX_SINK_EXT_MAX;
     }
 
     if (btif_av_src_sink_coexist_enabled()) {

@@ -49,7 +49,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -97,6 +96,7 @@ import com.android.bluetooth.hearingaid.HearingAidService;
 import com.android.bluetooth.hfp.HeadsetService;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.mcp.McpService;
+import com.android.bluetooth.storage.BluetoothStorageManager;
 import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.vc.VolumeControlService;
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
@@ -124,7 +124,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.Set;
 
 /** Test cases for {@link LeAudioService}. */
 @MediumTest
@@ -138,6 +138,7 @@ public class LeAudioServiceTest {
     @Mock private ActiveDeviceManager mActiveDeviceManager;
     @Mock private AudioManager mAudioManager;
     @Mock private DatabaseManager mDatabaseManager;
+    @Mock private BluetoothStorageManager mStorage;
     @Mock private LeAudioNativeInterface mNativeInterface;
     @Mock private LeAudioBroadcasterNativeInterface mLeAudioBroadcasterNativeInterface;
     @Mock private LeAudioTmapGattServer mTmapGattServer;
@@ -327,20 +328,13 @@ public class LeAudioServiceTest {
         doReturn(Optional.of(mVolumeControlService))
                 .when(mAdapterService)
                 .getVolumeControlService();
-        doCallRealMethod().when(mVolumeControlService).syncPost(any());
-        doAnswer(
-                        inv -> {
-                            return ((Function<VolumeControlService, ?>) inv.getArgument(0))
-                                    .apply(mVolumeControlService);
-                        })
-                .when(mVolumeControlService)
-                .syncPost(any(), any());
 
         mLooper = new TestLooper();
 
         mService =
                 new LeAudioService(
                         mAdapterService,
+                        mStorage,
                         mLooper.getLooper(),
                         mNativeInterface,
                         mLeAudioBroadcasterNativeInterface);
@@ -420,6 +414,7 @@ public class LeAudioServiceTest {
         int mask =
                 new LeAudioService(
                                 mAdapterService,
+                                mStorage,
                                 mLooper.getLooper(),
                                 mNativeInterface,
                                 mLeAudioBroadcasterNativeInterface)
@@ -1782,6 +1777,22 @@ public class LeAudioServiceTest {
                 TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_ACTIVE);
         sendEventAndVerifyIntentForGroupStatusChanged(
                 TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_INACTIVE);
+    }
+
+    @Test
+    public void testMessageFromNativeGroupStatusChanged_autonomousInactive() {
+        connectTestDevice(mSingleDevice, TEST_GROUP_ID);
+        injectAudioConfChanged(
+                mSingleDevice,
+                TEST_GROUP_ID,
+                BluetoothLeAudio.CONTEXT_TYPE_MEDIA | BluetoothLeAudio.CONTEXT_TYPE_CONVERSATIONAL,
+                3);
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_ACTIVE);
+
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_AUTONOMOUS_INACTIVE);
+        verify(mBassClientService)
+                .notifyLeAudioGroupAutonomousInactivated(
+                        eq(mService.getConnectedGroupLeadDevice(TEST_GROUP_ID)));
     }
 
     private void sendEventAndVerifyGroupStreamStatusChanged(int groupId, int groupStreamStatus) {
@@ -3536,6 +3547,44 @@ public class LeAudioServiceTest {
         groupStatusChangedEvent.valueInt2 = LeAudioStackEvent.GROUP_STATUS_INACTIVE;
         mService.messageFromNative(groupStatusChangedEvent);
         mLooper.dispatchAll();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_FALLBACK_GROUP_SELECTION)
+    public void testSelectDefaultBroadcastToUnicastFallbackGroupWhenFlagEnabled() {
+        List<BluetoothDevice> mostRecentDevices = new ArrayList<>();
+        mostRecentDevices.add(mLeftDevice);
+        mostRecentDevices.add(mRightDevice);
+        doReturn(mostRecentDevices).when(mDatabaseManager).getMostRecentlyConnectedDevices();
+
+        // Prepare: List of broadcast receivers containing only the newer device.
+        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
+        broadcastReceivers.add(mRightDevice);
+        broadcastReceivers.add(mSingleDevice);
+
+        // Connect devices to groups and create descriptors.
+        int groupIdLeft = 1;
+        int groupIdRight = 2;
+        int groupIdSingle = 3;
+        connectTestDevice(mLeftDevice, groupIdLeft);
+        connectTestDevice(mRightDevice, groupIdRight);
+        connectTestDevice(mSingleDevice, groupIdSingle);
+
+        // Invoke the new group selection function.
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+
+        // Verification: Although mLeftDevice is in the "mostRecent" list, it is not a receiver,
+        // so the selected group is from mRightDevice, which is the oldest connection among the
+        // receivers.
+        assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(groupIdRight);
+
+        // Change the list of receivers to contain only the oldest device.
+        broadcastReceivers.clear();
+        broadcastReceivers.add(mLeftDevice);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+
+        // Verification: Now the selected group is from mLeftDevice.
+        assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(groupIdLeft);
     }
 
     @Test
