@@ -111,6 +111,8 @@ public:
   static const BluetoothAudioHalVersion VERSION_AIDL_V2;
   static const BluetoothAudioHalVersion VERSION_AIDL_V3;
   static const BluetoothAudioHalVersion VERSION_AIDL_V4;
+  static const BluetoothAudioHalVersion VERSION_AIDL_V5;
+  static const BluetoothAudioHalVersion VERSION_AIDL_V6;
   static const BluetoothAudioHalVersion VERSION_QTI_HIDL_2_0;
   static const BluetoothAudioHalVersion VERSION_QTI_HIDL_2_1;
 
