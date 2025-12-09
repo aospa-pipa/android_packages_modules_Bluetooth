@@ -116,8 +116,8 @@ public class HeadsetPhoneState {
         mSubscriptionManager.removeOnSubscriptionsChangedListener(mOnSubscriptionsChangedListener);
         synchronized (mDeviceEventMap) {
             mDeviceEventMap.clear();
-            stopListenForPhoneState();
         }
+        stopListenForPhoneState();
     }
 
     @Override
