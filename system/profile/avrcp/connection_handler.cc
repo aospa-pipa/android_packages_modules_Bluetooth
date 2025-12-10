@@ -62,7 +62,7 @@ ConnectionHandler* ConnectionHandler::Get() {
   return instance_;
 }
 
-static bool IsAbsoluteVolumeEnabled(const RawAddress* bdaddr) {
+static bool IsAbsoluteVolumeEnabled(RawAddress bdaddr) {
   char volume_disabled[PROPERTY_VALUE_MAX] = {0};
   osi_property_get("persist.bluetooth.disableabsvol", volume_disabled, "false");
   if (strncmp(volume_disabled, "true", 4) == 0) {
@@ -580,7 +580,7 @@ void ConnectionHandler::SdpCb(RawAddress bdaddr, SdpCallback cb, tSDP_DISCOVERY_
           uint16_t categories = sdp_attribute->attr_value.v.u16;
           if (categories & AVRC_SUPF_CT_CAT2) {
             log::verbose("Device {} supports advanced control", bdaddr);
-            if (IsAbsoluteVolumeEnabled(&bdaddr)) {
+            if (IsAbsoluteVolumeEnabled(bdaddr)) {
               peer_features |= (BTA_AV_FEAT_ADV_CTRL);
             }
           }
@@ -626,7 +626,7 @@ void ConnectionHandler::SdpCb(RawAddress bdaddr, SdpCallback cb, tSDP_DISCOVERY_
           uint16_t categories = sdp_attribute->attr_value.v.u16;
           if (categories & AVRC_SUPF_CT_CAT2) {
             log::verbose("Device {} supports advanced control", bdaddr);
-            if (IsAbsoluteVolumeEnabled(&bdaddr)) {
+            if (IsAbsoluteVolumeEnabled(bdaddr)) {
               peer_features |= (BTA_AV_FEAT_ADV_CTRL);
             }
           }

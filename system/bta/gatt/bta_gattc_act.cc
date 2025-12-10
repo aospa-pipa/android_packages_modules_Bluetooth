@@ -751,8 +751,8 @@ void bta_gattc_disc_close(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data
 
 /** when a SRCB start discovery, tell all related clcb and set the state */
 static void bta_gattc_set_discover_st(tBTA_GATTC_SERV* p_srcb) {
-  if (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, &p_srcb->server_bda,
-                                  &btif_storage_get_remote_device_property)) {
+  if (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, p_srcb->server_bda,
+                                  btif_storage_get_remote_device_property)) {
     L2CA_LockBleConnParamsForServiceDiscovery(p_srcb->server_bda, true);
   }
   for (auto& p_clcb : bta_gattc_cb.clcb_set) {
@@ -846,8 +846,8 @@ void bta_gattc_cfg_mtu(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data) {
 
 void bta_gattc_start_discover_internal(tBTA_GATTC_CLCB* p_clcb) {
   if (p_clcb->transport == BT_TRANSPORT_LE) {
-    if (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, &p_clcb->p_srcb->server_bda,
-                                    &btif_storage_get_remote_device_property)) {
+    if (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, p_clcb->p_srcb->server_bda,
+                                    btif_storage_get_remote_device_property)) {
       bluetooth::stack::l2cap::get_interface().L2CA_LockBleConnParamsForServiceDiscovery(
               p_clcb->p_srcb->server_bda, true);
     }
@@ -974,8 +974,8 @@ void bta_gattc_disc_cmpl(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* /* p_da
 
   if (p_clcb->transport == BT_TRANSPORT_LE) {
     if (p_clcb->p_srcb &&
-        (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, &p_clcb->p_srcb->server_bda,
-                                     &btif_storage_get_remote_device_property))) {
+        (!interop_match_addr_or_name(INTEROP_DISABLE_LE_CONN_UPDATES, p_clcb->p_srcb->server_bda,
+                                     btif_storage_get_remote_device_property))) {
       bluetooth::stack::l2cap::get_interface().L2CA_LockBleConnParamsForServiceDiscovery(
               p_clcb->p_srcb->server_bda, false);
     }

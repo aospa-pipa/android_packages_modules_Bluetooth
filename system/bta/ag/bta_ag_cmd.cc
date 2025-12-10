@@ -611,8 +611,8 @@ void bta_ag_send_call_inds(tBTA_AG_SCB* p_scb, tBTA_AG_RES result) {
   size_t callsetup = bta_ag_indicator_by_result_code(result);
 
   bool is_blacklisted =
-          interop_match_addr_or_name(INTEROP_DISABLE_SNIFF_DURING_CALL, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property);
+          interop_match_addr_or_name(INTEROP_DISABLE_SNIFF_DURING_CALL, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property);
   if (result == BTA_AG_END_CALL_RES) {
     call = BTA_AG_CALL_INACTIVE;
   } else if (result == BTA_AG_IN_CALL_CONN_RES || result == BTA_AG_OUT_CALL_CONN_RES ||
@@ -1060,7 +1060,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
           bta_ag_svc_conn_open(p_scb, tBTA_AG_DATA::kEmpty);
         } else {
           if (p_scb->peer_version >= HFP_VERSION_1_7 &&
-              interop_match_addr(INTEROP_SLC_SKIP_BIND_COMMAND, &p_scb->peer_addr)) {
+              interop_match_addr(INTEROP_SLC_SKIP_BIND_COMMAND, p_scb->peer_addr)) {
             alarm_set_on_mloop(p_scb->bind_timer, BTA_AG_BIND_TIMEOUT_MS, bta_ag_bind_timer_cback,
                                p_scb);
           }
@@ -1203,11 +1203,11 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
       p_scb->inband_enabled = p_scb->features & BTA_AG_FEAT_INBAND;
 
       bool is_allowlisted_1_7 =
-          interop_match_addr_or_name(INTEROP_HFP_1_7_ALLOWLIST, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property);
+          interop_match_addr_or_name(INTEROP_HFP_1_7_ALLOWLIST, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property);
       bool is_allowlisted_1_9 =
-          interop_match_addr_or_name(INTEROP_HFP_1_9_ALLOWLIST, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property);
+          interop_match_addr_or_name(INTEROP_HFP_1_9_ALLOWLIST, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property);
       if (p_scb->peer_version == HFP_HSP_VERSION_UNKNOWN ||
           p_scb->peer_version == HFP_VERSION_1_1) {
           if (is_allowlisted_1_7) {
@@ -1236,7 +1236,7 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
       }
 
      if (interop_match_addr_or_name(INTEROP_DISABLE_CODEC_NEGOTIATION,
-          &p_scb->peer_addr, &btif_storage_get_remote_device_property)) {
+          p_scb->peer_addr, btif_storage_get_remote_device_property)) {
           log::verbose("disable codec negotiation, remote for blacklisted device");
           p_scb->masked_features = p_scb->masked_features & ~(BTA_AG_FEAT_CODEC);
           p_scb->peer_features = p_scb->peer_features & ~(BTA_AG_PEER_FEAT_CODEC);
@@ -1244,13 +1244,13 @@ void bta_ag_at_hfp_cback(tBTA_AG_SCB* p_scb, uint16_t cmd, uint8_t arg_type, cha
 
       bluetooth::metrics::LogMetricHfpAgVersion(p_scb->peer_addr, p_scb->peer_version);
 
-      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, &p_scb->peer_addr)) {
+      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, p_scb->peer_addr)) {
         log::verbose("do not send inband ringtone supported for denylisted device");
         p_scb->masked_features = p_scb->masked_features & ~(BTA_AG_FEAT_INBAND);
       }
 
-      if (interop_match_addr_or_name(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property)) {
+      if (interop_match_addr_or_name(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property)) {
         log::verbose("disable codec negotiation, remote for denylist device");
         p_scb->masked_features = p_scb->masked_features & ~(BTA_AG_FEAT_CODEC);
         p_scb->peer_features = p_scb->peer_features & ~(BTA_AG_PEER_FEAT_CODEC);
@@ -1648,7 +1648,7 @@ static void bta_ag_hsp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
       break;
 
     case BTA_AG_INBAND_RING_RES:
-      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, &p_scb->peer_addr)) {
+      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, p_scb->peer_addr)) {
         p_scb->inband_enabled = false;
       } else {
         p_scb->inband_enabled = result.data.state;
@@ -1740,8 +1740,8 @@ static void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
       */
       bta_ag_send_call_inds(p_scb, result.result);
 
-      if (interop_match_addr_or_name(INTEROP_DELAY_SCO_FOR_MT_CALL, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property)) {
+      if (interop_match_addr_or_name(INTEROP_DELAY_SCO_FOR_MT_CALL, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property)) {
         /* Ensure that call active indicator is sent prior to SCO connection
            request by adding some delay. Some remotes are very strict in the
            order of call indicator and SCO connection request. */
@@ -1774,8 +1774,8 @@ static void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
 
     case BTA_AG_OUT_CALL_ORIG_RES:
       bta_ag_send_call_inds(p_scb, result.result);
-      if (interop_match_addr_or_name(INTEROP_DELAY_SCO_FOR_MO_CALL, &p_scb->peer_addr,
-                                     &btif_storage_get_remote_device_property)) {
+      if (interop_match_addr_or_name(INTEROP_DELAY_SCO_FOR_MO_CALL, p_scb->peer_addr,
+                                     btif_storage_get_remote_device_property)) {
         log::verbose("sleeping 50msec before opening sco");
         usleep(50 * 1000);
       }
@@ -1878,7 +1878,7 @@ static void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
       break;
 
     case BTA_AG_INBAND_RING_RES:
-      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, &p_scb->peer_addr)) {
+      if (interop_match_addr(INTEROP_INBAND_RINGTONE_SET_TO_FALSE, p_scb->peer_addr)) {
         p_scb->inband_enabled = false;
       } else {
         p_scb->inband_enabled = result.data.state;

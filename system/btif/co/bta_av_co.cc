@@ -1210,7 +1210,7 @@ void DisableVBRCapability(BtaAvCoPeer* p_peer, uint8_t (&sink_codec_cap)[AVDT_CO
   bool vbr_supp = osi_property_get_bool("persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled", true);
   log::verbose("AAC VBR prop value is {}", vbr_supp);
   if (vbr_supp) {
-    if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, &p_peer->addr)) {
+    if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, p_peer->addr)) {
       log::verbose("AAC VBR is not supported for this BL remote device");
       vbr_bl = true;
     }
