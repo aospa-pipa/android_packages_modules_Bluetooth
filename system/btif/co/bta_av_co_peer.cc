@@ -171,7 +171,7 @@ bool bta_av_co_check_peer_eligible_for_aac_codec(const BtaAvCoPeer* p_peer) {
   char remote_name[248] = "";
   bool aac_support = false;
   log::verbose("{}", __func__);
-  if (interop_match_addr(INTEROP_ENABLE_AAC_CODEC, &p_peer->addr)) {
+  if (interop_match_addr(INTEROP_ENABLE_AAC_CODEC, p_peer->addr)) {
     log::verbose("AAC is supported for this WL remote device");
     aac_support = true;
   } else {
@@ -216,7 +216,7 @@ BtaAvCoSep* BtaAvCoPeerCache::FindPeerSink(BtaAvCoPeer* p_peer, btav_a2dp_codec_
       log::verbose("AAC VBR prop value is {}", vbr_supp);
       if (vbr_supp) {
         if (remote_vbr) {
-          if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, &p_peer->addr)) {
+          if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, p_peer->addr)) {
             log::verbose("AAC VBR is not supported for this BL remote device");
             vbr_bl = true;
           }

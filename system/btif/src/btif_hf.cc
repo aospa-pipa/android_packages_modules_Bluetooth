@@ -1312,7 +1312,7 @@ BtStatus HeadsetInterface::ClccResponse(int index, bthf_call_direction_t dir,
   if (index == 0) {
     ag_res.ok_flag = BTA_AG_OK_DONE;
   } else {
-    bool is_ind_blacklisted = interop_match_addr_or_name(INTEROP_SKIP_INCOMING_STATE, &bd_addr,
+    bool is_ind_blacklisted = interop_match_addr_or_name(INTEROP_SKIP_INCOMING_STATE, bd_addr,
                                                          &btif_storage_get_remote_device_property);
     if (is_ind_blacklisted && index > BTA_AG_CALL_INDEX && state == BTHF_CALL_STATE_INCOMING) {
       log::error("device is blacklisted for incoming state {}", idx);
