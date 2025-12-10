@@ -146,7 +146,7 @@ static bool avdt_ccb_check_peer_eligible_for_aac_codec(const AvdtpCcb* p_peer) {
   char remote_name[248] = "";
   bool aac_support = false;
   log::verbose(" ");
-  if (interop_match_addr(INTEROP_ENABLE_AAC_CODEC, &p_peer->peer_addr)) {
+  if (interop_match_addr(INTEROP_ENABLE_AAC_CODEC, p_peer->peer_addr)) {
     log::verbose("AAC is supported for this WL remote device");
     aac_support = true;
   } else {
@@ -234,7 +234,7 @@ void avdt_ccb_hdl_discover_cmd(AvdtpCcb* p_ccb, tAVDT_CCB_EVT* p_data) {
          int scb_vbr_cap = 0;
          scb_vbr_cap = p_scb->stream_config.cfg.codec_info[6] & A2DP_AAC_VARIABLE_BIT_RATE_MASK;
          log::verbose("original vbr {}", scb_vbr_cap);
-         if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, &p_ccb->peer_addr)) {
+         if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, p_ccb->peer_addr)) {
            log::verbose("AAC VBR is not supported for this BL remote device");
            vbr_bl = true;
          }
@@ -349,7 +349,7 @@ void avdt_ccb_hdl_getcap_cmd(AvdtpCcb* p_ccb, tAVDT_CCB_EVT* p_data) {
             osi_property_get_bool("persist.vendor.qcom.bluetooth.aac_vbr_ctl.enabled", true);
     log::verbose("AAC VBR prop value is {}", vbr_supp);
     if (vbr_supp) {
-      if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, &p_ccb->peer_addr)) {
+      if (interop_match_addr(INTEROP_DISABLE_AAC_VBR_CODEC, p_ccb->peer_addr)) {
         log::verbose("AAC VBR is not supported for this BL remote device");
         vbr_bl = true;
       }

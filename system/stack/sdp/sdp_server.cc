@@ -142,9 +142,9 @@ bool sdp_dynamic_change_hfp_version(const tSDP_ATTRIBUTE* p_attr,
     return false;
   }
   log::verbose("sdp_dynamic_change_hfp_version: is HFP");
-  bool is_allowlisted_1_7 = interop_match_addr_or_name(INTEROP_HFP_1_7_ALLOWLIST, &remote_address,
+  bool is_allowlisted_1_7 = interop_match_addr_or_name(INTEROP_HFP_1_7_ALLOWLIST, remote_address,
                                                        &btif_storage_get_remote_device_property);
-  bool is_allowlisted_1_9 = interop_match_addr_or_name(INTEROP_HFP_1_9_ALLOWLIST, &remote_address,
+  bool is_allowlisted_1_9 = interop_match_addr_or_name(INTEROP_HFP_1_9_ALLOWLIST, remote_address,
                                                        &btif_storage_get_remote_device_property);
   /* For PTS we should update AG's HFP version as 1.7 */
   if (!(is_allowlisted_1_7) && !(is_allowlisted_1_9) &&
@@ -203,7 +203,7 @@ bool sdp_dynamic_change_a2dp_src_version(const tSDP_ATTRIBUTE* p_attr,
     return false;
   }
   bool is_a2dp_1_3 =
-      interop_match_addr(INTEROP_A2DP_1_3_ONLY, &remote_address);
+      interop_match_addr(INTEROP_A2DP_1_3_ONLY, remote_address);
   log::verbose("sdp_dynamic_change_a2dp_src_version, is_a2dp_1_3:{}", is_a2dp_1_3);
   if (is_a2dp_1_3) {
      p_attr->value_ptr[PROFILE_VERSION_POSITION] = A2DP_PROFILE_DEFAULT_VERSION_3;
@@ -378,16 +378,16 @@ static void process_service_search(tCONN_CB* p_ccb, uint16_t trans_num, uint16_t
 static bool is_device_in_allowlist_for_pbap(RawAddress remote_address,
                                             bool check_for_1_2) {
   if (!check_for_1_2 &&
-      interop_match_addr_or_name(INTEROP_ADV_PBAP_VER_1_1, &remote_address,
-                                 &btif_storage_get_remote_device_property)) {
+      interop_match_addr_or_name(INTEROP_ADV_PBAP_VER_1_1, remote_address,
+                                 btif_storage_get_remote_device_property)) {
     log::verbose("device is in allowlist for pbap version < 1.2");
     return true;
   }
   if (check_for_1_2) {
     if (btm_sec_is_a_bonded_dev(remote_address)) {
       if (interop_match_addr_or_name(
-              INTEROP_ADV_PBAP_VER_1_2, &remote_address,
-              &btif_storage_get_remote_device_property)) {
+              INTEROP_ADV_PBAP_VER_1_2, remote_address,
+              btif_storage_get_remote_device_property)) {
         log::verbose("device is in allowlist for pbap version 1.2");
         return true;
       }
@@ -1317,9 +1317,9 @@ void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg) {
 **
 ***************************************************************************************/
 void update_pce_entry_to_interop_database(RawAddress remote_addr) {
-  if (!interop_match_addr_or_name(INTEROP_ADV_PBAP_VER_1_2, &remote_addr,
+  if (!interop_match_addr_or_name(INTEROP_ADV_PBAP_VER_1_2, remote_addr,
                                   &btif_storage_get_remote_device_property)) {
-    interop_database_add_addr(INTEROP_ADV_PBAP_VER_1_2, &remote_addr, 3);
+    interop_database_add_addr(INTEROP_ADV_PBAP_VER_1_2, remote_addr, 3);
     log::verbose("device: {} is added into interop list", remote_addr);
   } else {
     log::warn("device: {} is already found on interop list", remote_addr);
@@ -1337,7 +1337,7 @@ void update_pce_entry_to_interop_database(RawAddress remote_addr) {
 **
 ***************************************************************************************/
 bool is_sdp_pbap_pce_disabled(RawAddress remote_address) {
-  if (interop_match_addr_or_name(INTEROP_DISABLE_PCE_SDP_AFTER_PAIRING, &remote_address,
+  if (interop_match_addr_or_name(INTEROP_DISABLE_PCE_SDP_AFTER_PAIRING, remote_address,
                                  &btif_storage_get_remote_device_property)) {
     log::verbose("device is denylisted for PCE SDP");
     return true;

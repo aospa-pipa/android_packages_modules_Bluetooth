@@ -66,7 +66,7 @@ constexpr uint16_t kSsrMaxLatency = 18; /* slots * 0.625ms */
 static void blacklist_adjust_sniff_subrate(RawAddress peer_dev, uint16_t* ssr_max_lat) {
   uint16_t old_ssr_max_lat = *ssr_max_lat;
   RawAddress remote_bdaddr = peer_dev;
-  if (interop_match_addr_get_max_lat(INTEROP_UPDATE_HID_SSR_MAX_LAT, &remote_bdaddr, ssr_max_lat)) {
+  if (interop_match_addr_get_max_lat(INTEROP_UPDATE_HID_SSR_MAX_LAT, remote_bdaddr, ssr_max_lat)) {
     log::warn("Device in blacklist for ssr, max latency changed from {} to {}", old_ssr_max_lat,
               *ssr_max_lat);
   }

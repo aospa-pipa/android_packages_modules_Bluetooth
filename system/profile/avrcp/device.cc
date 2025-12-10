@@ -215,7 +215,7 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
     return;
   }
 
-  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
     CommandPdu event = pkt->GetCommandPdu();
     if (event == CommandPdu::LIST_PLAYER_APPLICATION_SETTING_ATTRIBUTES ||
         event == CommandPdu::LIST_PLAYER_APPLICATION_SETTING_VALUES ||
@@ -548,7 +548,7 @@ void Device::HandleGetCapabilities(uint8_t label,
       response->AddEvent(Event::TRACK_CHANGED);
       response->AddEvent(Event::PLAYBACK_POS_CHANGED);
       if (player_settings_interface_ != nullptr) {
-        if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+        if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
           log::error("Device in BL for PLAYER_APPLICATION_SETTING, don't show in capability");
         } else {
           response->AddEvent(Event::PLAYER_APPLICATION_SETTING_CHANGED);
@@ -619,7 +619,7 @@ void Device::HandleNotification(uint8_t label,
     } break;
 
     case Event::PLAYER_APPLICATION_SETTING_CHANGED: {
-      if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+      if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
         log::error("Device in BL for Player app settings, return");
         auto response = RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::INVALID_COMMAND);
         send_message(label, false, std::move(response));
@@ -718,7 +718,7 @@ void Device::HandleVolumeChanged(uint8_t label,
     return;
   }
 
-  if (interop_match_addr(INTEROP_DISABLE_ABSOLUTE_VOLUME, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_ABSOLUTE_VOLUME, address_)) {
     log::info("Absolute volume disabled by IOP table");
     log::info("don't acknowledge vol change from Remote");
     return;
@@ -2184,7 +2184,7 @@ void Device::HandleNowPlayingUpdate() {
 void Device::HandlePlayerSettingChanged(std::vector<PlayerAttribute> attributes,
                                         std::vector<uint8_t> values) {
   log::verbose("");
-  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
     log::error("Device in BL for Player app settings, return");
     return;
   }
