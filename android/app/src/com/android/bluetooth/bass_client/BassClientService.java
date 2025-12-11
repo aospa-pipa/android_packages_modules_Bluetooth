@@ -1653,7 +1653,6 @@ public class BassClientService extends ConnectableProfile {
 
     private void localNotifySourceAdded(
             BluetoothDevice sink, BluetoothLeBroadcastReceiveState receiveState, int reason) {
-
         if (reason == BluetoothStatusCodes.REASON_REMOTE_REQUEST) {
             syncRequestForMetadata(sink, receiveState.getBroadcastId());
         }
