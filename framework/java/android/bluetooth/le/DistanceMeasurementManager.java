@@ -68,15 +68,15 @@ public final class DistanceMeasurementManager {
 
     private final ConcurrentHashMap<BluetoothDevice, DistanceMeasurementSession> mSessionMap =
             new ConcurrentHashMap<>();
-    private final BluetoothAdapter mBluetoothAdapter;
+    private final BluetoothAdapter mAdapter;
     private final AttributionSource mAttributionSource;
     private final ParcelUuid mUuid;
 
     /** Use {@link BluetoothAdapter#getDistanceMeasurementManager()} instead. */
     @Hide
     public DistanceMeasurementManager(BluetoothAdapter bluetoothAdapter) {
-        mBluetoothAdapter = requireNonNull(bluetoothAdapter);
-        mAttributionSource = mBluetoothAdapter.getAttributionSource();
+        mAdapter = requireNonNull(bluetoothAdapter);
+        mAttributionSource = mAdapter.getAttributionSource();
         mUuid = new ParcelUuid(UUID.randomUUID());
     }
 
@@ -94,7 +94,7 @@ public final class DistanceMeasurementManager {
     public @NonNull List<DistanceMeasurementMethod> getSupportedMethods() {
         final List<DistanceMeasurementMethod> supportedMethods = new ArrayList<>();
         try {
-            IDistanceMeasurement distanceMeasurement = mBluetoothAdapter.getDistanceMeasurement();
+            IDistanceMeasurement distanceMeasurement = mAdapter.getDistanceMeasurement();
             if (distanceMeasurement == null) {
                 Log.e(TAG, "Distance Measurement is null");
                 return supportedMethods;
@@ -137,7 +137,7 @@ public final class DistanceMeasurementManager {
         requireNonNull(executor);
         requireNonNull(callback);
         try {
-            IDistanceMeasurement distanceMeasurement = mBluetoothAdapter.getDistanceMeasurement();
+            IDistanceMeasurement distanceMeasurement = mAdapter.getDistanceMeasurement();
             if (distanceMeasurement == null) {
                 Log.e(TAG, "Distance Measurement is null");
                 return null;
@@ -192,7 +192,7 @@ public final class DistanceMeasurementManager {
         requireNonNull(remoteDevice);
         final int defaultValue = ChannelSoundingParams.CS_SECURITY_LEVEL_UNKNOWN;
         try {
-            IDistanceMeasurement distanceMeasurement = mBluetoothAdapter.getDistanceMeasurement();
+            IDistanceMeasurement distanceMeasurement = mAdapter.getDistanceMeasurement();
             if (distanceMeasurement == null) {
                 Log.e(TAG, "Distance Measurement is null");
                 return defaultValue;
@@ -223,7 +223,7 @@ public final class DistanceMeasurementManager {
     public @CsSecurityLevel int getLocalChannelSoundingMaxSupportedSecurityLevel() {
         final int defaultValue = ChannelSoundingParams.CS_SECURITY_LEVEL_UNKNOWN;
         try {
-            IDistanceMeasurement distanceMeasurement = mBluetoothAdapter.getDistanceMeasurement();
+            IDistanceMeasurement distanceMeasurement = mAdapter.getDistanceMeasurement();
             if (distanceMeasurement == null) {
                 Log.e(TAG, "Distance Measurement is null");
                 return defaultValue;
@@ -253,7 +253,7 @@ public final class DistanceMeasurementManager {
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
     public @NonNull Set<@CsSecurityLevel Integer> getChannelSoundingSupportedSecurityLevels() {
         try {
-            IDistanceMeasurement distanceMeasurement = mBluetoothAdapter.getDistanceMeasurement();
+            IDistanceMeasurement distanceMeasurement = mAdapter.getDistanceMeasurement();
             if (distanceMeasurement == null) {
                 Log.e(TAG, "Distance Measurement is null");
                 return Collections.emptySet();

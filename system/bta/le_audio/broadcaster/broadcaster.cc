@@ -366,7 +366,7 @@ public:
     }
   }
 
-  void UpdateAudioActiveStateInPublicAnnouncement() {
+  void UpdateAudioActiveStateInBroadcastAnnouncements() {
     for (auto const& kv_it : broadcasts_) {
       auto& broadcast = kv_it.second;
 
@@ -395,6 +395,23 @@ public:
         return false;
       };
 
+      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+        auto announcement = broadcast->GetBroadcastAnnouncement();
+        bool broadcast_update = false;
+        for (auto& subgroup : announcement.subgroup_configs) {
+          auto subgroup_ltv = LeAudioLtvMap(subgroup.metadata);
+
+          if (updateLtv(audio_active_state, subgroup_ltv)) {
+            subgroup.metadata = subgroup_ltv.Values();
+            broadcast_update = true;
+          }
+        }
+
+        if (broadcast_update) {
+          broadcast->UpdateBroadcastAnnouncement(std::move(announcement));
+        }
+      }
+
       auto public_announcement = broadcast->GetPublicBroadcastAnnouncement();
       auto public_ltv = LeAudioLtvMap(public_announcement.metadata);
 
@@ -417,6 +434,10 @@ public:
     }
 
     log::info("For broadcast_id={}", broadcast_id);
+
+    bool audio_active_state =
+            (audio_state_ == AudioState::ACTIVE) &&
+            (broadcasts_[broadcast_id]->GetState() == BroadcastStateMachine::State::STREAMING);
 
     for (const std::vector<uint8_t>& metadata : subgroup_metadata) {
       /* Prepare the announcement format */
@@ -465,6 +486,12 @@ public:
         ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeCcidList, ccid_vec);
       }
 
+      // Append the Audio Active State
+      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+        ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeAudioActiveState,
+                audio_active_state);
+      }
+
       // Push to subgroup ltvs
       subgroup_ltvs.push_back(ltv);
     }
@@ -481,9 +508,6 @@ public:
       }
 
       // Append the Audio Active State
-      bool audio_active_state =
-              (audio_state_ == AudioState::ACTIVE) &&
-              (broadcasts_[broadcast_id]->GetState() == BroadcastStateMachine::State::STREAMING);
       public_ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeAudioActiveState,
                      audio_active_state);
 
@@ -654,6 +678,11 @@ public:
       auto ccid_vec = ContentControlIdKeeper::GetInstance()->GetAllCcids(context_type);
       if (!ccid_vec.empty()) {
         ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeCcidList, ccid_vec);
+      }
+
+      // Append the Audio Active State
+      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+        ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeAudioActiveState, false);
       }
 
       // Push to subgroup ltvs
@@ -956,7 +985,7 @@ public:
       // If audio resumes before ISO release, trigger broadcast start
       if (audio_state_ == AudioState::ACTIVE) {
         cancelBroadcastTimers();
-        UpdateAudioActiveStateInPublicAnnouncement();
+        UpdateAudioActiveStateInBroadcastAnnouncements();
 
         for (auto& broadcast_pair : broadcasts_) {
           auto& broadcast = broadcast_pair.second;
@@ -1134,11 +1163,12 @@ private:
         case BroadcastStateMachine::State::CONFIGURING:
           break;
         case BroadcastStateMachine::State::CONFIGURED:
-          instance->UpdateAudioActiveStateInPublicAnnouncement();
+          instance->UpdateAudioActiveStateInBroadcastAnnouncements();
           if(instance->is_suspended_by_audio_){
             instance->le_audio_source_hal_client_->ConfirmSuspendRequest();
             instance->is_suspended_by_audio_ = false;
           }
+
           break;
         case BroadcastStateMachine::State::ENABLING:
           break;
@@ -1158,7 +1188,7 @@ private:
               audio_receiver_.CheckAndReconfigureEncoders(broadcast_config);
 
               broadcast->SetMuted(false);
-              instance->UpdateAudioActiveStateInPublicAnnouncement();
+              instance->UpdateAudioActiveStateInBroadcastAnnouncements();
             }
           }
           break;
@@ -1400,7 +1430,7 @@ private:
 
       instance->is_suspended_by_audio_ = true;
       instance->audio_state_ = AudioState::SUSPENDED;
-      instance->UpdateAudioActiveStateInPublicAnnouncement();
+      instance->UpdateAudioActiveStateInBroadcastAnnouncements();
       instance->setBroadcastTimers();
     }
 
@@ -1438,7 +1468,7 @@ private:
       }
 
       instance->cancelBroadcastTimers();
-      instance->UpdateAudioActiveStateInPublicAnnouncement();
+      instance->UpdateAudioActiveStateInBroadcastAnnouncements();
 
       /* In case of double call of resume when broadcasts are already in streaming states */
       if (IsAnyoneStreaming()) {
