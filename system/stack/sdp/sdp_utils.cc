@@ -1578,13 +1578,13 @@ bool spdu_is_avrcp_version_valid(const uint16_t version) {
  * Returns          void
  *
  ******************************************************************************/
-void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress* bdaddr) {
+void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, RawAddress bdaddr) {
   // Check attribute is AVRCP profile description list and get AVRC Target
   // version
   uint16_t avrcp_version = sdpu_is_avrcp_profile_description_list(p_attr);
   log::info("SDP AVRCP DB Version {:x}", avrcp_version);
   if (avrcp_version == 0) {
-    log::info("Not AVRCP version attribute or version not valid for device {}", *bdaddr);
+    log::info("Not AVRCP version attribute or version not valid for device {}", bdaddr);
     return;
   }
 
@@ -1596,18 +1596,16 @@ void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress
   // AVRCP version. If those devices are in IOP database and our version higher
   // than device, we reply a lower version to them.
   uint16_t iop_version = 0;
-  if (dut_avrcp_version > AVRC_REV_1_4 && interop_match_addr(INTEROP_AVRCP_1_4_ONLY, *bdaddr)) {
+  if (dut_avrcp_version > AVRC_REV_1_4 && interop_match_addr(INTEROP_AVRCP_1_4_ONLY, bdaddr)) {
     iop_version = AVRC_REV_1_4;
   } else if (dut_avrcp_version > AVRC_REV_1_3 &&
-             interop_match_addr(INTEROP_AVRCP_1_3_ONLY, *bdaddr)) {
+             interop_match_addr(INTEROP_AVRCP_1_3_ONLY, bdaddr)) {
     iop_version = AVRC_REV_1_3;
   }
 
   if (iop_version != 0) {
-    log::info(
-            "device={} is in IOP database. Reply AVRC Target version {:x} instead "
-            "of {:x}.",
-            *bdaddr, iop_version, avrcp_version);
+    log::info("device={} is in IOP database. Reply AVRC Target version {:x} instead of {:x}.",
+              bdaddr, iop_version, avrcp_version);
     uint8_t* p_version = p_attr->value_ptr + 6;
     UINT16_TO_BE_FIELD(p_version, iop_version);
     return;
@@ -1623,19 +1621,19 @@ void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress
   // Read the remote device's AVRC Controller version from local storage
   uint16_t cached_version = 0;
   size_t version_value_size =
-          btif_config_get_bin_length(bdaddr->ToString(), BTIF_STORAGE_KEY_AVRCP_CONTROLLER_VERSION);
+          btif_config_get_bin_length(bdaddr.ToString(), BTIF_STORAGE_KEY_AVRCP_CONTROLLER_VERSION);
   if (version_value_size != sizeof(cached_version)) {
-    log::error("cached value len wrong, bdaddr={}. Len is {} but should be {}.", *bdaddr,
+    log::error("cached value len wrong, bdaddr={}. Len is {} but should be {}.", bdaddr,
                version_value_size, sizeof(cached_version));
     return;
   }
 
-  if (!btif_config_get_bin(bdaddr->ToString(), BTIF_STORAGE_KEY_AVRCP_CONTROLLER_VERSION,
+  if (!btif_config_get_bin(bdaddr.ToString(), BTIF_STORAGE_KEY_AVRCP_CONTROLLER_VERSION,
                            reinterpret_cast<uint8_t*>(&cached_version), &version_value_size)) {
     log::info(
             "no cached AVRC Controller version for {}. Reply default AVRC Target "
             "version {:x}.DUT AVRC Target version {:x}.",
-            *bdaddr, avrcp_version, dut_avrcp_version);
+            bdaddr, avrcp_version, dut_avrcp_version);
     return;
   }
 
@@ -1643,7 +1641,7 @@ void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress
     log::error(
             "cached AVRC Controller version {:x} of {} is not valid. Reply default "
             "AVRC Target version {:x}.",
-            cached_version, *bdaddr, avrcp_version);
+            cached_version, bdaddr, avrcp_version);
     return;
   }
 
@@ -1651,7 +1649,7 @@ void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress
   log::info(
           "read cached AVRC Controller version {:x} of {}. DUT AVRC Target version "
           "{:x}.Negotiated AVRCP version to update peer {:x}.",
-          cached_version, *bdaddr, dut_avrcp_version, negotiated_avrcp_version);
+          cached_version, bdaddr, dut_avrcp_version, negotiated_avrcp_version);
   uint8_t* p_version = p_attr->value_ptr + 6;
   UINT16_TO_BE_FIELD(p_version, negotiated_avrcp_version);
 }
@@ -1668,7 +1666,7 @@ void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress
  * Returns          void
  *
  ******************************************************************************/
-void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, const RawAddress* bdaddr,
+void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, RawAddress bdaddr,
                                    uint16_t avrcp_version) {
   log::info("SDP AVRCP Version {:x}", avrcp_version);
 
@@ -1679,7 +1677,7 @@ void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, const RawAddres
   }
 
   if (avrcp_version == 0) {
-    log::info("AVRCP version not valid for device {}", *bdaddr);
+    log::info("AVRCP version not valid for device {}", bdaddr);
     return;
   }
 
@@ -1693,14 +1691,14 @@ void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, const RawAddres
   // Read the remote device's AVRC Controller version from local storage
   uint16_t avrcp_peer_features = 0;
   size_t version_value_size =
-          btif_config_get_bin_length(bdaddr->ToString(), BTIF_STORAGE_KEY_AV_REM_CTRL_FEATURES);
+          btif_config_get_bin_length(bdaddr.ToString(), BTIF_STORAGE_KEY_AV_REM_CTRL_FEATURES);
   if (version_value_size != sizeof(avrcp_peer_features)) {
-    log::error("cached value len wrong, bdaddr={}. Len is {} but should be {}.", *bdaddr,
+    log::error("cached value len wrong, bdaddr={}. Len is {} but should be {}.", bdaddr,
                version_value_size, sizeof(avrcp_peer_features));
     return;
   }
 
-  if (!btif_config_get_bin(bdaddr->ToString(), BTIF_STORAGE_KEY_AV_REM_CTRL_FEATURES,
+  if (!btif_config_get_bin(bdaddr.ToString(), BTIF_STORAGE_KEY_AV_REM_CTRL_FEATURES,
                            reinterpret_cast<uint8_t*>(&avrcp_peer_features), &version_value_size)) {
     log::error("Unable to fetch cached AVRC features");
     return;
@@ -1747,7 +1745,7 @@ void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, const RawAddres
   }
 
   if (avrcp_version >= AVRC_REV_1_4 &&
-      interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, *bdaddr)) {
+      interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, bdaddr)) {
     log::error("device found in PLAYER_APPLICATION_SETTING_CMDS BL");
     log::error("Show player app settings not supported");
     p_attr->value_ptr[AVRCP_SUPPORTED_FEATURES_POSITION] &=

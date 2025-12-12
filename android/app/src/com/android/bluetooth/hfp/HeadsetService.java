@@ -428,16 +428,6 @@ public class HeadsetService extends ConnectableProfile {
         }
     }
 
-    private void doForEachConnectedStateMachine(List<StateMachineTask> tasks) {
-        synchronized (mStateMachines) {
-            for (BluetoothDevice device : getConnectedDevices()) {
-                for (StateMachineTask task : tasks) {
-                    task.execute(mStateMachines.get(device));
-                }
-            }
-        }
-    }
-
     private void doForEachConnectedOrConnectingStateMachine(List<StateMachineTask> tasks) {
         synchronized (mStateMachines) {
             for (BluetoothDevice device : getConnectedOrConnectingDevices()) {
@@ -2192,12 +2182,7 @@ public class HeadsetService extends ConnectableProfile {
                                 new HeadsetClccResponse(
                                         index, direction, status, mode, mpty, number, type)));
         if (index == CLCC_END_MARK_INDEX) {
-            if (Flags.sendOkClccBeforeSlc()) {
-                doForEachConnectedOrConnectingStateMachine(mPendingClccResponses);
-            } else {
-                doForEachConnectedStateMachine(mPendingClccResponses);
-            }
-
+            doForEachConnectedOrConnectingStateMachine(mPendingClccResponses);
             mPendingClccResponses.clear();
         }
     }
