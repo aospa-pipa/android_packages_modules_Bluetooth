@@ -314,7 +314,6 @@ class HfpClientConnection extends Connection {
     }
 
     private void error(String message) {
-
         Log.e(TAG, "[" + mDevice + "]: " + message);
     }
 }
