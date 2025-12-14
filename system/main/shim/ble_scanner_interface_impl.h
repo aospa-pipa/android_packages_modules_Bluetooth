@@ -27,8 +27,10 @@
 #include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
 
+#include <cstdint>
 #include <queue>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include "hci/le_scanning_callback.h"
@@ -84,7 +86,7 @@ public:
   void BatchScanDisable(Callback cb) override;
   void BatchScanReadReports(int client_if, int scan_mode) override;
   void StartSync(uint8_t sid, RawAddress address, tBLE_ADDR_TYPE address_type, uint16_t skip,
-                 uint16_t timeout, int reg_id) override;
+                 uint16_t timeout, int reg_id, uint8_t client_id) override;
   void StartSync(uint8_t sid, RawAddress address, uint16_t skip, uint16_t timeout,
                  StartSyncCb start_cb, SyncReportCb report_cb, SyncLostCb lost_cb,
                  BigInfoReportCb biginfo_report_cb) override;
@@ -105,7 +107,8 @@ public:
                         StartSyncCb start_cb) override;
 
   // bluetooth::hci::ScanningCallback
-  void RegisterCallbacks(ScanningCallbacks* callbacks);
+  void RegisterCallbacks(ScanningCallbacks* callbacks) override;
+  void RegisterCallbacksNative(ScanningCallbacks* callbacks, uint8_t client_id) override;
   void OnScannerRegistered(const bluetooth::hci::Uuid app_uuid,
                            bluetooth::hci::ScannerId scanner_id, ScanningStatus status) override;
   void OnSetScannerParameterComplete(bluetooth::hci::ScannerId scanner_id,
@@ -136,7 +139,6 @@ public:
                                  bluetooth::hci::Address address) override;
   void OnBigInfoReport(uint16_t sync_handle, bool encrypted) override;
 
-  ::ScanningCallbacks* scanning_callbacks_ = default_scanning_callback;
   bool OnFetchPseudoAddressFromIdentityAddress(bluetooth::hci::Address address,
                                                uint8_t address_type,
                                                bluetooth::hci::Address* pseudo_address);
@@ -145,8 +147,13 @@ public:
   void OnMsftAdvMonitorEnable(bool enable, bluetooth::hci::ErrorCode status);
   MsftCallbacks msft_callbacks_;
 
+  ::ScanningCallbacks* scanning_callbacks_ = default_scanning_callback;
+
 private:
   bool msft_adv_monitor_enabled_ = false;
+  std::unordered_map<uint8_t, ::ScanningCallbacks*> native_client_to_callbacks_map_;
+  std::unordered_map<int, uint8_t> periodic_sync_reg_id_to_client_map_;
+  std::unordered_map<uint16_t, uint8_t> periodic_sync_handle_to_client_map_;
 
 private:
   bool parse_filter_command(bluetooth::hci::AdvertisingPacketContentFilterCommand&
@@ -158,19 +165,6 @@ private:
                       uint8_t primary_phy, uint8_t secondary_phy, uint8_t advertising_sid,
                       int8_t tx_power, int8_t rssi, uint16_t periodic_advertising_interval,
                       std::vector<uint8_t> advertising_data);
-
-  class AddressCache {
-  public:
-    void init(void);
-    void add(const RawAddress& p_bda);
-    bool find(const RawAddress& p_bda);
-
-  private:
-    // all access to this variable should be done on the jni thread
-    std::set<RawAddress> remote_bdaddr_cache_;
-    std::queue<RawAddress> remote_bdaddr_cache_ordered_;
-    const size_t remote_bdaddr_cache_max_size_ = 1024;
-  } address_cache_;
 };
 
 }  // namespace shim

@@ -816,8 +816,7 @@ public final class BluetoothLeAdvertiser {
                             }
 
                             AdvertisingSet advertisingSet =
-                                    new AdvertisingSet(
-                                            advertise, advertiserId, mAdapter, mAttributionSource);
+                                    new AdvertisingSet(advertise, advertiserId, mAttributionSource);
                             mAdvertisingSets.put(advertiserId, advertisingSet);
                             callback.onAdvertisingSetStarted(advertisingSet, txPower, status);
                         });

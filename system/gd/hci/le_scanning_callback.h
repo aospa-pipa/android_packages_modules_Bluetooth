@@ -22,7 +22,6 @@
 #include <memory>
 #include <vector>
 
-#include "common/callback.h"
 #include "hci/address_with_type.h"
 #include "hci/hci_packets.h"
 #include "hci/uuid.h"

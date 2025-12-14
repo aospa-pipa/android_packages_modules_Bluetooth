@@ -12339,7 +12339,7 @@ TEST_F(UnicastTest, UpdateMultipleBidirContextTypes_SpeedUpReconfigFlagEnabled) 
   EXPECT_CALL(mock_state_machine_, StartStream(_, _, contexts, _)).Times(1);
 
   /* Make sure GAME is bidirectional */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
 
   UpdateLocalSourceMetadata(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, false);
@@ -12414,7 +12414,7 @@ TEST_F(UnicastTest, UpdateDisableLocalAudioSinkOnGame) {
 
   // 1) Start the recording. Sink resume will trigger the reconfiguration
   // ---------------------------------------------------------------------
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_MUSIC, group_id, AUDIO_SOURCE_MIC);
 
@@ -13377,7 +13377,7 @@ TEST_F(UnicastTest, BidirectionalGameContextRequestedFromAudioFramework) {
   SyncOnMainLoop();
 
   /* Set TAG */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC);
 
@@ -13452,7 +13452,7 @@ TEST_F(UnicastTest, SwitchFromUniToBidirectionalGameContext) {
           .Times(1);
 
   /* Set TAG and expect reconfiguration */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC, true);
 

@@ -19,11 +19,11 @@
  */
 #pragma once
 
+#include <base/functional/callback.h>
 #include <bluetooth/log.h>
 
 #include <vector>
 
-#include "common/callback.h"
 #include "hci/hci_layer.h"
 #include "hci/hci_packets.h"
 #include "os/handler.h"
