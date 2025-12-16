@@ -90,7 +90,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void offToBleOn(boolean quietMode, String hciInstanceName) {
-        Log.v(TAG, "offToBleOn(" + quietMode + ", " + hciInstanceName + " )");
+        Log.v(TAG, "offToBleOn(" + quietMode + ", " + hciInstanceName + ")");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "offToBleOn")) {
             return;
@@ -100,7 +100,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void onToBleOn() {
-        Log.v(TAG, "onToBleOn");
+        Log.v(TAG, "onToBleOn()");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "onToBleOn")) {
             return;
