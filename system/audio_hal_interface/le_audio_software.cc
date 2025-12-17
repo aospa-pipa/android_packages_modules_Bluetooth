@@ -554,13 +554,13 @@ void LeAudioClientInterface::Source::Cleanup() {
     delete hidl::le_audio::LeAudioSourceTransport::instance;
     hidl::le_audio::LeAudioSourceTransport::instance = nullptr;
   }
-  if (aidl::le_audio::LeAudioSourceTransport::interface) {
-    delete aidl::le_audio::LeAudioSourceTransport::interface;
-    aidl::le_audio::LeAudioSourceTransport::interface = nullptr;
+  if (aidl::le_audio::LeAudioSourceTransport::interface_unicast_) {
+    delete aidl::le_audio::LeAudioSourceTransport::interface_unicast_;
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_ = nullptr;
   }
-  if (aidl::le_audio::LeAudioSourceTransport::instance) {
-    delete aidl::le_audio::LeAudioSourceTransport::instance;
-    aidl::le_audio::LeAudioSourceTransport::instance = nullptr;
+  if (aidl::le_audio::LeAudioSourceTransport::instance_unicast_) {
+    delete aidl::le_audio::LeAudioSourceTransport::instance_unicast_;
+    aidl::le_audio::LeAudioSourceTransport::instance_unicast_ = nullptr;
   }
 }
 
@@ -571,7 +571,7 @@ void LeAudioClientInterface::Source::SetPcmParameters(const PcmParameters& param
             params.data_interval_us);
     return;
   }
-  return aidl::le_audio::LeAudioSourceTransport::instance->LeAudioSetSelectedHalPcmConfig(
+  return aidl::le_audio::LeAudioSourceTransport::instance_unicast_->LeAudioSetSelectedHalPcmConfig(
           params.sample_rate, params.bits_per_sample, params.channels_count,
           params.data_interval_us);
 }
@@ -582,7 +582,7 @@ void LeAudioClientInterface::Source::SetRemoteDelay(uint16_t delay_report_ms) {
     hidl::le_audio::LeAudioSourceTransport::instance->SetRemoteDelay(delay_report_ms);
     return;
   }
-  return aidl::le_audio::LeAudioSourceTransport::instance->SetRemoteDelay(delay_report_ms);
+  return aidl::le_audio::LeAudioSourceTransport::instance_unicast_->SetRemoteDelay(delay_report_ms);
 }
 
 void LeAudioClientInterface::Source::StartSession() {
@@ -599,7 +599,7 @@ void LeAudioClientInterface::Source::StartSession() {
     return;
   } else if (HalVersionManager::GetHalTransport() == BluetoothAudioHalTransport::AIDL) {
     AudioConfigurationAIDL audio_config;
-    if (aidl::le_audio::LeAudioSourceTransport::interface->GetTransportInstance()
+    if (aidl::le_audio::LeAudioSourceTransport::interface_unicast_->GetTransportInstance()
                 ->GetSessionType() ==
         aidl::SessionType::LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
       aidl::le_audio::LeAudioConfiguration le_audio_config;
@@ -607,14 +607,16 @@ void LeAudioClientInterface::Source::StartSession() {
               aidl::le_audio::LeAudioConfiguration{});
     } else {
       audio_config.set<AudioConfigurationAIDL::pcmConfig>(
-              aidl::le_audio::LeAudioSourceTransport::instance->LeAudioGetSelectedHalPcmConfig());
+          aidl::le_audio::LeAudioSourceTransport::instance_unicast_
+              ->LeAudioGetSelectedHalPcmConfig());
     }
 
-    if (!aidl::le_audio::LeAudioSourceTransport::interface->UpdateAudioConfig(audio_config)) {
+    if (!aidl::le_audio::LeAudioSourceTransport::interface_unicast_
+             ->UpdateAudioConfig(audio_config)) {
       log::error("cannot update audio config to HAL");
       return;
     }
-    aidl::le_audio::LeAudioSourceTransport::interface->StartSession();
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StartSession();
   }
 }
 
@@ -625,7 +627,7 @@ void LeAudioClientInterface::Source::SuspendedForReconfiguration() {
     return;
   }
 
-  aidl::le_audio::LeAudioSourceTransport::interface->StreamSuspended(
+  aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamSuspended(
           aidl::BluetoothAudioCtrlAck::SUCCESS_RECONFIGURATION);
 }
 
@@ -635,7 +637,7 @@ void LeAudioClientInterface::Source::ReconfigurationComplete() {
   if (HalVersionManager::GetHalTransport() == BluetoothAudioHalTransport::AIDL) {
     // FIXME: For now we have to workaround the missing API and use
     //        StreamSuspended() with SUCCESS_FINISHED ack code.
-    aidl::le_audio::LeAudioSourceTransport::interface->StreamSuspended(
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamSuspended(
             aidl::BluetoothAudioCtrlAck::SUCCESS_FINISHED);
   }
 }
@@ -646,7 +648,7 @@ void LeAudioClientInterface::Source::StreamSuspended() {
   if (HalVersionManager::GetHalTransport() == BluetoothAudioHalTransport::AIDL) {
     // FIXME: For now we have to workaround the missing API and use
     //        StreamSuspended() with SUCCESS_FINISHED ack code.
-    aidl::le_audio::LeAudioSourceTransport::interface->StreamSuspended(
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamSuspended(
             aidl::BluetoothAudioCtrlAck::SUCCESS_FINISHED);
   }
 }
@@ -654,7 +656,7 @@ void LeAudioClientInterface::Source::StreamSuspended() {
 void LeAudioClientInterface::Source::ConfirmSuspendRequest() {
   LOG(INFO) << __func__;
   if (HalVersionManager::GetHalTransport() == BluetoothAudioHalTransport::AIDL) {
-    aidl::le_audio::LeAudioSourceTransport::interface->StreamSuspended(
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamSuspended(
             aidl::BluetoothAudioCtrlAck::SUCCESS_FINISHED);
   }
 }
@@ -689,13 +691,13 @@ void LeAudioClientInterface::Source::ConfirmStreamingRequest(bool force) {
     return;
   }
 
-  auto aidl_instance = aidl::le_audio::LeAudioSourceTransport::instance;
+  auto aidl_instance = aidl::le_audio::LeAudioSourceTransport::instance_unicast_;
   if (force) {
     aidl_instance->SetBluetoothRequestState(BluetoothRequest::RESUME,
                                           BluetoothRequestState::PENDING_BEFORE_REQUEST);
   }
   if (aidl_instance->IsRequestCompletedAfterUpdate(lambda, BluetoothRequest::RESUME)) {
-    aidl::le_audio::LeAudioSourceTransport::interface->StreamStarted(
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamStarted(
             aidl::BluetoothAudioCtrlAck::SUCCESS_FINISHED);
   }
 }
@@ -729,9 +731,9 @@ void LeAudioClientInterface::Source::CancelStreamingRequest() {
     return;
   }
 
-  auto aidl_instance = aidl::le_audio::LeAudioSourceTransport::instance;
+  auto aidl_instance = aidl::le_audio::LeAudioSourceTransport::instance_unicast_;
   if (aidl_instance->IsRequestCompletedAfterUpdate(lambda, BluetoothRequest::RESUME)) {
-    aidl::le_audio::LeAudioSourceTransport::interface->StreamStarted(
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_->StreamStarted(
             aidl::BluetoothAudioCtrlAck::FAILURE);
   }
 }
@@ -744,9 +746,9 @@ void LeAudioClientInterface::Source::StopSession() {
     hidl::le_audio::LeAudioSourceTransport::interface->EndSession();
     return;
   }
-  aidl::le_audio::LeAudioSourceTransport::instance->ClearBluetoothRequestState(
+  aidl::le_audio::LeAudioSourceTransport::instance_unicast_->ClearBluetoothRequestState(
           BluetoothRequest::RESUME);
-  aidl::le_audio::LeAudioSourceTransport::interface->EndSession();
+  aidl::le_audio::LeAudioSourceTransport::interface_unicast_->EndSession();
 }
 
 void LeAudioClientInterface::Source::UpdateMetadataChanged(::bluetooth::le_audio::types::AseState&
@@ -766,7 +768,7 @@ void LeAudioClientInterface::Source::UpdateMetadataChanged(::bluetooth::le_audio
     log::error("Invalid AseState {}", static_cast<int>(state));
     return;
   }
-  aidl::le_audio::LeAudioSourceTransport::interface->onSourceAseMetadataChanged(ase_state, cig_id, cis_id, aidl_metadata);
+  aidl::le_audio::LeAudioSourceTransport::interface_unicast_->onSourceAseMetadataChanged(ase_state, cig_id, cis_id, aidl_metadata);
 }
 
 void LeAudioClientInterface::Source::UpdateAudioConfigToHal(
@@ -775,7 +777,8 @@ void LeAudioClientInterface::Source::UpdateAudioConfigToHal(
     return;
   }
 
-  if (aidl::le_audio::LeAudioSourceTransport::interface->GetTransportInstance()->GetSessionType() !=
+  if (aidl::le_audio::LeAudioSourceTransport::interface_unicast_->GetTransportInstance()
+          ->GetSessionType() !=
       aidl::SessionType::LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
     return;
   }
@@ -783,7 +786,7 @@ void LeAudioClientInterface::Source::UpdateAudioConfigToHal(
   auto offload_hal_config = aidl::le_audio::stream_config_to_hal_audio_config(offload_config);
   dumpOffloadConfig("Decoding config:", offload_hal_config);
 
-  aidl::le_audio::LeAudioSourceTransport::interface->UpdateAudioConfig(offload_hal_config);
+  aidl::le_audio::LeAudioSourceTransport::interface_unicast_->UpdateAudioConfig(offload_hal_config);
 }
 
 void LeAudioClientInterface::Source::SetCodecPriority(
@@ -792,12 +795,13 @@ void LeAudioClientInterface::Source::SetCodecPriority(
     return;
   }
 
-  if (aidl::le_audio::LeAudioSourceTransport::interface->GetTransportInstance()->GetSessionType() !=
+  if (aidl::le_audio::LeAudioSourceTransport::interface_unicast_->GetTransportInstance()
+          ->GetSessionType() !=
       aidl::SessionType::LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH) {
     return;
   }
 
-  aidl::le_audio::LeAudioSourceTransport::interface->SetCodecPriority(
+  aidl::le_audio::LeAudioSourceTransport::interface_unicast_->SetCodecPriority(
           GetAidlCodecIdFromStackFormat(codecId), priority);
 }
 
@@ -805,7 +809,7 @@ size_t LeAudioClientInterface::Source::Write(const uint8_t* p_buf, uint32_t len)
   if (HalVersionManager::GetHalTransport() == BluetoothAudioHalTransport::HIDL) {
     return hidl::le_audio::LeAudioSourceTransport::interface->WriteAudioData(p_buf, len);
   }
-  return aidl::le_audio::LeAudioSourceTransport::interface->WriteAudioData(p_buf, len);
+  return aidl::le_audio::LeAudioSourceTransport::interface_unicast_->WriteAudioData(p_buf, len);
 }
 
 LeAudioClientInterface::Sink* LeAudioClientInterface::GetSink(
@@ -929,8 +933,8 @@ bool LeAudioClientInterface::ReleaseSink(LeAudioClientInterface::Sink* sink) {
 
 LeAudioClientInterface::Source* LeAudioClientInterface::GetSource(
         StreamCallbacks stream_cb, bluetooth::common::MessageLoopThread* message_loop) {
-  if (source_ == nullptr) {
-    source_ = new Source();
+  if (unicast_source_ == nullptr) {
+    unicast_source_ = new Source();
   } else {
     log::warn("Source is already acquired");
     return nullptr;
@@ -955,8 +959,8 @@ LeAudioClientInterface::Source* LeAudioClientInterface::GetSource(
       hidl::le_audio::LeAudioSourceTransport::interface = nullptr;
       delete hidl::le_audio::LeAudioSourceTransport::instance;
       hidl::le_audio::LeAudioSourceTransport::instance = nullptr;
-      delete source_;
-      source_ = nullptr;
+      delete unicast_source_;
+      unicast_source_ = nullptr;
 
       return nullptr;
     }
@@ -966,44 +970,44 @@ LeAudioClientInterface::Source* LeAudioClientInterface::GetSource(
       session_type = aidl::SessionType::LE_AUDIO_HARDWARE_OFFLOAD_DECODING_DATAPATH;
     }
 
-    aidl::le_audio::LeAudioSourceTransport::instance =
+    aidl::le_audio::LeAudioSourceTransport::instance_unicast_ =
             new aidl::le_audio::LeAudioSourceTransport(session_type, std::move(stream_cb));
-    aidl::le_audio::LeAudioSourceTransport::interface =
+    aidl::le_audio::LeAudioSourceTransport::interface_unicast_ =
             new aidl::BluetoothAudioSourceClientInterface(
-                    aidl::le_audio::LeAudioSourceTransport::instance, message_loop);
-    if (!aidl::le_audio::LeAudioSourceTransport::interface->IsValid()) {
+                    aidl::le_audio::LeAudioSourceTransport::instance_unicast_, message_loop);
+    if (!aidl::le_audio::LeAudioSourceTransport::interface_unicast_->IsValid()) {
       log::warn("BluetoothAudio HAL for Le Audio is invalid?!");
-      delete aidl::le_audio::LeAudioSourceTransport::interface;
-      aidl::le_audio::LeAudioSourceTransport::interface = nullptr;
-      delete aidl::le_audio::LeAudioSourceTransport::instance;
-      aidl::le_audio::LeAudioSourceTransport::instance = nullptr;
-      delete source_;
-      source_ = nullptr;
+      delete aidl::le_audio::LeAudioSourceTransport::interface_unicast_;
+      aidl::le_audio::LeAudioSourceTransport::interface_unicast_ = nullptr;
+      delete aidl::le_audio::LeAudioSourceTransport::instance_unicast_;
+      aidl::le_audio::LeAudioSourceTransport::instance_unicast_ = nullptr;
+      delete unicast_source_;
+      unicast_source_ = nullptr;
 
       return nullptr;
     }
   }
 
-  return source_;
+  return unicast_source_;
 }
 
-bool LeAudioClientInterface::IsSourceAcquired() { return source_ != nullptr; }
+bool LeAudioClientInterface::IsUnicastSourceAcquired() { return unicast_source_ != nullptr; }
 
 bool LeAudioClientInterface::ReleaseSource(LeAudioClientInterface::Source* source) {
-  if (source != source_) {
+  if (source != unicast_source_) {
     log::warn("can't release not acquired source");
     return false;
   }
 
   if ((hidl::le_audio::LeAudioSourceTransport::interface &&
        hidl::le_audio::LeAudioSourceTransport::instance) ||
-      (aidl::le_audio::LeAudioSourceTransport::interface &&
-       aidl::le_audio::LeAudioSourceTransport::instance)) {
+      (aidl::le_audio::LeAudioSourceTransport::interface_unicast_ &&
+       aidl::le_audio::LeAudioSourceTransport::instance_unicast_)) {
     source->Cleanup();
   }
 
-  delete (source_);
-  source_ = nullptr;
+  delete (unicast_source_);
+  unicast_source_ = nullptr;
 
   return true;
 }

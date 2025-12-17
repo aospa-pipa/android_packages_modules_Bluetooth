@@ -2506,12 +2506,22 @@ public class HeadsetService extends ConnectableProfile {
         if (toState == BluetoothHeadset.STATE_AUDIO_DISCONNECTED) {
             mStateMachinesThreadHandler.post(() -> {
                 // Unsuspend A2DP when SCO connection is gone and call state is idle
-                if (wrapper.isCallIdleAndScoNotManagedbyHal) {
-                    Log.i(TAG, "Resume A2DP when SCO is gone and call state is idle");
-                    mSystemInterface.getAudioManager().setA2dpSuspended(false);
-                    mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+                if (!Flags.hfpAvoidDeadlock()) {
+                    if (wrapper.isCallIdleAndScoNotManagedbyHal) {
+                        Log.i(TAG, "Resume A2DP when SCO is gone and call state is idle");
+                        mSystemInterface.getAudioManager().setA2dpSuspended(false);
+                        mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+                    }
                 }
+
             });
+        }
+        if (Flags.hfpAvoidDeadlock() && toState == BluetoothHeadset.STATE_AUDIO_DISCONNECTED) {
+            // Resume A2DP when call ended and SCO is not connected
+            if (mSystemInterface.isCallIdle() && !mSystemInterface.isScoManagedByAudioEnabled()) {
+                mSystemInterface.getAudioManager().setA2dpSuspended(false);
+                mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+            }
         }
     }
 

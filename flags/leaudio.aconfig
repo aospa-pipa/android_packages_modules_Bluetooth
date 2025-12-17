@@ -243,6 +243,7 @@ flag {
 
 flag {
     name: "leaudio_peripheral_feature"
+    is_exported: true
     namespace: "bluetooth"
     description: "LE Audio peripheral feature"
     bug: "428719427"
@@ -505,6 +506,16 @@ flag {
     namespace: "bluetooth"
     description: "Close gatt channel while it is connecting"
     bug: "459264847"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "le_audio_use_highest_sample_rate_for_mic"
+    namespace: "bluetooth"
+    description: "Use highest sample rate available for mic in LE audio"
+    bug: "464457342"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

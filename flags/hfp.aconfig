@@ -127,6 +127,16 @@ flag {
 }
 
 flag {
+    name: "call_end_codec_negotiation"
+    namespace: "bluetooth"
+    description: "Close SCO when end call during codec negotiation"
+    bug: "461739981"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "end_outgoing_call_on_chld"
     namespace: "bluetooth"
     description: "End outgoing call on CHLD"
@@ -172,4 +182,21 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "hfp_avoid_deadlock"
+    namespace: "bluetooth"
+    description: "do the task outside synchronized to avoid deadlock with Audio Fwk"
+    bug: "462377292"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "hfp_get_codec_api"
+    namespace: "bluetooth"
+    description: "Add api support for get hfp connection codec type"
+    bug: "464401354"
 }

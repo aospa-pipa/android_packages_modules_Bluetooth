@@ -1015,12 +1015,9 @@ static void bta_dm_adjust_roles(bool delay_role_switch) {
                 break;
             }
           } else {
-            uint64_t delay = BTA_DM_SWITCH_DELAY_TIMER_MS;
-            if (com_android_bluetooth_flags_extend_and_randomize_role_switch_delay()) {
-              delay = bluetooth::os::GenerateRandom() %
-                              (BTA_DM_MAX_SWITCH_DELAY_MS - BTA_DM_MIN_SWITCH_DELAY_MS) +
-                      BTA_DM_MIN_SWITCH_DELAY_MS;
-            }
+            uint64_t delay = bluetooth::os::GenerateRandom() %
+                                     (BTA_DM_MAX_SWITCH_DELAY_MS - BTA_DM_MIN_SWITCH_DELAY_MS) +
+                             BTA_DM_MIN_SWITCH_DELAY_MS;
             log::debug("Set timer to delay role switch:{}", delay);
             alarm_set_on_mloop(bta_dm_cb.switch_delay_timer, delay, bta_dm_delay_role_switch_cback,
                                NULL);
@@ -1319,7 +1316,7 @@ static void bta_dm_update_cust_uuid(uint8_t c_uu_idx, const Uuid& uuid, uint32_t
 #if (BTA_EIR_SERVER_NUM_CUSTOM_UUID > 0)
   if (c_uu_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID) {
     tBTA_CUSTOM_UUID& curr = bta_dm_cb.bta_custom_uuid[c_uu_idx];
-    curr.custom_uuid.UpdateUuid(uuid);
+    curr.custom_uuid = uuid;
     curr.handle = handle;
   } else {
     log::error("invalid uuid index {}", c_uu_idx);

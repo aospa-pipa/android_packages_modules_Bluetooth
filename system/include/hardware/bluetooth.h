@@ -58,7 +58,7 @@
 #define BT_PROFILE_SDP_CLIENT_ID "sdp"
 #define BT_PROFILE_SOCKETS_ID "socket"
 #define BT_PROFILE_VAPS_SERVER_ID "vaps_server"
-#define BT_PROFILE_VC_ID "volume_control"
+#define BT_PROFILE_VCP_CONTROLLER_ID "volume_control"
 
 /** Bluetooth Device Name */
 typedef struct {
@@ -259,6 +259,7 @@ typedef struct {
   bool le_channel_sounding_supported;
   bool le_high_data_rate_throughput_supported;
   bool le_hdt_phy_supported;
+  bool le_connected_isochronous_stream_peripheral_supported;
 } __attribute__((packed)) bt_local_le_features_t;
 
 typedef struct {
