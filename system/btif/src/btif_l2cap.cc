@@ -49,6 +49,7 @@
 #include "stack/l2cap/l2c_int.h"
 #include <cutils/properties.h>
 #include "stack/include/main_thread.h"
+#include "osi/include/properties.h"
 
 using namespace bluetooth;
 
@@ -463,8 +464,12 @@ static uint8_t L2cap_DataWrite(uint16_t cid, char* p_data, uint32_t len) {
   log::debug("L2cap_DataWrite:: Invoked");
   BT_HDR* p_msg = NULL;
   uint8_t *ptr, *p_start;
-
-  p_msg = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled) {
+    p_msg = (BT_HDR*)osi_malloc(OBX_LRG_DATA_BUF_SIZE);
+  } else {
+    p_msg = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
+  }
   log::debug("osi_malloc");
   if (!p_msg) {
     log::debug("No resource to allocate");

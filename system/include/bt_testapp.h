@@ -74,8 +74,28 @@ typedef enum {
   TEST_APP_L2CAP,
   TEST_APP_GATT,
   TEST_APP_GAP,
-  TEST_APP_SMP
+  TEST_APP_SMP,
+  TEST_APP_HCI
 } test_app_profile;
+
+typedef struct {
+  size_t size;
+  void (*ble_start_enc_v2)(uint16_t handle, Octet8 rand, uint16_t ediv,
+                           Octet16 ltk, uint8_t hdt_mic_length,
+                           uint8_t enc_type);
+  void (*le_set_hdt_default_parameters)(uint8_t preferred_mic_length,
+                                        uint8_t preferred_packet_format,
+                                        uint8_t preferred_acl_rates);
+  void (*le_read_maximum_data_length_v2)(uint8_t phy);
+  void (*ble_set_phy)(RawAddress address ,uint16_t handle, uint8_t all_phys, uint8_t tx_phys,
+                      uint8_t rx_phys, uint16_t phy_options);
+  void (*ble_set_data_length)(uint16_t handle, uint16_t tx_pdu_len, uint16_t tx_time);
+  void (*ble_set_default_phy)(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys);
+  void (*refresh_enc_key_v2)(uint16_t handle, uint8_t hdt_mic_length);
+  void (*ble_set_data_length_v2)(uint16_t handle, uint16_t tx_pdu_len, uint16_t tx_time,
+                                uint8_t phys);
+} bthci_test_interface_t;
+
 typedef struct {
   /** set to sizeof(Btl2capInterface) */
   size_t size;
