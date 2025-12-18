@@ -922,6 +922,290 @@ struct iso_impl {
     client_cbs->cig_callbacks->OnCisEvent(kIsoEventCisEstablishCmpl, &evt);
   }
 
+  void process_cis_est_pkt_v2(uint8_t len, uint8_t* data) {
+    cis_establish_cmpl_evt evt;
+
+    log::assert_that(len == 42, "Invalid packet length: {}", len);
+    STREAM_TO_UINT8(evt.status, data);
+    STREAM_TO_UINT16(evt.cis_conn_hdl, data);
+
+    auto stream_ptr = GetStream(evt.cis_conn_hdl);
+    log::assert_that(stream_ptr != nullptr, "No such cis: {}", evt.cis_conn_hdl);
+
+    auto* client_cbs = get_client_callbacks_from_stream(stream_ptr);
+    log::assert_that(client_cbs != nullptr, "Cannot find client callbacks for stream {}",
+                     stream_ptr->conn_handle);
+    log::assert_that(client_cbs->cig_callbacks != nullptr, "Invalid CIG callbacks");
+
+    BTM_LogHistory(
+            kBtmLogTag, cis_hdl_to_addr[evt.cis_conn_hdl], "CIS established event",
+            std::format("cis_handle:0x{:04x} status:{} flags:{:#x}", evt.cis_conn_hdl,
+                        hci_error_code_text((tHCI_STATUS)(evt.status)), stream_ptr->state_flags));
+
+    STREAM_TO_UINT24(evt.cig_sync_delay, data);
+    STREAM_TO_UINT24(evt.cis_sync_delay, data);
+    STREAM_TO_UINT24(evt.trans_lat_mtos, data);
+    STREAM_TO_UINT24(evt.trans_lat_stom, data);
+    STREAM_TO_UINT8(evt.phy_mtos, data);
+    STREAM_TO_UINT8(evt.phy_stom, data);
+    STREAM_TO_UINT8(evt.nse, data);
+    STREAM_TO_UINT8(evt.bn_mtos, data);
+    STREAM_TO_UINT8(evt.bn_stom, data);
+    STREAM_TO_UINT8(evt.ft_mtos, data);
+    STREAM_TO_UINT8(evt.ft_stom, data);
+    STREAM_TO_UINT16(evt.max_payload_mtos, data);
+    STREAM_TO_UINT16(evt.max_payload_stom, data);
+    STREAM_TO_UINT16(evt.iso_itv, data);
+    STREAM_TO_UINT24(evt.sub_itv, data);
+    STREAM_TO_UINT16(evt.max_sdu_c_to_p, data);
+    STREAM_TO_UINT16(evt.max_sdu_p_to_c, data);
+    STREAM_TO_UINT24(evt.sdu_itv_c_to_p, data);
+    STREAM_TO_UINT24(evt.sdu_itv_p_to_c, data);
+    STREAM_TO_UINT8(evt.framing, data);
+
+
+    stream_ptr->state_flags &= ~kStateFlagIsConnecting;
+
+    if (evt.status == HCI_SUCCESS) {
+      stream_ptr->state_flags |= kStateFlagIsConnected;
+    } else {
+      if (evt.status == HCI_ERR_CANCELLED_BY_LOCAL_HOST) {
+        /* kStateFlagIsCancelled is cleared in disconnection complete event
+         * which shall also arrive during CIS cancel procedure. If flag is
+         * cleared it means that Disconnect Complete Event arrived before this
+         * CIS established event. This is also fine. In such case clear address
+         * to handle mapping (which is used only for logs) and send
+         * Disconnect Complete event. Otherwise, wait with clearing it
+         * until Disconnect Complete event arrives
+         */
+
+        if (!(stream_ptr->state_flags & kStateFlagIsCancelled)) {
+          log::info(
+                  "Flag kStateFlagIsCancelled already cleared, means Disconnect Complete arrived "
+                  "before this event.");
+          cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+          if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+            log::info("cis: {:#x} cancelation completed, send disconnect complete event",
+                      evt.cis_conn_hdl);
+            send_disconnect_complete_event(client_cbs, stream_ptr->group_id, evt.cis_conn_hdl,
+                                           HCI_ERR_CONN_CAUSE_LOCAL_HOST);
+            return;
+          }
+        } else if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+          log::info(
+                  "Skip sending Established event for canceled cis: {:#x} flags: {:#x}, wait for "
+                  "disconnect complete event",
+                  evt.cis_conn_hdl, stream_ptr->state_flags);
+          return;
+        }
+      } else {
+        cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+      }
+    }
+
+    if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso() &&
+        (stream_ptr->state_flags & kStateFlagIsCancelled)) {
+      handle_race_on_canceling_cis(stream_ptr, evt.cis_conn_hdl);
+      return;
+    }
+    evt.cig_id = stream_ptr->group_id;
+
+    client_cbs->cig_callbacks->OnCisEvent(kIsoEventCisEstablishCmpl, &evt); 
+  }
+
+  void process_cis_est_pkt_v3(uint8_t len, uint8_t* data) {
+    cis_establish_cmpl_evt evt;
+
+    log::assert_that(len == 48, "Invalid packet length: {}", len);
+    STREAM_TO_UINT8(evt.status, data);
+    STREAM_TO_UINT16(evt.cis_conn_hdl, data);
+
+    auto stream_ptr = GetStream(evt.cis_conn_hdl);
+    log::assert_that(stream_ptr != nullptr, "No such cis: {}", evt.cis_conn_hdl);
+
+    auto* client_cbs = get_client_callbacks_from_stream(stream_ptr);
+    log::assert_that(client_cbs != nullptr, "Cannot find client callbacks for stream {}",
+                     stream_ptr->conn_handle);
+    log::assert_that(client_cbs->cig_callbacks != nullptr, "Invalid CIG callbacks");
+
+    BTM_LogHistory(
+            kBtmLogTag, cis_hdl_to_addr[evt.cis_conn_hdl], "CIS established event",
+            std::format("cis_handle:0x{:04x} status:{} flags:{:#x}", evt.cis_conn_hdl,
+                        hci_error_code_text((tHCI_STATUS)(evt.status)), stream_ptr->state_flags));
+
+    STREAM_TO_UINT24(evt.cig_sync_delay, data);
+    STREAM_TO_UINT24(evt.cis_sync_delay, data);
+    STREAM_TO_UINT24(evt.trans_lat_mtos, data);
+    STREAM_TO_UINT24(evt.trans_lat_stom, data);
+    STREAM_TO_UINT8(evt.phy_mtos, data);
+    STREAM_TO_UINT8(evt.phy_stom, data);
+    STREAM_TO_UINT8(evt.nse, data);
+    STREAM_TO_UINT8(evt.bn_mtos, data);
+    STREAM_TO_UINT8(evt.bn_stom, data);
+    STREAM_TO_UINT8(evt.ft_mtos, data);
+    STREAM_TO_UINT8(evt.ft_stom, data);
+    STREAM_TO_UINT16(evt.max_payload_mtos, data);
+    STREAM_TO_UINT16(evt.max_payload_stom, data);
+    STREAM_TO_UINT16(evt.iso_itv, data);
+    STREAM_TO_UINT24(evt.sub_itv, data);
+    STREAM_TO_UINT16(evt.max_sdu_c_to_p, data);
+    STREAM_TO_UINT16(evt.max_sdu_p_to_c, data);
+    STREAM_TO_UINT24(evt.sdu_itv_c_to_p, data);
+    STREAM_TO_UINT24(evt.sdu_itv_p_to_c, data);
+    STREAM_TO_UINT8(evt.framing, data);
+    STREAM_TO_UINT16(evt.rates_c_to_p, data);
+    STREAM_TO_UINT16(evt.rates_p_to_c, data);
+    STREAM_TO_UINT8(evt.config_id, data);
+    STREAM_TO_UINT8(evt.tl_group_id, data);
+
+
+    stream_ptr->state_flags &= ~kStateFlagIsConnecting;
+
+    if (evt.status == HCI_SUCCESS) {
+      stream_ptr->state_flags |= kStateFlagIsConnected;
+    } else {
+      if (evt.status == HCI_ERR_CANCELLED_BY_LOCAL_HOST) {
+        /* kStateFlagIsCancelled is cleared in disconnection complete event
+         * which shall also arrive during CIS cancel procedure. If flag is
+         * cleared it means that Disconnect Complete Event arrived before this
+         * CIS established event. This is also fine. In such case clear address
+         * to handle mapping (which is used only for logs) and send
+         * Disconnect Complete event. Otherwise, wait with clearing it
+         * until Disconnect Complete event arrives
+         */
+
+        if (!(stream_ptr->state_flags & kStateFlagIsCancelled)) {
+          log::info(
+                  "Flag kStateFlagIsCancelled already cleared, means Disconnect Complete arrived "
+                  "before this event.");
+          cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+          if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+            log::info("cis: {:#x} cancelation completed, send disconnect complete event",
+                      evt.cis_conn_hdl);
+            send_disconnect_complete_event(client_cbs, stream_ptr->group_id, evt.cis_conn_hdl,
+                                           HCI_ERR_CONN_CAUSE_LOCAL_HOST);
+            return;
+          }
+        } else if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+          log::info(
+                  "Skip sending Established event for canceled cis: {:#x} flags: {:#x}, wait for "
+                  "disconnect complete event",
+                  evt.cis_conn_hdl, stream_ptr->state_flags);
+          return;
+        }
+      } else {
+        cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+      }
+    }
+
+    if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso() &&
+        (stream_ptr->state_flags & kStateFlagIsCancelled)) {
+      handle_race_on_canceling_cis(stream_ptr, evt.cis_conn_hdl);
+      return;
+    }
+    evt.cig_id = stream_ptr->group_id;
+
+    client_cbs->cig_callbacks->OnCisEvent(kIsoEventCisEstablishCmpl, &evt);
+  }
+
+  void process_cis_est_pkt_v4(uint8_t len, uint8_t* data) {
+    cis_establish_cmpl_evt evt;
+
+    log::assert_that(len == 50, "Invalid packet length: {}", len);
+    STREAM_TO_UINT8(evt.status, data);
+    STREAM_TO_UINT16(evt.cis_conn_hdl, data);
+
+    auto stream_ptr = GetStream(evt.cis_conn_hdl);
+    log::assert_that(stream_ptr != nullptr, "No such cis: {}", evt.cis_conn_hdl);
+
+    auto* client_cbs = get_client_callbacks_from_stream(stream_ptr);
+    log::assert_that(client_cbs != nullptr, "Cannot find client callbacks for stream {}",
+                     stream_ptr->conn_handle);
+    log::assert_that(client_cbs->cig_callbacks != nullptr, "Invalid CIG callbacks");
+
+    BTM_LogHistory(
+            kBtmLogTag, cis_hdl_to_addr[evt.cis_conn_hdl], "CIS established event",
+            std::format("cis_handle:0x{:04x} status:{} flags:{:#x}", evt.cis_conn_hdl,
+                        hci_error_code_text((tHCI_STATUS)(evt.status)), stream_ptr->state_flags));
+
+    STREAM_TO_UINT24(evt.cig_sync_delay, data);
+    STREAM_TO_UINT24(evt.cis_sync_delay, data);
+    STREAM_TO_UINT24(evt.trans_lat_mtos, data);
+    STREAM_TO_UINT24(evt.trans_lat_stom, data);
+    STREAM_TO_UINT8(evt.phy_mtos, data);
+    STREAM_TO_UINT8(evt.phy_stom, data);
+    STREAM_TO_UINT8(evt.nse, data);
+    STREAM_TO_UINT8(evt.bn_mtos, data);
+    STREAM_TO_UINT8(evt.bn_stom, data);
+    STREAM_TO_UINT8(evt.ft_mtos, data);
+    STREAM_TO_UINT8(evt.ft_stom, data);
+    STREAM_TO_UINT16(evt.max_payload_mtos, data);
+    STREAM_TO_UINT16(evt.max_payload_stom, data);
+    STREAM_TO_UINT16(evt.iso_itv, data);
+    STREAM_TO_UINT24(evt.sub_itv, data);
+    STREAM_TO_UINT16(evt.max_sdu_c_to_p, data);
+    STREAM_TO_UINT16(evt.max_sdu_p_to_c, data);
+    STREAM_TO_UINT24(evt.sdu_itv_c_to_p, data);
+    STREAM_TO_UINT24(evt.sdu_itv_p_to_c, data);
+    STREAM_TO_UINT16(evt.rates_c_to_p, data);
+    STREAM_TO_UINT16(evt.rates_p_to_c, data);
+    STREAM_TO_UINT8(evt.config_id, data);
+    STREAM_TO_UINT8(evt.tl_group_id, data);
+    STREAM_TO_UINT8(evt.encryption_enabled, data);
+    STREAM_TO_UINT8(evt.mic_length, data);
+
+
+    stream_ptr->state_flags &= ~kStateFlagIsConnecting;
+
+    if (evt.status == HCI_SUCCESS) {
+      stream_ptr->state_flags |= kStateFlagIsConnected;
+    } else {
+      if (evt.status == HCI_ERR_CANCELLED_BY_LOCAL_HOST) {
+        /* kStateFlagIsCancelled is cleared in disconnection complete event
+         * which shall also arrive during CIS cancel procedure. If flag is
+         * cleared it means that Disconnect Complete Event arrived before this
+         * CIS established event. This is also fine. In such case clear address
+         * to handle mapping (which is used only for logs) and send
+         * Disconnect Complete event. Otherwise, wait with clearing it
+         * until Disconnect Complete event arrives
+         */
+
+        if (!(stream_ptr->state_flags & kStateFlagIsCancelled)) {
+          log::info(
+                  "Flag kStateFlagIsCancelled already cleared, means Disconnect Complete arrived "
+                  "before this event.");
+          cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+          if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+            log::info("cis: {:#x} cancelation completed, send disconnect complete event",
+                      evt.cis_conn_hdl);
+            send_disconnect_complete_event(client_cbs, stream_ptr->group_id, evt.cis_conn_hdl,
+                                           HCI_ERR_CONN_CAUSE_LOCAL_HOST);
+            return;
+          }
+        } else if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso()) {
+          log::info(
+                  "Skip sending Established event for canceled cis: {:#x} flags: {:#x}, wait for "
+                  "disconnect complete event",
+                  evt.cis_conn_hdl, stream_ptr->state_flags);
+          return;
+        }
+      } else {
+        cis_hdl_to_addr.erase(evt.cis_conn_hdl);
+      }
+    }
+
+    if (com_android_bluetooth_flags_btm_iso_improve_canceling_iso() &&
+        (stream_ptr->state_flags & kStateFlagIsCancelled)) {
+      handle_race_on_canceling_cis(stream_ptr, evt.cis_conn_hdl);
+      return;
+    }
+    evt.cig_id = stream_ptr->group_id;
+
+    client_cbs->cig_callbacks->OnCisEvent(kIsoEventCisEstablishCmpl, &evt);
+  }
+
+
+
   void disconnection_complete(uint16_t handle, uint8_t reason) {
     /* Check if this is an ISO handle */
     auto stream_ptr = GetStream(handle);
@@ -1045,6 +1329,75 @@ struct iso_impl {
       }
     }
 
+    auto* client_cbs = get_client_callbacks_from_big(evt.big_handle, true);
+    log::assert_that(client_cbs != nullptr, "Cannot find client callbacks for big {}",
+                     evt.big_handle);
+    log::assert_that(client_cbs->big_callbacks != nullptr, "Invalid BIG callbacks");
+    client_cbs->big_callbacks->OnBigSourceEvent(BigSourceEvent::kCreateCmpl, &evt);
+
+    if (stream_sz_before_big_create) {
+      return;
+    }
+
+    // Only set active for the first stream setup.
+    notify_iso_traffic_active(true);
+  }
+  
+  void process_create_big_cmpl_pkt_v2(uint8_t len, uint8_t* data) {
+    struct big_create_cmpl_evt evt;
+
+    log::assert_that(len >= 22, "Invalid packet length: {}", len);
+
+    STREAM_TO_UINT8(evt.status, data);
+    STREAM_TO_UINT8(evt.big_handle, data);
+    STREAM_TO_UINT24(evt.big_sync_delay, data);
+    STREAM_TO_UINT24(evt.transport_latency_big, data);
+    STREAM_TO_UINT8(evt.phy, data);
+    STREAM_TO_UINT8(evt.nse, data);
+    STREAM_TO_UINT8(evt.bn, data);
+    STREAM_TO_UINT8(evt.pto, data);
+    STREAM_TO_UINT8(evt.irc, data);
+    STREAM_TO_UINT16(evt.max_pdu, data);
+    STREAM_TO_UINT16(evt.iso_interval, data);
+    STREAM_TO_UINT8(evt.encryption_enabled, data);
+    STREAM_TO_UINT8(evt.mic_length, data);
+
+
+    uint8_t num_bis;
+    STREAM_TO_UINT8(num_bis, data);
+
+    log::assert_that(num_bis != 0, "Bis count is 0");
+    log::assert_that(len == (22 + num_bis * sizeof(uint16_t)),
+                     "Invalid packet length: {}. Number of bis: {}", len, num_bis);
+    auto group_it = big_handle_to_group_map_.find(evt.big_handle);
+    log::assert_that(group_it != big_handle_to_group_map_.end(),
+                     "Cannot find group for big_handle: {}", evt.big_handle);
+
+    size_t stream_sz_before_big_create = conn_hdl_to_iso_stream_map_.size();
+
+    for (auto i = 0; i < num_bis; ++i) {
+      uint16_t conn_handle;
+      STREAM_TO_UINT16(conn_handle, data);
+      evt.conn_handles.push_back(conn_handle);
+      group_it->second->stream_conn_handles.push_back(conn_handle);
+      log::info("received BIS conn_hdl {}", conn_handle);
+
+      if (evt.status == HCI_SUCCESS) {
+        auto stream_ptr = std::make_unique<iso_stream>();
+        stream_ptr->conn_handle = conn_handle;
+        stream_ptr->group_id = evt.big_handle;
+        stream_ptr->sdu_itv = last_big_create_req_sdu_itv_;
+        stream_ptr->sync_info = {.tx_seq_nb = 0, .rx_seq_nb = 0};
+        stream_ptr->used_credits = 0;
+        stream_ptr->state_flags = kStateFlagIsBroadcastSource;
+
+        log::verbose("BIG_HANDLE {}, bis_handle: {:#x}, flags: {:#x}, status {}", evt.big_handle,
+                     conn_handle, stream_ptr->state_flags,
+                     hci_status_code_text((tHCI_STATUS)(evt.status)));
+
+        conn_hdl_to_iso_stream_map_[conn_handle] = std::move(stream_ptr);
+      }
+    }
     auto* client_cbs = get_client_callbacks_from_big(evt.big_handle, true);
     log::assert_that(client_cbs != nullptr, "Cannot find client callbacks for big {}",
                      evt.big_handle);
@@ -1330,6 +1683,12 @@ struct iso_impl {
       case HCI_BLE_CIS_EST_EVT:
         process_cis_est_pkt(packet_len, packet);
         break;
+      case HCI_BLE_CIS_EST_EVT_V2:
+        process_cis_est_pkt_v2(packet_len, packet);
+        break;
+      case HCI_BLE_CIS_EST_EVT_V3:
+        process_cis_est_pkt_v3(packet_len, packet);
+        break;
       case HCI_BLE_CREATE_BIG_CPL_EVT:
         process_create_big_cmpl_pkt(packet_len, packet);
         break;
@@ -1354,6 +1713,19 @@ struct iso_impl {
       uint16_t delay, uint64_t bdAddr) {
     if (vsc_callback_ == nullptr) return;
     vsc_callback_->OnVscEvent(delay, mode, bdAddr);
+  }
+
+  void on_iso_hdt_event(uint8_t code, uint8_t* packet, uint16_t packet_len) {
+    switch (code) {
+      case HCI_BLE_CIS_EST_EVT_V4:
+        process_cis_est_pkt_v4(packet_len, packet);
+        break;
+      case HCI_BLE_CREATE_BIG_CPL_EVT_V2:
+        process_create_big_cmpl_pkt_v2(packet_len, packet);
+        break;
+      default:
+        log::error("Unhandled event code {}", code);
+    }
   }
 
   void handle_iso_data(BT_HDR* p_msg) {

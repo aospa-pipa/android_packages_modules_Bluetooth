@@ -191,6 +191,9 @@ struct big_create_cmpl_evt {
   uint8_t irc;
   uint16_t max_pdu;
   uint16_t iso_interval;
+  uint16_t rates;
+  uint8_t encryption_enabled;
+  uint8_t mic_length;
   std::vector<uint16_t> conn_handles;
 };
 

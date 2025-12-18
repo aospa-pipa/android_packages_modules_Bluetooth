@@ -366,10 +366,27 @@ tBTM_STATUS BTM_SetBleDataLength(const RawAddress& bd_addr, uint16_t tx_pdu_leng
     return tBTM_STATUS::BTM_UNKNOWN_ADDR;
   }
 
-  if (tx_pdu_length > BTM_BLE_DATA_SIZE_MAX) {
-    tx_pdu_length = BTM_BLE_DATA_SIZE_MAX;
-  } else if (tx_pdu_length < BTM_BLE_DATA_SIZE_MIN) {
-    tx_pdu_length = BTM_BLE_DATA_SIZE_MIN;
+  if (!get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
+    log::info("Unable to set data length because no le acl link connected to device");
+    return tBTM_STATUS::BTM_WRONG_MODE;
+  }
+
+  uint16_t hci_handle =
+          get_btm_client_interface().peer.BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy() &&
+        acl_peer_supports_ble_hdt_phy(hci_handle)) {
+    if (tx_pdu_length > BTM_HDT_DATA_SIZE_MAX) {
+      tx_pdu_length = BTM_HDT_DATA_SIZE_MAX;
+    } else if (tx_pdu_length < BTM_HDT_DATA_SIZE_MIN) {
+      tx_pdu_length = BTM_HDT_DATA_SIZE_MIN;
+    }
+  } else {
+    if (tx_pdu_length > BTM_BLE_DATA_SIZE_MAX) {
+      tx_pdu_length = BTM_BLE_DATA_SIZE_MAX;
+    } else if (tx_pdu_length < BTM_BLE_DATA_SIZE_MIN) {
+      tx_pdu_length = BTM_BLE_DATA_SIZE_MIN;
+    }
   }
 
   if (com_android_bluetooth_flags_set_max_data_length_for_lecoc() &&
@@ -397,30 +414,39 @@ tBTM_STATUS BTM_SetBleDataLength(const RawAddress& bd_addr, uint16_t tx_pdu_leng
     tx_time = BTM_BLE_DATA_TX_TIME_MAX;
   }
 
-  if (!get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
-    log::info("Unable to set data length because no le acl link connected to device");
-    return tBTM_STATUS::BTM_WRONG_MODE;
-  }
-
-  uint16_t hci_handle =
-          get_btm_client_interface().peer.BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
-
   if (!acl_peer_supports_ble_packet_extension(hci_handle)) {
     log::info("Remote device unable to support le packet extension");
     return tBTM_STATUS::BTM_ILLEGAL_VALUE;
   }
 
-  tx_pdu_length = std::min<uint16_t>(
-          tx_pdu_length,
-          bluetooth::shim::GetController()->GetLeMaximumDataLength().supported_max_tx_octets_);
-  tx_time = std::min<uint16_t>(
+  if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+               bluetooth::hci::OpCode::LE_READ_MAXIMUM_DATA_LENGTH_V2)) {
+    tx_pdu_length = std::min<uint16_t>(
+      tx_pdu_length,
+      bluetooth::shim::GetController()->GetLeMaximumDataLengthV2().supported_max_tx_octets_);
+    tx_time = std::min<uint16_t>(
+          tx_time,
+          bluetooth::shim::GetController()->GetLeMaximumDataLengthV2().supported_max_tx_time_);
+  } else {
+    tx_pdu_length = std::min<uint16_t>(
+      tx_pdu_length,
+      bluetooth::shim::GetController()->GetLeMaximumDataLength().supported_max_tx_octets_);
+    tx_time = std::min<uint16_t>(
           tx_time,
           bluetooth::shim::GetController()->GetLeMaximumDataLength().supported_max_tx_time_);
-
+  }
   log::info("Requesting actual tx_pdu_length:{} and tx_time:{} for bd_addr:{}", tx_pdu_length,
             tx_time, bd_addr);
 
-  btsnd_hcic_ble_set_data_length(hci_handle, tx_pdu_length, tx_time);
+  if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy() &&
+        acl_peer_supports_ble_hdt_phy(hci_handle) &&
+        bluetooth::shim::GetController()->IsSupported(
+          bluetooth::hci::OpCode::LE_SET_DATA_LENGTH_V2)) {
+    uint8_t phys = BTM_BLE_HDT_PHYS;
+    btsnd_hcic_ble_set_data_length_v2(hci_handle, tx_pdu_length, tx_time, phys);
+  } else {
+    btsnd_hcic_ble_set_data_length(hci_handle, tx_pdu_length, tx_time);
+  }
   p_device->set_suggested_tx_octect(tx_pdu_length);
   if (is_privileged_client) {
     p_lcb->set_is_datalen_set_by_privileged_client(true);

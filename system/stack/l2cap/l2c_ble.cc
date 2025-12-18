@@ -1212,9 +1212,15 @@ void l2cble_update_data_length(tL2C_LCB* p_lcb) {
       }
     }
   }
-
-  if (tx_mtu > BTM_BLE_DATA_SIZE_MAX) {
-    tx_mtu = BTM_BLE_DATA_SIZE_MAX;
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
+    if (tx_mtu > BTM_HDT_DATA_SIZE_MAX) {
+      tx_mtu = BTM_HDT_DATA_SIZE_MAX;
+    }
+  } else {
+    if (tx_mtu > BTM_BLE_DATA_SIZE_MAX) {
+      tx_mtu = BTM_BLE_DATA_SIZE_MAX;
+    }
   }
 
   /* update TX data length if changed */
@@ -1240,6 +1246,13 @@ static bool is_legal_tx_data_len(const uint16_t& tx_data_len) {
   return tx_data_len >= 0x001B && tx_data_len <= 0x00FB;
 }
 
+static bool is_legal_hdt_tx_data_len(const uint16_t& tx_data_len, uint16_t handle) {
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  return hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy() && 
+          acl_peer_supports_ble_hdt_phy(handle) && tx_data_len >= BTM_HDT_DATA_SIZE_MIN &&
+            tx_data_len <= BTM_HDT_DATA_SIZE_MAX;
+}
+
 void l2cble_process_data_length_change_event(uint16_t handle, uint16_t tx_data_len,
                                              uint16_t /* rx_data_len */) {
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_handle(handle);
@@ -1248,7 +1261,7 @@ void l2cble_process_data_length_change_event(uint16_t handle, uint16_t tx_data_l
     return;
   }
 
-  if (is_legal_tx_data_len(tx_data_len)) {
+  if (is_legal_tx_data_len(tx_data_len) || is_legal_hdt_tx_data_len(tx_data_len, handle)) {
     if (p_lcb->tx_data_len != tx_data_len) {
       log::debug(
               "Received data length change event for device:{} tx_data_len:{} => "
@@ -1270,6 +1283,11 @@ void l2cble_process_data_length_change_event(uint16_t handle, uint16_t tx_data_l
             p_lcb->remote_bd_addr, tx_data_len);
   }
   /* ignore rx_data len for now */
+}
+
+uint16_t l2cble_read_tx_data_length(uint16_t handle) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_handle(handle);
+  return p_lcb->tx_data_len;
 }
 
 /*******************************************************************************

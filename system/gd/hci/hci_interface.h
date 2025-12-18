@@ -79,6 +79,12 @@ public:
 
   virtual void UnregisterLeEventHandler(SubeventCode subevent_code) = 0;
 
+  virtual void RegisterHdtEventHandler(
+          SubeventCode subevent_code,
+          common::ContextualCallback<void(HdtEventView)> event_handler) = 0;
+
+  virtual void UnregisterHdtEventHandler(SubeventCode subevent_code) = 0;
+
   virtual void RegisterVendorSpecificEventHandler(
           VseSubeventCode subevent_code,
           common::ContextualCallback<void(VendorSpecificEventView)> event_handler) = 0;

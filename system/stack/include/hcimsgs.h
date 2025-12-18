@@ -396,4 +396,21 @@ void btsnd_hcic_configure_data_path(hci_data_direction_t data_path_direction, ui
 void btsnd_hcic_ble_set_big_channel_map_classification_vsc(uint8_t action, uint8_t big_handle,
                                                            const std::vector<uint16_t>& handles);
 
+void btsnd_hci_ble_set_default_phy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys);
+
+// HDT Commands
+
+void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
+                                              uint8_t preferred_packet_format,
+                                              uint8_t preferred_acl_rates);
+
+void btsnd_hcic_ble_start_enc_v2(uint16_t handle, Octet8 rand, uint16_t ediv,
+                              const Octet16& ltk, uint8_t hdt_mic_length, uint8_t enc_type);
+
+void btsnd_hcic_refresh_enc_key_v2(uint16_t conn_handle, uint8_t hdt_mic_length);
+
+void btsnd_hcic_ble_set_data_length_v2(uint16_t conn_handle, uint16_t tx_octets, uint16_t tx_time, uint8_t phys);
+
+void btsnd_hcic_ble_read_enc_key_sched_debug_mode();
+
 #endif

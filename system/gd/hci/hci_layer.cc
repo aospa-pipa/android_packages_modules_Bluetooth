@@ -495,6 +495,16 @@ struct HciLayer::impl {
     le_event_handlers_.erase(it);
   }
 
+  void register_hdt_event(SubeventCode event, ContextualCallback<void(HdtEventView)> handler) {
+    log::assert_that(hdt_event_handlers_.count(event) == 0,
+                     "Can not register a second handler for {}", SubeventCodeText(event));
+    hdt_event_handlers_[event] = handler;
+  }
+
+  void unregister_hdt_event(SubeventCode event) {
+    hdt_event_handlers_.erase(hdt_event_handlers_.find(event));
+  }
+
   void register_vs_event(VseSubeventCode event,
                          ContextualCallback<void(VendorSpecificEventView)> handler) {
     log::assert_that(vs_event_handlers_.count(event) == 0,
@@ -611,6 +621,9 @@ struct HciLayer::impl {
       case EventCode::LE_META_EVENT:
         on_le_meta_event(event);
         break;
+      case EventCode::HDT_EVENT:
+        on_hdt_event(event);
+        break;
       case EventCode::HARDWARE_ERROR:
         on_hardware_error(event);
         break;
@@ -653,6 +666,17 @@ struct HciLayer::impl {
     le_event_handlers_[subevent_code](meta_event_view);
   }
 
+  void on_hdt_event(EventView event) {
+    HdtEventView hdt_event_view = HdtEventView::Create(event);
+    log::assert_that(hdt_event_view.IsValid(), "assert failed: hdt_event_view.IsValid()");
+    SubeventCode subevent_code = hdt_event_view.GetSubeventCode();
+    if (hdt_event_handlers_.find(subevent_code) == hdt_event_handlers_.end()) {
+      log::warn("Unhandled hdt subevent of type {}", SubeventCodeText(subevent_code));
+      return;
+    }
+    hdt_event_handlers_[subevent_code](hdt_event_view);
+  }
+
   void on_vs_event(EventView event) {
     VendorSpecificEventView vs_event_view = VendorSpecificEventView::Create(event);
     log::assert_that(vs_event_view.IsValid(), "assert failed: vs_event_view.IsValid()");
@@ -677,6 +701,7 @@ struct HciLayer::impl {
 
   std::map<EventCode, ContextualCallback<void(EventView)>> event_handlers_;
   std::map<SubeventCode, ContextualCallback<void(LeMetaEventView)>> le_event_handlers_;
+  std::map<SubeventCode, ContextualCallback<void(HdtEventView)>> hdt_event_handlers_;
   std::map<VseSubeventCode, ContextualCallback<void(VendorSpecificEventView)>> vs_event_handlers_;
   std::optional<ContextualCallback<void(VendorSpecificEventView)>> vs_event_default_handler_;
 
@@ -867,6 +892,23 @@ void HciLayer::UnregisterLeEventHandler(SubeventCode event) {
     return;
   }
   impl_->handler_->CallOn(impl_, &impl::unregister_le_event, event);
+}
+
+void HciLayer::RegisterHdtEventHandler(SubeventCode event,
+                                      ContextualCallback<void(HdtEventView)> handler) {
+  std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
+  if (life_cycle_stopped) {
+    return;
+  }
+  impl_->handler_->CallOn(impl_, &impl::register_hdt_event, event, handler);
+}
+
+void HciLayer::UnregisterHdtEventHandler(SubeventCode event) {
+  std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
+  if (life_cycle_stopped) {
+    return;
+  }
+  impl_->handler_->CallOn(impl_, &impl::unregister_hdt_event, event);
 }
 
 void HciLayer::RegisterVendorSpecificEventHandler(
