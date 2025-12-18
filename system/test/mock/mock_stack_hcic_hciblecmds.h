@@ -452,6 +452,82 @@ struct btsnd_hcic_ble_big_terminate_sync {
 };
 extern struct btsnd_hcic_ble_big_terminate_sync btsnd_hcic_ble_big_terminate_sync;
 
+// Name: btsnd_hci_ble_set_default_phy
+// Params: uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys
+// Return: void
+struct btsnd_hci_ble_set_default_phy {
+  std::function<void(uint8_t, uint8_t, uint8_t)> body{
+          [](uint8_t /* all_phys */, uint8_t /* tx_phys */, uint8_t /* rx_phys */) {}};
+  void operator()(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys) {
+    body(all_phys, tx_phys, rx_phys);
+  }
+};
+extern struct btsnd_hci_ble_set_default_phy btsnd_hci_ble_set_default_phy;
+
+// Name: btsnd_hcic_le_set_hdt_default_parameters
+// Params: uint8_t preferred_mic_length, uint8_t preferred_packet_format, uint8_t preferred_acl_rates
+// Return: void
+struct btsnd_hcic_le_set_hdt_default_parameters {
+  std::function<void(uint8_t, uint8_t, uint8_t)> body{
+          [](uint8_t /* preferred_mic_length */, uint8_t /* preferred_packet_format */,
+             uint8_t /* preferred_acl_rates */) {}};
+  void operator()(uint8_t preferred_mic_length, uint8_t preferred_packet_format,
+                  uint8_t preferred_acl_rates) {
+    body(preferred_mic_length, preferred_packet_format, preferred_acl_rates);
+  }
+};
+extern struct btsnd_hcic_le_set_hdt_default_parameters btsnd_hcic_le_set_hdt_default_parameters;
+
+// Name: btsnd_hcic_ble_start_enc_v2
+// Params: uint16_t handle, Octet8 rand, uint16_t ediv, const Octet16& ltk, 
+// uint8_t hdt_mic_length, uint8_t enc_type Return: void
+struct btsnd_hcic_ble_start_enc_v2 {
+  std::function<void(uint16_t, Octet8, uint16_t, const Octet16&, uint8_t, uint8_t)> body{
+          [](uint16_t /* handle */, Octet8 /* rand */, uint16_t /* ediv */,
+             const Octet16& /* ltk */, uint8_t /* hdt_mic_length */, uint8_t /* enc_type */) {}};
+  void operator()(uint16_t handle, Octet8 rand, uint16_t ediv, const Octet16& ltk,
+                  uint8_t hdt_mic_length, uint8_t enc_type) {
+    body(handle, rand, ediv, ltk, hdt_mic_length, enc_type);
+  }
+};
+extern struct btsnd_hcic_ble_start_enc_v2 btsnd_hcic_ble_start_enc_v2;
+
+// Name: btsnd_hcic_refresh_enc_key_v2
+// Params: uint16_t conn_handle, uint8_t hdt_mic_length
+// Return: void
+struct btsnd_hcic_refresh_enc_key_v2 {
+  std::function<void(uint16_t, uint8_t)> body{
+          [](uint16_t /* conn_handle */, uint8_t /* hdt_mic_length */) {}};
+  void operator()(uint16_t conn_handle, uint8_t hdt_mic_length) {
+    body(conn_handle, hdt_mic_length);
+  }
+};
+extern struct btsnd_hcic_refresh_enc_key_v2 btsnd_hcic_refresh_enc_key_v2;
+
+
+// Name: btsnd_hcic_ble_set_data_length_v2
+// Params: uint16_t conn_handle, uint16_t tx_octets, uint16_t tx_time, uint8_t phys
+// Return: void
+struct btsnd_hcic_ble_set_data_length_v2 {
+  std::function<void(uint16_t, uint16_t, uint16_t, uint8_t)> body{
+          [](uint16_t /* conn_handle */, uint16_t /* tx_octets */, uint16_t /* tx_time */,
+             uint8_t /* phys */) {}};
+  void operator()(uint16_t conn_handle, uint16_t tx_octets, uint16_t tx_time, uint8_t phys) {
+    body(conn_handle, tx_octets, tx_time, phys);
+  }
+};
+extern struct btsnd_hcic_ble_set_data_length_v2 btsnd_hcic_ble_set_data_length_v2;
+
+// Name: btsnd_hcic_ble_read_enc_key_sched_debug_mode
+// Params: void
+// Return: void
+struct btsnd_hcic_ble_read_enc_key_sched_debug_mode {
+  std::function<void()> body{[]() {}};
+  void operator()() { body(); }
+};
+extern struct btsnd_hcic_ble_read_enc_key_sched_debug_mode btsnd_hcic_ble_read_enc_key_sched_debug_mode;
+// 
+
 }  // namespace stack_hcic_hciblecmds
 }  // namespace mock
 }  // namespace test

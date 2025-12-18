@@ -31,6 +31,10 @@ constexpr SubeventCode LeConnectionManagementEvents[] = {
         // SubeventCode::READ_REMOTE_FEATURES_COMPLETE
 };
 
+constexpr SubeventCode LeHdtConnectionManagementEvents[] = {
+        SubeventCode::ENCRYPTION_CHANGE_V3,     SubeventCode::ENCRYPTION_KEY_REFRESH_COMPLETE_V2,
+        SubeventCode::DATA_LENGTH_CHANGE_V2,    SubeventCode::LE_TEST_REPORT_HDT_LINK_QUALITY,
+};
 typedef CommandInterface<AclCommandBuilder> LeAclConnectionInterface;
 
 }  // namespace hci

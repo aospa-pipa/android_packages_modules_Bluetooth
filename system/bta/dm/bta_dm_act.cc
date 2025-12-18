@@ -1501,8 +1501,16 @@ void bta_dm_ble_update_conn_params(const RawAddress& bd_addr, uint16_t min_int, 
 
 /** This function set the maximum transmission packet size */
 void bta_dm_ble_set_data_length(const RawAddress& bd_addr) {
-  uint16_t max_len =
-          bluetooth::shim::GetController()->GetLeMaximumDataLength().supported_max_tx_octets_;
+  uint16_t max_len = 0;
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                        bluetooth::hci::OpCode::LE_READ_MAXIMUM_DATA_LENGTH_V2)) {
+    max_len = bluetooth::shim::GetController()->GetLeMaximumDataLengthV2()
+                      .supported_max_tx_octets_;
+  } else {
+    max_len = bluetooth::shim::GetController()->GetLeMaximumDataLength()
+                      .supported_max_tx_octets_;
+  }
 
   if (get_btm_client_interface().ble.BTM_SetBleDataLength(
               bd_addr, max_len, /* is_privileged_client */ false) != tBTM_STATUS::BTM_SUCCESS) {

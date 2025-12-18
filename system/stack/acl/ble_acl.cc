@@ -146,11 +146,11 @@ void acl_ble_update_request_event_received(uint16_t handle, uint16_t interval_mi
 }
 
 void acl_ble_data_length_change_event(uint16_t handle, uint16_t max_tx_octets, uint16_t max_tx_time,
-                                      uint16_t max_rx_octets, uint16_t max_rx_time) {
+                                      uint16_t max_rx_octets, uint16_t max_rx_time, uint8_t phys) {
   log::debug(
           "Data length change event received handle:0x{:04x} max_tx_octets:{} "
-          "max_tx_time:{} max_rx_octets:{} max_rx_time:{}",
-          handle, max_tx_octets, max_tx_time, max_rx_octets, max_rx_time);
+          "max_tx_time:{} max_rx_octets:{} max_rx_time:{} phys: {}",
+          handle, max_tx_octets, max_tx_time, max_rx_octets, max_rx_time, phys);
   l2cble_process_data_length_change_event(handle, max_tx_octets, max_rx_octets);
 }
 

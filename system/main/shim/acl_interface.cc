@@ -20,6 +20,7 @@
 #include "stack/include/acl_hci_link_interface.h"
 #include "stack/include/ble_acl_interface.h"
 #include "stack/include/sec_hci_link_interface.h"
+#include "stack/include/l2cap_hci_link_interface.h"
 #include "stack/l2cap/l2c_int.h"
 
 struct tBTM_ESCO_DATA;
@@ -80,6 +81,9 @@ const acl_interface_t& GetAclInterface() {
           .link.le.on_read_remote_version_information_complete = btm_read_remote_version_complete,
           .link.le.on_phy_update = gatt_notify_phy_updated,
           .link.le.on_le_subrate_change = on_le_subrate_change,
+          .link.le.on_encryption_change_v3 = btm_sec_encryption_change_evt,
+          .link.le.on_encryption_key_refresh_complete_v2 = btm_sec_encryption_key_refresh_complete,
+          .link.le.read_tx_data_length = l2cble_read_tx_data_length,
   };
   return acl_interface;
 }

@@ -81,6 +81,7 @@ constexpr uint8_t PHY_LE_CODED = 0x04;
 constexpr uint8_t PHY_HDT = 0x10;
 constexpr bool kEnableBlePrivacy = true;
 constexpr bool kEnableBleOnlyInit1mPhy = false;
+constexpr uint8_t kDefaultPhys = 0x00;
 
 static const std::string kPropertyMinConnInterval = "bluetooth.core.le.min_connection_interval";
 static const std::string kPropertyMaxConnInterval = "bluetooth.core.le.max_connection_interval";
@@ -159,6 +160,9 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
             handler_->BindOn(this, &le_impl::on_le_event),
             handler_->BindOn(this, &le_impl::on_le_disconnect),
             handler_->BindOn(this, &le_impl::on_le_read_remote_version_information));
+    for (const auto event : LeHdtConnectionManagementEvents) {
+      hci_layer_.RegisterHdtEventHandler(event, handler_->BindOn(this, &le_impl::on_hdt_event));
+    }
     le_address_manager_ = new LeAddressManager(
             common::Bind(&le_impl::enqueue_command, common::Unretained(this)), handler_,
             controller.GetMacAddress(), controller.GetLeFilterAcceptListSize(),
@@ -171,6 +175,9 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
     }
     delete le_address_manager_;
     hci_layer_.PutLeAclConnectionInterface();
+    for (const auto event : LeHdtConnectionManagementEvents) {
+      hci_layer_.UnregisterHdtEventHandler(event);
+    }
     connections.reset();
   }
 
@@ -237,6 +244,24 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
     }
   }
 
+  void on_hdt_event(HdtEventView event_packet) {
+    log::info("Received HDT event (event code 0xFE)");
+    SubeventCode code = event_packet.GetSubeventCode();
+    switch (code) {
+      case SubeventCode::ENCRYPTION_CHANGE_V3:
+        on_encryption_change_v3(event_packet);
+        break;
+      case SubeventCode::ENCRYPTION_KEY_REFRESH_COMPLETE_V2:
+        on_encryption_key_refresh_complete_v2(event_packet);
+        break;
+      case SubeventCode::DATA_LENGTH_CHANGE_V2:
+        on_data_length_change_v2(event_packet);
+        break;
+      case SubeventCode::LE_TEST_REPORT_HDT_LINK_QUALITY:
+      default:
+        log::fatal("Unhandled event code {}", SubeventCodeText(code));
+    }
+  }
 private:
   static constexpr uint16_t kIllegalConnectionHandle = 0xffff;
   // Stores the connection_complete events which are not processed immediately because another
@@ -718,7 +743,22 @@ public:
     connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
       callbacks->OnDataLengthChange(
               data_length_view.GetMaxTxOctets(), data_length_view.GetMaxTxTime(),
-              data_length_view.GetMaxRxOctets(), data_length_view.GetMaxRxTime());
+              data_length_view.GetMaxRxOctets(), data_length_view.GetMaxRxTime(), kDefaultPhys);
+    });
+  }
+
+  void on_data_length_change_v2(HdtEventView view) {
+    auto data_length_v2_view = LeDataLengthChangeV2View::Create(view);
+    if (!data_length_v2_view.IsValid()) {
+      log::error("Invalid packet");
+      return;
+    }
+    auto handle = data_length_v2_view.GetConnectionHandle();
+    connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
+      callbacks->OnDataLengthChange(
+              data_length_v2_view.GetMaxTxOctets(), data_length_v2_view.GetMaxTxTime(),
+              data_length_v2_view.GetMaxRxOctets(), data_length_v2_view.GetMaxRxTime(),
+              data_length_v2_view.GetPhys());
     });
   }
 
@@ -752,6 +792,40 @@ public:
                                    subrate_change_view.GetSupervisionTimeout());
     });
   }
+
+  void on_encryption_change_v3(HdtEventView view) {
+    auto encryption_change_v3_view = EncryptionChangeV3View::Create(view);
+    if (!encryption_change_v3_view.IsValid()) {
+      log::error("Invalid packet");
+      return;
+    }
+    auto handle = encryption_change_v3_view.GetConnectionHandle();
+    connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
+      callbacks->OnEncryptionChangeV3(encryption_change_v3_view.GetStatus(),
+                                      static_cast<uint8_t>(encryption_change_v3_view.GetEncryptionEnabled()),
+                                      encryption_change_v3_view.GetKeySize(),
+                                      encryption_change_v3_view.GetMicLength(),
+                                      encryption_change_v3_view.GetKeySchedEnabled(),
+                                      encryption_change_v3_view.GetKeySchedDebugFlag());
+    });
+  }
+
+  
+  void on_encryption_key_refresh_complete_v2(HdtEventView view) {
+    auto refresh_view = EncryptionKeyRefreshCompleteV2View::Create(view);
+    if (!refresh_view.IsValid()) {
+      log::error("Invalid packet");
+      return;
+    }
+    auto handle = refresh_view.GetConnectionHandle();
+    connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
+      callbacks->OnEncryptionKeyRefreshCompleteV2(refresh_view.GetStatus(),
+                                                  refresh_view.GetMicLength(),
+                                                  refresh_view.GetKeySchedEnabled(),
+                                                  refresh_view.GetKeySchedDebugFlag());
+    });
+   }
+
 
   uint16_t HACK_get_handle(Address address) { return connections.HACK_get_handle(address); }
 

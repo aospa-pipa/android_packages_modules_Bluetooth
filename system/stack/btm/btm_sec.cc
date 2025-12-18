@@ -3541,7 +3541,8 @@ static void read_encryption_key_size_complete_after_encryption_change(uint8_t en
  *
  ******************************************************************************/
 void btm_sec_encryption_change_evt(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
-                                   uint8_t key_size) {
+                                   uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                   uint8_t key_sched_debug_flag) {
   if (status == HCI_SUCCESS && encr_enable != 0 && !BTM_IsBleConnection(handle)) {
     if (key_size != 0) {
       read_encryption_key_size_complete_after_encryption_change(encr_enable, status, handle,
@@ -4118,7 +4119,10 @@ static void read_encryption_key_size_complete_after_key_refresh(uint8_t encr_ena
   btm_sec_encrypt_change(handle, static_cast<tHCI_STATUS>(status), encr_enable, key_size);
 }
 
-void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status) {
+void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status,
+                                             uint8_t mic_length, uint8_t key_sched_enabled,
+                                             uint8_t key_sched_debug_flag) {
+
   if (status != HCI_SUCCESS || BTM_IsBleConnection(handle) ||
       // Skip encryption key size check when using set_min_encryption_key_size
       bluetooth::shim::GetController()->IsSupported(

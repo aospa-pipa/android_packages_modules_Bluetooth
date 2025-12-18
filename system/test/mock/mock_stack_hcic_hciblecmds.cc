@@ -62,6 +62,12 @@ struct btsnd_hcic_ble_set_big_channel_map_classification_vsc
         btsnd_hcic_ble_set_big_channel_map_classification_vsc;
 struct btsnd_hcic_ble_big_create_sync btsnd_hcic_ble_big_create_sync;
 struct btsnd_hcic_ble_big_terminate_sync btsnd_hcic_ble_big_terminate_sync;
+struct btsnd_hci_ble_set_default_phy btsnd_hci_ble_set_default_phy;
+struct btsnd_hcic_le_set_hdt_default_parameters btsnd_hcic_le_set_hdt_default_parameters;
+struct btsnd_hcic_ble_start_enc_v2 btsnd_hcic_ble_start_enc_v2;
+struct btsnd_hcic_refresh_enc_key_v2 btsnd_hcic_refresh_enc_key_v2;
+struct btsnd_hcic_ble_set_data_length_v2 btsnd_hcic_ble_set_data_length_v2;
+struct btsnd_hcic_ble_read_enc_key_sched_debug_mode btsnd_hcic_ble_read_enc_key_sched_debug_mode;
 
 }  // namespace stack_hcic_hciblecmds
 }  // namespace mock
@@ -232,6 +238,38 @@ void btsnd_hcic_ble_big_terminate_sync(uint8_t big_handle,
                                        base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
   inc_func_call_count(__func__);
   test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_big_terminate_sync(big_handle, std::move(cb));
+}
+
+void btsnd_hci_ble_set_default_phy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hci_ble_set_default_phy(all_phys, tx_phys, rx_phys);
+}
+void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
+                                              uint8_t preferred_packet_format,
+                                              uint8_t preferred_acl_rates) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_le_set_hdt_default_parameters(
+          preferred_mic_length, preferred_packet_format, preferred_acl_rates);
+}
+void btsnd_hcic_ble_start_enc_v2(uint16_t handle, Octet8 rand, uint16_t ediv,
+                                 const Octet16& ltk, uint8_t hdt_mic_length, uint8_t enc_type) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_start_enc_v2(
+          handle, rand, ediv, ltk, hdt_mic_length, enc_type);
+}
+void btsnd_hcic_refresh_enc_key_v2(uint16_t conn_handle, uint8_t hdt_mic_length) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_refresh_enc_key_v2(conn_handle, hdt_mic_length);
+}
+void btsnd_hcic_ble_set_data_length_v2(uint16_t conn_handle, uint16_t tx_octets,
+                                       uint16_t tx_time, uint8_t phys) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_set_data_length_v2(
+          conn_handle, tx_octets, tx_time, phys);
+}
+void btsnd_hcic_ble_read_enc_key_sched_debug_mode(void) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_read_enc_key_sched_debug_mode();
 }
 // Mocked functions complete
 // END mockcify generation

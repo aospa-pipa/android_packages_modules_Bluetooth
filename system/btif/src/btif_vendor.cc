@@ -95,8 +95,18 @@
 #include "stack/include/btm_client_interface.h"
 #if TEST_APP_INTERFACE == TRUE
 #include <bt_testapp.h>
+#include "stack/include/hcimsgs.h"
+#include "main/shim/entry.h"
+#include "hci/hci_layer.h"
+#include "os/handler.h"
+#include "stack/include/btm_ble_api.h"
+#include "bluetooth/types/address.h"
+#include "gd/hci/controller.h"
+#include <array>
 #endif
 using namespace bluetooth;
+using namespace bluetooth::hci;
+using namespace bluetooth::os;
 
 extern bool interface_ready(void);
 #define SOC_NAME_MAX_SIZE 15
@@ -191,6 +201,96 @@ static void cleanup(void) {
   }
 }
 
+static void ble_start_enc_v2_wrapper(uint16_t handle, Octet8 rand,
+                                     uint16_t ediv, Octet16 ltk,
+                                     uint8_t hdt_mic_length,
+                                     uint8_t enc_type) {
+  btsnd_hcic_ble_start_enc_v2(handle, rand, ediv, ltk, hdt_mic_length, enc_type);
+  log::info("Sent btsnd_hcic_ble_start_enc_v2 command from wrapper.");
+}
+
+static void le_set_hdt_default_parameters_wrapper(uint8_t preferred_mic_length,
+                                                  uint8_t preferred_packet_format,
+                                                  uint8_t preferred_acl_rates) {
+  btsnd_hcic_le_set_hdt_default_parameters(preferred_mic_length, preferred_packet_format,
+                                            preferred_acl_rates);
+  log::info("Sent btsnd_hcic_le_set_hdt_default_parameters command from wrapper.");
+}
+
+static void le_set_data_length_wrapper(uint16_t handle,
+                                                  uint16_t tx_pdu_length, uint16_t tx_time) { 
+  btsnd_hcic_ble_set_data_length(handle, tx_pdu_length, tx_time);
+  log::info("Sent btsnd_hcic_le_set_hdt_default_parameters command from wrapper.");
+}
+
+static void le_read_maximum_data_length_v2_complete_handler(CommandCompleteView view) {
+  log::warn("Received command complete for LeReadMaximumDataLengthV2");
+  auto le_maximum_data_length_v2_ = bluetooth::shim::GetController()->GetLeMaximumDataLengthV2();
+  auto complete_view = LeReadMaximumDataLengthV2CompleteView::Create(view);
+  if (complete_view.IsValid()) {
+    log::info("LeReadMaximumDataLengthV2Builder command complete. Status: {}",
+              ErrorCodeText(complete_view.GetStatus()));
+    bluetooth::shim::GetController()->GetLeMaximumDataLengthV2() = complete_view.GetLeMaximumDataLengthV2();
+  } else {
+    log::error("LeReadMaximumDataLengthV2Builder command complete, but view is invalid.");
+  }
+}
+
+static void le_read_maximum_data_length_v2_wrapper(uint8_t phy) {
+  HciInterface* hci = bluetooth::shim::GetHciLayer();
+  Handler* handler = bluetooth::shim::GetGdShimHandler();
+
+  if (hci != nullptr && handler != nullptr) {
+    std::unique_ptr<LeReadMaximumDataLengthV2Builder> command =
+        LeReadMaximumDataLengthV2Builder::Create(phy);
+    hci->EnqueueCommand(
+        std::move(command),
+        handler->BindOnce(le_read_maximum_data_length_v2_complete_handler));
+    log::info("Enqueued LeReadMaximumDataLengthV2Builder command.");
+  } else {
+    log::error("Failed to get HciLayer or Handler for LeReadMaximumDataLengthV2Builder command.");
+  }
+}
+
+static void ble_set_phy_wrapper(RawAddress address, uint16_t handle, uint8_t all_phys, uint8_t tx_phys,
+                                uint8_t rx_phys, uint16_t phy_options) {
+
+              
+  BTM_BleSetPhy(address, tx_phys, rx_phys, phy_options);
+  log::info("Sent BTM_BleSetPhy to wrapper.");
+}
+
+static void le_set_default_phy_wrapper(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys) {
+  btsnd_hci_ble_set_default_phy(all_phys, tx_phys, rx_phys);
+  log::info("Sent btsnd_hci_ble_set_default_phy command from wrapper.");
+}
+static void refresh_enc_key_v2_wrapper(uint16_t handle, uint8_t hdt_mic_length) {
+  btsnd_hcic_refresh_enc_key_v2(handle, hdt_mic_length);
+  log::info("Sent btsnd_hcic_refresh_enc_key_v2 command from wrapper.");
+}
+
+static void le_set_data_length_v2_wrapper(uint16_t handle, uint16_t tx_pdu_length,
+                                       uint16_t tx_time, uint8_t phys) { 
+  btsnd_hcic_ble_set_data_length_v2(handle, tx_pdu_length, tx_time, phys);
+  log::info("Sent btsnd_hcic_le_set_hdt_default_parameters command from wrapper.");
+}
+
+static const bthci_test_interface_t bthciTestInterface = {
+    sizeof(bthciTestInterface),
+    ble_start_enc_v2_wrapper,
+    le_set_hdt_default_parameters_wrapper,
+    le_read_maximum_data_length_v2_wrapper,
+    ble_set_phy_wrapper,
+    le_set_data_length_wrapper,
+    le_set_default_phy_wrapper,
+    refresh_enc_key_v2_wrapper,
+    le_set_data_length_v2_wrapper,
+};
+
+const bthci_test_interface_t* btif_hci_test_get_interface(void) {
+  return &bthciTestInterface;
+}
+
 /*******************************************************************************
 **
 ** Function         get_testapp_interface
@@ -212,6 +312,8 @@ static const void* get_testapp_interface(int test_app_profile) {
       return btif_smp_get_interface();
     case TEST_APP_GAP:
       return btif_gap_get_interface();
+    case TEST_APP_HCI:
+      return btif_hci_test_get_interface();
     default:
       return NULL;
   }

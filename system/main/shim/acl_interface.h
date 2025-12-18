@@ -92,7 +92,7 @@ typedef struct {
   void (*on_parameter_update_request)(uint16_t handle, uint16_t interval_min, uint16_t interval_max,
                                       uint16_t latency, uint16_t supervision_timeout);
   void (*on_data_length_change)(uint16_t handle, uint16_t max_tx_octets, uint16_t max_tx_time,
-                                uint16_t max_rx_octets, uint16_t max_rx_time);
+                                uint16_t max_rx_octets, uint16_t max_rx_time, uint8_t phys);
   void (*on_read_remote_version_information_complete)(tHCI_STATUS status, uint16_t handle,
                                                       uint8_t lmp_version,
                                                       uint16_t manufacturer_name,
@@ -101,6 +101,13 @@ typedef struct {
 
   void (*on_le_subrate_change)(uint16_t handle, uint16_t subrate_factor, uint16_t latency,
                                uint16_t cont_num, uint16_t timeout, uint8_t status);
+  void (*on_encryption_change_v3)(uint16_t handle, tHCI_STATUS hci_status, uint8_t encr_enable,
+                                  uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                  uint8_t key_sched_debug_flag);
+  void (*on_encryption_key_refresh_complete_v2)(uint16_t handle, tHCI_STATUS hci_status,
+                                                uint8_t mic_length, uint8_t key_sched_enabled,
+                                                uint8_t key_sched_debug_flag);
+  uint16_t (*read_tx_data_length)(uint16_t handle);
 } acl_le_link_interface_t;
 
 typedef struct {

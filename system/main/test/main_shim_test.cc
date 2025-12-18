@@ -195,6 +195,9 @@ shim::acl_interface_t acl_interface{
         .link.le.on_parameter_update_request = nullptr,
         .link.le.on_data_length_change = nullptr,
         .link.le.on_read_remote_version_information_complete = nullptr,
+        .link.le.on_encryption_change_v3 = nullptr,
+        .link.le.on_encryption_key_refresh_complete_v2 = nullptr,
+        .link.le.read_tx_data_length = nullptr,
 };
 
 static const shim::acl_interface_t& GetMockAclInterface() { return acl_interface; }

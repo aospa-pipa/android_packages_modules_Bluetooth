@@ -34,6 +34,7 @@
 #include "hci/event_checkers.h"
 #include "hci/hci_interface.h"
 #include "os/system_properties.h"
+#include "osi/include/properties.h"
 #include "stack/include/hcidefs.h"
 #if TARGET_FLOSS
 #include "sysprops/sysprops_module.h"
@@ -48,6 +49,11 @@ constexpr int kMaxEncryptionKeySize = 16;
 
 constexpr bool kDefaultVendorCapabilitiesEnabled = true;
 constexpr bool kDefaultRpaOffload = false;
+constexpr int kHdtPhy = 5;
+
+constexpr uint8_t kDefaultPreferredMicLength = 0x01;
+constexpr uint8_t kDefaultPreferredPacketFormat = 0x01;
+constexpr uint8_t kDefaultPreferredAclRates = 0x00;
 
 static const std::string kPropertyVendorCapabilitiesEnabled =
         "bluetooth.core.le.vendor_capabilities.enabled";
@@ -104,6 +110,10 @@ struct ControllerImpl::impl {
     if (module_.SupportsBleChannelSounding()) {
       le_event_mask |= kLeCSEventMask;
     }
+    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+    if (hdt_enabled && module_.SupportsBleHDTPhy()) {
+      le_event_mask |= kLeHDTEventMask;
+    }
     le_set_event_mask(MaskLeEventMask(local_version_information_.hci_version_, le_event_mask));
 
     hci_->EnqueueCommand(
@@ -153,8 +163,38 @@ struct ControllerImpl::impl {
       le_resolving_list_size_ = 0;
     }
 
-    if (is_supported(OpCode::LE_READ_MAXIMUM_DATA_LENGTH) &&
+    if (hdt_enabled && is_supported(OpCode::LE_SET_HDT_DEFAULT_PARAMETERS)) {
+      hci_->EnqueueCommand(
+              LeSetHdtDefaultParametersBuilder::Create(kDefaultPreferredMicLength,
+                                                       kDefaultPreferredPacketFormat,
+                                                       kDefaultPreferredAclRates),
+              handler_->BindOnceOn(this, &ControllerImpl::impl::le_set_hdt_default_parameters_handler));
+    }
+
+    if (hdt_enabled && is_supported(OpCode::LE_READ_MAXIMUM_DATA_LENGTH_V2) &&
         module_.SupportsBleDataPacketLengthExtension()) {
+      uint8_t phy = 0;
+      if (module_.SupportsBleHDTPhy()) {
+        phy = kHdtPhy;
+      }
+      hci_->EnqueueCommand(
+        LeReadMaximumDataLengthV2Builder::Create(phy),
+        handler_->BindOnceOn(this, &ControllerImpl::impl::le_read_maximum_data_length_handler_v2));
+    } else {
+      log::info("LE_READ_MAX_DATA_LENGTH_V2 not supported, defaulting to 0");
+      le_maximum_data_length_v2_.supported_max_rx_octets_ = 0;
+      le_maximum_data_length_v2_.supported_max_rx_time_ = 0;
+      le_maximum_data_length_v2_.supported_max_tx_octets_ = 0;
+      le_maximum_data_length_v2_.supported_max_tx_time_ = 0;
+      le_maximum_data_length_v2_.supported_max_tx_pdus_per_packet_ = 0;
+      le_maximum_data_length_v2_.supported_max_rx_pdus_per_packet_ = 0;
+      le_maximum_data_length_v2_.supported_max_rx_octets_per_packet_ = 0;
+
+    }
+
+    if (is_supported(OpCode::LE_READ_MAXIMUM_DATA_LENGTH) &&
+        module_.SupportsBleDataPacketLengthExtension() &&
+        !is_supported(OpCode::LE_READ_MAXIMUM_DATA_LENGTH_V2)) {
       hci_->EnqueueCommand(
               LeReadMaximumDataLengthBuilder::Create(),
               handler_->BindOnceOn(this,
@@ -557,6 +597,21 @@ struct ControllerImpl::impl {
     ErrorCode status = complete_view.GetStatus();
     log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
     le_maximum_data_length_ = complete_view.GetLeMaximumDataLength();
+  }
+
+  void le_read_maximum_data_length_handler_v2(CommandCompleteView view) {
+    auto complete_view = LeReadMaximumDataLengthV2CompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
+    ErrorCode status = complete_view.GetStatus();
+    log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
+    le_maximum_data_length_v2_ = complete_view.GetLeMaximumDataLengthV2();
+  }
+
+  void le_set_hdt_default_parameters_handler(CommandCompleteView view) {
+    auto complete_view = LeSetHdtDefaultParametersCompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
+    ErrorCode status = complete_view.GetStatus();
+    log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
   }
 
   void le_read_suggested_default_data_length_handler(CommandCompleteView view) {
@@ -1106,6 +1161,7 @@ struct ControllerImpl::impl {
       OP_CODE_MAPPING(LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT)
       OP_CODE_MAPPING(LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_V2)
       OP_CODE_MAPPING(LE_READ_MAXIMUM_DATA_LENGTH)
+      OP_CODE_MAPPING(LE_READ_MAXIMUM_DATA_LENGTH_V2)
       OP_CODE_MAPPING(LE_READ_PHY)
       OP_CODE_MAPPING(LE_SET_DEFAULT_PHY)
       OP_CODE_MAPPING(LE_SET_PHY)
@@ -1185,6 +1241,9 @@ struct ControllerImpl::impl {
       OP_CODE_MAPPING(LE_SET_DATA_RELATED_ADDRESS_CHANGES)
       OP_CODE_MAPPING(LE_SET_DEFAULT_SUBRATE)
       OP_CODE_MAPPING(LE_SUBRATE_REQUEST)
+      OP_CODE_MAPPING(LE_START_ENCRYPTION_V2)
+      OP_CODE_MAPPING(LE_SET_HDT_DEFAULT_PARAMETERS)
+      OP_CODE_MAPPING(LE_SET_DATA_LENGTH_V2);
 
       // deprecated
       case OpCode::ADD_SCO_CONNECTION:
@@ -1280,6 +1339,7 @@ struct ControllerImpl::impl {
   uint8_t le_accept_list_size_{};
   uint8_t le_resolving_list_size_{};
   LeMaximumDataLength le_maximum_data_length_{};
+  LeMaximumDataLengthV2 le_maximum_data_length_v2_{};
   uint16_t le_maximum_advertising_data_length_{};
   uint16_t le_suggested_default_data_length_{};
   uint8_t le_number_supported_advertising_sets_{};
@@ -1506,6 +1566,10 @@ uint8_t ControllerImpl::GetLeResolvingListSize() const { return impl_->le_resolv
 
 LeMaximumDataLength ControllerImpl::GetLeMaximumDataLength() const {
   return impl_->le_maximum_data_length_;
+}
+
+LeMaximumDataLengthV2 ControllerImpl::GetLeMaximumDataLengthV2() const {
+  return impl_->le_maximum_data_length_v2_;
 }
 
 uint16_t ControllerImpl::GetLeMaximumAdvertisingDataLength() const {

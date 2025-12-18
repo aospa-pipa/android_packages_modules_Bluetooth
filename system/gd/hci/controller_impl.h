@@ -181,6 +181,8 @@ public:
 
   virtual LeMaximumDataLength GetLeMaximumDataLength() const override;
 
+  virtual LeMaximumDataLengthV2 GetLeMaximumDataLengthV2() const override;
+
   virtual uint16_t GetLeMaximumAdvertisingDataLength() const override;
 
   virtual uint16_t GetLeSuggestedDefaultDataLength() const override;

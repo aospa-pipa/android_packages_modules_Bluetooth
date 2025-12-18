@@ -317,6 +317,10 @@ typedef uint8_t BLE_SIGNATURE[BTM_BLE_AUTH_SIGN_LEN]; /* Device address */
     should include in a single Link Layer Data Channel PDU. */
 #define BTM_BLE_DATA_SIZE_MAX 0x00fb
 #define BTM_BLE_DATA_SIZE_MIN 0x001b
+#define BTM_HDT_DATA_SIZE_MAX 0x1fef
+#define BTM_HDT_DATA_SIZE_MIN 0x001b
+
+#define BTM_BLE_HDT_PHYS 0x01
 
 /*  Preferred maximum number of microseconds that the local Controller
     should use to transmit a single Link Layer Data Channel PDU. */

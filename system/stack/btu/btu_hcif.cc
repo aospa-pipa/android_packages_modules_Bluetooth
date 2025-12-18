@@ -71,6 +71,7 @@ using bluetooth::hci::IsoManager;
 static void btu_hcif_authentication_comp_evt(uint8_t* p);
 static void btu_hcif_encryption_change_evt(uint8_t* p);
 static void btu_hcif_encryption_change_evt_v2(uint8_t* p);
+static void btu_hcif_encryption_change_evt_v3(uint8_t* p);
 static void btu_hcif_command_complete_evt(BT_HDR* response, void* context);
 static void btu_hcif_command_status_evt(uint8_t status, BT_HDR* command, void* context);
 static void btu_hcif_mode_change_evt(uint8_t* p);
@@ -99,6 +100,7 @@ static void btu_hcif_io_cap_response_evt(const uint8_t* p);
 
 static void btu_ble_proc_ltk_req(uint8_t* p, uint16_t evt_len);
 static void btu_hcif_encryption_key_refresh_cmpl_evt(uint8_t* p);
+static void btu_hcif_encryption_key_refresh_cmpl_evt_v2(uint8_t* p);
 
 /**
  * Log HCI event metrics that are not handled in special functions
@@ -160,6 +162,23 @@ static void btu_hcif_log_event_metrics(uint8_t evt_code, const uint8_t* p_event)
                                                        encryption_enabled);
       break;
     }
+    case HCI_ENCRYPTION_CHANGE_EVT_V3: {
+      uint8_t encryption_enabled;
+      uint8_t key_size;
+      uint8_t mic_length;
+      uint8_t key_sched_enabled;
+      uint8_t key_sched_debug_flag;
+      STREAM_TO_UINT8(status, p_event);
+      STREAM_TO_UINT16(handle, p_event);
+      STREAM_TO_UINT8(encryption_enabled, p_event);
+      STREAM_TO_UINT8(key_size, p_event);
+      STREAM_TO_UINT8(mic_length, p_event);
+      STREAM_TO_UINT8(key_sched_enabled, p_event);
+      STREAM_TO_UINT8(key_sched_debug_flag, p_event);
+      bluetooth::metrics::LogMetricClassicPairingEvent(bda, handle, cmd, evt_code, status, reason,
+                                                    encryption_enabled);
+      break;
+    }
     case HCI_ESCO_CONNECTION_COMP_EVT: {
       uint8_t link_type;
       STREAM_TO_UINT8(status, p_event);
@@ -214,7 +233,7 @@ static void btu_hcif_log_event_metrics(uint8_t evt_code, const uint8_t* p_event)
 static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_msg) {
   uint8_t* p = (uint8_t*)(p_msg + 1) + p_msg->offset;
   uint8_t hci_evt_code, hci_evt_len;
-  uint8_t ble_sub_code;
+  uint8_t ble_sub_code, ble_hdt_sub_code;
   STREAM_TO_UINT8(hci_evt_code, p);
   STREAM_TO_UINT8(hci_evt_len, p);
 
@@ -236,8 +255,14 @@ static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_
     case HCI_ENCRYPTION_CHANGE_EVT_V2:
       btu_hcif_encryption_change_evt_v2(p);
       break;
+    case HCI_ENCRYPTION_CHANGE_EVT_V3:
+      btu_hcif_encryption_change_evt_v3(p);
+      break;
     case HCI_ENCRYPTION_KEY_REFRESH_COMP_EVT:
       btu_hcif_encryption_key_refresh_cmpl_evt(p);
+      break;
+    case HCI_ENCRYPTION_KEY_REFRESH_COMP_EVT_V2:
+      btu_hcif_encryption_key_refresh_cmpl_evt_v2(p);
       break;
     case HCI_COMMAND_COMPLETE_EVT:
       log::error(
@@ -318,6 +343,8 @@ static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_
           break;
 
         case HCI_BLE_CIS_EST_EVT:
+        case HCI_BLE_CIS_EST_EVT_V2:
+        case HCI_BLE_CIS_EST_EVT_V3:
         case HCI_BLE_CREATE_BIG_CPL_EVT:
         case HCI_BLE_TERM_BIG_CPL_EVT:
         case HCI_BLE_CIS_REQ_EVT:
@@ -329,6 +356,25 @@ static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_
         default:
           log::error(
                   "Unexpectedly received LE sub_event_code:0x{:02x} that should "
+                  "not be handled here",
+                  ble_sub_code);
+          break;
+      }
+    } break;
+
+    case HCI_HDT_EVENT: {
+      STREAM_TO_UINT8(ble_hdt_sub_code, p);
+
+      uint8_t ble_hdt_evt_len = hci_evt_len - 1;
+      switch (ble_hdt_sub_code) {
+        case HCI_BLE_CIS_EST_EVT_V4:
+        case HCI_BLE_CREATE_BIG_CPL_EVT_V2:
+          IsoManager::GetInstance()->HandleHciHdtEvent(ble_hdt_sub_code, p, ble_hdt_evt_len);
+          break;
+
+        default:
+          log::error(
+                  "Unexpectedly received HDT sub_event_code:0x{:02x} that should "
                   "not be handled here",
                   ble_sub_code);
           break;
@@ -761,7 +807,7 @@ static void btu_hcif_encryption_change_evt(uint8_t* p) {
   STREAM_TO_UINT16(handle, p);
   STREAM_TO_UINT8(encr_enable, p);
 
-  btm_sec_encryption_change_evt(handle, static_cast<tHCI_STATUS>(status), encr_enable, 0);
+  btm_sec_encryption_change_evt(handle, static_cast<tHCI_STATUS>(status), encr_enable, 0, 0, 0, 0);
 }
 
 /*******************************************************************************
@@ -784,7 +830,36 @@ static void btu_hcif_encryption_change_evt_v2(uint8_t* p) {
   STREAM_TO_UINT8(encr_enable, p);
   STREAM_TO_UINT8(key_size, p);
 
-  btm_sec_encryption_change_evt(handle, static_cast<tHCI_STATUS>(status), encr_enable, key_size);
+  btm_sec_encryption_change_evt(handle, static_cast<tHCI_STATUS>(status), encr_enable, key_size, 0, 0, 0);
+}
+
+/*******************************************************************************
+ *
+ * Function         btu_hcif_encryption_change_evt_v3
+ *
+ * Description      Process event HCI_ENCRYPTION_CHANGE_EVT_V3
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+ static void btu_hcif_encryption_change_evt_v3(uint8_t* p) {
+  uint8_t status;
+  uint16_t handle;
+  uint8_t encr_enable;
+  uint8_t key_size;
+  uint8_t mic_length;
+  uint8_t key_sched_enabled;
+  uint8_t key_sched_debug_flag;
+
+  STREAM_TO_UINT8(status, p);
+  STREAM_TO_UINT16(handle, p);
+  STREAM_TO_UINT8(encr_enable, p);
+  STREAM_TO_UINT8(key_size, p);
+  STREAM_TO_UINT8(mic_length, p);
+  STREAM_TO_UINT8(key_sched_enabled, p);
+  STREAM_TO_UINT8(key_sched_debug_flag, p);
+
+  btm_sec_encryption_change_evt(handle, static_cast<tHCI_STATUS>(status), encr_enable, key_size, mic_length, key_sched_enabled, key_sched_debug_flag);
 }
 
 /*******************************************************************************
@@ -1350,7 +1425,24 @@ static void btu_hcif_encryption_key_refresh_cmpl_evt(uint8_t* p) {
   STREAM_TO_UINT8(status, p);
   STREAM_TO_UINT16(handle, p);
 
-  btm_sec_encryption_key_refresh_complete(handle, static_cast<tHCI_STATUS>(status));
+  // V1: no MIC length or key schedule fields available
+  btm_sec_encryption_key_refresh_complete(handle, static_cast<tHCI_STATUS>(status), 0 /* mic_length */, 0 /* key_sched_enabled */, 0 /* key_sched_debug_flag */);
+}
+
+static void btu_hcif_encryption_key_refresh_cmpl_evt_v2(uint8_t* p) {
+  uint8_t status;
+  uint16_t handle;
+  uint8_t mic_length;
+  uint8_t key_sched_enabled;
+  uint8_t key_sched_debug_flag;
+
+  STREAM_TO_UINT8(status, p);
+  STREAM_TO_UINT16(handle, p);
+  STREAM_TO_UINT8(mic_length, p);
+  STREAM_TO_UINT8(key_sched_enabled, p);
+  STREAM_TO_UINT8(key_sched_debug_flag, p);
+
+  btm_sec_encryption_key_refresh_complete(handle, static_cast<tHCI_STATUS>(status), mic_length, key_sched_enabled, key_sched_debug_flag);
 }
 
 /**********************************************
