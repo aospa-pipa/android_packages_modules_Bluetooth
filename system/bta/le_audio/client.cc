@@ -6112,7 +6112,8 @@ public:
       //update on decoding session. This ensures to be stay in VBC path.
       if (( is_local_sink_metadata_available_ == false) &&
           (audio_sender_state_ == AudioState::IDLE) &&
-          (configuration_context_type_ == LeAudioContextType::GAME)) {
+          (configuration_context_type_ == LeAudioContextType::GAME) &&
+          (local_metadata_context_types_.sink.test(LeAudioContextType::GAME))) {
         if (!ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
           log::error("Unable to reconfigure group at this time, configuration_context_type_ = {}",
                     ToString(configuration_context_type_));
