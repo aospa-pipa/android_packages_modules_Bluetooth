@@ -423,6 +423,7 @@ public:
         track_in_call_update_(0),
         defer_reconfig_complete_update_(false),
         defer_call_reconfig_(false),
+        defer_media_reconfig_(false),
         le_audio_source_hal_client_(nullptr),
         le_audio_sink_hal_client_(nullptr),
         close_vbc_timeout_(alarm_new("LeAudioCloseVbcTimeout")),
@@ -1455,6 +1456,9 @@ public:
         if (group) {
           group->ClearStreamingPendingTargetState();
         }
+      } else {
+        log::debug("Clear cached call end updates during group In-Active");
+        defer_media_reconfig_ = false;
       }
       callbacks_->OnGroupStatus(group_id, GroupStatus::INACTIVE);
     }
@@ -1639,6 +1643,8 @@ public:
       track_in_call_update_ = 0;
       defer_call_reconfig_ = false;
       defer_reconfig_complete_update_ = false;
+    } else {
+      defer_media_reconfig_ = false;
     }
 
     if (in_call == in_call_) {
@@ -1741,6 +1747,12 @@ public:
     } else {
       if (configuration_context_type_ == LeAudioContextType::CONVERSATIONAL) {
         log::info("Call is ended, speed up reconfiguration for media");
+        if (group->GetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING &&
+            group->GetTargetState() == AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
+          log::info("stack is pending for CONVERSATIONAL streaming, defer media reconfiguration");
+          defer_media_reconfig_ = true;
+          return;
+        }
         if (in_call_metadata_context_types_.sink.none() &&
             in_call_metadata_context_types_.source.none()) {
           log::debug("No metadata, set default Media");
@@ -2142,6 +2154,9 @@ public:
         if (group) {
           group->ClearStreamingPendingTargetState();
         }
+      } else {
+        log::debug("Clear cached call end updates during group In-Active");
+        defer_media_reconfig_ = false;
       }
       StopAudio();
       ClientAudioInterfaceRelease();
@@ -7581,6 +7596,12 @@ public:
                   ::bluetooth::le_audio::types::kLeAudioDirectionSink);
         }
 
+        if (!IsInCall() && defer_media_reconfig_) {
+          reconfigurationComplete();
+          in_call_ = true;
+          defer_media_reconfig_ = false;
+          SetInCall(false);
+        }
         if (audio_sender_state_ == AudioState::READY_TO_START) {
           startSendingAudioWrapper(group);
           auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
@@ -7959,6 +7980,8 @@ private:
 
   /*To track call reconfig when call comes during other reconfiguration*/
   bool defer_call_reconfig_;
+  /*To track media reconfig when call is pending for streaming */
+  bool defer_media_reconfig_;
 
   static constexpr uint64_t kGroupConnectedWatchDelayMs = 3000;
   static constexpr uint64_t kRecoveryReconnectDelayMs = 2000;
