@@ -74,7 +74,7 @@ static std::chrono::milliseconds get_gd_stack_timeout_ms(bool is_start) {
                    "unify_timeout_property is enabled");
   auto gd_timeout = os::GetSystemPropertyUint32(
           is_start ? "bluetooth.gd.start_timeout" : "bluetooth.gd.stop_timeout",
-          is_start ? 3000 : 5000);
+          is_start ? 8000 : 5000);
   return std::chrono::milliseconds(gd_timeout *
                                    os::GetSystemPropertyUint32("ro.hw_timeout_multiplier", 1));
 }
@@ -176,9 +176,9 @@ void Stack::StartEverything() {
       start_timeout = std::chrono::milliseconds(8000);
     } else if (bluetooth::os::GetSystemPropertyUint32("ro.build.version.sdk", 99) < 37) {
       start_timeout = std::chrono::milliseconds(
-              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 3000));
+              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 8000));
     } else {
-      start_timeout = std::chrono::milliseconds(3000);
+      start_timeout = std::chrono::milliseconds(8000);
     }
   }
 
