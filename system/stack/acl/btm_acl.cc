@@ -1974,7 +1974,8 @@ void on_acl_br_edr_connected(const RawAddress& bda, uint16_t handle, uint8_t enc
                hci_role_text(role), enc_mode, locally_initiated);
   power_telemetry::GetInstance().LogLinkDetails(handle, bda, true, true);
 
-  btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode, role);
+    btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode,
+                      locally_initiated ? HCI_ROLE_CENTRAL : HCI_ROLE_PERIPHERAL);
   l2c_link_hci_conn_comp(HCI_SUCCESS, handle, bda);
   uint16_t link_supervision_timeout =
           osi_property_get_int32(PROPERTY_LINK_SUPERVISION_TIMEOUT, 8000);
