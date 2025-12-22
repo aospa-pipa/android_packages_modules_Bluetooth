@@ -638,7 +638,15 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
                         handleConnectionPolicyAfterCsipConnect(device);
                 default -> {} // Nothing to do
             }
-            connectOtherProfile(device);
+
+            if (profile == BluetoothProfile.HEADSET && device != null &&
+                    mAdapterService.interopMatchDevice(
+                    InteropUtil.InteropFeature.INTEROP_SUPPRESS_A2DP_AUTO_CONNECT,
+                    device)) {
+                Log.d(TAG,"fix to suppress auto a2dp when HFP is connected in some carkit");
+            } else {
+                connectOtherProfile(device);
+            }
         } else if (nextState == STATE_DISCONNECTED) {
             if (prevState == STATE_CONNECTING || prevState == STATE_DISCONNECTING) {
                 if (Flags.mainlineBetaStorage()) {
