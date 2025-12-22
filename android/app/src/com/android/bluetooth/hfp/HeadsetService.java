@@ -279,9 +279,7 @@ public class HeadsetService extends ConnectableProfile {
         if (!android.media.audio.Flags.unifyAbsoluteVolumeManagement()) {
             filter.addAction(AudioManager.ACTION_VOLUME_CHANGED);
         }
-        if (Flags.microphoneMuteStatusSync()) {
-            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
-        }
+        filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
         filter.addAction(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
         registerReceiver(mHeadsetReceiver, filter);
     }
@@ -552,9 +550,6 @@ public class HeadsetService extends ConnectableProfile {
                             }
                         }
                         case AudioManager.ACTION_MICROPHONE_MUTE_CHANGED -> {
-                            if (!Flags.microphoneMuteStatusSync()) {
-                                break;
-                            }
                             Log.i(TAG, "received microphone mute status changed");
                             doForEachConnectedStateMachine(
                                     stateMachine ->
