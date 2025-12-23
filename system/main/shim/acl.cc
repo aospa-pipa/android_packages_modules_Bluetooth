@@ -773,23 +773,6 @@ public:
                         rx_phy);
   }
 
-  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
-                            uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
-                            uint8_t key_sched_debug_flag) {
-    TRY_POSTING_ON_MAIN(interface_.on_encryption_change_v3, handle_,
-                        ToLegacyHciErrorCode(hci_status), encr_enable, key_size, mic_length, 
-                        key_sched_enabled, key_sched_debug_flag);
-  }
-
-  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status,
-                                        uint8_t mic_length,
-                                        uint8_t key_sched_enabled,
-                                        uint8_t key_sched_debug_flag) override {
-    TRY_POSTING_ON_MAIN(interface_.on_encryption_key_refresh_complete_v2, handle_,
-                        ToLegacyHciErrorCode(hci_status), mic_length, key_sched_enabled,
-                        key_sched_debug_flag);
-  }
-
   void OnDisconnection(hci::ErrorCode reason) {
     Disconnect();
     on_disconnect_(handle_, reason);

@@ -102,20 +102,6 @@ public:
                  continuation_number, supervision_timeout);
   }
 
-  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
-                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
-                                    uint8_t key_sched_debug_flag) override {
-    SAVE_OR_CALL(OnEncryptionChangeV3, hci_status, encr_enable, key_size, mic_length,
-                 key_sched_enabled, key_sched_debug_flag);
-  }
-
-  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
-                                        uint8_t key_sched_enabled,
-                                        uint8_t key_sched_debug_flag) override {
-    SAVE_OR_CALL(OnEncryptionKeyRefreshCompleteV2, hci_status, mic_length, key_sched_enabled,
-                key_sched_debug_flag);
-  }
-
   void OnDisconnection(ErrorCode reason) override { SAVE_OR_CALL(OnDisconnection, reason); }
 #undef SAVE_OR_CALL
 

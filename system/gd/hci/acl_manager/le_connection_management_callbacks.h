@@ -41,12 +41,6 @@ public:
   virtual void OnLeSubrateChange(hci::ErrorCode hci_status, uint16_t subrate_factor,
                                  uint16_t peripheral_latency, uint16_t continuation_number,
                                  uint16_t supervision_timeout) = 0;
-  virtual void OnEncryptionChangeV3(hci::ErrorCode hci_status,  uint8_t encr_enable,
-                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
-                                    uint8_t key_sched_debug_flag) = 0;
-  virtual void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
-                                                uint8_t key_sched_enabled,
-                                                uint8_t key_sched_debug_flag) = 0;
 };
 
 }  // namespace acl_manager
