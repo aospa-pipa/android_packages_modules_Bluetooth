@@ -98,13 +98,8 @@
 #include "device/include/interop_config.h"
 #include "hardware/avrcp/avrcp.h"
 #include "hardware/bt_csis.h"
-#include "hardware/bt_gatt.h"
-#include "hardware/bt_has.h"
 #include "hardware/bt_hearing_aid.h"
 #include "hardware/bt_le_audio.h"
-#include "hardware/bt_rc.h"
-#include "hardware/bt_sdp.h"
-#include "hardware/bt_sock.h"
 #include "hardware/bt_vcp_controller.h"
 #include "internal_include/bt_target.h"
 #include "main/shim/dumpsys.h"
@@ -495,7 +490,7 @@ static int enable(const std::string local_name) {
   }
 
   stack_manager_get_interface()->start_up_stack_async(CreateInterfaceToProfiles(), &start_profiles,
-                                                      &stop_profiles, local_name);
+                                                      local_name);
   return BT_STATUS_SUCCESS;
 }
 

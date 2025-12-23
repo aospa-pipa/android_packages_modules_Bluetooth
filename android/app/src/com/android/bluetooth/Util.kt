@@ -46,8 +46,10 @@ import android.location.LocationManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
 import android.os.RemoteException
 import android.os.UserHandle
+import android.os.UserManager
 import android.permission.PermissionManager
 import android.permission.PermissionManager.PERMISSION_GRANTED
 import android.permission.PermissionManager.PERMISSION_HARD_DENIED
@@ -449,6 +451,116 @@ object Util {
     @PermissionMethod
     private fun Context.checkCallerHasPermission(@PermissionName permission: String) =
         checkCallingOrSelfPermission(permission) == PERMISSION_GRANTED
+
+    /**
+     * Verifies whether the calling package name matches the calling app uid
+     *
+     * @param context the Bluetooth AdapterService context
+     * @param callingPackage the calling application package name
+     * @param callingUid the calling application uid
+     * @return `true` if the package name matches the calling app uid, `false` otherwise
+     */
+    @JvmStatic
+    fun isPackageNameAccurate(context: Context, callingPackage: String, callingUid: Int): Boolean {
+        val header = "isPackageNameAccurate: App with package name $callingPackage"
+        val callingUser = UserHandle.getUserHandleForUid(callingUid)
+
+        // Verifies the integrity of the calling package name
+        try {
+            val packageUid =
+                context
+                    .createContextAsUser(callingUser, 0)
+                    .packageManager
+                    .getPackageUid(callingPackage, 0)
+            if (packageUid != callingUid) {
+                Log.e(TAG, "$header is UID $packageUid but caller is $callingUid")
+                return false
+            }
+        } catch (_: PackageManager.NameNotFoundException) {
+            Log.e(TAG, "$header does not exist")
+            return false
+        }
+        return true
+    }
+
+    /**
+     * Checks if the caller to the method is system server.
+     *
+     * @param tag the log tag to use in case the caller is not system server
+     * @param method the API method name
+     * @return `true` if the caller is system server, `false` otherwise
+     */
+    @JvmStatic
+    fun callerIsSystem(tag: String, method: String): Boolean {
+        if (Utils.isInstrumentationTestMode()) {
+            return true
+        }
+        val res = checkCallerIsSystem()
+        if (!res) {
+            Log.w(TAG, "$tag.$method() - Not allowed outside system server")
+        }
+        return res
+    }
+
+    private fun checkCallerIsSystem() =
+        UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(Binder.getCallingUid())
+
+    @JvmStatic
+    fun callerIsSystemOrActiveOrManagedUser(context: Context, tag: String, method: String) =
+        checkCallerIsSystemOrActiveOrManagedUser(context, "$tag.$method()")
+
+    @JvmStatic
+    fun checkCallerIsSystemOrActiveOrManagedUser(context: Context, tag: String): Boolean {
+        if (Utils.isInstrumentationTestMode()) {
+            return true
+        }
+        val res = checkCallerIsSystemOrActiveOrManagedUser(context)
+        if (!res) {
+            Log.w(TAG, "$tag - Not allowed for non-active user and non-system and non-managed user")
+        }
+        return res
+    }
+
+    private fun checkCallerIsSystemOrActiveOrManagedUser(context: Context?): Boolean {
+        if (context == null) {
+            return checkCallerIsSystemOrActiveUser()
+        }
+        val callingUid = Binder.getCallingUid()
+        val callingUser = UserHandle.getUserHandleForUid(callingUid)
+
+        // Use the Bluetooth process identity when making call to get parent user
+        val identity = Binder.clearCallingIdentity()
+        try {
+            val userManager = context.getSystemService(UserManager::class.java)
+            val userHandle = userManager.getProfileParent(callingUser)
+
+            // In HSUM mode, UserHandle.SYSTEM is only for System and the human users will use other
+            // ids
+            val isSystemUserInHsumMode =
+                UserManager.isHeadlessSystemUserMode() && callingUser == UserHandle.SYSTEM
+
+            // Always allow SystemUI/System access.
+            return Process.myUserHandle() == callingUser ||
+                Process.myUserHandle() == userHandle ||
+                (UserHandle.getAppId(Utils.getSystemUiUid()) == UserHandle.getAppId(callingUid)) ||
+                (UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(callingUid)) ||
+                (isSystemUserInHsumMode)
+        } catch (ex: Exception) {
+            Log.e(TAG, "checkCallerAllowManagedProfiles: Exception ex=$ex")
+            return false
+        } finally {
+            Binder.restoreCallingIdentity(identity)
+        }
+    }
+
+    private fun checkCallerIsSystemOrActiveUser(): Boolean {
+        val callingUid = Binder.getCallingUid()
+        val callingUser = UserHandle.getUserHandleForUid(callingUid)
+
+        return Process.myUserHandle() == callingUser ||
+            (UserHandle.getAppId(Utils.getSystemUiUid()) == UserHandle.getAppId(callingUid)) ||
+            (UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(callingUid))
+    }
 
     /**
      * Returns `true` if the [BLUETOOTH_ADVERTISE] permission is granted for the calling app.
