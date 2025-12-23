@@ -59,16 +59,6 @@ flag {
 }
 
 flag {
-    name: "voice_recognition_fixes"
-    namespace: "bluetooth"
-    description: "Fix issues with starting/stopping voice recognition"
-    bug: "415376528"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "support_zoomed_in_icon_metadata"
     namespace: "bluetooth"
     is_exported: true
@@ -101,16 +91,6 @@ flag {
     namespace: "bluetooth"
     description: "Send OK on no action perfomed on CHLD instead of ERROR"
     bug: "424860125"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "microphone_mute_status_sync"
-    namespace: "bluetooth"
-    description: "Synchronize microphone Mute status of phone with peripheral"
-    bug: "391258154"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -199,4 +179,14 @@ flag {
     namespace: "bluetooth"
     description: "Add api support for get hfp connection codec type"
     bug: "464401354"
+}
+
+flag {
+    name: "microphone_mute_gain_retain"
+    namespace: "bluetooth"
+    description: "Retain the mic gain value between MUTE and UNMUTE"
+    bug: "468985625"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

@@ -279,9 +279,7 @@ public class HeadsetService extends ConnectableProfile {
         if (!android.media.audio.Flags.unifyAbsoluteVolumeManagement()) {
             filter.addAction(AudioManager.ACTION_VOLUME_CHANGED);
         }
-        if (Flags.microphoneMuteStatusSync()) {
-            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
-        }
+        filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
         filter.addAction(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
         registerReceiver(mHeadsetReceiver, filter);
     }
@@ -552,9 +550,6 @@ public class HeadsetService extends ConnectableProfile {
                             }
                         }
                         case AudioManager.ACTION_MICROPHONE_MUTE_CHANGED -> {
-                            if (!Flags.microphoneMuteStatusSync()) {
-                                break;
-                            }
                             Log.i(TAG, "received microphone mute status changed");
                             doForEachConnectedStateMachine(
                                     stateMachine ->
@@ -880,7 +875,7 @@ public class HeadsetService extends ConnectableProfile {
                 return false;
             }
 
-            if (Flags.voiceRecognitionFixes() && !isVoiceRecognitionSupported(device)) {
+            if (!isVoiceRecognitionSupported(device)) {
                 Log.w(TAG, "voice recognition not supported on the device");
                 return false;
             }
@@ -1017,31 +1012,28 @@ public class HeadsetService extends ConnectableProfile {
             }
             if (!mVoiceRecognitionStarted) {
                 Log.w(TAG, "stopVoiceRecognition: voice recognition was not started");
-                if (Flags.voiceRecognitionFixes()) {
-                    if (mVoiceRecognitionTimeoutEvent != null) {
-                        if (!mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice.equals(device)) {
-                            // TODO(b/79660380): Workaround when target device != requesting device
-                            Log.w(
-                                    TAG,
-                                    "stopVoiceRecognition: device "
-                                            + device
-                                            + " is not the same as requesting device "
-                                            + mVoiceRecognitionTimeoutEvent
-                                                    .mVoiceRecognitionDevice);
-                        }
-                        mStateMachinesThreadHandler.removeCallbacks(mVoiceRecognitionTimeoutEvent);
-                        mVoiceRecognitionTimeoutEvent = null;
-                        if (mSystemInterface.getVoiceRecognitionWakeLock().isHeld()) {
-                            try {
-                                mSystemInterface.getVoiceRecognitionWakeLock().release();
-                            } catch (RuntimeException e) {
-                                Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
-                            }
+                if (mVoiceRecognitionTimeoutEvent != null) {
+                    if (!mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice.equals(device)) {
+                        // TODO(b/79660380): Workaround when target device != requesting device
+                        Log.w(
+                                TAG,
+                                "stopVoiceRecognition: device "
+                                        + device
+                                        + " is not the same as requesting device "
+                                        + mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice);
+                    }
+                    mStateMachinesThreadHandler.removeCallbacks(mVoiceRecognitionTimeoutEvent);
+                    mVoiceRecognitionTimeoutEvent = null;
+                    if (mSystemInterface.getVoiceRecognitionWakeLock().isHeld()) {
+                        try {
+                            mSystemInterface.getVoiceRecognitionWakeLock().release();
+                        } catch (RuntimeException e) {
+                            Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
                         }
                     }
-                    stateMachine.sendMessage(
-                            HeadsetStateMachine.VOICE_RECOGNITION_RESULT, 0 /* fail */, 0, device);
                 }
+                stateMachine.sendMessage(
+                        HeadsetStateMachine.VOICE_RECOGNITION_RESULT, 0 /* fail */, 0, device);
                 return false;
             }
             mVoiceRecognitionStarted = false;

@@ -25,6 +25,7 @@
 #include <com_android_bluetooth_flags.h>
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
+#include <com_android_bluetooth_flags.h>
 #include <string.h>
 
 #include <array>
@@ -674,7 +675,9 @@ static bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid,
     p_clcb->connected = true;
   }
 
-  if (!GATT_Connect(gatt_if, p_clcb->bda, BTM_BLE_DIRECT_CONNECTION, BT_TRANSPORT_LE, true)) {
+  if (!GATT_Connect(gatt_if, p_clcb->bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION,
+                    BT_TRANSPORT_LE, true, 0, false,
+                    com::android::bluetooth::flags::gatt_conn_settings())) {
     return false;
   }
 
