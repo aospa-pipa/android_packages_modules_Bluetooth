@@ -2519,6 +2519,10 @@ public:
      */
     if (leAudioDevice->group_id_ != bluetooth::groups::kGroupUnknown) {
       auto group = aseGroups_.FindById(leAudioDevice->group_id_);
+      if (leAudioDevice->group_id_ == active_group_id_ && (group->Size() == 1)) {
+        log::warn("Set device inactive before removing.");
+        groupSetAndNotifyInactive(false);
+      }
       group_remove_node(group, address, true);
     }
 
