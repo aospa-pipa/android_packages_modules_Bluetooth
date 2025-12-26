@@ -89,8 +89,8 @@ DEV_CLASS btif_dm_get_local_class_of_device();
  * Out-of-band functions
  */
 void btif_dm_set_oob_for_io_req(tBTM_OOB_DATA* p_oob_data);
-void btif_dm_set_oob_for_le_io_req(const RawAddress& bd_addr, tBTM_OOB_DATA* p_oob_data,
-                                   tBTM_LE_AUTH_REQ* p_auth_req);
+tBTM_OOB_DATA btif_dm_set_oob_for_le_io_req(const RawAddress& bd_addr,
+                                            tBTM_LE_AUTH_REQ* p_auth_req);
 void btif_dm_load_local_oob(void);
 void btif_dm_proc_loc_oob(tBT_TRANSPORT transport, bool is_valid, const Octet16& c,
                           const Octet16& r);
@@ -125,7 +125,7 @@ bool btif_dm_get_smp_config(tBTE_APPL_CFG* p_cfg);
 void btif_dm_enable_service(tBTA_SERVICE_ID service_id, bool enable);
 
 void BTIF_dm_disable();
-void BTIF_dm_enable();
+void BTIF_dm_enable(const std::string local_name);
 void BTIF_dm_report_inquiry_status_change(tBTM_INQUIRY_STATE inquiry_state);
 
 typedef struct {

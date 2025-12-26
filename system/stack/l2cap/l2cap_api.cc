@@ -77,6 +77,11 @@ void bluetooth::stack::l2cap::Impl::L2CA_DeregisterLECoc(uint16_t psm) {
   return ::L2CA_GetPeerLECocConfig(lcid, peer_cfg);
 }
 
+[[nodiscard]] bool bluetooth::stack::l2cap::Impl::L2CA_FlowControl(
+           uint16_t cid, bool data_enabled) {
+   return ::L2CA_FlowControl(cid, data_enabled);
+}
+
 [[nodiscard]] uint16_t bluetooth::stack::l2cap::Impl::L2CA_GetPeerLECocCredit(
         const RawAddress& bd_addr, uint16_t lcid) {
   return ::L2CA_GetPeerLECocCredit(bd_addr, lcid);
@@ -219,9 +224,24 @@ void bluetooth::stack::l2cap::Impl::L2CA_Consolidate(const RawAddress& identity_
   return ::L2CA_GetBleConnRole(bd_addr);
 }
 
+[[nodiscard]] uint16_t bluetooth::stack::l2cap::Impl::L2CA_GetBleSubrateFactor(
+        const RawAddress& bd_addr) {
+  return ::L2CA_GetBleSubrateFactor(bd_addr);
+}
+
 [[nodiscard]] uint16_t bluetooth::stack::l2cap::Impl::L2CA_GetBleConnInterval(
         const RawAddress& bd_addr) {
   return ::L2CA_GetBleConnInterval(bd_addr);
+}
+
+[[nodiscard]] uint16_t bluetooth::stack::l2cap::Impl::L2CA_GetBlePeriphLatency(
+        const RawAddress& bd_addr) {
+  return ::L2CA_GetBlePeriphLatency(bd_addr);
+}
+
+[[nodiscard]] uint16_t bluetooth::stack::l2cap::Impl::L2CA_GetBleSupervisionTimeout(
+        const RawAddress& bd_addr) {
+  return ::L2CA_GetBleSupervisionTimeout(bd_addr);
 }
 
 void bluetooth::stack::l2cap::Impl::L2CA_AdjustConnectionIntervals(uint16_t* min_interval,

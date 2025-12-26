@@ -40,12 +40,12 @@ import android.os.Message;
 import android.os.UserHandle;
 import android.util.Log;
 
-import com.android.bluetooth.BluetoothObexTransport;
-import com.android.bluetooth.ObexRejectServer;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.obex.BluetoothObexTransport;
+import com.android.bluetooth.obex.ObexRejectServer;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.annotations.VisibleForTesting.Visibility;
 import com.android.internal.util.State;
@@ -159,8 +159,18 @@ public class PbapStateMachine extends StateMachine {
             mPrevState = this;
         }
 
-        // Should not be called from enter() method
-        private void broadcastConnectionState(BluetoothDevice device, int fromState, int toState) {
+        /** Broadcast connection state change for this state machine */
+        void broadcastStateTransitions() {
+            int prevStateInt = STATE_DISCONNECTED;
+            if (mPrevState != null) {
+                prevStateInt = mPrevState.getConnectionStateInt();
+            }
+            if (getConnectionStateInt() == prevStateInt) {
+                return;
+            }
+            BluetoothDevice device = mRemoteDevice;
+            int fromState = prevStateInt;
+            int toState = getConnectionStateInt();
             stateLogD("broadcastConnectionState " + device + ": " + fromState + "->" + toState);
             mAdapterService.updateProfileConnectionAdapterProperties(
                     device, BluetoothProfile.PBAP, toState, fromState);
@@ -175,24 +185,6 @@ public class PbapStateMachine extends StateMachine {
             } else {
                 mService.sendBroadcastAsUser(
                         intent, UserHandle.ALL, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
-            }
-        }
-
-        /** Broadcast connection state change for this state machine */
-        void broadcastStateTransitions() {
-            int prevStateInt = STATE_DISCONNECTED;
-            if (mPrevState != null) {
-                prevStateInt = mPrevState.getConnectionStateInt();
-            }
-            if (getConnectionStateInt() != prevStateInt) {
-                stateLogD(
-                        "connection state changed: "
-                                + mRemoteDevice
-                                + ": "
-                                + mPrevState
-                                + " -> "
-                                + this);
-                broadcastConnectionState(mRemoteDevice, prevStateInt, getConnectionStateInt());
             }
         }
 

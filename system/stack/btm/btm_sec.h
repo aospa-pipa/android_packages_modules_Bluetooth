@@ -25,15 +25,15 @@
 #pragma once
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/hci_role.h>
 
 #include <cstdint>
 #include <string>
 
-#include "stack/btm/security_device_record.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/include/bt_device_type.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_sec_api_types.h"
 #include "stack/include/btm_status.h"
@@ -72,7 +72,7 @@ bool BTM_IsAuthenticated(const RawAddress& bd_addr, tBT_TRANSPORT transport);
  * Returns          void
  *
  ******************************************************************************/
-void BTM_SetPinType(uint8_t pin_type, PIN_CODE pin_code, uint8_t pin_code_len);
+void BTM_SetPinType(uint8_t pin_type, PinCode pin_code, uint8_t pin_code_len);
 
 /*******************************************************************************
  *
@@ -150,7 +150,8 @@ uint8_t BTM_SecClrServiceByPsm(uint16_t psm);
  *                  p_pin        - pointer to array with the PIN Code
  *
  ******************************************************************************/
-void BTM_PINCodeReply(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len, uint8_t* p_pin);
+void BTM_PINCodeReply(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len,
+                      PinCode pin_code);
 
 /*******************************************************************************
  *
@@ -679,8 +680,7 @@ void btm_sec_update_clock_offset(uint16_t handle, uint16_t clock_offset);
  * Parameters:      void
  *
  ******************************************************************************/
-void btm_sec_dev_rec_cback_event(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS res,
-                                 bool is_le_transport);
+void btm_sec_dev_rec_cback_event(BtmDevice* p_device, tBTM_STATUS res, bool is_le_transport);
 
 /*******************************************************************************
  *
@@ -693,7 +693,7 @@ void btm_sec_dev_rec_cback_event(tBTM_SEC_DEV_REC* p_dev_rec, tBTM_STATUS res,
  * Returns          void
  *
  ******************************************************************************/
-void btm_sec_clear_ble_keys(tBTM_SEC_DEV_REC* p_dev_rec);
+void btm_sec_clear_ble_keys(BtmDevice* p_device);
 
 /*******************************************************************************
  *
@@ -737,7 +737,7 @@ void btm_sec_set_peer_sec_caps(uint16_t hci_handle, bool ssp_supported, bool hos
  *                  BTM_NO_RESOURCES  - permission declined
  *
  ******************************************************************************/
-extern tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec);
+extern tBTM_STATUS btm_sec_execute_procedure(BtmDevice* p_device);
 
 /*******************************************************************************
  *
@@ -749,3 +749,25 @@ extern tBTM_STATUS btm_sec_execute_procedure(tBTM_SEC_DEV_REC* p_dev_rec);
  *
  ******************************************************************************/
 void btm_sec_cr_loc_oob_data_cback_event(const RawAddress& address, tSMP_LOC_OOB_DATA loc_oob_data);
+
+/*******************************************************************************
+ *
+ * Function         btm_is_bond_lost
+ *
+ * Description      This function is called to check if the bond is lost
+ *
+ * Returns          bool
+ *
+ ******************************************************************************/
+bool btm_is_bond_lost(const RawAddress& bd_addr);
+
+/*******************************************************************************
+ *
+ * Function         btm_update_bond_lost
+ *
+ * Description      This function is called to set the bond lost status.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_update_bond_lost(const RawAddress& bd_addr, bool bond_lost);

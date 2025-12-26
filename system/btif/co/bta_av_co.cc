@@ -661,11 +661,6 @@ void BtaAvCo::ProcessStart(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_ad
   *p_no_rtp_header = !add_rtp_header;
 }
 
-void BtaAvCo::ProcessStop(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_address) {
-  log::verbose("peer {} bta_av_handle: 0x{:x}", peer_address, bta_av_handle);
-  // Nothing to do
-}
-
 BT_HDR* BtaAvCo::GetNextSourceDataPacket(const uint8_t* p_codec_info, uint32_t* p_timestamp) {
   BT_HDR* p_buf;
 
@@ -760,7 +755,9 @@ bool BtaAvCo::SetActivePeer(const RawAddress& peer_address, const uint8_t t_loca
   reference_state->setActivePeer(p_peer);
   log::info("codec = {}", A2DP_CodecInfoString(p_peer->getCodecConfig()));
   // report the selected codec configuration of this new active peer.
-  ReportSourceCodecState(p_peer);
+  if (!com_android_bluetooth_flags_a2dp_control_codec_state_reports()) {
+    ReportSourceCodecState(p_peer);
+  }
   return true;
 }
 
@@ -1028,16 +1025,18 @@ bool BtaAvCo::ReportSourceCodecState(BtaAvCoPeer* p_peer) {
     return false;
   }
 
-  bool is_qhs_phy_supported = get_btm_client_interface().vendor.BTM_IsQHSPhySupported(
-          p_peer->addr, BT_TRANSPORT_BR_EDR);
+  if (!osi_property_get_bool("persist.vendor.qcom.bluetooth.vsc_enabled", false)) {
+    bool is_qhs_phy_supported = get_btm_client_interface().vendor.BTM_IsQHSPhySupported(
+            p_peer->addr, BT_TRANSPORT_BR_EDR);
 
-  if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_ADAPTIVE) {
-    if (is_qhs_phy_supported) {
-      codec_config.codec_specific_3 &= ~((int64_t)QHS_SUPPORT_MASK);
-      codec_config.codec_specific_3 |= (int64_t)QHS_SUPPORT_AVAILABLE;
-    } else {
-      codec_config.codec_specific_3 &= ~((int64_t)QHS_SUPPORT_MASK);
-      codec_config.codec_specific_3 |= (int64_t)QHS_SUPPORT_NOT_AVAILABLE;
+    if (codec_config.codec_type == BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_ADAPTIVE) {
+      if (is_qhs_phy_supported) {
+        codec_config.codec_specific_3 &= ~((int64_t)QHS_SUPPORT_MASK);
+        codec_config.codec_specific_3 |= (int64_t)QHS_SUPPORT_AVAILABLE;
+      } else {
+        codec_config.codec_specific_3 &= ~((int64_t)QHS_SUPPORT_MASK);
+        codec_config.codec_specific_3 |= (int64_t)QHS_SUPPORT_NOT_AVAILABLE;
+      }
     }
   }
 
@@ -1045,6 +1044,15 @@ bool BtaAvCo::ReportSourceCodecState(BtaAvCoPeer* p_peer) {
   btif_av_report_source_codec_state(p_peer->addr, codec_config, codecs_local_capabilities,
                                     codecs_selectable_capabilities);
   return true;
+}
+
+bool BtaAvCo::ReportSourceCodecState(const RawAddress& peer_address) {
+  BtaAvCoPeer* p_peer = peer_cache_->FindPeer(peer_address);
+  if (p_peer == nullptr) {
+    log::error("cannot find peer {} to report codec config changed", peer_address);
+    return false;
+  }
+  return ReportSourceCodecState(p_peer);
 }
 
 bool BtaAvCo::ReportSinkCodecState(BtaAvCoPeer* p_peer) {
@@ -1577,7 +1585,8 @@ static bool bta_av_co_should_select_hardware_codec(
   // Prioritize LDAC, AptX HD and AptX over AAC and SBC offload codecs
   if (software_codec_index == BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC ||
       software_codec_index == BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD ||
-      software_codec_index == BTAV_A2DP_CODEC_INDEX_SOURCE_APTX) {
+      software_codec_index == BTAV_A2DP_CODEC_INDEX_SOURCE_APTX ||
+      software_codec_index == BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5) {
     log::verbose("select software codec: {}", A2DP_CodecIndexStr(software_codec_index));
     return false;
   }
@@ -1639,10 +1648,6 @@ void bta_av_co_audio_close(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_ad
 void bta_av_co_audio_start(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_address,
                            const uint8_t* p_codec_info, bool* p_no_rtp_header) {
   bta_av_co_cb.ProcessStart(bta_av_handle, peer_address, p_codec_info, p_no_rtp_header);
-}
-
-void bta_av_co_audio_stop(tBTA_AV_HNDL bta_av_handle, const RawAddress& peer_address) {
-  bta_av_co_cb.ProcessStop(bta_av_handle, peer_address);
 }
 
 BT_HDR* bta_av_co_audio_source_data_path(const uint8_t* p_codec_info, uint32_t* p_timestamp) {
@@ -1714,6 +1719,10 @@ btav_a2dp_scmst_info_t bta_av_co_get_scmst_info(const RawAddress& peer_address) 
   }
 
   return scmst_info;
+}
+
+bool bta_av_co_report_codec_config_changed(const RawAddress& peer_address) {
+  return bta_av_co_cb.ReportSourceCodecState(peer_address);
 }
 
 void btif_a2dp_codec_debug_dump(int fd) { bta_av_co_cb.DebugDump(fd); }

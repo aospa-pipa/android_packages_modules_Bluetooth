@@ -20,7 +20,6 @@ import android.annotation.Hide;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Binder;
 import android.os.Parcel;
@@ -346,6 +345,24 @@ public final class BluetoothUtils {
         }
     }
 
+    /**
+     * Utility class for keeping compatibility with old API that doesn't force the executor and
+     * doesn't document that the fallback is to use the main looper.
+     *
+     * <p>See more https://source.android.com/docs/setup/contribute/api-guidelines#provide-executor
+     *
+     * @deprecated Use a provided executor or post even on the main looper
+     */
+    @Hide
+    @Deprecated
+    public static class SynchronousExecutor implements Executor {
+        @RequiresNoPermission
+        @Override
+        public void execute(Runnable r) {
+            r.run();
+        }
+    }
+
     /** A {@link Runnable} that automatically logs {@link RemoteException} */
     @Hide
     @FunctionalInterface
@@ -464,7 +481,6 @@ public final class BluetoothUtils {
      * <p>This check doesn't replace the permissions check when reaching the Bluetooth binder.
      */
     @Hide
-    @SuppressLint("AndroidFrameworkRequiresPermission") // Enforcement in framework is never valid
     public static void enforcePermissionInFramework(Context context, String... permissions) {
         final int pid = Process.myPid();
         final int uid = Process.myUid();

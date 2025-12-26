@@ -56,7 +56,7 @@ uint16_t btif_dm_get_connection_state(const RawAddress& /* bd_addr */) {
   return 0;
 }
 void BTIF_dm_disable() { inc_func_call_count(__func__); }
-void BTIF_dm_enable() { inc_func_call_count(__func__); }
+void BTIF_dm_enable(const std::string) { inc_func_call_count(__func__); }
 void BTIF_dm_report_inquiry_status_change(tBTM_INQUIRY_STATE /* state */) {
   inc_func_call_count(__func__);
 }
@@ -117,10 +117,10 @@ void btif_dm_remove_bond(const RawAddress /* bd_addr */) { inc_func_call_count(_
 void btif_dm_set_oob_for_io_req(tBTM_OOB_DATA* /* p_has_oob_data */) {
   inc_func_call_count(__func__);
 }
-void btif_dm_set_oob_for_le_io_req(const RawAddress& /* bd_addr */,
-                                   tBTM_OOB_DATA* /* p_has_oob_data */,
-                                   tBTM_LE_AUTH_REQ* /* p_auth_req */) {
+tBTM_OOB_DATA btif_dm_set_oob_for_le_io_req(const RawAddress& /* bd_addr */,
+                                            tBTM_LE_AUTH_REQ* /* p_auth_req */) {
   inc_func_call_count(__func__);
+  return BTM_OOB_UNKNOWN;
 }
 void btif_dm_ssp_reply(const RawAddress /* bd_addr */, bt_ssp_variant_t /* variant */,
                        uint8_t /* accept */) {

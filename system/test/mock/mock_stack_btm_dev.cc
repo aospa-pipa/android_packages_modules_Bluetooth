@@ -22,15 +22,12 @@
 #include "test/mock/mock_stack_btm_dev.h"
 
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <stddef.h>
 #include <stdlib.h>
 
-#include <string>
-
 #include "stack/btm/btm_dev.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_ble_addr.h"
-#include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_sec_api.h"
 #include "test/common/mock_functions.h"
 
@@ -66,23 +63,27 @@ DEV_CLASS BTM_SecReadDevClass(const RawAddress& /* bd_addr */) {
   inc_func_call_count(__func__);
   return kDevClassEmpty;
 }
-tBTM_SEC_DEV_REC* btm_find_dev(const RawAddress& bd_addr) {
+BtmDevice* btm_find_dev(const RawAddress& bd_addr) {
   inc_func_call_count(__func__);
   return test::mock::stack_btm_dev::btm_find_dev.body(bd_addr);
 }
-tBTM_SEC_DEV_REC* btm_find_dev_by_handle(uint16_t /* handle */) {
+const BtmDevice* btm_find_dev_by_handle(uint16_t /* handle */) {
   inc_func_call_count(__func__);
   return nullptr;
 }
-tBTM_SEC_DEV_REC* btm_find_or_alloc_dev(const RawAddress& /* bd_addr */) {
+BtmDevice* btm_get_dev_by_handle(uint16_t /* handle */) {
   inc_func_call_count(__func__);
   return nullptr;
 }
-tBTM_SEC_DEV_REC* btm_sec_alloc_dev(const RawAddress& /* bd_addr */) {
+BtmDevice* btm_find_or_alloc_dev(const RawAddress& /* bd_addr */) {
   inc_func_call_count(__func__);
   return nullptr;
 }
-tBTM_SEC_DEV_REC* btm_sec_allocate_dev_rec(void) {
+BtmDevice* btm_sec_alloc_dev(const RawAddress& /* bd_addr */) {
+  inc_func_call_count(__func__);
+  return nullptr;
+}
+BtmDevice* btm_sec_allocate_dev_rec(const RawAddress& /* bd_addr */) {
   inc_func_call_count(__func__);
   return nullptr;
 }
@@ -91,11 +92,11 @@ tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& /* bd_addr */) {
   return BOND_TYPE_UNKNOWN;
 }
 void BTM_SecClearSecurityFlags(const RawAddress& /* bd_addr */) { inc_func_call_count(__func__); }
-void btm_consolidate_dev(tBTM_SEC_DEV_REC* /* p_target_rec */) { inc_func_call_count(__func__); }
+void btm_consolidate_dev(BtmDevice* /* p_target_rec */) { inc_func_call_count(__func__); }
 void btm_dev_consolidate_existing_connections(const RawAddress& /* bd_addr */) {
   inc_func_call_count(__func__);
 }
-std::vector<tBTM_SEC_DEV_REC*> btm_get_sec_dev_rec() {
+std::vector<BtmDevice*> btm_get_sec_dev_rec() {
   inc_func_call_count(__func__);
   return {};
 }

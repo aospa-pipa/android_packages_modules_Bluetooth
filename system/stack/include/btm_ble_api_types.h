@@ -27,13 +27,12 @@
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_octets.h>
 #include <hardware/bt_common_types.h>
 
 #include <cstdint>
 #include <vector>
 
-#include "stack/include/ble_appearance.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/hci_error_code.h"
 
@@ -199,6 +198,11 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_CONN_TIMEOUT_MIN_DEF 100
 #endif
 
+/* maximum supervision timeout */
+#ifndef BTM_BLE_CONN_TIMEOUT_MAX_DEF
+#define BTM_BLE_CONN_TIMEOUT_MAX_DEF 32000
+#endif
+
 /* minimum acceptable connection interval */
 #ifndef BTM_BLE_CONN_INT_MIN_LIMIT
 #define BTM_BLE_CONN_INT_MIN_LIMIT 0x0009
@@ -287,20 +291,6 @@ typedef uint8_t BLE_SIGNATURE[BTM_BLE_AUTH_SIGN_LEN]; /* Device address */
                 BLE_APPEARANCE_OUTDOOR_SPORTS_LOCATION_POD
 #define BTM_BLE_APPEARANCE_OUTDOOR_SPORTS_LOCATION_POD_AND_NAV \
                 BLE_APPEARANCE_OUTDOOR_SPORTS_LOCATION_POD_AND_NAV
-
-/* Structure returned with Rand/Encrypt complete callback */
-typedef struct {
-  uint8_t status;
-  uint8_t param_len;
-  uint16_t opcode;
-  uint8_t param_buf[OCTET16_LEN];
-} tBTM_RAND_ENC;
-
-/* General callback function for notifying an application that a synchronous
- * BTM function is complete. The pointer contains the address of any returned
- * data.
- */
-typedef void(tBTM_RAND_ENC_CB)(tBTM_RAND_ENC* p1);
 
 /* ADV data flag bit definition used for BTM_BLE_AD_TYPE_FLAG */
 #define BTM_BLE_LIMIT_DISC_FLAG (0x01 << 0)

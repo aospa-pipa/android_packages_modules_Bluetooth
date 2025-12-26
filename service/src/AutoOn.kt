@@ -34,7 +34,8 @@ import android.os.SystemClock
 import android.os.UserHandle
 import android.provider.Settings
 import androidx.annotation.VisibleForTesting
-import com.android.server.bluetooth.airplane.hasUserToggledApm
+import com.android.server.bluetooth.airplane.AirplaneModeController
+import com.android.server.bluetooth.airplane.hasAirplaneModeEnhanced
 import com.android.server.bluetooth.satellite.isOn as isSatelliteModeOn
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -45,13 +46,14 @@ import kotlin.time.toDuration
 
 private const val TAG = "AutoOn"
 
+@kotlin.time.ExperimentalTime
 class AutoOn(
     private val looper: Looper,
     private val context: Context,
     private val user: UserHandle,
     private val state: BluetoothAdapterState,
     private val callback_on: () -> Unit,
-    private val is_airplane_mode_on: () -> Boolean,
+    private val airplaneModeController: AirplaneModeController,
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
@@ -74,8 +76,8 @@ class AutoOn(
             Log.d(TAG, "Satellite prevent feature activation")
             return
         }
-        if (is_airplane_mode_on()) {
-            if (!hasUserToggledApm(context)) {
+        if (airplaneModeController.isOnForUser) {
+            if (!context.hasAirplaneModeEnhanced()) {
                 Log.d(TAG, "Airplane prevent feature activation")
                 return
             }
@@ -96,7 +98,7 @@ class AutoOn(
         val timeToSleep = now.until(target, ChronoUnit.NANOS).toDuration(DurationUnit.NANOSECONDS)
 
         if (timeToSleep.isNegative()) {
-            Log.i(TAG, "Starting immediately (${now}). Previous timer was scheduled for ${target}")
+            Log.i(TAG, "Starting immediately ($now). Previous timer was scheduled for $target")
             callback_on()
             resetStorage(contentResolver)
             return
@@ -117,7 +119,7 @@ class AutoOn(
         if (!isSupported()) {
             val defaultFeatureValue = true
             setEnabledUnchecked(defaultFeatureValue)
-            Log.i(TAG, "Feature was set to its default value ${defaultFeatureValue}")
+            Log.i(TAG, "Feature was set to its default value $defaultFeatureValue")
         } else {
             // When Bluetooth turned on state, any saved time will be obsolete.
             // This happen only when the phone reboot while Bluetooth is ON
@@ -128,16 +130,12 @@ class AutoOn(
     fun isSupported() = Settings.Secure.getInt(contentResolver, USER_SETTINGS_KEY, -1) != -1
 
     fun isEnabled(): Boolean {
-        if (!isSupported()) {
-            throw IllegalStateException("AutoOn not supported for $user")
-        }
+        check(isSupported()) { "AutoOn not supported for $user" }
         return isEnabledUnchecked()
     }
 
     fun setEnabled(status: Boolean) {
-        if (!isSupported()) {
-            throw IllegalStateException("AutoOn not supported for $user")
-        }
+        check(isSupported()) { "AutoOn not supported for $user" }
         if (isEnabledUnchecked() && status == true) {
             Log.i(TAG, "setEnabled: Nothing to do, feature is already enabled")
             return
@@ -178,7 +176,7 @@ class AutoOn(
                 this,
                 handler,
             )
-            Log.i(TAG, "[${this}]: Scheduling next Bluetooth restart")
+            Log.i(TAG, "[$this]: Scheduling next Bluetooth restart")
 
             context.registerReceiver(
                 receiver,
@@ -193,7 +191,7 @@ class AutoOn(
         }
 
         override fun onAlarm() {
-            Log.i(TAG, "[${this}]: Bluetooth restarting now")
+            Log.i(TAG, "[$this]: Bluetooth restarting now")
             callback_on()
             cancel()
             this@AutoOn.timer = null
@@ -201,7 +199,7 @@ class AutoOn(
 
         /** Save timer to storage and stop it */
         internal fun pause() {
-            Log.i(TAG, "[${this}]: Pausing timer")
+            Log.i(TAG, "[$this]: Pausing timer")
             context.unregisterReceiver(receiver)
             alarmManager.cancel(this)
             handler.removeCallbacksAndMessages(null)
@@ -210,7 +208,7 @@ class AutoOn(
         /** Stop timer and reset storage */
         @VisibleForTesting
         internal fun cancel() {
-            Log.i(TAG, "[${this}]: Cancelling timer")
+            Log.i(TAG, "[$this]: Cancelling timer")
             context.unregisterReceiver(receiver)
             alarmManager.cancel(this)
             handler.removeCallbacksAndMessages(null)
@@ -218,7 +216,7 @@ class AutoOn(
         }
 
         override fun toString() =
-            "Timer: scheduled at ${now}. expire at ${target}. (sleep for ${timeToSleep})."
+            "Timer: scheduled at $now. expire at $target. (sleep for $timeToSleep)."
     }
 
     private fun isEnabledUnchecked() =
@@ -238,6 +236,9 @@ class AutoOn(
                 .setDeferralPolicy(BroadcastOptions.DEFERRAL_POLICY_UNTIL_ACTIVE)
                 .toBundle(),
         )
+
+        Log.i(TAG, "Triggering data backup")
+        BackupHelper.sendBroadcast(context)
     }
 
     companion object {

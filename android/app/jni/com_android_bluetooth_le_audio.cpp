@@ -187,16 +187,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for connection state");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onConnectionStateChanged, (jint)state,
-                                 addr.get());
+                                 jaddr.get());
   }
 
   void OnGroupStatus(int group_id, GroupStatus group_status) override {
@@ -222,15 +215,8 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
-    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onGroupNodeStatus, addr.get(),
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
+    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onGroupNodeStatus, jaddr.get(),
                                  (jint)group_id, (jint)node_status);
   }
 
@@ -263,16 +249,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     jint jni_sink_audio_location = sink_audio_location ? sink_audio_location->to_ulong() : -1;
-    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSinkAudioLocationAvailable, addr.get(),
+    sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onSinkAudioLocationAvailable, jaddr.get(),
                                  jni_sink_audio_location);
   }
 
@@ -357,16 +336,9 @@ public:
       return;
     }
 
-    ScopedLocalRef<jbyteArray> addr(sCallbackEnv.get(),
-                                    sCallbackEnv->NewByteArray(sizeof(RawAddress)));
-    if (!addr.get()) {
-      log::error("Failed to new jbyteArray bd addr for group status");
-      return;
-    }
-
-    sCallbackEnv->SetByteArrayRegion(addr.get(), 0, sizeof(RawAddress), (jbyte*)&bd_addr);
+    ScopedLocalRef<jbyteArray> jaddr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
     sCallbackEnv->CallVoidMethod(mCallbacksObj, method_onHealthBasedRecommendationAction,
-                                 addr.get(), (jint)action);
+                                 jaddr.get(), (jint)action);
   }
 
   void OnHealthBasedGroupRecommendationAction(
@@ -726,6 +698,18 @@ static void groupConfirmActiveNative(JNIEnv* /* env */, jobject /* object */, ji
   }
 
   sLeAudioClientInterface->GroupConfirmActive(group_id);
+}
+
+static void setInGameNative(JNIEnv* /* env */, jobject /* object */, jboolean in_game) {
+  log::info("");
+  std::shared_lock<std::shared_timed_mutex> lock(interface_mutex);
+
+  if (!sLeAudioClientInterface) {
+    log::error("Failed to get the Bluetooth LeAudio Interface");
+    return;
+  }
+
+  sLeAudioClientInterface->SetInGame(in_game);
 }
 
 /* Le Audio Broadcaster */
@@ -1447,6 +1431,29 @@ static void getBroadcastMetadataNative(JNIEnv* /* env */, jobject /* object */, 
   sLeAudioBroadcasterInterface->GetBroadcastMetadata(broadcast_id);
 }
 
+static void setBigChannelMapClassificationNative(JNIEnv* env, jobject /* object */, jint action,
+                                                 jbyteArray sink_addr, jint broadcast_id) {
+  log::info("");
+  std::shared_lock<std::shared_timed_mutex> lock(sBroadcasterInterfaceMutex);
+  if (!sLeAudioBroadcasterInterface) {
+    log::error("sLeAudioBroadcasterInterface is null");
+    return;
+  }
+
+  jbyte* sink_addr_bytes = env->GetByteArrayElements(sink_addr, nullptr);
+  if (!sink_addr_bytes) {
+    log::error("Failed to get byte array elements for sink address");
+    jniThrowIOException(env, EINVAL);
+    return;
+  }
+
+  RawAddress* sink_addr_raw = (RawAddress*)sink_addr_bytes;
+  sLeAudioBroadcasterInterface->SetBigChannelMapClassification(action, *sink_addr_raw,
+                                                               broadcast_id);
+
+  env->ReleaseByteArrayElements(sink_addr, sink_addr_bytes, 0);
+}
+
 static int register_com_android_bluetooth_le_audio_broadcaster(JNIEnv* env) {
   const JNINativeMethod methods[] = {
           {"initNative", "()V", (void*)BroadcasterInitNative},
@@ -1460,6 +1467,8 @@ static int register_com_android_bluetooth_le_audio_broadcaster(JNIEnv* env) {
           {"pauseBroadcastNative", "(I)V", (void*)PauseBroadcastNative},
           {"destroyBroadcastNative", "(I)V", (void*)DestroyBroadcastNative},
           {"getBroadcastMetadataNative", "(I)V", (void*)getBroadcastMetadataNative},
+          {"setBigChannelMapClassificationNative", "(I[BI)V",
+           (void*)setBigChannelMapClassificationNative},
   };
 
   const int result = REGISTER_NATIVE_METHODS(
@@ -1554,6 +1563,7 @@ int register_com_android_bluetooth_le_audio(JNIEnv* env) {
           {"sendAudioProfilePreferencesNative", "(IZZ)V", (void*)sendAudioProfilePreferencesNative},
           {"setGroupAllowedContextMaskNative", "(III)V", (void*)setGroupAllowedContextMaskNative},
           {"groupConfirmActiveNative", "(I)V", (void*)groupConfirmActiveNative},
+          {"setInGameNative", "(Z)V", (void*)setInGameNative},
   };
 
   const int result = REGISTER_NATIVE_METHODS(

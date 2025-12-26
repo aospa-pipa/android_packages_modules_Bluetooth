@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <bluetooth/types/acl_link_spec.h>
 #include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/hci_role.h>
 #include <bluetooth/types/remote_version.h>
@@ -168,7 +169,7 @@ struct tBTM_PM_MCB {
 };
 
 struct tACL_CONN {
-  tAclLinkSpec link_spec;
+  AclLinkSpec link_spec;
   tBLE_BD_ADDR active_addrt;
 
   bool in_use{false};
@@ -225,6 +226,9 @@ public:
   void set_encryption_idle() { encrypt_state_ = BTM_ACL_ENCRYPT_STATE_IDLE; }
 
   void set_encryption_switching() { encrypt_state_ = BTM_ACL_ENCRYPT_STATE_TEMP_FUNC; }
+
+  bool is_encryption_switching() const { return encrypt_state_ == BTM_ACL_ENCRYPT_STATE_TEMP_FUNC;}
+
 
 public:
   bool is_encrypted = false;

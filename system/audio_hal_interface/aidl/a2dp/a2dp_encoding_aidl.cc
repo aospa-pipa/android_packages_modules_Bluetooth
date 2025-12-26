@@ -90,7 +90,7 @@ public:
   bool GetPresentationPosition(uint64_t* remote_delay_report_ns, uint64_t* total_bytes_read,
                                timespec* data_position) override;
 
-  void SourceMetadataChanged(bool is_low_latency);
+  void SourceMetadataChanged(btav_a2dp_codec_audio_context_t audio_context);
 
   tA2DP_CTRL_CMD GetPendingCmd() const;
 
@@ -216,8 +216,8 @@ void A2dpTransport::SetLatencyMode(LatencyMode latency_mode) {
   stream_callbacks_->SetLatencyMode(latency_mode == LatencyMode::LOW_LATENCY);
 }
 
-void A2dpTransport::SourceMetadataChanged(bool is_low_latency) {
-  stream_callbacks_->UpdateSourceMetadata(is_low_latency);
+void A2dpTransport::SourceMetadataChanged(btav_a2dp_codec_audio_context_t audio_context) {
+  stream_callbacks_->SourceMetadataChanged(audio_context);
 }
 
 bool A2dpTransport::GetPresentationPosition(uint64_t* remote_delay_report_ns,
@@ -810,6 +810,17 @@ provider::get_a2dp_configuration(
     default:
       break;
   }
+  switch (user_preferences.audio_context) {
+    case BTAV_A2DP_CODEC_AUDIO_CONTEXT_MEDIA:
+      hint.audioContext.bitmask = AudioContext::MEDIA;
+      break;
+    case BTAV_A2DP_CODEC_AUDIO_CONTEXT_GAME:
+      hint.audioContext.bitmask = AudioContext::GAME;
+      break;
+    default:
+      hint.audioContext.bitmask = AudioContext::UNSPECIFIED;
+      break;
+  }
 
   auto aidl_codec_id = convertCodecId(user_preferred_codec_id);
   log::assert_that(aidl_codec_id.has_value(), "convertCodecId failed");
@@ -877,10 +888,14 @@ provider::get_a2dp_configuration(
           provider_info->SourceCodecIndex(result->id).value();
   a2dp_configuration.codec_parameters.codec_specific_1 = user_preferences.codec_specific_1;
   if (result->parameters.lossless) {
-    a2dp_configuration.codec_parameters.codec_specific_3 =
-        APTX_ADAPTIVE_R2_2_SUPPORT_AVAILABLE | QHS_SUPPORT_MASK;
+    a2dp_configuration.codec_parameters.codec_specific_3 &=
+          ~((int64_t)QHS_SUPPORT_MASK);
+    a2dp_configuration.codec_parameters.codec_specific_3 |=
+         (int64_t)QHS_SUPPORT_AVAILABLE;
+    a2dp_configuration.codec_parameters.codec_specific_3 |=
+         (int64_t)APTX_ADAPTIVE_R2_2_SUPPORT_AVAILABLE;
   }
-  return std::make_optional(a2dp_configuration);
+  return a2dp_configuration;
 }
 
 /***

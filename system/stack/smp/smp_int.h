@@ -26,6 +26,7 @@
 
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/hci_role.h>
 
 #include <cstdint>
@@ -33,8 +34,8 @@
 #include "macros.h"
 #include "osi/include/alarm.h"
 #include "stack/include/bt_hdr.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/smp_api_types.h"
+#include "stack/btm/btm_security_record.h"
 
 typedef enum : uint16_t {
   SMP_METRIC_COMMAND_LE_FLAG = 0x0000,
@@ -317,8 +318,8 @@ public:
   Octet16 rconfirm;
   Octet16 rrand; /* for SC this is peer nonce */
   Octet16 rand;  /* for SC this is local nonce */
-  BT_OCTET32 private_key;
-  BT_OCTET32 dhkey;
+  Octet32 private_key;
+  Octet32 dhkey;
   Octet16 commitment;
   Octet16 remote_commitment;
   Octet16 local_random; /* local randomizer - passkey or OOB randomizer */
@@ -362,7 +363,7 @@ public:
   uint16_t div;
   Octet16 csrk; /* storage for local CSRK */
   uint16_t ediv;
-  BT_OCTET8 enc_rand;
+  Octet8 enc_rand;
   tBLE_ADDR_TYPE addr_type;
   RawAddress local_bda;
   bool is_pair_cancel;
@@ -520,6 +521,7 @@ tSMP_STATUS smp_calculate_confirm(tSMP_CB* p_cb, const Octet16& rand, Octet16* o
 
 void print128(const Octet16& x, const char* key_name);
 void smp_xor_128(Octet16* a, const Octet16& b);
+PairingAlgorithm smp_get_pairing_algorithm(tSMP_CB* p_cb);
 
 /* Save the p_cb->sc_oob_data.loc_oob_data for later, since the p_cb gets
  * cleaned up */

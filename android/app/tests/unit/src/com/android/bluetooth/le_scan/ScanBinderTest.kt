@@ -21,6 +21,7 @@ import android.app.PendingIntent
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.le.IPeriodicAdvertisingCallback
 import android.bluetooth.le.IScannerCallback
+import android.bluetooth.le.ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
@@ -52,7 +53,7 @@ import org.mockito.kotlin.whenever
 class ScanBinderTest {
     @get:Rule val mockitoRule = MockitoRule()
 
-    @Mock private lateinit var attributionSource: AttributionSource
+    @Mock private lateinit var source: AttributionSource
     @Mock private lateinit var adapterService: AdapterService
     @Mock private lateinit var scanController: ScanController
 
@@ -86,16 +87,60 @@ class ScanBinderTest {
         val filters = listOf<ScanFilter>()
         val workSource = mock(WorkSource::class.java)
 
-        binder.registerScanner(callback, settings, filters, workSource, attributionSource)
-        verify(scanController).registerScanner(callback, workSource, attributionSource)
+        binder.registerScanner(callback, settings, filters, workSource, source)
+        verify(scanController).registerScanner(callback, workSource, source)
+    }
+
+    @Test
+    fun registerAndStartScan() {
+        // Setup: Create mock objects for the call
+        val callback = mock(IScannerCallback::class.java)
+        val settings = ScanSettings.Builder().build()
+        val filters = listOf<ScanFilter>()
+        val workSource = mock(WorkSource::class.java)
+
+        // Action: Call the method to be tested
+        binder.registerAndStartScan(callback, settings, filters, workSource, source)
+
+        // Verification: Ensure the call is forwarded to the scanController
+        verify(scanController).registerAndStartScan(callback, workSource, source, settings, filters)
+        // The callback should not be invoked directly by the binder in the success path
+        verify(callback, never()).onScannerRegistered(any(Int::class.java), any(Int::class.java))
+    }
+
+    @Test
+    fun registerAndStartScan_afterCleanup_callsOnScannerRegisteredFailed() {
+        // Setup: Create mock objects and put the binder in a cleaned-up state
+        val callback = mock(IScannerCallback::class.java)
+        val settings = ScanSettings.Builder().build()
+        val filters = listOf<ScanFilter>()
+        val workSource: WorkSource? = null
+        binder.cleanup()
+
+        // Action: Call the method to be tested
+        binder.registerAndStartScan(callback, settings, filters, workSource, source)
+
+        // Verification: Ensure the scanController is not called
+        verify(scanController, never()).registerAndStartScan(any(), any(), any(), any(), any())
+        // Verification: Ensure the failure callback is invoked with the correct error code
+        verify(callback).onScannerRegistered(SCAN_FAILED_APPLICATION_REGISTRATION_FAILED, -1)
     }
 
     @Test
     fun unregisterScanner() {
         val scannerId = 1
 
-        binder.unregisterScanner(scannerId, attributionSource)
+        binder.unregisterScanner(scannerId, source)
         verify(scanController).unregisterScanner(scannerId)
+    }
+
+    @Test
+    fun unregisterScanner_afterCleanup_doesNothing() {
+        val scannerId = 1
+
+        binder.cleanup()
+        binder.unregisterScanner(scannerId, source)
+        verify(scanController, never()).unregisterScanner(scannerId)
     }
 
     @Test
@@ -104,50 +149,38 @@ class ScanBinderTest {
         val settings = ScanSettings.Builder().build()
         val filters = listOf<ScanFilter>()
 
-        binder.startScan(scannerId, settings, filters, attributionSource)
-
-        // Verify that the scan is started on the controller
-        verify(scanController).startScan(scannerId, settings, filters, attributionSource)
-        // Verify that privileged permission is not required for default settings
+        binder.startScan(scannerId, settings, filters, source)
+        verify(scanController).startScan(scannerId, settings, filters, source)
         verify(adapterService, never()).enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)
     }
 
     @Test
     fun startScan_whenAdapterIsBleOn_enforcesPrivilegedPermission() {
-        // Setup: Bluetooth adapter is STATE_BLE_ON
         whenever(adapterService.state).thenReturn(BluetoothAdapter.STATE_BLE_ON)
         val scannerId = 1
         val settings = ScanSettings.Builder().build()
         val filters = listOf<ScanFilter>()
 
-        binder.startScan(scannerId, settings, filters, attributionSource)
-
-        // Verify that privileged permission is enforced
+        binder.startScan(scannerId, settings, filters, source)
         verify(adapterService).enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)
-        // Verify that the scan is still started on the controller
-        verify(scanController).startScan(scannerId, settings, filters, attributionSource)
+        verify(scanController).startScan(scannerId, settings, filters, source)
     }
 
     @Test
     fun startScan_withAmbientDiscoveryMode_enforcesPrivilegedPermission() {
         val scannerId = 1
-        // Setup: ScanSettings with ambient discovery mode
         val settings =
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_AMBIENT_DISCOVERY).build()
         val filters = listOf<ScanFilter>()
 
-        binder.startScan(scannerId, settings, filters, attributionSource)
-
-        // Verify that privileged permission is enforced
+        binder.startScan(scannerId, settings, filters, source)
         verify(adapterService).enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)
-        // Verify that the scan is still started on the controller
-        verify(scanController).startScan(scannerId, settings, filters, attributionSource)
+        verify(scanController).startScan(scannerId, settings, filters, source)
     }
 
     @Test
     fun startScan_withBatchScanTruncated_enforcesPrivilegedPermission() {
         val scannerId = 1
-        // Setup: ScanSettings for truncated batch scan
         val settings =
             ScanSettings.Builder()
                 .setReportDelay(1000)
@@ -155,18 +188,14 @@ class ScanBinderTest {
                 .build()
         val filters = listOf<ScanFilter>()
 
-        binder.startScan(scannerId, settings, filters, attributionSource)
-
-        // Verify that privileged permission is enforced
+        binder.startScan(scannerId, settings, filters, source)
         verify(adapterService).enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)
-        // Verify that the scan is still started on the controller
-        verify(scanController).startScan(scannerId, settings, filters, attributionSource)
+        verify(scanController).startScan(scannerId, settings, filters, source)
     }
 
     @Test
     fun startScan_withBatchScanFull_doesNotEnforcePrivilegedPermission() {
         val scannerId = 1
-        // Setup: ScanSettings for full batch scan
         val settings =
             ScanSettings.Builder()
                 .setReportDelay(1000)
@@ -174,12 +203,9 @@ class ScanBinderTest {
                 .build()
         val filters = listOf<ScanFilter>()
 
-        binder.startScan(scannerId, settings, filters, attributionSource)
-
-        // Verify that privileged permission is NOT enforced
+        binder.startScan(scannerId, settings, filters, source)
         verify(adapterService, never()).enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)
-        // Verify that the scan is started on the controller
-        verify(scanController).startScan(scannerId, settings, filters, attributionSource)
+        verify(scanController).startScan(scannerId, settings, filters, source)
     }
 
     @Test
@@ -188,15 +214,15 @@ class ScanBinderTest {
         val settings = ScanSettings.Builder().build()
         val filters = listOf<ScanFilter>()
 
-        binder.registerPiAndStartScan(intent, settings, filters, attributionSource)
-        verify(scanController).registerPiAndStartScan(intent, settings, filters, attributionSource)
+        binder.registerPiAndStartScan(intent, settings, filters, source)
+        verify(scanController).registerPiAndStartScan(intent, settings, filters, source)
     }
 
     @Test
     fun stopScan_withScannerId() {
         val scannerId = 1
 
-        binder.stopScan(scannerId, attributionSource)
+        binder.stopScan(scannerId, source)
         verify(scanController).stopScan(scannerId)
     }
 
@@ -204,7 +230,7 @@ class ScanBinderTest {
     fun stopScan_withIntent() {
         val intent = PendingIntent.getBroadcast(context, 0, Intent(), PendingIntent.FLAG_IMMUTABLE)
 
-        binder.stopScanForIntent(intent, attributionSource)
+        binder.stopScanForIntent(intent, source)
         verify(scanController).stopScan(intent)
     }
 
@@ -212,7 +238,7 @@ class ScanBinderTest {
     fun flushPendingBatchResults() {
         val scannerId = 1
 
-        binder.flushPendingBatchResults(scannerId, attributionSource)
+        binder.flushPendingBatchResults(scannerId, source)
         verify(scanController).flushPendingBatchResults(scannerId)
     }
 
@@ -223,7 +249,7 @@ class ScanBinderTest {
         val timeout = 2
         val callback = mock(IPeriodicAdvertisingCallback::class.java)
 
-        binder.registerSync(scanResult, skip, timeout, callback, attributionSource)
+        binder.registerSync(scanResult, skip, timeout, callback, source)
         verify(scanController).registerSync(scanResult, skip, timeout, callback)
     }
 
@@ -231,7 +257,7 @@ class ScanBinderTest {
     fun unregisterSync() {
         val callback = mock(IPeriodicAdvertisingCallback::class.java)
 
-        binder.unregisterSync(callback, attributionSource)
+        binder.unregisterSync(callback, source)
         verify(scanController).unregisterSync(callback)
     }
 
@@ -240,7 +266,7 @@ class ScanBinderTest {
         val serviceData = 1
         val syncHandle = 2
 
-        binder.transferSync(device, serviceData, syncHandle, attributionSource)
+        binder.transferSync(device, serviceData, syncHandle, source)
         verify(scanController).transferSync(device, serviceData, syncHandle)
     }
 
@@ -250,18 +276,13 @@ class ScanBinderTest {
         val advHandle = 2
         val callback = mock(IPeriodicAdvertisingCallback::class.java)
 
-        binder.transferSetInfo(device, serviceData, advHandle, callback, attributionSource)
+        binder.transferSetInfo(device, serviceData, advHandle, callback, source)
         verify(scanController).transferSetInfo(device, serviceData, advHandle, callback)
     }
 
     @Test
     fun numHwTrackFiltersAvailable() {
-        binder.numHwTrackFiltersAvailable(attributionSource)
+        binder.numHwTrackFiltersAvailable(source)
         verify(scanController).numHwTrackFiltersAvailable()
-    }
-
-    @Test
-    fun cleanup_doesNotCrash() {
-        binder.cleanup()
     }
 }

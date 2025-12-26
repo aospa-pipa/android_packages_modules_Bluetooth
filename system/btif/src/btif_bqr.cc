@@ -801,7 +801,7 @@ static void AddLinkQualityEventToQueue(uint8_t length, const uint8_t* p_link_qua
     }
 
     if (bd_addr.IsEmpty()) {
-      tBTM_SEC_DEV_REC* dev =
+      const BtmDevice* dev =
               btm_find_dev_by_handle(p_bqr_event->bqr_link_quality_event_.connection_handle);
       if (dev != NULL) {
         bd_addr = dev->RemoteAddress();

@@ -346,6 +346,25 @@ void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
   } else {
     /* application allows to do update, if we were delaying one do it now */
     if (p_lcb->conn_update_mask & L2C_BLE_NEW_CONN_PARAM) {
+
+      /* If we find timeout for connection update config smaller than lower bound
+         because of current subrate factor, reset the subrate first */
+      if (com::android::bluetooth::flags::le_subrate_manager()) {
+        if (p_lcb->SubrateFactor() > 1) {
+          uint16_t timeout_bond =
+              (1 + p_lcb->latency) * p_lcb->SubrateFactor() * p_lcb->max_interval * 1.25 * 2;
+          log::info("timeout: {}, timeout_bond: {}", p_lcb->timeout, timeout_bond);
+          if (p_lcb->timeout < timeout_bond) {
+              log::verbose("Sending HCI cmd for subrate req to reset first");
+              bluetooth::shim::ACL_LeSubrateRequest(
+                p_lcb->Handle(), 1, 1, p_lcb->PeriphLatency(), 0, p_lcb->timeout);
+              p_lcb->subrate_req_mask |= L2C_BLE_SUBRATE_REQ_PENDING;
+              p_lcb->conn_update_mask |= L2C_BLE_NOT_DEFAULT_PARAM;
+              return;
+          }
+        }
+      }
+
       /* if both side 4.1, or we are central device, send HCI command */
       if (p_lcb->IsLinkRoleCentral() ||
           (bluetooth::shim::GetController()->SupportsBleConnectionParametersRequest() &&
@@ -396,7 +415,7 @@ void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
  *
  ******************************************************************************/
 void l2cble_process_conn_update_evt(uint16_t handle, uint8_t status, uint16_t interval,
-                                    uint16_t /* latency */, uint16_t /* timeout */) {
+                                    uint16_t latency, uint16_t timeout) {
   log::verbose("");
 
   /* See if we have a link control block for the remote device */
@@ -406,10 +425,15 @@ void l2cble_process_conn_update_evt(uint16_t handle, uint8_t status, uint16_t in
     return;
   }
   p_lcb->SetConnInterval(interval);
+  p_lcb->SetPeriphLatency(latency);
+  p_lcb->SetSupervisionTimeout(timeout);
   p_lcb->conn_update_mask &= ~L2C_BLE_UPDATE_PENDING;
 
   if (status != HCI_SUCCESS) {
     log::warn("Error status: {}", status);
+  } else {
+    p_lcb->SetSubrateFactor(1);
+    p_lcb->SetContNumber(0);
   }
 
   l2cble_start_conn_update(p_lcb);
@@ -466,32 +490,32 @@ void l2cble_process_rc_param_request_evt(uint16_t handle, uint16_t int_min, uint
 
 void l2cble_use_preferred_conn_params(const RawAddress& bda) {
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bda, BT_TRANSPORT_LE);
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_or_alloc_dev(bda);
+  BtmDevice* p_device = btm_find_or_alloc_dev(bda);
 
   /* If there are any preferred connection parameters, set them now */
-  if ((p_lcb != NULL) && (p_dev_rec != NULL) &&
-      (p_dev_rec->conn_params.min_conn_int >= BTM_BLE_CONN_INT_MIN) &&
-      (p_dev_rec->conn_params.min_conn_int <= BTM_BLE_CONN_INT_MAX) &&
-      (p_dev_rec->conn_params.max_conn_int >= BTM_BLE_CONN_INT_MIN) &&
-      (p_dev_rec->conn_params.max_conn_int <= BTM_BLE_CONN_INT_MAX) &&
-      (p_dev_rec->conn_params.peripheral_latency <= BTM_BLE_CONN_LATENCY_MAX) &&
-      (p_dev_rec->conn_params.supervision_tout >= BTM_BLE_CONN_SUP_TOUT_MIN) &&
-      (p_dev_rec->conn_params.supervision_tout <= BTM_BLE_CONN_SUP_TOUT_MAX) &&
-      ((p_lcb->min_interval < p_dev_rec->conn_params.min_conn_int &&
-        p_dev_rec->conn_params.min_conn_int != BTM_BLE_CONN_PARAM_UNDEF) ||
-       (p_lcb->min_interval > p_dev_rec->conn_params.max_conn_int) ||
-       (p_lcb->latency > p_dev_rec->conn_params.peripheral_latency) ||
-       (p_lcb->timeout > p_dev_rec->conn_params.supervision_tout))) {
+  if ((p_lcb != NULL) && (p_device != NULL) &&
+      (p_device->conn_params.min_conn_int >= BTM_BLE_CONN_INT_MIN) &&
+      (p_device->conn_params.min_conn_int <= BTM_BLE_CONN_INT_MAX) &&
+      (p_device->conn_params.max_conn_int >= BTM_BLE_CONN_INT_MIN) &&
+      (p_device->conn_params.max_conn_int <= BTM_BLE_CONN_INT_MAX) &&
+      (p_device->conn_params.peripheral_latency <= BTM_BLE_CONN_LATENCY_MAX) &&
+      (p_device->conn_params.supervision_tout >= BTM_BLE_CONN_SUP_TOUT_MIN) &&
+      (p_device->conn_params.supervision_tout <= BTM_BLE_CONN_SUP_TOUT_MAX) &&
+      ((p_lcb->min_interval < p_device->conn_params.min_conn_int &&
+        p_device->conn_params.min_conn_int != BTM_BLE_CONN_PARAM_UNDEF) ||
+       (p_lcb->min_interval > p_device->conn_params.max_conn_int) ||
+       (p_lcb->latency > p_device->conn_params.peripheral_latency) ||
+       (p_lcb->timeout > p_device->conn_params.supervision_tout))) {
     log::verbose(
-            "HANDLE={} min_conn_int={} max_conn_int={} peripheral_latency={} supervision_tout={}",
-            p_lcb->Handle(), p_dev_rec->conn_params.min_conn_int,
-            p_dev_rec->conn_params.max_conn_int, p_dev_rec->conn_params.peripheral_latency,
-            p_dev_rec->conn_params.supervision_tout);
+            "HANDLE={} min_conn_int={} max_conn_int={} peripheral_latency={} "
+            "supervision_tout={}",
+            p_lcb->Handle(), p_device->conn_params.min_conn_int, p_device->conn_params.max_conn_int,
+            p_device->conn_params.peripheral_latency, p_device->conn_params.supervision_tout);
 
-    p_lcb->min_interval = p_dev_rec->conn_params.min_conn_int;
-    p_lcb->max_interval = p_dev_rec->conn_params.max_conn_int;
-    p_lcb->timeout = p_dev_rec->conn_params.supervision_tout;
-    p_lcb->latency = p_dev_rec->conn_params.peripheral_latency;
+    p_lcb->min_interval = p_device->conn_params.min_conn_int;
+    p_lcb->max_interval = p_device->conn_params.max_conn_int;
+    p_lcb->timeout = p_device->conn_params.supervision_tout;
+    p_lcb->latency = p_device->conn_params.peripheral_latency;
     if (com_android_bluetooth_flags_initial_conn_params_p1()) {
       p_lcb->conn_update_mask &= ~L2C_BLE_AGGRESSIVE_INITIAL_PARAM;
     }
@@ -636,8 +660,8 @@ bool L2CA_SubrateRequest(const RawAddress& rem_bda, uint16_t subrate_min, uint16
  *
  ******************************************************************************/
 void l2cble_process_subrate_change_evt(uint16_t handle, uint8_t status,
-                                       uint16_t /* subrate_factor */,
-                                       uint16_t /* peripheral_latency */, uint16_t /* cont_num */,
+                                       uint16_t subrate_factor,
+                                       uint16_t /* peripheral_latency */, uint16_t cont_num,
                                        uint16_t /* timeout */) {
   log::verbose("");
 
@@ -652,6 +676,11 @@ void l2cble_process_subrate_change_evt(uint16_t handle, uint8_t status,
 
   if (status != HCI_SUCCESS) {
     log::warn("Error status: {}", status);
+  }
+
+  if (status == HCI_SUCCESS) {
+    p_lcb->SetSubrateFactor(subrate_factor);
+    p_lcb->SetContNumber(cont_num);
   }
 
   l2cble_start_conn_update(p_lcb);

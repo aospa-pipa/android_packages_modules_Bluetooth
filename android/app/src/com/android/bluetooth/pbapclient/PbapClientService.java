@@ -22,8 +22,6 @@ import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
-import static java.util.Objects.requireNonNull;
-
 import android.accounts.Account;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothProfile;
@@ -92,7 +90,7 @@ public class PbapClientService extends ConnectableProfile {
     }
 
     public PbapClientService(AdapterService adapterService) {
-        super(BluetoothProfile.PBAP_CLIENT, requireNonNull(adapterService));
+        super(BluetoothProfile.PBAP_CLIENT, adapterService);
         mHandler = new Handler(Looper.getMainLooper());
         mStateMachinesLooper = null;
 
@@ -112,7 +110,7 @@ public class PbapClientService extends ConnectableProfile {
             PbapClientContactsStorage storage,
             Map<BluetoothDevice, PbapClientStateMachine> deviceMap,
             Looper looper) {
-        super(BluetoothProfile.PBAP_CLIENT, requireNonNull(adapterService));
+        super(BluetoothProfile.PBAP_CLIENT, adapterService);
 
         // This is an override unique to this constructor which belongs to tests only
         mHandler = new Handler(looper);
@@ -165,7 +163,7 @@ public class PbapClientService extends ConnectableProfile {
      * up when we shutdown.
      */
     private void registerSdpRecord() {
-        final var nativeInterface = mAdapterService.getSdpManagerNativeInterface();
+        final var nativeInterface = getAdapterService().getSdpManagerNativeInterface();
         if (nativeInterface.isEmpty()) {
             Log.e(TAG, "SdpManagerNativeInterface is not available");
             return;
@@ -186,7 +184,7 @@ public class PbapClientService extends ConnectableProfile {
         }
         int sdpHandle = mSdpHandle;
         mSdpHandle = -1;
-        final var nativeInterface = mAdapterService.getSdpManagerNativeInterface();
+        final var nativeInterface = getAdapterService().getSdpManagerNativeInterface();
         if (nativeInterface.isEmpty()) {
             Log.e(
                     TAG,
@@ -230,7 +228,7 @@ public class PbapClientService extends ConnectableProfile {
                 }
                 stateMachine =
                         new PbapClientStateMachine(
-                                mAdapterService,
+                                getAdapterService(),
                                 device,
                                 mPbapClientContactsStorage,
                                 this,
@@ -391,7 +389,7 @@ public class PbapClientService extends ConnectableProfile {
         Log.d(TAG, "connect(device=" + device.getAddress() + ")");
         if (getConnectionPolicy(device) <= CONNECTION_POLICY_FORBIDDEN
                 || (Flags.pbapClientCheckAccessPermission()
-                        && mAdapterService.getPhonebookAccessPermission(device)
+                        && getAdapterService().getPhonebookAccessPermission(device)
                                 != BluetoothDevice.ACCESS_ALLOWED)) {
             return false;
         }
@@ -502,7 +500,8 @@ public class PbapClientService extends ConnectableProfile {
         }
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
 
-        if (!mAdapterService.setProfileConnectionPolicy(device, mProfileId, connectionPolicy)) {
+        if (!getAdapterService()
+                .setProfileConnectionPolicy(device, getProfileId(), connectionPolicy)) {
             return false;
         }
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {

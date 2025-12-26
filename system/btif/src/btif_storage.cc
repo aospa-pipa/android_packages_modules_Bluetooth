@@ -42,6 +42,7 @@
 #include <cutils/multiuser.h>
 #endif
 #include <bluetooth/types/ble_address_with_type.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/uuid.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,7 +66,6 @@
 #include "main/shim/helpers.h"
 #include "main/shim/shim.h"
 #include "osi/include/allocator.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/bt_uuid16.h"
 #include "storage/config_keys.h"
 
@@ -155,6 +155,9 @@ static bool prop2cfg(const RawAddress* remote_bd_addr, bt_property_t* prop) {
       btif_config_set_int(bdstr, BTIF_STORAGE_KEY_TIMESTAMP, static_cast<int>(time(NULL)));
       break;
     case BT_PROPERTY_BDNAME: {
+      if (com_android_bluetooth_flags_set_name_in_system_server() && !remote_bd_addr) {
+        log::fatal("Invalid set/get name within native config under set from system server flag");
+      }
       int name_length = prop->len > BD_NAME_LEN ? BD_NAME_LEN : prop->len;
       strncpy(value, reinterpret_cast<char*>(prop->val), name_length);
       value[name_length] = '\0';
@@ -270,6 +273,9 @@ static bool cfg2prop(const RawAddress* remote_bd_addr, bt_property_t* prop) {
       }
       break;
     case BT_PROPERTY_BDNAME: {
+      if (com_android_bluetooth_flags_set_name_in_system_server() && !remote_bd_addr) {
+        log::fatal("Invalid set/get name within native config under set from system server flag");
+      }
       int len = prop->len;
       if (remote_bd_addr) {
         ret = btif_config_get_str(bdstr, BTIF_STORAGE_KEY_NAME, reinterpret_cast<char*>(prop->val),
@@ -893,7 +899,7 @@ static void remove_devices_with_sample_ltk() {
 
     if (btif_storage_get_ble_bonding_key(bd_addr, BTM_LE_KEY_PENC, reinterpret_cast<uint8_t*>(&key),
                                          sizeof(tBTM_LE_PENC_KEYS)) == BT_STATUS_SUCCESS) {
-      if (is_sample_ltk(key.penc_key.ltk)) {
+      if (key.penc_key.ltk == SAMPLE_LTK) {
         bad_ltk.push_back(bd_addr);
       }
     }
@@ -1019,10 +1025,12 @@ bt_status_t btif_storage_load_bonded_devices(void) {
       num_props++;
     }
 
-    /* BD_NAME */
-    btif_storage_get_adapter_prop(BT_PROPERTY_BDNAME, &name, sizeof(name),
-                                  &adapter_props[num_props]);
-    num_props++;
+    if (!com_android_bluetooth_flags_set_name_in_system_server()) {
+      /* BD_NAME */
+      btif_storage_get_adapter_prop(BT_PROPERTY_BDNAME, &name, sizeof(name),
+                                    &adapter_props[num_props]);
+      num_props++;
+    }
 
     /* DISC_TIMEOUT */
     btif_storage_get_adapter_prop(BT_PROPERTY_ADAPTER_DISCOVERABLE_TIMEOUT, &disc_timeout,
@@ -1370,9 +1378,9 @@ uint8_t btif_storage_get_sr_supp_feat(const RawAddress& bd_addr) {
  *                  false otherwise
  *
  ******************************************************************************/
-bool btif_storage_is_restricted_device(const RawAddress* remote_bd_addr) {
+bool btif_storage_is_restricted_device(const RawAddress remote_bd_addr) {
   int val;
-  return btif_config_get_int(remote_bd_addr->ToString(), BTIF_STORAGE_KEY_RESTRICTED, &val);
+  return btif_config_get_int(remote_bd_addr.ToString(), BTIF_STORAGE_KEY_RESTRICTED, &val);
 }
 
 /*******************************************************************************

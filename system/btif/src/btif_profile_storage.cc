@@ -135,7 +135,7 @@ static void btif_storage_hogp_device_info(std::string bdstr, uint16_t attr_mask,
  *
  ******************************************************************************/
 
-bt_status_t btif_storage_add_hid_device_info(const tAclLinkSpec& link_spec, uint16_t attr_mask,
+bt_status_t btif_storage_add_hid_device_info(const AclLinkSpec& link_spec, uint16_t attr_mask,
                                              uint8_t sub_class, uint8_t app_id, uint16_t vendor_id,
                                              uint16_t product_id, uint16_t version,
                                              uint8_t ctry_code, uint16_t ssr_max_latency,
@@ -161,7 +161,7 @@ bt_status_t btif_storage_add_hid_device_info(const tAclLinkSpec& link_spec, uint
   return BT_STATUS_SUCCESS;
 }
 
-static void btif_storage_load_bonded_hid_device(const tAclLinkSpec link_spec) {
+static void btif_storage_load_bonded_hid_device(const AclLinkSpec link_spec) {
   auto name = link_spec.addrt.bda.ToString();
   int value;
   bool reconnect_allowed = true;
@@ -217,7 +217,7 @@ static void btif_storage_load_bonded_hid_device(const tAclLinkSpec link_spec) {
   btif_hh_load_bonded_dev(link_spec, attr_mask, sub_class, app_id, dscp_info, reconnect_allowed);
 }
 
-static void btif_storage_load_bonded_hogp_device(const tAclLinkSpec link_spec) {
+static void btif_storage_load_bonded_hogp_device(const AclLinkSpec link_spec) {
   auto name = link_spec.addrt.bda.ToString();
   int value;
   bool reconnect_allowed = true;
@@ -277,7 +277,7 @@ static void btif_storage_load_bonded_hogp_device(const tAclLinkSpec link_spec) {
 bt_status_t btif_storage_load_bonded_hid_info(void) {
   for (const auto& bd_addr : btif_config_get_paired_devices()) {
     auto name = bd_addr.ToString();
-    tAclLinkSpec link_spec = {};
+    AclLinkSpec link_spec = {};
     link_spec.addrt.bda = bd_addr;
     link_spec.addrt.type = BLE_ADDR_PUBLIC;
     link_spec.transport = BT_TRANSPORT_AUTO;
@@ -311,7 +311,7 @@ bt_status_t btif_storage_load_bonded_hid_info(void) {
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_hid_info(const tAclLinkSpec& link_spec) {
+bt_status_t btif_storage_remove_hid_info(const AclLinkSpec& link_spec) {
   std::string bdstr = link_spec.addrt.bda.ToString();
 
   btif_config_remove(bdstr, BTIF_STORAGE_KEY_HID_ATTR_MASK);
@@ -421,25 +421,9 @@ void btif_storage_add_hearing_aid(const bluetooth::asha::HearingDevice& dev_info
           [](const bluetooth::asha::HearingDevice& dev_info) {
             std::string bdstr = dev_info.address.ToString();
             log::verbose("saving hearing aid device: {}", dev_info.address);
-            if (!com_android_bluetooth_flags_continue_queued_command_after_discovery()) {
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_SERVICE_CHANGED_CCC_HANDLE,
-                                  dev_info.service_changed_ccc_handle);
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_READ_PSM_HANDLE,
-                                  dev_info.read_psm_handle);
-            }
             btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_CAPABILITIES,
                                 dev_info.capabilities);
             btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_CODECS, dev_info.codecs);
-            if (!com_android_bluetooth_flags_continue_queued_command_after_discovery()) {
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_CONTROL_POINT,
-                                  dev_info.audio_control_point_handle);
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_VOLUME_HANDLE,
-                                  dev_info.volume_handle);
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_HANDLE,
-                                  dev_info.audio_status_handle);
-              btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_CCC_HANDLE,
-                                  dev_info.audio_status_ccc_handle);
-            }
             btif_config_set_uint64(bdstr, BTIF_STORAGE_KEY_HEARING_AID_SYNC_ID,
                                    dev_info.hi_sync_id);
             btif_config_set_int(bdstr, BTIF_STORAGE_KEY_HEARING_AID_RENDER_DELAY,
@@ -483,32 +467,6 @@ void btif_storage_load_bonded_hearing_aids() {
     uint16_t service_changed_ccc_handle = 0;
     uint16_t volume_handle = 0;
     uint16_t read_psm_handle = 0;
-    if (!com_android_bluetooth_flags_continue_queued_command_after_discovery()) {
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_CONTROL_POINT, &value)) {
-        audio_control_point_handle = value;
-      }
-
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_HANDLE, &value)) {
-        audio_status_handle = value;
-      }
-
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_CCC_HANDLE, &value)) {
-        audio_status_ccc_handle = value;
-      }
-
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_SERVICE_CHANGED_CCC_HANDLE,
-                              &value)) {
-        service_changed_ccc_handle = value;
-      }
-
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_VOLUME_HANDLE, &value)) {
-        volume_handle = value;
-      }
-
-      if (btif_config_get_int(name, BTIF_STORAGE_KEY_HEARING_AID_READ_PSM_HANDLE, &value)) {
-        read_psm_handle = value;
-      }
-    }
 
     uint64_t lvalue;
     uint64_t hi_sync_id = 0;
@@ -545,22 +503,12 @@ void btif_storage_load_bonded_hearing_aids() {
 /** Deletes the bonded hearing aid device info from NVRAM */
 void btif_storage_remove_hearing_aid(const RawAddress& address) {
   std::string addrstr = address.ToString();
-  if (!com_android_bluetooth_flags_continue_queued_command_after_discovery()) {
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_READ_PSM_HANDLE);
-  }
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_CAPABILITIES);
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_CODECS);
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_SYNC_ID);
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_RENDER_DELAY);
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_PREPARATION_DELAY);
   btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_IS_ACCEPTLISTED);
-  if (!com_android_bluetooth_flags_continue_queued_command_after_discovery()) {
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_CONTROL_POINT);
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_VOLUME_HANDLE);
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_HANDLE);
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_AUDIO_STATUS_CCC_HANDLE);
-    btif_config_remove(addrstr, BTIF_STORAGE_KEY_HEARING_AID_SERVICE_CHANGED_CCC_HANDLE);
-  }
 }
 
 /** Set/Unset the hearing aid device HEARING_AID_IS_ACCEPTLISTED flag. */
@@ -1116,7 +1064,7 @@ bt_status_t btif_storage_remove_hidd(RawAddress* remote_bd_addr) {
  * Returns          BT_STATUS_SUCCESS
  *
  ******************************************************************************/
-bt_status_t btif_storage_set_hid_connection_policy(const tAclLinkSpec& link_spec,
+bt_status_t btif_storage_set_hid_connection_policy(const AclLinkSpec& link_spec,
                                                    bool reconnect_allowed) {
   std::string bdstr = link_spec.addrt.bda.ToString();
 
@@ -1140,7 +1088,7 @@ bt_status_t btif_storage_set_hid_connection_policy(const tAclLinkSpec& link_spec
  * Returns          BT_STATUS_SUCCESS
  *
  ******************************************************************************/
-bt_status_t btif_storage_get_hid_connection_policy(const tAclLinkSpec& link_spec,
+bt_status_t btif_storage_get_hid_connection_policy(const AclLinkSpec& link_spec,
                                                    bool* reconnect_allowed) {
   std::string bdstr = link_spec.addrt.bda.ToString();
 

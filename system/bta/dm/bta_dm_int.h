@@ -25,6 +25,7 @@
 #pragma once
 
 #include <bluetooth/log.h>
+#include <bluetooth/types/acl_link_spec.h>
 #include <bluetooth/types/ble_address_with_type.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -233,8 +234,7 @@ typedef struct {
 
 typedef struct {
   uint16_t page_timeout; /* timeout for page in slots */
-  bool avoid_scatter;    /* true to avoid scatternet when av is streaming (be the
-                            central) */
+  bool avoid_scatter;    /* true to avoid scatternet when av is streaming(be the central) */
 } tBTA_DM_CFG;
 
 extern const uint32_t bta_service_id_to_btm_srv_id_lkup_tbl[];
@@ -316,7 +316,7 @@ extern tBTA_DM_ACL_CB bta_dm_acl_cb;
 /* DI control block */
 extern tBTA_DM_DI_CB bta_dm_di_cb;
 
-void BTA_dm_on_hw_on();
+void BTA_dm_on_hw_on(const std::string local_name);
 void BTA_dm_on_hw_off();
 
 void bta_dm_enable(tBTA_DM_SEC_CBACK*, tBTA_DM_ACL_CBACK*);
@@ -367,8 +367,8 @@ void bta_dm_process_ssr(void);
 namespace bluetooth::legacy::testing {
 
 tBTA_DM_PEER_DEVICE* allocate_device_for(const RawAddress& bd_addr, tBT_TRANSPORT transport);
-void bta_dm_acl_up(const tAclLinkSpec& link_spec, uint16_t acl_handle);
-void bta_dm_acl_down(const tAclLinkSpec& link_spec);
+void bta_dm_acl_up(const AclLinkSpec& link_spec, uint16_t acl_handle);
+void bta_dm_acl_down(const AclLinkSpec& link_spec);
 void bta_dm_init_cb();
 void bta_dm_deinit_cb();
 

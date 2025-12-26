@@ -20,6 +20,7 @@
 
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/bt_transport.h>
 
 #include <cstdint>
@@ -28,7 +29,6 @@
 #include "macros.h"
 #include "stack/include/bt_dev_class.h"
 #include "stack/include/bt_name.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/hcidefs.h"
 #include "stack/include/smp_api_types.h"
 #include "stack/include/smp_status.h"
@@ -289,6 +289,7 @@ typedef struct {
   tBTM_AUTH_REQ rmt_auth_req; /* Authentication required for peer device */
   BtIoCap loc_io_caps;        /* IO Capabilities of the local device */
   BtIoCap rmt_io_caps;        /* IO Capabilities of the remot device */
+  PairingAlgorithm pairing_algorithm;
 } tBTM_SP_CFM_REQ;
 
 /* data type for BTM_SP_KEY_REQ_EVT */
@@ -304,6 +305,7 @@ typedef struct {
   DEV_CLASS dev_class; /* peer CoD */
   BD_NAME bd_name;     /* peer device name */
   uint32_t passkey;    /* passkey */
+  PairingAlgorithm pairing_algorithm;
 } tBTM_SP_KEY_NOTIF;
 
 /* data type for BTM_SP_LOC_OOB_EVT */
@@ -468,17 +470,6 @@ typedef struct {
   bool is_pair_cancel;
   bool smp_over_br;
 } tBTM_LE_COMPLT;
-
-/************************
- *  Stored Linkkey Types
- ************************/
-#define BTM_CB_EVT_DELETE_STORED_LINK_KEYS 4
-
-typedef struct {
-  uint8_t event;
-  uint8_t status;
-  uint16_t num_keys;
-} tBTM_DELETE_STORED_LINK_KEY_COMPLETE;
 
 enum tBTM_BOND_TYPE : uint8_t {
   BOND_TYPE_UNKNOWN = 0,

@@ -26,11 +26,12 @@
 #include <string>
 
 // Original included files, if any
+#include <bluetooth/types/acl_link_spec.h>
 #include <bluetooth/types/address.h>
 
 #include "hci/class_of_device.h"
 #include "stack/acl/acl.h"
-#include "stack/btm/security_device_record.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_status.h"
@@ -430,18 +431,6 @@ struct acl_write_automatic_flush_timeout {
   }
 };
 extern struct acl_write_automatic_flush_timeout acl_write_automatic_flush_timeout;
-// Name: btm_acl_connected
-// Params: const RawAddress& bda, uint16_t handle, tHCI_STATUS status, uint8_t
-// enc_mode Returns: void
-struct btm_acl_connected {
-  std::function<void(const RawAddress& bda, uint16_t handle, tHCI_STATUS status, uint8_t enc_mode)>
-          body{[](const RawAddress& /* bda */, uint16_t /* handle */, tHCI_STATUS /* status */,
-                  uint8_t /* enc_mode */) { ; }};
-  void operator()(const RawAddress& bda, uint16_t handle, tHCI_STATUS status, uint8_t enc_mode) {
-    body(bda, handle, status, enc_mode);
-  }
-};
-extern struct btm_acl_connected btm_acl_connected;
 // Name: btm_connection_request
 // Params: const RawAddress& bda, const bluetooth::hci::ClassOfDevice& cod
 // Returns: void
@@ -454,13 +443,13 @@ struct btm_connection_request {
 };
 extern struct btm_connection_request btm_connection_request;
 // Name: btm_acl_created
-// Params: const tAclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role,
+// Params: const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role,
 // Returns: void
 struct btm_acl_created {
-  std::function<void(const tAclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role)> body{
-          [](const tAclLinkSpec& /* link_spec */, uint16_t /* hci_handle */,
+  std::function<void(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role)> body{
+          [](const AclLinkSpec& /* link_spec */, uint16_t /* hci_handle */,
              tHCI_ROLE /* link_role */) { ; }};
-  void operator()(const tAclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role) {
+  void operator()(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role) {
     body(link_spec, hci_handle, link_role);
   }
 };
@@ -637,16 +626,17 @@ struct btm_set_packet_types_from_address {
 };
 extern struct btm_set_packet_types_from_address btm_set_packet_types_from_address;
 // Name: on_acl_br_edr_connected
-// Params: const RawAddress& bda, uint16_t handle, uint8_t enc_mode, bool
-// locally_initiated Returns: void
+// Params: const RawAddress& bda, uint16_t handle, uint8_t enc_mode, bool locally_initiated,
+// tHCI_ROLE role
+//  Returns: void
 struct on_acl_br_edr_connected {
   std::function<void(const RawAddress& bda, uint16_t handle, uint8_t enc_mode,
-                     bool locally_initiated)>
+                     bool locally_initiated, tHCI_ROLE role)>
           body{[](const RawAddress& /* bda */, uint16_t /* handle */, uint8_t /* enc_mode */,
-                  bool /* locally_initiated */) { ; }};
-  void operator()(const RawAddress& bda, uint16_t handle, uint8_t enc_mode,
-                  bool locally_initiated) {
-    body(bda, handle, enc_mode, locally_initiated);
+                  bool /* locally_initiated */, tHCI_ROLE /* role */) { ; }};
+  void operator()(const RawAddress& bda, uint16_t handle, uint8_t enc_mode, bool locally_initiated,
+                  tHCI_ROLE role) {
+    body(bda, handle, enc_mode, locally_initiated, role);
   }
 };
 extern struct on_acl_br_edr_connected on_acl_br_edr_connected;

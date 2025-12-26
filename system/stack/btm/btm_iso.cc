@@ -150,6 +150,13 @@ void IsoManager::TerminateBig(uint8_t big_handle, uint8_t reason) {
   }
 }
 
+void IsoManager::SetBigChannelMapClassificationByConnHandles(uint8_t action, uint8_t big_handle,
+                                                             const std::vector<uint16_t>& handles) {
+  if (pimpl_->IsRunning()) {
+    pimpl_->iso_impl_->set_big_channel_map_classification(action, big_handle, handles);
+  }
+}
+
 void IsoManager::HandleIsoData(void* p_msg) {
   if (pimpl_->IsRunning()) {
     pimpl_->iso_impl_->handle_iso_data(static_cast<BT_HDR*>(p_msg));

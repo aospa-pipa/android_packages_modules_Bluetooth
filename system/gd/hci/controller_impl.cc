@@ -72,9 +72,6 @@ struct ControllerImpl::impl {
 
     write_le_host_support(Enable::ENABLED, Enable::DISABLED);
     hci_->EnqueueCommand(
-            ReadLocalNameBuilder::Create(),
-            handler_->BindOnceOn(this, &ControllerImpl::impl::read_local_name_complete_handler));
-    hci_->EnqueueCommand(
             ReadLocalVersionInformationBuilder::Create(),
             handler_->BindOnceOn(
                     this, &ControllerImpl::impl::read_local_version_information_complete_handler));
@@ -332,18 +329,6 @@ struct ControllerImpl::impl {
     ASSERT(complete_view.IsValid());
     ErrorCode status = complete_view.GetStatus();
     log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
-  }
-
-  void read_local_name_complete_handler(CommandCompleteView view) {
-    auto complete_view = ReadLocalNameCompleteView::Create(view);
-    ASSERT(complete_view.IsValid());
-    ErrorCode status = complete_view.GetStatus();
-    log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
-    std::array<uint8_t, 248> local_name_array = complete_view.GetLocalName();
-
-    local_name_ = std::string(local_name_array.begin(), local_name_array.end());
-    // erase \0
-    local_name_.erase(std::find(local_name_.begin(), local_name_.end(), '\0'), local_name_.end());
   }
 
   void read_local_version_information_complete_handler(CommandCompleteView view) {
@@ -1216,6 +1201,8 @@ struct ControllerImpl::impl {
         return false;
       case OpCode::DYNAMIC_AUDIO_BUFFER:
         return vendor_capabilities_.dynamic_audio_buffer_support_ > 0x00;
+      case OpCode::LE_SET_BIG_CHANNEL_MAP_CLASSIFICATION:
+        return false;
       // Before MSFT extension is fully supported, return false for the following MSFT_OPCODE_XXXX
       // for now.
       case OpCode::MSFT_OPCODE_INTEL:
@@ -1272,7 +1259,6 @@ struct ControllerImpl::impl {
   uint8_t sco_buffer_length_{};
   uint16_t sco_buffers_{};
   Address mac_address_{};
-  std::string local_name_{};
   LeBufferSize le_buffer_size_{};
   std::vector<uint8_t> local_supported_codec_ids_{};
   std::vector<uint32_t> local_supported_vendor_codec_ids_{};
@@ -1306,8 +1292,6 @@ void ControllerImpl::RegisterCompletedMonitorAclPacketsCallback(CompletedAclPack
 void ControllerImpl::UnregisterCompletedMonitorAclPacketsCallback() {
   impl_->handler_->CallOn(impl_.get(), &impl::unregister_completed_monitor_acl_packets_callback);
 }
-
-std::string ControllerImpl::GetLocalName() const { return impl_->local_name_; }
 
 LocalVersionInformation ControllerImpl::GetLocalVersionInformation() const {
   return impl_->local_version_information_;
@@ -1398,6 +1382,8 @@ LOCAL_LE_FEATURE_ACCESSOR(SupportsBleConnectionSubratingHost, 38)
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleChannelSounding, 46)
 /* TODO: Decide and change bit number for HDT support, for testing keep this false since SoC support NA */
 LOCAL_LE_FEATURE_ACCESSOR(SupportsBleHDTPhy, 47)
+// TODO(b/455578977): Update the bit later, bit 56 is reserved for furture use in spec
+LOCAL_LE_FEATURE_ACCESSOR(SupportsBleHighDataThroughputPhy, 56)
 
 uint64_t ControllerImpl::GetLocalFeatures(uint8_t page_number) const {
   if (page_number < impl_->extended_lmp_features_array_.size()) {
@@ -1474,7 +1460,6 @@ void ControllerImpl::SetEventFilterConnectionSetupAddress(Address address,
 }
 
 void ControllerImpl::WriteLocalName(std::string local_name) {
-  impl_->local_name_ = local_name;
   impl_->handler_->CallOn(impl_.get(), &impl::write_local_name, local_name);
 }
 

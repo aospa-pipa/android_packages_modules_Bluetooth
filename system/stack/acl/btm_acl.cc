@@ -61,13 +61,13 @@
 #include "stack/acl/peer_packet_types.h"
 #include "stack/btm/btm_ble_int.h"
 #include "stack/btm/btm_dev.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/btm/btm_int.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sco.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_utils.h"
 #include "stack/btm/internal/btm_api.h"
-#include "stack/btm/security_device_record.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_api_types.h"
 #include "stack/include/acl_hci_link_interface.h"
@@ -204,7 +204,10 @@ static void disconnect_acl(tACL_CONN& p_acl, tHCI_STATUS reason, std::string com
 
 void StackAclBtmAcl::hci_start_role_switch_to_central(tACL_CONN& p_acl) {
   GetInterface().StartRoleSwitch(p_acl.link_spec.addrt.bda, static_cast<uint8_t>(HCI_ROLE_CENTRAL));
-  p_acl.set_switch_role_in_progress();
+  /* Legacy devices follow encry off, role switch and encry on */
+  if (!p_acl.is_encryption_switching()) {
+    p_acl.set_switch_role_in_progress();
+  }
   p_acl.rs_disc_pending = BTM_SEC_RS_PENDING;
 }
 
@@ -373,7 +376,7 @@ tACL_CONN* StackAclBtmAcl::acl_allocate_connection() {
   return nullptr;
 }
 
-void btm_acl_created(const tAclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role) {
+void btm_acl_created(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role) {
   tACL_CONN* p_acl = internal_.btm_bda_to_acl(link_spec.addrt.bda, link_spec.transport);
   if (p_acl != (tACL_CONN*)NULL) {
     p_acl->hci_handle = hci_handle;
@@ -428,7 +431,7 @@ void btm_acl_created(const tAclLinkSpec& link_spec, uint16_t hci_handle, tHCI_RO
   }
 }
 
-void btm_acl_create_failed(const tAclLinkSpec& link_spec, tHCI_STATUS hci_status) {
+void btm_acl_create_failed(const AclLinkSpec& link_spec, tHCI_STATUS hci_status) {
   BTA_dm_acl_up_failed(link_spec, hci_status);
 }
 
@@ -826,34 +829,34 @@ void btm_read_remote_version_complete(tHCI_STATUS status, uint16_t handle, uint8
  ******************************************************************************/
 void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_number) {
   tBTM_STATUS status;
-  tBTM_SEC_DEV_REC* p_dev_rec;
+  BtmDevice* p_device;
   CHECK(p_acl_cb != nullptr);
   if (!p_acl_cb->peer_lmp_feature_valid[max_page_number]) {
     log::warn("Checking remote features but remote feature read is incomplete");
   }
 
-  p_dev_rec = btm_find_dev(p_acl_cb->link_spec.addrt.bda);
+  p_device = btm_find_dev(p_acl_cb->link_spec.addrt.bda);
 
-  if (p_dev_rec == nullptr) {
-    log::warn("Unable to find p_dev_rec");
+  if (p_device == nullptr) {
+    log::warn("Unable to find p_device");
     return;
   }
 
-  if ((p_dev_rec->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) &&
-      ((p_dev_rec->dev_class[1] == BTM_COD_MAJOR_UNCLASSIFIED) ||
-      ((p_dev_rec->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) != BTM_COD_MAJOR_PERIPHERAL))) {
+  if ((p_device->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) &&
+      ((p_device->dev_class[1] == BTM_COD_MAJOR_UNCLASSIFIED) ||
+      ((p_device->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) != BTM_COD_MAJOR_PERIPHERAL))) {
     /* Name is known, unset it so that name is retrieved again
     * from security procedure. This will ensure, that if remote device
     * has updated its name since last connection, we will have
     * update name of remote device. */
-    p_dev_rec->sec_rec.sec_flags &= ~BTM_SEC_NAME_KNOWN;
-    p_dev_rec->sec_bd_name[0] = '\0';
+    p_device->sec_rec.sec_flags &= ~BTM_SEC_NAME_KNOWN;
+    p_device->sec_bd_name[0] = '\0';
   }
-  if (!(p_dev_rec->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) || p_dev_rec->outgoing)
+  if (!(p_device->sec_rec.sec_flags & BTM_SEC_NAME_KNOWN) || p_device->outgoing)
   {
     log::debug("Calling Next Security Procedure");
-    if ((status = btm_sec_execute_procedure(p_dev_rec)) != tBTM_STATUS::BTM_CMD_STARTED) {
-      btm_sec_dev_rec_cback_event(p_dev_rec, status, FALSE);
+    if ((status = btm_sec_execute_procedure(p_device)) != tBTM_STATUS::BTM_CMD_STARTED) {
+      btm_sec_dev_rec_cback_event(p_device, status, FALSE);
     }
   }
 
@@ -1948,14 +1951,14 @@ bool acl_peer_supports_ble_connection_subrating_host(const RawAddress& remote_bd
  ******************************************************************************/
 void BTM_ReadConnectionAddr(const RawAddress& remote_bda, RawAddress& local_conn_addr,
                             tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  tBTM_SEC_DEV_REC* p_sec_rec = btm_find_dev(remote_bda);
-  if (p_sec_rec == nullptr) {
+  BtmDevice* p_device = btm_find_dev(remote_bda);
+  if (p_device == nullptr) {
     log::warn("No matching known device {} in record", remote_bda);
     return;
   }
 
-  bluetooth::shim::ACL_ReadConnectionAddress(p_sec_rec->ble_hci_handle, local_conn_addr,
-                                             p_addr_type, ota_address);
+  bluetooth::shim::ACL_ReadConnectionAddress(p_device->ble_hci_handle, local_conn_addr, p_addr_type,
+                                             ota_address);
 }
 
 /*******************************************************************************
@@ -2012,13 +2015,13 @@ bool acl_is_switch_role_idle(const RawAddress& bd_addr, tBT_TRANSPORT transport)
  ******************************************************************************/
 bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr, RawAddress& conn_addr,
                                   tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  tBTM_SEC_DEV_REC* p_sec_rec = btm_find_dev(pseudo_addr);
-  if (p_sec_rec == nullptr) {
+  BtmDevice* p_device = btm_find_dev(pseudo_addr);
+  if (p_device == nullptr) {
     log::warn("No matching known device {} in record", pseudo_addr);
     return false;
   }
 
-  bluetooth::shim::ACL_ReadPeerConnectionAddress(p_sec_rec->ble_hci_handle, conn_addr, p_addr_type,
+  bluetooth::shim::ACL_ReadPeerConnectionAddress(p_device->ble_hci_handle, conn_addr, p_addr_type,
                                                  ota_address);
   return true;
 }
@@ -2112,7 +2115,9 @@ bool acl_set_peer_le_features_from_handle(uint16_t hci_handle, const uint8_t* p)
 }
 
 void on_acl_br_edr_connected(const RawAddress& bda, uint16_t handle, uint8_t enc_mode,
-                             bool locally_initiated) {
+                             bool locally_initiated, tHCI_ROLE role) {
+  log::verbose("{}, handle:{}, role:{}, enc_mode:{}, locally_initiated:{}", bda, handle,
+               hci_role_text(role), enc_mode, locally_initiated);
   power_telemetry::GetInstance().LogLinkDetails(handle, bda, true, true);
   if (delayed_role_change_ != nullptr && delayed_role_change_->bd_addr == bda) {
     btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode, delayed_role_change_->new_role);
@@ -2132,6 +2137,9 @@ void on_acl_br_edr_connected(const RawAddress& bda, uint16_t handle, uint8_t enc
   }
 
   acl_set_locally_initiated(locally_initiated);
+  if (com_android_bluetooth_flags_remove_fake_role_change_event()) {
+    p_acl->link_role = role;
+  }
 
   /*
    * The legacy code path informs the upper layer via the BTA
@@ -2143,8 +2151,8 @@ void on_acl_br_edr_connected(const RawAddress& bda, uint16_t handle, uint8_t enc
 }
 
 void on_acl_br_edr_failed(const RawAddress& bda, tHCI_STATUS status, bool locally_initiated) {
-  tAclLinkSpec link_spec = {.addrt = {.type = BLE_ADDR_PUBLIC, .bda = bda},
-                            .transport = BT_TRANSPORT_BR_EDR};
+  AclLinkSpec link_spec = {.addrt = {.type = BLE_ADDR_PUBLIC, .bda = bda},
+                           .transport = BT_TRANSPORT_BR_EDR};
   log::assert_that(status != HCI_SUCCESS, "Successful connection entering failing code path");
   if (delayed_role_change_ != nullptr && delayed_role_change_->bd_addr == bda) {
     btm_sec_connected(bda, HCI_INVALID_HANDLE, status, false, delayed_role_change_->new_role);
@@ -2156,17 +2164,6 @@ void on_acl_br_edr_failed(const RawAddress& bda, tHCI_STATUS status, bool locall
 
   acl_set_locally_initiated(locally_initiated);
   btm_acl_create_failed(link_spec, status);
-}
-
-void btm_acl_connected(const RawAddress& bda, uint16_t handle, tHCI_STATUS status,
-                       uint8_t enc_mode) {
-  switch (status) {
-    case HCI_SUCCESS:
-      power_telemetry::GetInstance().LogLinkDetails(handle, bda, true, true);
-      return on_acl_br_edr_connected(bda, handle, enc_mode, true /* locally_initiated */);
-    default:
-      return on_acl_br_edr_failed(bda, status, /* locally_initiated */ true);
-  }
 }
 
 void btm_acl_disconnected(tHCI_STATUS status, uint16_t handle, tHCI_REASON reason) {

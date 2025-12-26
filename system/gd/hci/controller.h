@@ -29,7 +29,7 @@ class Controller {
 public:
   static constexpr uint64_t kDefaultEventMask = 0x3dbfffffffffffff;
   static constexpr uint64_t kDefaultEventMaskPage2 = 0x2000000;
-  static constexpr uint64_t kDefaultLeEventMask = 0x000000074d02fe7f;
+  static constexpr uint64_t kDefaultLeEventMask = 0x000000077d02fe7f;
   static constexpr uint64_t kLeCSEventMask = 0x0007f80000000000;
 
   Controller() = default;
@@ -48,7 +48,6 @@ public:
   virtual void RegisterCompletedMonitorAclPacketsCallback(CompletedAclPacketsCallback cb) = 0;
   virtual void UnregisterCompletedMonitorAclPacketsCallback() = 0;
 
-  virtual std::string GetLocalName() const = 0;
   virtual LocalVersionInformation GetLocalVersionInformation() const = 0;
 
   virtual bool SupportsSimplePairing() const = 0;
@@ -122,6 +121,7 @@ public:
   virtual bool SupportsBleConnectionSubrating() const = 0;
   virtual bool SupportsBleConnectionSubratingHost() const = 0;
   virtual bool SupportsBleChannelSounding() const = 0;
+  virtual bool SupportsBleHighDataThroughputPhy() const = 0;
 
   virtual uint16_t GetAclPacketLength() const = 0;
 

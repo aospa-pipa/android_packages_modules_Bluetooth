@@ -483,6 +483,9 @@ public:
 
   /* Confirm group is active */
   virtual void GroupConfirmActive(int group_id) = 0;
+
+  /* Set Game mode */
+  virtual void SetInGame(bool game_mode) = 0;
 };
 
 /* Represents the broadcast source state. */
@@ -626,6 +629,9 @@ public:
   virtual void DestroyBroadcast(uint32_t broadcast_id) = 0;
   /* Get Broadcast Metadata */
   virtual void GetBroadcastMetadata(uint32_t broadcast_id) = 0;
+  /* Set BIG Channel Map by Sink Channel Classification */
+  virtual void SetBigChannelMapClassification(uint8_t action, const RawAddress& sink_addr,
+                                              uint32_t broadcast_id) = 0;
 };
 
 } /* namespace le_audio */

@@ -22,7 +22,7 @@ import android.os.Message
 import android.util.Log
 import com.android.bluetooth.flags.Flags
 
-private const val TAG = "ScanSuspendManager"
+private const val TAG = ScanUtil.TAG_PREFIX + "ScanSuspendManager"
 
 /** Class that handles Bluetooth LE scan related operations when the system suspends. */
 internal class ScanSuspendManager(
@@ -72,9 +72,7 @@ internal class ScanSuspendManager(
 
     private fun handleSuspendAllScans() {
         fun suspendScan(client: ScanClient) {
-            client.appScanStats.ifPresent { stats: AppScanStats ->
-                stats.recordScanSuspend(client.scannerId)
-            }
+            client.appScanStats?.recordScanSuspend(client.scannerId)
             Log.d(TAG, "Suspend scan for $client")
             scanManager.stopScan(client.scannerId)
             scanManager.suspendedScanQueue.add(client)

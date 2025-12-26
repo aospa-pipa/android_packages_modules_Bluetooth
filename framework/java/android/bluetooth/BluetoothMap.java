@@ -330,7 +330,6 @@ public final class BluetoothMap implements BluetoothProfile, AutoCloseable {
             super(8, IpcDataCache.MODULE_BLUETOOTH, api, api, query);
         }
     }
-    ;
 
     @Hide
     @RequiresNoPermission
@@ -390,7 +389,6 @@ public final class BluetoothMap implements BluetoothProfile, AutoCloseable {
     @Hide
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    @SuppressLint("AndroidFrameworkRequiresPermission") // IpcDataCache prevent lint enforcement
     public int getConnectionState(BluetoothDevice device) {
         log("getConnectionState(" + device + ")");
         final IBluetoothMap service = getService();

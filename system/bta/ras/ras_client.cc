@@ -44,14 +44,12 @@
 #include "main/shim/entry.h"
 #include "osi/include/alarm.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/security_device_record.h"
+#include "stack/btm/btm_device_record.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/gap_api.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
-#include "stack/btm/btm_dev.h"
-#include "stack/btm/security_device_record.h"
 #include "internal_include/stack_config.h"
 
 
@@ -114,7 +112,7 @@ public:
     tCONN_ID conn_id_;
     RawAddress address_;
     RawAddress address_for_cs_;
-    const gatt::Service* service_ = nullptr;
+    gatt::Service service_;
     uint32_t remote_supported_features_;
     uint16_t latest_ranging_counter_ = 0;
     bool handling_on_demand_data_ = false;
@@ -130,11 +128,11 @@ public:
     uint16_t mtu = kDefaultGattMtu;
 
     const gatt::Characteristic* FindCharacteristicByUuid(Uuid uuid) {
-      if (service_ == nullptr) {
+      if (service_.uuid != kRangingService) {
         log::error("Can't find Ranging Service");
         return nullptr;
       }
-      for (auto& characteristic : service_->characteristics) {
+      for (auto& characteristic : service_.characteristics) {
         if (characteristic.uuid == uuid) {
           return &characteristic;
         }
@@ -143,7 +141,7 @@ public:
     }
 
     const gatt::Characteristic* FindCharacteristicByHandle(uint16_t handle) {
-      for (auto& characteristic : service_->characteristics) {
+      for (auto& characteristic : service_.characteristics) {
         if (characteristic.value_handle == handle) {
           return &characteristic;
         }
@@ -251,8 +249,7 @@ public:
       } break;
       case BTA_GATTC_CLOSE_EVT: {
         OnGattDisconnected(p_data->close);
-        break;
-      }
+      } break;
       case BTA_GATTC_SEARCH_CMPL_EVT: {
         OnGattServiceSearchComplete(p_data->search_cmpl);
       } break;
@@ -341,12 +338,16 @@ public:
     // Get Ranging Service
     bool service_found = false;
     const std::list<gatt::Service>* all_services = BTA_GATTC_GetServices(evt.conn_id);
-    for (const auto& service : *all_services) {
-      if (service.uuid == kRangingService) {
-        tracker->service_ = &service;
-        service_found = true;
-        break;
+    if (all_services != nullptr) {
+      for (const auto& service : *all_services) {
+        if (service.uuid == kRangingService) {
+          tracker->service_ = service;
+          service_found = true;
+          break;
+        }
       }
+    } else {
+      log::warn("No GATT services found for conn_id: {}", evt.conn_id);
     }
     // config mtu anyway, if it had been configured by others, it can get the current mtu.
     log::info("config the MTU size as RAP minimum value {}", kMinimumRasMtu);
@@ -454,6 +455,12 @@ public:
       log::warn("Can't find tracker for conn_id:{}", evt.conn_id);
       return;
     }
+    // Handle race condition where notification arrives before
+    // service discovery is complete.
+    if (tracker->service_.uuid != kRangingService) {
+      log::warn("Notification received before service discovery, ignoring. handle:{}", evt.handle);
+      return;
+    }
     auto characteristic = tracker->FindCharacteristicByHandle(evt.handle);
     if (characteristic == nullptr) {
       log::warn("Can't find characteristic for handle:{}", evt.handle);
@@ -468,8 +475,7 @@ public:
       case kRasRealTimeRangingDataCharacteristic16bit:
       case kRasOnDemandDataCharacteristic16bit: {
         OnRemoteData(evt, tracker);
-        break;
-      }
+      } break;
       case kRasControlPointCharacteristic16bit: {
         OnControlPointEvent(evt, tracker);
       } break;
@@ -488,9 +494,9 @@ public:
     bool is_last = (data[0] >> 1 & 0x01);
     alarm_cancel(tracker->ranging_data_timeout_timer_);
     if (!is_last) {
-      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(tracker->address_);
-      if (p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
-        log::info("Low Power Mode Timer: {}", p_dev_rec->conn_params.peripheral_latency);
+      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
+        log::info("Low Power Mode Timer: {}", p_device->conn_params.peripheral_latency);
         SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs_lowpower, TimeoutType::FOLLOWING_SEGMENT);
       } else {
         SetTimeOutAlarm(tracker, kFollowingSegmentTimeoutMs, TimeoutType::FOLLOWING_SEGMENT);
@@ -744,7 +750,7 @@ public:
 
   void ListCharacteristic(std::shared_ptr<RasTracker> tracker) {
     tracker->vendor_specific_characteristics_.clear();
-    for (auto& characteristic : tracker->service_->characteristics) {
+    for (auto& characteristic : tracker->service_.characteristics) {
       bool vendor_specific = !IsRangingServiceCharacteristic(characteristic.uuid);
       log::info(
               "{}Characteristic uuid:0x{:04x}, handle:0x{:04x}, "
@@ -837,8 +843,8 @@ public:
         return;
       }
       uint16_t first_segment_timeout_ms = kFirstSegmentRangingDataTimeoutMs;
-      tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev(tracker->address_);
-      if (p_dev_rec && (p_dev_rec->conn_params.peripheral_latency >= 2)) {
+      BtmDevice* p_device = btm_find_dev(tracker->address_);
+      if (p_device && (p_device->conn_params.peripheral_latency >= 2)) {
         first_segment_timeout_ms = kLowPowerFirstSegmentRangingDataTimeoutMs;
       }
       SetTimeOutAlarm(tracker, first_segment_timeout_ms, TimeoutType::FIRST_SEGMENT);

@@ -40,6 +40,7 @@
 #include "stack/include/gap_api.h"
 #include "stack/include/main_thread.h"
 #include "utils.h"
+#include "osi/include/properties.h"
 
 using bluetooth::hci::Address;
 using bluetooth::hci::AddressType;
@@ -184,9 +185,9 @@ public:
     parse_gap_data(advertise_data, config.advertisement);
     parse_gap_data(scan_response_data, config.scan_response);
 
-    bluetooth::shim::GetAdvertising()->StartAdvertising(
-            advertiser_id, config, timeout_s * 100, cb, timeout_cb, scan_callback,
-            set_terminated_callback, bluetooth::shim::GetGdShimHandler());
+    bluetooth::shim::GetAdvertising()->StartAdvertising(advertiser_id, config, timeout_s * 100, cb,
+                                                        timeout_cb,
+                                                        bluetooth::shim::GetGdShimHandler());
   }
 
   void StartAdvertisingSet(uint8_t client_id, int reg_id,
@@ -231,8 +232,8 @@ public:
     }
 
     bluetooth::shim::GetAdvertising()->ExtendedCreateAdvertiser(
-            client_id, reg_id, config, scan_callback, set_terminated_callback, duration,
-            maxExtAdvEvents, bluetooth::shim::GetGdShimHandler());
+            client_id, reg_id, config, duration, maxExtAdvEvents,
+            bluetooth::shim::GetGdShimHandler());
 
     log::info("create advertising set, client_id:{}, reg_id:{}", client_id, reg_id);
     BTM_LogHistory(kBtmLogTag, RawAddress::kEmpty, "Le advert started",
@@ -288,22 +289,6 @@ public:
   void RegisterCallbacksNative(::AdvertisingCallbacks* callbacks, uint8_t client_id) override {
     native_adv_callbacks_map_[client_id] = callbacks;
   }
-
-  void on_scan(Address /* address */, AddressType /* address_type */) {
-    log::info("in shim layer");
-  }
-
-  void on_set_terminated(ErrorCode /* error_code */, uint8_t, uint8_t) {
-    log::info("in shim layer");
-  }
-
-  const bluetooth::common::Callback<void(Address, AddressType)> scan_callback =
-          bluetooth::common::Bind(&BleAdvertiserInterfaceImpl::on_scan,
-                                  bluetooth::common::Unretained(this));
-
-  const bluetooth::common::Callback<void(ErrorCode, uint8_t, uint8_t)> set_terminated_callback =
-          bluetooth::common::Bind(&BleAdvertiserInterfaceImpl::on_set_terminated,
-                                  bluetooth::common::Unretained(this));
 
   // bluetooth::hci::AdvertisingCallback
   void OnAdvertisingSetStarted(int reg_id, uint8_t advertiser_id, int8_t tx_power,
@@ -459,7 +444,14 @@ private:
     config.interval_min = params.min_interval;
     config.interval_max = params.max_interval;
     config.channel_map = params.channel_map;
-    config.tx_power = params.tx_power;
+    // If persist.vendor.qcom.bluetooth.max_tx_power is set, use it, else use value from app params
+    int max_tx_power = osi_property_get_int32("persist.vendor.qcom.bluetooth.max_tx_power", 0);
+    if (max_tx_power != 0) {
+        config.tx_power = max_tx_power;
+    } else {
+        config.tx_power = params.tx_power;
+    }
+    log::warn("config tx power set to : {}", config.tx_power);
     config.use_le_coded_phy = params.primary_advertising_phy == 0x03;
     config.secondary_advertising_phy =
             static_cast<bluetooth::hci::SecondaryPhyType>(params.secondary_advertising_phy);

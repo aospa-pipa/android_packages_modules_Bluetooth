@@ -1358,6 +1358,16 @@ void Device::HandlePlayItem(uint8_t label, std::shared_ptr<PlayItemRequest> pkt)
     return;
   }
 
+  if (com_android_bluetooth_flags_fix_play_item_non_playable_folder() &&
+      pkt->GetScope() == Scope::VFS &&
+      non_playable_vfs_uids_.find(pkt->GetUid()) != non_playable_vfs_uids_.end()) {
+    log::warn("{}: Request to play non-playable folder", address_);
+    auto response =
+            RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::FOLDER_ITEM_NOT_PLAYABLE);
+    send_message(label, false, std::move(response));
+    return;
+  }
+
   log::verbose("scope={} uid={}", pkt->GetScope(), pkt->GetUid());
 
   std::string media_id = "";
@@ -1848,11 +1858,25 @@ void Device::GetItemAttributesVFSResponse(uint8_t label,
 void Device::GetMediaPlayerListResponse(uint8_t label, std::shared_ptr<GetFolderItemsRequest> pkt,
                                         uint16_t curr_player,
                                         std::vector<MediaPlayerInfo> players) {
-  log::verbose("");
+  log::info("");
 
   if (players.size() == 0) {
     auto no_items_rsp = GetFolderItemsResponseBuilder::MakePlayerListBuilder(
+            Status::NO_AVAILABLE_PLAYERS, 0x0000, browse_mtu_);
+    send_message(label, true, std::move(no_items_rsp));
+    return;
+  } else if (pkt->GetStartItem() >= players.size()) {
+    auto no_items_rsp = GetFolderItemsResponseBuilder::MakePlayerListBuilder(
             Status::RANGE_OUT_OF_BOUNDS, 0x0000, browse_mtu_);
+    send_message(label, true, std::move(no_items_rsp));
+    return;
+  }
+
+  if (RcFeature::RC_FEAT_UNDEFINED != peer_feature_ &&
+      RcFeature::RC_FEAT_NONE == (peer_feature_ & RcFeature::RC_FEAT_BROWSE)) {
+    log::warn("Browsing is not supported, respond with No Available Players.");
+    auto no_items_rsp = GetFolderItemsResponseBuilder::MakePlayerListBuilder(
+            Status::NO_AVAILABLE_PLAYERS, 0x0000, browse_mtu_);
     send_message(label, true, std::move(no_items_rsp));
     return;
   }
@@ -1906,7 +1930,11 @@ void Device::GetVFSListResponse(uint8_t label, std::shared_ptr<GetFolderItemsReq
   // an operation.
   for (const auto& item : items) {
     if (item.type == ListItem::FOLDER) {
-      vfs_ids_.insert(item.folder.media_id);
+      uint64_t item_uid = vfs_ids_.insert(item.folder.media_id);
+      if (com_android_bluetooth_flags_fix_play_item_non_playable_folder() &&
+          !item.folder.is_playable) {
+        non_playable_vfs_uids_.insert(item_uid);
+      }
     } else if (item.type == ListItem::SONG) {
       vfs_ids_.insert(item.song.media_id);
     }

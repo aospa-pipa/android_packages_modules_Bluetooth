@@ -23,6 +23,7 @@
 #include <base/functional/bind.h>
 #include <base/location.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/acl_link_spec.h>
 #include <bluetooth/types/ble_address_with_type.h>
 #include <hardware/bluetooth.h>
 #include <stdlib.h>
@@ -32,6 +33,7 @@
 #include "abstract_message_loop.h"
 #include "bta/include/bta_api.h"
 #include "common/message_loop_thread.h"
+#include "include/hardware/bluetooth.h"
 #include "osi/include/osi.h"
 #include "stack/include/bt_hdr.h"
 
@@ -145,16 +147,17 @@ void invoke_remote_device_properties_cb(bt_status_t status, RawAddress bd_addr,
 void invoke_device_found_cb(int num_properties, bt_property_t* properties);
 void invoke_discovery_state_changed_cb(bt_discovery_state_t state);
 void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod,
-                           bool min_16_digit);
-void invoke_ssp_request_cb(RawAddress bd_addr, bt_ssp_variant_t pairing_variant, uint32_t pass_key);
+                           bool min_16_digit, PairingAlgorithm pairing_algorithm);
+void invoke_ssp_request_cb(RawAddress bd_addr, bt_ssp_variant_t pairing_variant, uint32_t pass_key,
+                           PairingAlgorithm pairing_algorithm);
 void invoke_oob_data_request_cb(tBT_TRANSPORT t, bool valid, Octet16 c, Octet16 r,
                                 RawAddress raw_address, uint8_t address_type);
-void invoke_bond_state_changed_cb(bt_status_t status, RawAddress bd_addr, bt_bond_state_t state,
-                                  int fail_reason);
+void invoke_bond_state_changed_cb(bt_status_t status, RawAddress bd_addr, tBT_TRANSPORT transport,
+                                  bt_bond_state_t state, PairingType pairing_type, int fail_reason);
 void invoke_address_consolidate_cb(RawAddress main_bd_addr, RawAddress secondary_bd_addr);
 void invoke_le_address_associate_cb(RawAddress main_bd_addr, RawAddress secondary_bd_addr,
                                     uint8_t identity_address_type);
-void invoke_acl_state_changed_cb(bt_status_t status, tAclLinkSpec& link_spec, bt_acl_state_t state,
+void invoke_acl_state_changed_cb(bt_status_t status, AclLinkSpec& link_spec, bt_acl_state_t state,
                                  bt_hci_error_code_t hci_reason, bt_conn_direction_t direction,
                                  uint16_t acl_handle);
 void invoke_thread_evt_cb(bt_cb_thread_evt event);

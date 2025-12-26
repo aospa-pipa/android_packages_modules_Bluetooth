@@ -56,6 +56,9 @@ public:
   virtual void CreateBig(uint8_t big_handle,
                          struct bluetooth::hci::iso_manager::big_create_params big_params) = 0;
 
+  virtual void SetBigChannelMapClassificationByConnHandles(
+          uint8_t action, uint8_t big_handle, const std::vector<uint16_t>& handles) = 0;
+
   virtual void TerminateBig(uint8_t big_handle, uint8_t reason) = 0;
 
   virtual ~HcicInterface() = default;
@@ -99,6 +102,10 @@ public:
               (override));
 
   MOCK_METHOD((void), TerminateBig, (uint8_t big_handle, uint8_t reason), (override));
+
+  MOCK_METHOD((void), SetBigChannelMapClassificationByConnHandles,
+              (uint8_t action, uint8_t big_handle, const std::vector<uint16_t>& conn_handles),
+              (override));
 };
 
 void SetMockHcicInterface(MockHcicInterface* mock_hcic_interface);

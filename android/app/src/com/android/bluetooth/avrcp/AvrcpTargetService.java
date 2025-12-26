@@ -266,7 +266,7 @@ public class AvrcpTargetService extends ProfileService {
 
     /** Returns the active A2DP {@link BluetoothDevice} */
     private BluetoothDevice getA2dpActiveDevice() {
-        return mAdapterService.getA2dpService().map(A2dpService::getActiveDevice).orElse(null);
+        return getAdapterService().getA2dpService().map(A2dpService::getActiveDevice).orElse(null);
     }
 
     /**
@@ -277,10 +277,10 @@ public class AvrcpTargetService extends ProfileService {
      */
     private void setA2dpActiveDevice(@NonNull BluetoothDevice device) {
         if (Flags.setA2dpActiveDeviceThroughAdapterService()) {
-            mAdapterService.setActiveDevice(device, BluetoothAdapter.ACTIVE_DEVICE_AUDIO);
+            getAdapterService().setActiveDevice(device, BluetoothAdapter.ACTIVE_DEVICE_AUDIO);
             return;
         }
-        mAdapterService.getA2dpService().ifPresent(a2dp -> a2dp.setActiveDevice(device));
+        getAdapterService().getA2dpService().ifPresent(a2dp -> a2dp.setActiveDevice(device));
     }
 
     /** Informs {@link AvrcpVolumeManager} that a new device is connected */
@@ -574,7 +574,7 @@ public class AvrcpTargetService extends ProfileService {
     /** Returns {@code true} if A2DP connection policy is forbidden. */
     private boolean isA2dpConnectionForbidden(BluetoothDevice device) {
         return BluetoothProfile.CONNECTION_POLICY_FORBIDDEN
-                == mAdapterService
+                == getAdapterService()
                         .getA2dpService()
                         .map(a2dp -> a2dp.getConnectionPolicy(device))
                         .orElse(BluetoothProfile.CONNECTION_POLICY_UNKNOWN);
@@ -667,8 +667,7 @@ public class AvrcpTargetService extends ProfileService {
 
     /** Dump debugging information to the string builder */
     public void dump(StringBuilder sb) {
-        sb.append("\nProfile: AvrcpTargetService:\n");
-
+        super.dump(sb);
         StringBuilder tempBuilder = new StringBuilder();
         tempBuilder.append("AVRCP version: ").append(mAvrcpVersion).append("\n");
 

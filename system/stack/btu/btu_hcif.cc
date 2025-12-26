@@ -55,7 +55,6 @@
 #include "stack/include/btm_sec_api_types.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/btu_hcif.h"
-#include "stack/include/dev_hci_link_interface.h"
 #include "stack/include/hci_error_code.h"
 #include "stack/include/hci_evt_length.h"
 #include "stack/include/inq_hci_link_interface.h"
@@ -899,7 +898,6 @@ static void btu_hcif_hdl_command_complete(uint16_t opcode, uint8_t* p, uint16_t 
       break;
 
     case HCI_DELETE_STORED_LINK_KEY:
-      btm_delete_stored_link_key_complete(p, evt_len);
       break;
 
     case HCI_READ_RSSI:
@@ -1035,7 +1033,7 @@ static void btu_hcif_hdl_command_status(uint16_t opcode, uint8_t status, const u
     case HCI_CREATE_CONNECTION:
       if (status != HCI_SUCCESS) {
         STREAM_TO_BDADDR(bd_addr, p_cmd);
-        btm_acl_connected(bd_addr, HCI_INVALID_HANDLE, hci_status, 0);
+        on_acl_br_edr_failed(bd_addr, hci_status, /* locally_initiated */ true);
       }
       break;
     case HCI_AUTHENTICATION_REQUESTED:
@@ -1419,7 +1417,9 @@ static void btu_ble_proc_ltk_req(uint8_t* p, uint16_t evt_len) {
   STREAM_TO_UINT16(handle, p);
   pp = p + 8;
   STREAM_TO_UINT16(ediv, pp);
-  btm_ble_ltk_request(handle, p, ediv);
+  Octet8 rand;
+  STREAM_TO_ARRAY(rand.data(), pp, kOctet8Length);
+  btm_ble_ltk_request(handle, rand, ediv);
   /* This is empty until an upper layer cares about returning event */
 }
 

@@ -655,7 +655,10 @@ public:
    ******************************************************************************/
   virtual void L2CA_Consolidate(const RawAddress& identity_addr, const RawAddress& rpa) = 0;
   virtual tHCI_ROLE L2CA_GetBleConnRole(const RawAddress& bd_addr) = 0;
+  virtual uint16_t L2CA_GetBleSubrateFactor(const RawAddress& bd_addr) = 0;
   virtual uint16_t L2CA_GetBleConnInterval(const RawAddress& bd_addr) = 0;
+  virtual uint16_t L2CA_GetBlePeriphLatency(const RawAddress& bd_addr) = 0;
+  virtual uint16_t L2CA_GetBleSupervisionTimeout(const RawAddress& bd_addr) = 0;
 
   /*******************************************************************************
    **
@@ -886,6 +889,20 @@ public:
    **
    ******************************************************************************/
   virtual void L2CA_SetEcosystemBaseInterval(uint32_t base_interval) = 0;
+
+/*******************************************************************************
+ **
+ ** Function         L2CA_FlowControl
+ **
+ ** Description      Enables or disables data flow for a given L2CAP channel.
+ **
+ ** Parameters:      cid           - L2CAP channel identifier
+ **                  data_enabled  - TRUE to enable data flow, FALSE to disable
+ **
+ ** Return value:    bool          - TRUE if operation succeeded, FALSE otherwise
+ **
+ ******************************************************************************/
+   virtual bool L2CA_FlowControl(uint16_t cid, bool data_enabled) = 0;
 
   /*******************************************************************************
    **

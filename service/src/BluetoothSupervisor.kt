@@ -23,6 +23,8 @@ import android.os.Looper
 import android.os.UserHandle
 import com.android.bluetooth.flags.Flags
 import com.android.bluetooth.util.TimeProvider
+import com.android.server.bluetooth.airplane.initialize as initializeAirplaneMode
+import com.android.server.bluetooth.satellite.initialize as initializeSatelliteMode
 import java.io.FileDescriptor
 import java.io.PrintWriter
 
@@ -30,7 +32,7 @@ private const val TAG = "BluetoothSupervisor"
 
 class BluetoothSupervisor(
     context: Context,
-    val looper: Looper,
+    private val looper: Looper,
     bluetoothComponent: BluetoothComponent,
 ) {
     private val bms: BluetoothManagerService
@@ -53,12 +55,33 @@ class BluetoothSupervisor(
                 bluetoothComponent,
                 TimeProvider.systemClock,
             )
+
+        initializeAirplaneMode(looper, context.contentResolver, this::onAirplaneModeChanged)
+        initializeSatelliteMode(looper, context.contentResolver, this::onSatelliteModeChanged)
         Log.i(TAG, "Created BluetoothSupervisor")
     }
 
     fun onBluetoothDisallowed() {
         enforceCorrectThread()
         bms.onBluetoothDisallowed()
+    }
+
+    fun onAirplaneModeChanged(isAirplaneModeOn: Boolean) {
+        enforceCorrectThread()
+        if (!mInitialized) {
+            Log.i(TAG, "onAirplaneModeChanged before initialization - skipping")
+            return
+        }
+        bms.airplaneModeController.onAirplaneModeChanged(isAirplaneModeOn)
+    }
+
+    fun onSatelliteModeChanged(isSatelliteModeOn: Boolean) {
+        enforceCorrectThread()
+        if (!mInitialized) {
+            Log.i(TAG, "onSatelliteModeChanged before initialization - skipping")
+            return
+        }
+        bms.onSatelliteModeChanged(isSatelliteModeOn)
     }
 
     fun onUserStarting(userHandle: UserHandle) {
@@ -73,9 +96,7 @@ class BluetoothSupervisor(
 
     fun onUserSwitching(userHandle: UserHandle) {
         enforceCorrectThread()
-        if (!mInitialized) {
-            throw IllegalStateException("Initialize did not happen")
-        }
+        check(mInitialized) { "Initialize did not happen" }
         bms.onUserSwitching(userHandle)
     }
 
@@ -100,7 +121,7 @@ class BluetoothSupervisor(
 
         private fun multithreadBms() = bmsProvider.multithreadBms()
 
-        override fun getState() = multithreadBms().getState()
+        override fun getState() = multithreadBms().state
 
         override fun waitForState(state: Int) = multithreadBms().waitForState(state)
 
@@ -110,13 +131,15 @@ class BluetoothSupervisor(
         override fun unregisterAdapter(callback: IBluetoothManagerCallback) =
             bms().unregisterAdapter(callback)
 
-        override fun getAddress() = bms().getAddress()
+        override fun getAddress() = bms().address
 
-        override fun getName() = bms().getName()
+        override fun setName(name: String) = bms().setName(name)
+
+        override fun getName() = bms().name
 
         override fun isBleScanAvailable() = bms().isBleScanAvailable()
 
-        override fun isHearingAidProfileSupported() = bms().isHearingAidProfileSupported()
+        override fun isHearingAidProfileSupported() = bms().isHearingAidProfileSupported
 
         override fun enable(reason: Int, packageName: String) = bms().enable(reason, packageName)
 
@@ -136,11 +159,11 @@ class BluetoothSupervisor(
 
         override fun setBtHciSnoopLogMode(mode: Int) = bms().setBtHciSnoopLogMode(mode)
 
-        override fun getBtHciSnoopLogMode() = bms().getBtHciSnoopLogMode()
+        override fun getBtHciSnoopLogMode() = bms().btHciSnoopLogMode
 
-        override fun isAutoOnSupported() = bms().isAutoOnSupported()
+        override fun isAutoOnSupported() = bms().isAutoOnSupported
 
-        override fun isAutoOnEnabled() = bms().isAutoOnEnabled()
+        override fun isAutoOnEnabled() = bms().isAutoOnEnabled
 
         override fun setAutoOnEnabled(status: Boolean) = bms().setAutoOnEnabled(status)
 

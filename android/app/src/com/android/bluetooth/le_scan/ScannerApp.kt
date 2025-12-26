@@ -17,12 +17,16 @@
 package com.android.bluetooth.le_scan
 
 import android.bluetooth.le.IScannerCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanSettings
+import android.content.AttributionSource
 import android.os.RemoteException
 import android.os.UserHandle
 import android.util.Log
+import com.android.bluetooth.ActionOnDeathRecipient
 import java.util.UUID
 
-private const val TAG = "ScannerApp"
+private const val TAG = ScanUtil.TAG_PREFIX + "ScannerApp"
 
 class ScannerApp(
     val appScanStats: AppScanStats,
@@ -30,7 +34,11 @@ class ScannerApp(
     val userHandle: UserHandle?, // User handle of the scanning app
     val attributionTag: String?, // Final attribution tag in chain
     val callback: IScannerCallback?,
+    val settings: ScanSettings? = null, // TODO(b/455057044) Remove nullable on cleanup
+    val filters: List<ScanFilter>? = null, // TODO(b/455057044) Remove nullable on cleanup
+    val source: AttributionSource,
     val info: ScanController.PendingIntentInfo?, // Context information
+    val isInternal: Boolean,
 ) {
     var id = 0
     var hasLocationPermission = false
@@ -40,7 +48,7 @@ class ScannerApp(
     var hasDisavowedLocation = false
     var eligibleForSanitizedExposureNotification = false
     var associatedDevices: MutableList<String>? = null
-    private var deathRecipient: ScanController.ScannerDeathRecipient? = null
+    private var deathRecipient: ActionOnDeathRecipient? = null
 
     val uid = appScanStats.uid
     val pid = appScanStats.pid
@@ -48,7 +56,7 @@ class ScannerApp(
 
     override fun toString() = "ScannerApp(uid=$uid, name=$name)"
 
-    fun linkToDeath(recipient: ScanController.ScannerDeathRecipient) {
+    fun linkToDeath(recipient: ActionOnDeathRecipient) {
         callback?.let { cb ->
             try {
                 cb.asBinder().linkToDeath(recipient, 0)

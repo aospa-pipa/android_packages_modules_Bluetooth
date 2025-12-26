@@ -29,6 +29,7 @@ import android.os.Bundle
 import android.util.Log
 import android.util.Pair
 import androidx.datastore.core.CorruptionException
+import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
@@ -99,7 +100,7 @@ constructor(
 ) {
     private val ioScope = CoroutineScope(dispatcher + SupervisorJob())
 
-    private val mEventLog = BluetoothEventLogger(30, TAG) // Dumpsys logger
+    private val eventLog = BluetoothEventLogger(30, TAG) // Dumpsys logger
 
     // The DataStore instance that handles the UserStorage proto.
     // Data is stored in a file named "user_storage" in the app's device protected storage.
@@ -118,6 +119,12 @@ constructor(
                     Log.wtf(TAG, "Data corrupted. Resetting to default value.", it)
                     UserStorage.getDefaultInstance()
                 },
+            migrations =
+                listOf(
+                    MigrationFromRoomDatabase(adapterService),
+                    MigrationFromAccessPermissions(adapterService),
+                    MigrationFromAvrcpVolume(adapterService),
+                ),
             scope = ioScope,
         )
     }
@@ -149,7 +156,7 @@ constructor(
 
     /** Dump metadata changes for debugging purposes while keeping the address anonymized. */
     fun dump(sb: StringBuilder) {
-        mEventLog.dump(sb)
+        eventLog.dump(sb)
 
         sb.append(
             currentStorage
@@ -203,28 +210,26 @@ constructor(
         val mediaProfile = toMediaProfile(bundle.getInt(AUDIO_MODE_OUTPUT_ONLY))
         val voiceProfile = toVoiceProfile(bundle.getInt(AUDIO_MODE_DUPLEX))
 
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
 
-                groupDevices.forEach { device ->
-                    val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
-                    val leAudioBuilder = deviceBuilder.leAudioSettings.toBuilder()
+            groupDevices.forEach { device ->
+                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+                val leAudioBuilder = deviceBuilder.leAudioSettings.toBuilder()
 
-                    if (mediaProfile != MediaProfile.UNKNOWN) {
-                        leAudioBuilder.preferredOutputProfile = mediaProfile
-                        logEvent(device, "preferred media profile is $mediaProfile")
-                    }
-                    if (voiceProfile != VoiceProfile.UNKNOWN) {
-                        leAudioBuilder.preferredInputProfile = voiceProfile
-                        logEvent(device, "preferred voice profile is $voiceProfile")
-                    }
-
-                    deviceBuilder.setLeAudioSettings(leAudioBuilder.build())
-                    builder.putDevices(device.address, deviceBuilder.build())
+                if (mediaProfile != MediaProfile.UNKNOWN) {
+                    leAudioBuilder.preferredOutputProfile = mediaProfile
+                    logEvent(device, "preferred media profile is $mediaProfile")
                 }
-                builder.build()
+                if (voiceProfile != VoiceProfile.UNKNOWN) {
+                    leAudioBuilder.preferredInputProfile = voiceProfile
+                    logEvent(device, "preferred voice profile is $voiceProfile")
+                }
+
+                deviceBuilder.setLeAudioSettings(leAudioBuilder.build())
+                builder.putDevices(device.address, deviceBuilder.build())
             }
+            builder.build()
         }
     }
 
@@ -236,20 +241,17 @@ constructor(
 
     fun setActiveAudioPolicy(device: BluetoothDevice, value: Int) {
         val newPolicy = toActiveAudioPolicy(value)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+            val settingsBuilder = deviceBuilder.leAudioSettings.toBuilder()
+            settingsBuilder.activeAudioPolicy = newPolicy
 
-                val settingsBuilder = deviceBuilder.leAudioSettings.toBuilder()
-                settingsBuilder.activeAudioPolicy = newPolicy
+            logEvent(device, "active audio policy to $newPolicy")
 
-                logEvent(device, "active audio policy to $newPolicy")
-
-                deviceBuilder.setLeAudioSettings(settingsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
-            }
+            deviceBuilder.setLeAudioSettings(settingsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
@@ -278,34 +280,31 @@ constructor(
 
     fun setCustomMetadata(device: BluetoothDevice, key: Int, value: ByteArray) {
         validateMetadataKey(key)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+            val newByteString =
+                if (value.isEmpty()) ByteString.EMPTY else ByteString.copyFrom(value)
+            val oldByteString = deviceBuilder.customMetadataMap[key] ?: ByteString.EMPTY
 
-                val newByteString =
-                    if (value.isEmpty()) ByteString.EMPTY else ByteString.copyFrom(value)
-                val oldByteString = deviceBuilder.customMetadataMap[key] ?: ByteString.EMPTY
-
-                if (oldByteString == newByteString) {
-                    return@updateData storage
-                }
-
-                adapterService.onMetadataChanged(device, key, value)
-                logEvent(device, "Custom metadata changed for $key")
-
-                val metadataBuilder = deviceBuilder.customMetadataMap.toMutableMap()
-                if (value.isEmpty()) {
-                    metadataBuilder.remove(key)
-                } else {
-                    metadataBuilder[key] = newByteString
-                }
-                deviceBuilder.clearCustomMetadata()
-                deviceBuilder.putAllCustomMetadata(metadataBuilder)
-
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (oldByteString == newByteString) {
+                return@blockingUpdateData storage
             }
+
+            adapterService.onMetadataChanged(device, key, value)
+            logEvent(device, "Custom metadata changed for $key")
+
+            val metadataBuilder = deviceBuilder.customMetadataMap.toMutableMap()
+            if (value.isEmpty()) {
+                metadataBuilder.remove(key)
+            } else {
+                metadataBuilder[key] = newByteString
+            }
+            deviceBuilder.clearCustomMetadata()
+            deviceBuilder.putAllCustomMetadata(metadataBuilder)
+
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
@@ -317,35 +316,34 @@ constructor(
 
     fun setProfileConnectionPolicy(device: BluetoothDevice, profile: Int, policy: Int) {
         val newValue = fromConnectionPolicy(policy)
-
         val accessor = getPolicyAccessor(profile)
 
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val previousValue = accessor.getter(deviceBuilder.profileConnectionPolicies)
-                if (previousValue == newValue) {
-                    return@updateData storage
-                }
-
-                val oldPolicy = previousValue.toConnectionPolicy()
-                logEvent(device, "${getProfileName(profile)} policy changed: $oldPolicy -> $policy")
-
-                val policiesBuilder = deviceBuilder.profileConnectionPolicies.toBuilder()
-                val newPolicies = accessor.setter(policiesBuilder, newValue).build()
-                deviceBuilder.setProfileConnectionPolicies(newPolicies)
-
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            val previousValue = accessor.getter(deviceBuilder.profileConnectionPolicies)
+            if (previousValue == newValue) {
+                return@blockingUpdateData storage
             }
+
+            val oldPolicy = previousValue.toConnectionPolicy()
+            logEvent(device, "${getProfileName(profile)} policy changed: $oldPolicy -> $policy")
+
+            val policiesBuilder = deviceBuilder.profileConnectionPolicies.toBuilder()
+            val newPolicies = accessor.setter(policiesBuilder, newValue).build()
+            deviceBuilder.setProfileConnectionPolicies(newPolicies)
+
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
     fun getAudioPolicyMetadata(device: BluetoothDevice): BluetoothSinkAudioPolicy {
-        val settings =
-            currentStorage.devicesMap[device.address]?.hfpClientSettings
-                ?: return BluetoothSinkAudioPolicy.Builder().build()
+        val device = currentStorage.devicesMap[device.address]
+        if (device == null || !device.hasHfpClientSettings()) {
+            return BluetoothSinkAudioPolicy.Builder().build()
+        }
+        val settings = device.hfpClientSettings
 
         return BluetoothSinkAudioPolicy.Builder()
             .setCallEstablishPolicy(toAudioPolicy(settings.callEstablish))
@@ -355,22 +353,20 @@ constructor(
     }
 
     fun setAudioPolicyMetadata(device: BluetoothDevice, policy: BluetoothSinkAudioPolicy) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val settingsBuilder = deviceBuilder.hfpClientSettings.toBuilder()
-                settingsBuilder.callEstablish = fromAudioPolicy(policy.callEstablishPolicy)
-                settingsBuilder.setActiveAfterConnection =
-                    fromAudioPolicy(policy.activeDevicePolicyAfterConnection)
-                settingsBuilder.inBandRingtoneEnabled = fromAudioPolicy(policy.inBandRingtonePolicy)
+            val settingsBuilder = deviceBuilder.hfpClientSettings.toBuilder()
+            settingsBuilder.callEstablish = fromAudioPolicy(policy.callEstablishPolicy)
+            settingsBuilder.setActiveAfterConnection =
+                fromAudioPolicy(policy.activeDevicePolicyAfterConnection)
+            settingsBuilder.inBandRingtoneEnabled = fromAudioPolicy(policy.inBandRingtonePolicy)
 
-                logEvent(device, "audio policy metadata to $policy")
+            logEvent(device, "audio policy metadata to $policy")
 
-                deviceBuilder.setHfpClientSettings(settingsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
-            }
+            deviceBuilder.setHfpClientSettings(settingsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun getA2dpOptionalCodecsSupported(device: BluetoothDevice): Int {
@@ -385,23 +381,21 @@ constructor(
     }
 
     fun setA2dpOptionalCodecsSupported(device: BluetoothDevice, value: Int) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val settingsBuilder = deviceBuilder.a2DpSettings.toBuilder()
-                val newStatus = fromSupported(value)
-                if (newStatus == null) {
-                    settingsBuilder.clearOptionalCodecsSupported()
-                } else {
-                    settingsBuilder.optionalCodecsSupported = newStatus
-                }
-                logEvent(device, "a2dp optional codec supported is $value")
-
-                deviceBuilder.setA2DpSettings(settingsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            val settingsBuilder = deviceBuilder.a2DpSettings.toBuilder()
+            val newStatus = fromSupported(value)
+            if (newStatus == null) {
+                settingsBuilder.clearOptionalCodecsSupported()
+            } else {
+                settingsBuilder.optionalCodecsSupported = newStatus
             }
+            logEvent(device, "a2dp optional codec supported is $value")
+
+            deviceBuilder.setA2DpSettings(settingsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun getA2dpOptionalCodecsEnabled(device: BluetoothDevice): Int {
@@ -416,23 +410,21 @@ constructor(
     }
 
     fun setA2dpOptionalCodecsEnabled(device: BluetoothDevice, value: Int) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val settingsBuilder = deviceBuilder.a2DpSettings.toBuilder()
-                val newStatus = fromPreference(value)
-                if (newStatus == null) {
-                    settingsBuilder.clearOptionalCodecsEnabled()
-                } else {
-                    settingsBuilder.optionalCodecsEnabled = newStatus
-                }
-                logEvent(device, "a2dp optional codec enabled is $value")
-
-                deviceBuilder.setA2DpSettings(settingsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            val settingsBuilder = deviceBuilder.a2DpSettings.toBuilder()
+            val newStatus = fromPreference(value)
+            if (newStatus == null) {
+                settingsBuilder.clearOptionalCodecsEnabled()
+            } else {
+                settingsBuilder.optionalCodecsEnabled = newStatus
             }
+            logEvent(device, "a2dp optional codec enabled is $value")
+
+            deviceBuilder.setA2DpSettings(settingsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun getPhonebookAccessPermission(device: BluetoothDevice): Int {
@@ -443,27 +435,25 @@ constructor(
 
     fun setPhonebookAccessPermission(device: BluetoothDevice, value: Int) {
         val newStatus = fromAccess(value)
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val permissions = deviceBuilder.permissions
-                val oldStatus = if (permissions.hasPhonebook()) permissions.phonebook else null
+            val permissions = deviceBuilder.permissions
+            val oldStatus = if (permissions.hasPhonebook()) permissions.phonebook else null
 
-                if (oldStatus == newStatus) {
-                    return@updateData storage
-                }
-                logEvent(device, "Phonebook permission changed: $oldStatus -> $newStatus")
-                val permissionsBuilder = permissions.toBuilder()
-                if (newStatus == null) {
-                    permissionsBuilder.clearPhonebook()
-                } else {
-                    permissionsBuilder.phonebook = newStatus
-                }
-                deviceBuilder.setPermissions(permissionsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (oldStatus == newStatus) {
+                return@blockingUpdateData storage
             }
+            logEvent(device, "Phonebook permission changed: $oldStatus -> $newStatus")
+            val permissionsBuilder = permissions.toBuilder()
+            if (newStatus == null) {
+                permissionsBuilder.clearPhonebook()
+            } else {
+                permissionsBuilder.phonebook = newStatus
+            }
+            deviceBuilder.setPermissions(permissionsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
@@ -475,27 +465,25 @@ constructor(
 
     fun setMessageAccessPermission(device: BluetoothDevice, value: Int) {
         val newStatus = fromAccess(value)
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val permissions = deviceBuilder.permissions
-                val oldStatus = if (permissions.hasMessage()) permissions.message else null
+            val permissions = deviceBuilder.permissions
+            val oldStatus = if (permissions.hasMessage()) permissions.message else null
 
-                if (oldStatus == newStatus) {
-                    return@updateData storage
-                }
-                logEvent(device, "Message permission changed: $oldStatus -> $newStatus")
-                val permissionsBuilder = permissions.toBuilder()
-                if (newStatus == null) {
-                    permissionsBuilder.clearMessage()
-                } else {
-                    permissionsBuilder.message = newStatus
-                }
-                deviceBuilder.setPermissions(permissionsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (oldStatus == newStatus) {
+                return@blockingUpdateData storage
             }
+            logEvent(device, "Message permission changed: $oldStatus -> $newStatus")
+            val permissionsBuilder = permissions.toBuilder()
+            if (newStatus == null) {
+                permissionsBuilder.clearMessage()
+            } else {
+                permissionsBuilder.message = newStatus
+            }
+            deviceBuilder.setPermissions(permissionsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
@@ -507,55 +495,51 @@ constructor(
 
     fun setSimAccessPermission(device: BluetoothDevice, value: Int) {
         val newStatus = fromAccess(value)
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val permissions = deviceBuilder.permissions
-                val oldStatus = if (permissions.hasSim()) permissions.sim else null
+            val permissions = deviceBuilder.permissions
+            val oldStatus = if (permissions.hasSim()) permissions.sim else null
 
-                if (oldStatus == newStatus) {
-                    return@updateData storage
-                }
-                logEvent(device, "SIM permission changed: $oldStatus -> $newStatus")
-                val permissionsBuilder = permissions.toBuilder()
-                if (newStatus == null) {
-                    permissionsBuilder.clearSim()
-                } else {
-                    permissionsBuilder.sim = newStatus
-                }
-                deviceBuilder.setPermissions(permissionsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (oldStatus == newStatus) {
+                return@blockingUpdateData storage
             }
+            logEvent(device, "SIM permission changed: $oldStatus -> $newStatus")
+            val permissionsBuilder = permissions.toBuilder()
+            if (newStatus == null) {
+                permissionsBuilder.clearSim()
+            } else {
+                permissionsBuilder.sim = newStatus
+            }
+            deviceBuilder.setPermissions(permissionsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
     }
 
     fun getKeyMissingCount(device: BluetoothDevice): Int =
-        currentStorage.devicesMap[device.address]?.keyMissingCount ?: 0
+        currentStorage.devicesMap[device.address]?.keyMissingCount ?: -1
 
     fun updateKeyMissingCount(device: BluetoothDevice, isKeyMissingDetected: Boolean) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                val newCount =
-                    if (isKeyMissingDetected) {
-                        deviceBuilder.keyMissingCount + 1
-                    } else {
-                        0
-                    }
-
-                if (deviceBuilder.keyMissingCount == newCount) {
-                    return@updateData storage
+            val newCount =
+                if (isKeyMissingDetected) {
+                    deviceBuilder.keyMissingCount + 1
+                } else {
+                    0
                 }
 
-                logEvent(device, "Key missing count: ${deviceBuilder.keyMissingCount} -> $newCount")
-                deviceBuilder.keyMissingCount = newCount
-
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (deviceBuilder.keyMissingCount == newCount) {
+                return@blockingUpdateData storage
             }
+
+            logEvent(device, "Key missing count: ${deviceBuilder.keyMissingCount} -> $newCount")
+            deviceBuilder.keyMissingCount = newCount
+
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun isMicrophonePreferredForCalls(device: BluetoothDevice): Boolean {
@@ -568,23 +552,21 @@ constructor(
     }
 
     fun setMicrophonePreferredForCalls(device: BluetoothDevice, enabled: Boolean) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                if (
-                    deviceBuilder.hasMicrophonePreferredForCalls() &&
-                        deviceBuilder.microphonePreferredForCalls == enabled
-                ) {
-                    return@updateData storage
-                }
-
-                logEvent(device, "Microphone preferred for calls set to $enabled")
-                deviceBuilder.microphonePreferredForCalls = enabled
-
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (
+                deviceBuilder.hasMicrophonePreferredForCalls() &&
+                    deviceBuilder.microphonePreferredForCalls == enabled
+            ) {
+                return@blockingUpdateData storage
             }
+
+            logEvent(device, "Microphone preferred for calls set to $enabled")
+            deviceBuilder.microphonePreferredForCalls = enabled
+
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun getAvrcpVolume(device: BluetoothDevice, defaultValue: Int): Int {
@@ -597,22 +579,20 @@ constructor(
     }
 
     fun setAvrcpVolume(device: BluetoothDevice, newVolume: Int) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
-                val settingsBuilder = deviceBuilder.avrcpSettings.toBuilder()
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+            val settingsBuilder = deviceBuilder.avrcpSettings.toBuilder()
 
-                if (settingsBuilder.hasVolume() && settingsBuilder.volume == newVolume) {
-                    return@updateData storage
-                }
-
-                logEvent(device, "Storing AVRCP Volume = $newVolume")
-                settingsBuilder.volume = newVolume
-
-                deviceBuilder.setAvrcpSettings(settingsBuilder.build())
-                builder.putDevices(device.address, deviceBuilder.build()).build()
+            if (settingsBuilder.hasVolume() && settingsBuilder.volume == newVolume) {
+                return@blockingUpdateData storage
             }
+
+            logEvent(device, "Storing AVRCP Volume = $newVolume")
+            settingsBuilder.volume = newVolume
+
+            deviceBuilder.setAvrcpSettings(settingsBuilder.build())
+            builder.putDevices(device.address, deviceBuilder.build()).build()
         }
 
     fun getLeAudioCodecPreferences(
@@ -638,28 +618,26 @@ constructor(
         devices: List<BluetoothDevice>,
         codecPreferences: Map<Int, Pair<BluetoothLeAudioCodecConfig, BluetoothLeAudioCodecConfig>>,
     ) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                devices.forEach { device ->
-                    val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            devices.forEach { device ->
+                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
 
-                    val settingsBuilder = deviceBuilder.leAudioSettings.toBuilder()
-                    settingsBuilder.clearCodecPreferences()
-                    codecPreferences.values.forEach { pair ->
-                        settingsBuilder.addCodecPreferences(
-                            LeAudioCodecPreference.newBuilder()
-                                .setInput(toProtoCodecConfig(pair.first))
-                                .setOutput(toProtoCodecConfig(pair.second))
-                                .build()
-                        )
-                    }
-
-                    deviceBuilder.setLeAudioSettings(settingsBuilder.build())
-                    builder.putDevices(device.address, deviceBuilder.build())
+                val settingsBuilder = deviceBuilder.leAudioSettings.toBuilder()
+                settingsBuilder.clearCodecPreferences()
+                codecPreferences.values.forEach { pair ->
+                    settingsBuilder.addCodecPreferences(
+                        LeAudioCodecPreference.newBuilder()
+                            .setInput(toProtoCodecConfig(pair.first))
+                            .setOutput(toProtoCodecConfig(pair.second))
+                            .build()
+                    )
                 }
-                builder.build()
+
+                deviceBuilder.setLeAudioSettings(settingsBuilder.build())
+                builder.putDevices(device.address, deviceBuilder.build())
             }
+            builder.build()
         }
 
     /**
@@ -736,31 +714,29 @@ constructor(
      *   profile's active status needs to be updated.
      */
     fun onDeviceConnected(device: BluetoothDevice, profileId: Int) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
-                val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
-                deviceBuilder.incrementConnectionCounter(builder)
-                val address = device.address
-                builder.putDevices(address, deviceBuilder.build())
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
+            val deviceBuilder = builder.getExistingOrNewDeviceBuilder(device)
+            deviceBuilder.incrementConnectionCounter(builder)
+            val address = device.address
+            builder.putDevices(address, deviceBuilder.build())
 
-                // Update active device for the given profile
-                when (profileId) {
-                    BluetoothProfile.A2DP -> {
-                        val devices = builder.activeA2DpDevicesList.filter { it != address }
-                        builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(devices)
-                        builder.addActiveA2DpDevices(address)
-                        logEvent(device, "active A2DP contains: ${builder.activeA2DpDevicesList}")
-                    }
-                    BluetoothProfile.HEADSET -> {
-                        val devices = builder.activeHfpDevicesList.filter { it != address }
-                        builder.clearActiveHfpDevices().addAllActiveHfpDevices(devices)
-                        builder.addActiveHfpDevices(address)
-                        logEvent(device, "active HFP contains: ${builder.activeHfpDevicesList}")
-                    }
+            // Update active device for the given profile
+            when (profileId) {
+                BluetoothProfile.A2DP -> {
+                    val devices = builder.activeA2DpDevicesList.filter { it != address }
+                    builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(devices)
+                    builder.addActiveA2DpDevices(address)
+                    logEvent(device, "active A2DP contains: ${builder.activeA2DpDevicesList}")
                 }
-                builder.build()
+                BluetoothProfile.HEADSET -> {
+                    val devices = builder.activeHfpDevicesList.filter { it != address }
+                    builder.clearActiveHfpDevices().addAllActiveHfpDevices(devices)
+                    builder.addActiveHfpDevices(address)
+                    logEvent(device, "active HFP contains: ${builder.activeHfpDevicesList}")
+                }
             }
+            builder.build()
         }
 
     /**
@@ -772,43 +748,39 @@ constructor(
      * @param profileId The profile ID from [BluetoothProfile] that is no longer active.
      */
     fun onDeviceDisconnected(device: BluetoothDevice, profileId: Int) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                val builder = storage.toBuilder()
+        dataStore.blockingUpdateData { storage ->
+            val builder = storage.toBuilder()
 
-                when (profileId) {
-                    BluetoothProfile.A2DP -> {
-                        val devices = builder.activeA2DpDevicesList.filter { it != device.address }
-                        builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(devices)
-                        logEvent(device, "no longer A2DP active. Remains $devices")
-                    }
-                    BluetoothProfile.HEADSET -> {
-                        val devices = builder.activeHfpDevicesList.filter { it != device.address }
-                        builder.clearActiveHfpDevices().addAllActiveHfpDevices(devices)
-                        logEvent(device, "no longer HFP active. Remains $devices")
-                    }
+            when (profileId) {
+                BluetoothProfile.A2DP -> {
+                    val devices = builder.activeA2DpDevicesList.filter { it != device.address }
+                    builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(devices)
+                    logEvent(device, "no longer A2DP active. Remains $devices")
                 }
-                builder.build()
+                BluetoothProfile.HEADSET -> {
+                    val devices = builder.activeHfpDevicesList.filter { it != device.address }
+                    builder.clearActiveHfpDevices().addAllActiveHfpDevices(devices)
+                    logEvent(device, "no longer HFP active. Remains $devices")
+                }
             }
+            builder.build()
         }
 
     /** Removes a device from storage */
     fun removeDevice(device: BluetoothDevice) =
-        ioScope.launch {
-            dataStore.updateData { storage ->
-                logEvent(device, "Remove from storage")
-                val builder = storage.toBuilder()
+        dataStore.blockingUpdateData { storage ->
+            logEvent(device, "Remove from storage")
+            val builder = storage.toBuilder()
 
-                builder.removeDevices(device.address)
+            builder.removeDevices(device.address)
 
-                val a2dpDevices = builder.activeA2DpDevicesList.filter { it != device.address }
-                builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(a2dpDevices)
+            val a2dpDevices = builder.activeA2DpDevicesList.filter { it != device.address }
+            builder.clearActiveA2DpDevices().addAllActiveA2DpDevices(a2dpDevices)
 
-                val hfpDevices = builder.activeHfpDevicesList.filter { it != device.address }
-                builder.clearActiveHfpDevices().addAllActiveHfpDevices(hfpDevices)
+            val hfpDevices = builder.activeHfpDevicesList.filter { it != device.address }
+            builder.clearActiveHfpDevices().addAllActiveHfpDevices(hfpDevices)
 
-                builder.build()
-            }
+            builder.build()
         }
 
     private suspend fun recompactConnectionCounter() =
@@ -875,9 +847,13 @@ constructor(
         }
     }
 
+    private fun DataStore<UserStorage>.blockingUpdateData(
+        transform: suspend (UserStorage) -> UserStorage
+    ) = runBlocking { updateData(transform) }
+
     /** Logs a metadata change event for dumpsys. */
     private fun logEvent(device: BluetoothDevice, log: String) {
-        mEventLog.logi(TAG, "$device: ${log.anonymizeAddress()}")
+        eventLog.logi(TAG, "$device: ${log.anonymizeAddress()}")
     }
 
     // Serializer for the UserStorage proto to tells DataStore how to read and write the data.

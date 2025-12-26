@@ -16,7 +16,6 @@
 
 package com.android.bluetooth.profile
 
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothProfile
 import android.content.ComponentName
 import android.content.ContextWrapper
@@ -27,12 +26,14 @@ import com.android.bluetooth.Utils
 import com.android.bluetooth.btservice.AdapterService
 import java.util.Optional
 
-/** Base class for a Bluetooth profile. */
-abstract class ProfileService(
-    /** The id of this Profile. see [BluetoothProfile] */
-    @JvmField val mProfileId: Int,
-    @JvmField protected val mAdapterService: AdapterService,
-) : ContextWrapper(mAdapterService) {
+/**
+ * Base class for a Bluetooth profile.
+ *
+ * @param profileId The id of this Profile. see [BluetoothProfile]
+ * @param adapterService The [AdapterService].
+ */
+abstract class ProfileService(val profileId: Int, val adapterService: AdapterService) :
+    ContextWrapper(adapterService) {
 
     interface IProfileServiceBinder : IBinder {
         fun cleanup()
@@ -40,7 +41,7 @@ abstract class ProfileService(
 
     val name = javaClass.simpleName
     val binder: Optional<IProfileServiceBinder>
-    @get:JvmName("isAvailable") @set:JvmName("setAvailable") var available = false
+    var isAvailable = false
 
     init {
         Log.d(name, "Service created")
@@ -60,7 +61,7 @@ abstract class ProfileService(
     abstract fun cleanup()
 
     protected fun <T> obtainSystemService(serviceClass: Class<T>): T {
-        return mAdapterService.getSystemService(serviceClass)
+        return adapterService.getSystemService(serviceClass)
     }
 
     /**
@@ -99,10 +100,8 @@ abstract class ProfileService(
      *
      * @param sb StringBuilder from the profile.
      */
-    // Suppressed since this is called from framework
-    @SuppressLint("AndroidFrameworkRequiresPermission")
     open fun dump(sb: StringBuilder) {
-        sb.append("\nProfile: ").append(name).append("\n")
+        sb.appendLine("Profile: $name")
     }
 
     companion object {
@@ -110,11 +109,11 @@ abstract class ProfileService(
          * Append an indented String for adding dumpsys support to subclasses.
          *
          * @param sb StringBuilder from the profile.
-         * @param s String to indent and append.
+         * @param text String to indent and append.
          */
         @JvmStatic
-        fun println(sb: StringBuilder, s: String) {
-            sb.append("  ").append(s).append("\n")
+        fun println(sb: StringBuilder, text: String) {
+            sb.appendLine("  $text")
         }
     }
 }

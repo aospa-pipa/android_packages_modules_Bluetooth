@@ -27,7 +27,6 @@ import android.annotation.Hide;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
-import android.annotation.SuppressLint;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -76,6 +75,13 @@ public class CallbackWrapper<T, S> {
         mCallbackExecutorMap = requireNonNull(map);
     }
 
+    /** Checks if there are any callbacks currently registered */
+    public boolean isEmpty() {
+        synchronized (mCallbackExecutorMap) {
+            return mCallbackExecutorMap.isEmpty();
+        }
+    }
+
     /** Dispatch the callback from the Bluetooth service to all the currently registered callback */
     public void forEach(Consumer<T> consumer) {
         synchronized (mCallbackExecutorMap) {
@@ -87,7 +93,6 @@ public class CallbackWrapper<T, S> {
 
     /** Register the callback and save the wrapper to the service if needed */
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
-    @SuppressLint("AndroidFrameworkRequiresPermission") // Consumer wrongly report permission
     public void registerCallback(
             @Nullable S service,
             @NonNull T callback,
@@ -110,7 +115,6 @@ public class CallbackWrapper<T, S> {
 
     /** Register the callback and remove the wrapper to the service if needed */
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
-    @SuppressLint("AndroidFrameworkRequiresPermission") // Consumer wrongly report permission
     public void unregisterCallback(@Nullable S service, @NonNull T callback) {
         requireNonNull(callback);
         synchronized (mCallbackExecutorMap) {

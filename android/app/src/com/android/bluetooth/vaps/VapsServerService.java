@@ -138,7 +138,7 @@ public class VapsServerService extends ProfileService {
     public void setCcid() {
         int ccid =
                 ContentControlIdKeeper.acquireCcid(
-                        mAdapterService,
+                        getAdapterService(),
                         BluetoothUuid.VAPS,
                         BluetoothLeAudio.CONTEXT_TYPE_VOICE_ASSISTANTS);
         if (ccid == ContentControlIdKeeper.CCID_INVALID) {
@@ -182,7 +182,7 @@ public class VapsServerService extends ProfileService {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         Log.d(TAG, "activateVoiceRecognition: ");
         try {
-            mAdapterService.startActivity(intent);
+            getAdapterService().startActivity(intent);
         } catch (ActivityNotFoundException e) {
             Log.e(TAG, "activateVoiceRecognition, failed due to activity not found for " + intent);
             return false;
@@ -195,7 +195,7 @@ public class VapsServerService extends ProfileService {
         Intent intent = new Intent(Intent.ACTION_STOP_VOICE_COMMAND);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         intent.putExtra(BluetoothProfile.EXTRA_PROFILE, BluetoothProfile.LE_AUDIO);
-        mAdapterService.sendBroadcast(intent);
+        getAdapterService().sendBroadcast(intent);
         return true;
     }
 
@@ -204,29 +204,38 @@ public class VapsServerService extends ProfileService {
             Log.e(TAG, "Event ignored, service not available: " + stackEvent);
             return;
         }
-        BluetoothDevice device = stackEvent.device;
+        mHandler.post(
+                () -> {
+                    BluetoothDevice device = stackEvent.device;
 
-        switch (stackEvent.type) {
-            case VapsServerStackEvent.EVENT_TYPE_ON_INITIALIZED -> {
-                Log.d(TAG, "onInitialized");
-                setCcid();
-                Log.d(TAG, "Calling setVaeName after initialization");
-                setVaeName();
-            }
-            case VapsServerStackEvent.EVENT_TYPE_ON_START_VA_SESSION -> {
-                Log.d(TAG, "start VA session by remote Headset:" + device);
+                    switch (stackEvent.type) {
+                        case VapsServerStackEvent.EVENT_TYPE_ON_INITIALIZED -> {
+                            Log.d(TAG, "onInitialized");
+                            setCcid();
+                            Log.d(TAG, "Calling setVaeName after initialization");
+                            setVaeName();
+                        }
+                        case VapsServerStackEvent.EVENT_TYPE_ON_START_VA_SESSION -> {
+                            Log.d(TAG, "start VA session by remote Headset:" + device);
 
-                if (!activateVoiceRecognition(device)) {
-                    Log.w(TAG, "start VA session by remote Headset: failed request from " + device);
-                }
-            }
-            case VapsServerStackEvent.EVENT_TYPE_ON_STOP_VA_SESSION -> {
-                Log.d(TAG, "stop VA session by remote Headset:" + device);
-                if (!deactivateVoiceRecognition(device)) {
-                    Log.w(TAG, "stop VA session by remote Headset: failed request from " + device);
-                }
-            }
-            default -> {}
-        }
+                            if (!activateVoiceRecognition(device)) {
+                                Log.w(
+                                        TAG,
+                                        "start VA session by remote Headset: failed request from "
+                                                + device);
+                            }
+                        }
+                        case VapsServerStackEvent.EVENT_TYPE_ON_STOP_VA_SESSION -> {
+                            Log.d(TAG, "stop VA session by remote Headset:" + device);
+                            if (!deactivateVoiceRecognition(device)) {
+                                Log.w(
+                                        TAG,
+                                        "stop VA session by remote Headset: failed request from "
+                                                + device);
+                            }
+                        }
+                        default -> {}
+                    }
+                });
     }
 }

@@ -1048,6 +1048,10 @@ tGATT_STATUS GATTC_Read(tCONN_ID conn_id, tGATT_READ_TYPE type, tGATT_READ_PARAM
       p_clcb->s_handle = 0;
       /* copy multiple handles in CB */
       tGATT_READ_MULTI* p_read_multi = (tGATT_READ_MULTI*)osi_malloc(sizeof(tGATT_READ_MULTI));
+      if (!p_read_multi) {
+        log::error("Unable to allocate read multiple buffer");
+        return GATT_NO_RESOURCES;
+      }
       p_clcb->p_attr_buf = (uint8_t*)p_read_multi;
       memcpy(p_read_multi, &p_read->read_multiple, sizeof(tGATT_READ_MULTI));
       break;
@@ -1543,7 +1547,7 @@ void GATT_StartIf(tGATT_IF gatt_if) {
  ******************************************************************************/
 bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
                   tBTM_BLE_CONN_TYPE connection_type, tBT_TRANSPORT transport, bool opportunistic,
-                  uint8_t initiating_phys, uint16_t preferred_mtu, bool prefer_relax_mode) {
+                  uint16_t preferred_mtu, bool prefer_relax_mode) {
   /* Make sure app is registered */
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
   if (!p_reg) {
@@ -1576,7 +1580,7 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE ad
 
     if (tcb_exist || transport == BT_TRANSPORT_BR_EDR) {
       /* Consider to remove gatt_act_connect at all */
-      ret = gatt_act_connect(p_reg, bd_addr, addr_type, transport, initiating_phys);
+      ret = gatt_act_connect(p_reg, bd_addr, addr_type, transport);
     } else {
       log::verbose("Connecting without tcb to: {}", bd_addr);
       bool has_direct_conn = connection_manager::is_direct_connection(bd_addr);
@@ -1633,7 +1637,7 @@ bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE ad
 bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBTM_BLE_CONN_TYPE connection_type,
                   tBT_TRANSPORT transport, bool opportunistic) {
   return GATT_Connect(gatt_if, bd_addr, BLE_ADDR_PUBLIC, connection_type, transport, opportunistic,
-                      LE_PHY_1M, 0, false);
+                      0, false);
 }
 
 /*******************************************************************************
@@ -1787,6 +1791,35 @@ bool GATT_GetConnIdIfConnected(tGATT_IF gatt_if, const RawAddress& bd_addr, tCON
   return status;
 }
 
+void GATT_UpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode,
+                              uint16_t subrate_max, uint16_t subrate_min,
+                              uint16_t cont_num) {
+  if (!gatt_cb.subrate_mode_config.contains(subrate_mode)) {
+    log::warn("This is a unknown subrate mode to update: {}", subrate_mode);
+    return;
+  }
+  if (subrate_min > subrate_max || cont_num >= subrate_max || subrate_min > 500 ||
+      subrate_max > 500) {
+    log::error("Invalid subrate parameter to update: {} {} {} {}",
+               subrate_mode, subrate_max, subrate_min, cont_num);
+    return;
+  }
+  log::debug("Update subrate mode config: {} {} {} {}",
+              subrate_mode, subrate_max, subrate_min, cont_num);
+  gatt_cb.subrate_mode_config[subrate_mode].subrate_max = subrate_max;
+  gatt_cb.subrate_mode_config[subrate_mode].subrate_min = subrate_min;
+  gatt_cb.subrate_mode_config[subrate_mode].cont_num = cont_num;
+}
+
+bool GATT_SubrateRequest(tGATT_IF client_if, const RawAddress& bd_addr,
+                         tGATT_SUBRATE_MODE subrate_mode) {
+  log::debug("client_if:{} addr:{}, subrate_mode:{}", client_if, bd_addr, subrate_mode);
+  if (!gatt_register_subrate_config(client_if, bd_addr, subrate_mode)) {
+    return false;
+  }
+  return true;
+}
+
 static void gatt_bonded_check_add_address(const RawAddress& bda) {
   if (!gatt_is_bda_in_the_srv_chg_clt_list(bda)) {
     gatt_add_a_bonded_dev_for_srv_chg(bda);
@@ -1817,14 +1850,14 @@ void gatt_load_bonded(void) {
   if (!load_bonded) {
     return;
   }
-  for (tBTM_SEC_DEV_REC* p_dev_rec : btm_get_sec_dev_rec()) {
-    if (p_dev_rec->sec_rec.is_link_key_known()) {
-      log::verbose("Add bonded BR/EDR transport {}", p_dev_rec->bd_addr);
-      gatt_bonded_check_add_address(p_dev_rec->bd_addr);
+  for (BtmDevice* p_device : btm_get_sec_dev_rec()) {
+    if (p_device->sec_rec.is_link_key_known()) {
+      log::verbose("Add bonded BR/EDR transport {}", p_device->bd_addr);
+      gatt_bonded_check_add_address(p_device->bd_addr);
     }
-    if (p_dev_rec->sec_rec.is_le_link_key_known()) {
-      log::verbose("Add bonded BLE {}", p_dev_rec->ble.pseudo_addr);
-      gatt_bonded_check_add_address(p_dev_rec->ble.pseudo_addr);
+    if (p_device->sec_rec.is_le_link_key_known()) {
+      log::verbose("Add bonded BLE {}", p_device->ble.pseudo_addr);
+      gatt_bonded_check_add_address(p_device->ble.pseudo_addr);
     }
   }
 }

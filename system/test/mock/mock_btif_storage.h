@@ -37,11 +37,10 @@
 //       may need attention to prune from (or add to ) the inclusion set.
 
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/uuid.h>
 
 #include "btif/include/btif_storage.h"
-#include "stack/include/bt_octets.h"
-
 // Original usings
 
 // Mocked compile conditionals, if any
@@ -290,9 +289,9 @@ extern struct btif_storage_get_cod btif_storage_get_cod;
 // Return: bool
 struct btif_storage_is_restricted_device {
   static bool return_value;
-  std::function<bool(const RawAddress* remote_bd_addr)> body{
-          [](const RawAddress* /* remote_bd_addr */) { return return_value; }};
-  bool operator()(const RawAddress* remote_bd_addr) { return body(remote_bd_addr); }
+  std::function<bool(RawAddress remote_bd_addr)> body{
+          [](RawAddress /* remote_bd_addr */) { return return_value; }};
+  bool operator()(RawAddress remote_bd_addr) { return body(remote_bd_addr); }
 };
 extern struct btif_storage_is_restricted_device btif_storage_is_restricted_device;
 

@@ -70,6 +70,7 @@
 
 #define PID_FILE "/data/.bdt_pid"
 #define L2CAP_PROP_FOC_ENABLED 1
+#define L2CAP_PROP_SEND_S_FRAME_RR_ENABLED 1
 
 #ifndef MAX
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -577,8 +578,8 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
 #endif
 static void ssp_request_cb(RawAddress* remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key) {
-  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
+                           uint32_t pass_key, PairingAlgorithm pairing_algo) {
+  if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(*remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
     printf("SSP Reply failed\n");
@@ -586,12 +587,12 @@ static void ssp_request_cb(RawAddress* remote_bd_addr,
 }
 
 static void bond_state_changed_cb(bt_status_t status,
-                                  RawAddress* remote_bd_addr,
-                                  bt_bond_state_t state, int fail_reason) {
+                                  RawAddress* remote_bd_addr,tBT_TRANSPORT transport,
+                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason) {
   g_PairState = state;
 }
 
-static void acl_state_changed(bt_status_t status, tAclLinkSpec& link_spec,
+static void acl_state_changed(bt_status_t status, AclLinkSpec& link_spec,
                               bt_acl_state_t state, bt_hci_error_code_t hci_reason,
                               bt_conn_direction_t direction,
                               uint16_t acl_handle) {}
@@ -655,7 +656,8 @@ void bdt_enable(void) {
     printf("Bluetooth is already enabled\n");
     return;
   }
-  status = (bt_status_t)sBtInterface->enable();
+  std::string toolName = "l2cap_tool";
+  status = (bt_status_t)sBtInterface->enable(std::move(toolName));
   return;
 }
 
@@ -979,7 +981,7 @@ static void l2c_send(char* p) {
 static int l2c_pair(char* p) {
   RawAddress bd_addr = RawAddress::FromString(p).value_or(RawAddress::kEmpty);
   if (BT_STATUS_SUCCESS !=
-      sBtInterface->create_bond(&bd_addr, TRANSPORT_BREDR)) {
+      sBtInterface->create_bond(bd_addr, TRANSPORT_BREDR)) {
     printf("Failed to Initiate Pairing \n");
     return FALSE;
   }
@@ -1038,7 +1040,12 @@ int main(int argc, char* argv[]) {
   struct sigaction sa;
   int opt, mode = RECEIVE, addr_required = 0;
   char temp[3] = {0};
-
+  int adding_flag_to_send_rr = 0;
+  char l2c_send_s_frame_rr_opt[PROPERTY_VALUE_MAX];
+  property_get("persist.vendor.qcom.bluetooth.l2c_send_s_frame_rr", l2c_send_s_frame_rr_opt, "0");
+  if(atoi(l2c_send_s_frame_rr_opt) == L2CAP_PROP_SEND_S_FRAME_RR_ENABLED) {
+	  adding_flag_to_send_rr = 1;
+  }
   while ((opt = getopt(argc, argv,
                        "aerswcpb:i:P:K:O:H:F:N:L:C:D:X:Q:I:W:Z:UGATMES")) !=
          EOF) {
@@ -1284,6 +1291,9 @@ int main(int argc, char* argv[]) {
 ERR:
   while (1) {
     sleep(5);
+	if(adding_flag_to_send_rr) {
+        l2c_disconnect(NULL);
+     }
     printf("Enter Y/y to Exit... \n");
     len = read(0, &temp, 2);
     if ((temp[0] == 'Y') || (temp[0] == 'y')) break;

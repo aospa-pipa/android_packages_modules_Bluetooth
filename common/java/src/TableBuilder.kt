@@ -24,17 +24,23 @@ package com.android.bluetooth.util
  * @param width Optional width. If null, width is calculated dynamically.
  * @param value Extracts cell content from a data object.
  */
-data class Column<T>(val header: String, val width: Int? = null, val value: (T) -> String)
+data class Column<T>(val header: String, val width: Int? = null, val value: (T) -> Any)
 
 fun <T> Iterable<T>.toTable(vararg columns: Column<T>) = toTable(columns.toList())
 
 /**
  * Formats an iterable of items into a monospaced string table
  *
- * Column widths are calculated dynamically based on content unless a `width` is specified.
+ * Column widths are calculated dynamically based on content unless a `width` is specified. To
+ * indent the entire resulting table, use [indent] on the returned string:
+ * ```
+ * val table = myList.toTable(columns).indent("  ")
+ * sb.appendLine(table)
+ * ```
+ * **
  *
  * @param columns A list of `Column` objects defining the table's structure.
- * @return A formatted string table, or an empty string if the input is empty.
+ * @return A formatted string table or an empty string if the input is empty.
  */
 fun <T> Iterable<T>.toTable(columns: List<Column<T>>): String {
     val data = this.toList()
@@ -45,18 +51,27 @@ fun <T> Iterable<T>.toTable(columns: List<Column<T>>): String {
     val colWidths =
         columns.map { column ->
             column.width
-                ?: maxOf(column.header.length, data.maxOfOrNull { column.value(it).length } ?: 0)
+                ?: maxOf(
+                    column.header.length,
+                    data.maxOfOrNull { column.value(it).toString().length } ?: 0,
+                )
         }
 
     return buildString {
         // Headers
-        appendLine(columns.zip(colWidths) { c, width -> c.header.padEnd(width) }.joinToString(" "))
+        appendLine(
+            columns
+                .zip(colWidths) { column, width -> column.header.padEnd(width) }
+                .joinToString(" ")
+        )
         // Separators
-        appendLine(colWidths.joinToString(" ") { "-".repeat(it) })
+        appendLine(colWidths.joinToString(" ") { width -> "-".repeat(width) })
         // Values
-        data.forEach { item ->
+        data.forEach {
             appendLine(
-                columns.zip(colWidths) { c, width -> c.value(item).padEnd(width) }.joinToString(" ")
+                columns
+                    .zip(colWidths) { column, width -> column.value(it).toString().padEnd(width) }
+                    .joinToString(" ")
             )
         }
     }

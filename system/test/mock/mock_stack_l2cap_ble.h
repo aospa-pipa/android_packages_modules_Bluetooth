@@ -99,6 +99,15 @@ struct L2CA_GetBleConnRole {
   hci_role_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
 };
 extern struct L2CA_GetBleConnRole L2CA_GetBleConnRole;
+// Name: L2CA_GetBleSubrateFactor
+// Params: const RawAddress& bd_addr
+// Returns: uint16_t
+struct L2CA_GetBleSubrateFactor {
+  std::function<uint16_t(const RawAddress& bd_addr)> body{
+          [](const RawAddress& /* bd_addr */) { return 24; }};
+  uint16_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
+};
+extern struct L2CA_GetBleSubrateFactor L2CA_GetBleSubrateFactor;
 // Name: L2CA_GetBleConnInterval
 // Params: const RawAddress& bd_addr
 // Returns: uint16_t
@@ -108,6 +117,24 @@ struct L2CA_GetBleConnInterval {
   uint16_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
 };
 extern struct L2CA_GetBleConnInterval L2CA_GetBleConnInterval;
+// Name: L2CA_GetBlePeriphLatency
+// Params: const RawAddress& bd_addr
+// Returns: uint16_t
+struct L2CA_GetBlePeriphLatency {
+  std::function<uint16_t(const RawAddress& bd_addr)> body{
+          [](const RawAddress& /* bd_addr */) { return 24; }};
+  uint16_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
+};
+extern struct L2CA_GetBlePeriphLatency L2CA_GetBlePeriphLatency;
+// Name: L2CA_GetBleSupervisionTimeout
+// Params: const RawAddress& bd_addr
+// Returns: uint16_t
+struct L2CA_GetBleSupervisionTimeout {
+  std::function<uint16_t(const RawAddress& bd_addr)> body{
+          [](const RawAddress& /* bd_addr */) { return 24; }};
+  uint16_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
+};
+extern struct L2CA_GetBleSupervisionTimeout L2CA_GetBleSupervisionTimeout;
 // Name: l2cble_notify_le_connection
 // Params: const RawAddress& bda
 // Returns: void
@@ -274,6 +301,19 @@ struct L2CA_AdjustConnectionIntervals {
   }
 };
 extern struct L2CA_AdjustConnectionIntervals L2CA_AdjustConnectionIntervals;
+
+// Name: L2CA_FlowControl
+// Params: uint16_t cid, bool data_enabled
+// floor_interval Returns: void
+struct L2CA_FlowControl {
+  std::function<bool(uint16_t cid, bool data_enabled)> body{
+          [](uint16_t /* cid */, bool /* data_enabled */){return false;}};
+  bool operator()(uint16_t cid, bool data_enabled) {
+    return body(cid, data_enabled);
+  }
+};
+extern struct L2CA_FlowControl L2CA_FlowControl;
+
 // Name: L2CA_SetEcosystemBaseInterval
 // Params: uint16_t* min_interval, uint16_t* max_interval, uint16_t
 // floor_interval Returns: void

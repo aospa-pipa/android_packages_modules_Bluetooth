@@ -19,6 +19,8 @@ package com.android.bluetooth.le_scan
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanRecord
+import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.bluetooth.le.ScanSettings.SCAN_MODE_AMBIENT_DISCOVERY
 import android.bluetooth.le.ScanSettings.SCAN_MODE_BALANCED
@@ -37,9 +39,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-private const val TAG = "ScanUtil"
+private const val TAG = ScanUtil.TAG_PREFIX + "ScanUtil"
 
 object ScanUtil {
+    const val TAG_PREFIX = "BtScan."
 
     const val DEFAULT_SCAN_QUOTA_COUNT = 5
     @JvmField val DEFAULT_SCAN_QUOTA_WINDOW = 30.seconds.toJavaDuration()
@@ -91,13 +94,10 @@ object ScanUtil {
     @JvmStatic fun findById(clients: Set<ScanClient>, id: Int) = clients.find { it.scannerId == id }
 
     @JvmStatic
-    fun appNameOrUnknown(appName: String?, uid: Int) = appName ?: "Unknown App (UID: $uid)"
-
-    @JvmStatic
     fun hasScanResultPermission(adapterService: AdapterService, client: ScanClient) =
         when {
             // Bypass permission check for internal clients
-            client.isInternalClient ||
+            client.isInternal ||
                 client.hasNetworkSettingsPermission ||
                 client.hasNetworkSetupWizardPermission ||
                 client.hasScanWithoutLocationPermission ||
@@ -371,15 +371,15 @@ object ScanUtil {
         isTimeoutScanClient(client) || isDowngradedScanClient(client)
 
     private fun isTimeoutScanClient(client: ScanClient) =
-        client.appScanStats.map { it.isScanTimeout(client.scannerId) }.orElse(false)
+        client.appScanStats?.isScanTimeout(client.scannerId) ?: false
 
     @JvmStatic
     fun isDowngradedScanClient(client: ScanClient) =
-        client.appScanStats.map { it.isScanDowngraded(client.scannerId) }.orElse(false)
+        client.appScanStats?.isScanDowngraded(client.scannerId) ?: false
 
     @JvmStatic
     fun isAutoBatchScanClientEnabled(client: ScanClient) =
-        client.appScanStats.map { it.isAutoBatchScan(client.scannerId) }.orElse(false)
+        client.appScanStats?.isAutoBatchScan(client.scannerId) ?: false
 
     @JvmStatic
     fun isPhyConfigured(client: ScanClient, use1mPhy: Boolean) =
@@ -423,9 +423,7 @@ object ScanUtil {
         client.updateScanMode(SCAN_MODE_SCREEN_OFF)
         val scanModeString = scanModeToString(client.scanModeApp)
         Log.d(TAG, "Scan mode update during setAutoBatchScanClient() to $scanModeString")
-        client.appScanStats.ifPresent { appScanStats ->
-            appScanStats.setAutoBatchScan(client.scannerId, true)
-        }
+        client.appScanStats?.setAutoBatchScan(client.scannerId, true)
     }
 
     @JvmStatic
@@ -436,36 +434,93 @@ object ScanUtil {
         client.updateScanMode(client.scanModeApp)
         val scanModeString = scanModeToString(client.scanModeApp)
         Log.d(TAG, "Scan mode update during clearAutoBatchScanClient() to $scanModeString")
-        client.appScanStats.ifPresent { appScanStats ->
-            appScanStats.setAutoBatchScan(client.scannerId, false)
+        client.appScanStats?.setAutoBatchScan(client.scannerId, false)
+    }
+
+    // EN format defined here:
+    // https://blog.google/documents/70/Exposure_Notification_-_Bluetooth_Specification_v1.2.2.pdf
+    private val EXPOSURE_NOTIFICATION_FLAGS_PREAMBLE =
+        // size 2, flag field, flags byte (value is not important)
+        byteArrayOf(0x02.toByte(), 0x01.toByte())
+
+    private const val EXPOSURE_NOTIFICATION_FLAGS_LENGTH = 0x2 + 1
+    private val EXPOSURE_NOTIFICATION_PAYLOAD_PREAMBLE =
+        byteArrayOf(
+            // size 3, complete 16 bit UUID, EN UUID -> (0x03, 0x03, 0x6F, 0xFD)
+            0x03.toByte(),
+            0x03.toByte(),
+            0x6F.toByte(),
+            0xFD.toByte(),
+            // size 23, data for 16 bit UUID, EN UUID -> (0x17, 0x16, 0x6F, 0xFD)
+            0x17.toByte(),
+            0x16.toByte(),
+            0x6F.toByte(),
+            0xFD.toByte(),
+            // ...payload
+        )
+    private const val EXPOSURE_NOTIFICATION_PAYLOAD_LENGTH = 0x03 + 0x17 + 2
+
+    @JvmStatic
+    fun getSanitizedExposureNotification(scanRecord: ScanRecord, rssi: Int): ScanResult? {
+        // Remove the flags part of the payload, if present
+        val record =
+            if (
+                scanRecord.bytes.size > EXPOSURE_NOTIFICATION_FLAGS_LENGTH &&
+                    scanRecord.bytes.startsWith(EXPOSURE_NOTIFICATION_FLAGS_PREAMBLE)
+            ) {
+                ScanRecord.parseFromBytes(
+                    scanRecord.bytes.copyOfRange(
+                        EXPOSURE_NOTIFICATION_FLAGS_LENGTH,
+                        scanRecord.bytes.size,
+                    )
+                )
+            } else {
+                scanRecord
+            }
+
+        if (record.bytes.size != EXPOSURE_NOTIFICATION_PAYLOAD_LENGTH) {
+            return null
         }
+        if (!record.bytes.startsWith(EXPOSURE_NOTIFICATION_PAYLOAD_PREAMBLE)) {
+            return null
+        }
+
+        return ScanResult(null, 0, 0, 0, 0, 0, rssi, 0, record, 0)
+    }
+
+    private fun ByteArray.startsWith(prefix: ByteArray): Boolean {
+        if (this.size < prefix.size) {
+            return false
+        }
+        for (i in prefix.indices) {
+            if (prefix[i] != this[i]) {
+                return false
+            }
+        }
+        return true
     }
 
     @JvmStatic
-    fun scanFilterToStringWithoutNullParam(filter: ScanFilter): String {
-        return buildString {
-            append("Filter: [")
-            filter.deviceName?.let { append(" DeviceName=").append(it) }
-            filter.deviceAddress?.let { append(" DeviceAddress=").append(it) }
-            filter.serviceUuid?.let { append(" ServiceUuid=").append(it) }
-            filter.serviceUuidMask?.let { append(" ServiceUuidMask=").append(it) }
-            filter.serviceSolicitationUuid?.let { append(" ServiceSolicitationUuid=").append(it) }
-            filter.serviceSolicitationUuidMask?.let {
-                append(" ServiceSolicitationUuidMask=").append(it)
-            }
-            filter.serviceDataUuid?.let { append(" ServiceDataUuid=").append(it) }
-            filter.serviceData?.let { append(" ServiceData=").append(it.contentToString()) }
-            filter.serviceDataMask?.let { append(" ServiceDataMask=").append(it.contentToString()) }
-            if (filter.manufacturerId >= 0) {
-                append(" ManufacturerId=").append(filter.manufacturerId)
-            }
-            filter.manufacturerData?.let {
-                append(" ManufacturerData=").append(it.contentToString())
-            }
-            filter.manufacturerDataMask?.let {
-                append(" ManufacturerDataMask=").append(it.contentToString())
-            }
-            append(" ]")
+    fun ScanSettings.toStringShort() =
+        "ScanSettings(mode=${scanModeToString(scanMode)}, reportDelayMs=$reportDelayMillis" +
+            ", resultType=${callbackTypeToString(scanResultType)})"
+
+    fun ScanFilter.toStringWithoutNullParam() = buildString {
+        append("Filter: [")
+        deviceName?.let { append(" DeviceName=").append(it) }
+        deviceAddress?.let { append(" DeviceAddress=").append(it) }
+        serviceUuid?.let { append(" ServiceUuid=").append(it) }
+        serviceUuidMask?.let { append(" ServiceUuidMask=").append(it) }
+        serviceSolicitationUuid?.let { append(" ServiceSolicitationUuid=").append(it) }
+        serviceSolicitationUuidMask?.let { append(" ServiceSolicitationUuidMask=").append(it) }
+        serviceDataUuid?.let { append(" ServiceDataUuid=").append(it) }
+        serviceData?.let { append(" ServiceData=").append(it.contentToString()) }
+        serviceDataMask?.let { append(" ServiceDataMask=").append(it.contentToString()) }
+        if (manufacturerId >= 0) {
+            append(" ManufacturerId=").append(manufacturerId)
         }
+        manufacturerData?.let { append(" ManufacturerData=").append(it.contentToString()) }
+        manufacturerDataMask?.let { append(" ManufacturerDataMask=").append(it.contentToString()) }
+        append(" ]")
     }
 }

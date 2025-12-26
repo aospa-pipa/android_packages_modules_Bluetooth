@@ -485,6 +485,36 @@ bool LeAudioDevice::ConfigureAses(const types::AudioSetConfiguration* audio_set_
 
       log::debug( ": coding_format = {}, vendor_codec_id = {}",
                   ase->codec_config.id.coding_format, ase->codec_config.id.vendor_codec_id);
+      /* Let's choose audio channel allocation if not set */
+      bool location_provided_in_config =
+              ase->codec_config.params.Find(codec_spec_conf::kLeAudioLtvTypeAudioChannelAllocation)
+                      .has_value();
+      uint32_t location = 0;
+
+      if (com_android_bluetooth_flags_leaudio_fix_allocation_in_codec_config()) {
+        if (location_provided_in_config) {
+          auto config = ase->codec_config.params.GetAsCoreCodecConfig();
+          group_audio_locations_memo |= config.audio_channel_allocation.value();
+          location = config.audio_channel_allocation.value();
+        } else {
+          location = PickAudioLocation(strategy, direction, audio_locations_,
+                                       group_audio_locations_memo);
+        }
+      } else {
+        location = PickAudioLocation(strategy, direction, audio_locations_,
+                                     group_audio_locations_memo);
+      }
+
+      if (location != bluetooth::le_audio::codec_spec_conf::kLeAudioLocationMonoAudio) {
+        ase->codec_config.params.Add(codec_spec_conf::kLeAudioLtvTypeAudioChannelAllocation,
+                                     location);
+      } else if (com_android_bluetooth_flags_leaudio_fix_allocation_in_codec_config()) {
+        if (location_provided_in_config) {
+          log::info(
+                  "Mono location is provided by audio hal, remove it from Codec Config operations");
+          ase->codec_config.params.Remove(codec_spec_conf::kLeAudioLtvTypeAudioChannelAllocation);
+        }
+      }
 
       uint32_t audio_location =
               PickAudioLocation(strategy, direction, audio_locations_, group_audio_locations_memo);
@@ -1665,6 +1695,22 @@ void LeAudioDevice::StartConnSubrate() {
     return;
   }
 
+  if (com::android::bluetooth::flags::le_subrate_manager()) {
+      stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
+      tGATT_STATUS status =
+          BTA_GATTC_SubrateModeRequest(client_if_, address_, GATT_SUBRATE_MODE_LEA);
+
+      if (status != GATT_SUCCESS) {
+        stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, false);
+        SetSubrateState(SubrateState::DISABLED);
+        log::error("Fail to request subrate mode.");
+      } else {
+        SetSubrateState(SubrateState::PENDING_ENABLING_SUBRATE_UPDATE);
+      }
+
+      return;
+  }
+
   stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, true);
   stack::l2cap::get_interface().L2CA_SubrateRequest(address_, min_subrate, max_subrate, 0,
                                                     cont_number, supervision_timeout);
@@ -1678,6 +1724,11 @@ void LeAudioDevice::StopConnSubrate() {
   }
 
   stack::l2cap::get_interface().L2CA_LockBleConnParamsForLeAudioSubrate(address_, false);
+
+  if (com::android::bluetooth::flags::le_subrate_manager()) {
+    BTA_GATTC_SubrateModeRequest(client_if_, address_, GATT_SUBRATE_MODE_OFF);
+  }
+
   SetSubrateState(SubrateState::DISABLED);
 }
 

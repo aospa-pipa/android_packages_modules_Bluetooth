@@ -28,17 +28,16 @@ extern tBTM_SEC_CB btm_sec_cb;
 
 static const size_t QUEUE_SIZE_MAX = 10;
 
-static tBTM_SEC_DEV_REC* make_bonded_ble_device(const RawAddress& bda, const RawAddress& rra) {
-  tBTM_SEC_DEV_REC* dev = btm_sec_allocate_dev_rec();
+static BtmDevice* make_bonded_ble_device(const RawAddress& bda, const RawAddress& rra) {
+  BtmDevice* dev = btm_sec_allocate_dev_rec(bda);
   dev->sec_rec.sec_flags |= BTM_SEC_LE_LINK_KEY_KNOWN;
-  dev->bd_addr = bda;
   dev->ble.pseudo_addr = rra;
   dev->sec_rec.ble_keys.key_type = BTM_LE_KEY_PID | BTM_LE_KEY_PENC | BTM_LE_KEY_LENC;
   return dev;
 }
 
-static tBTM_SEC_DEV_REC* make_bonded_dual_device(const RawAddress& bda, const RawAddress& rra) {
-  tBTM_SEC_DEV_REC* dev = make_bonded_ble_device(bda, rra);
+static BtmDevice* make_bonded_dual_device(const RawAddress& bda, const RawAddress& rra) {
+  BtmDevice* dev = make_bonded_ble_device(bda, rra);
   dev->sec_rec.sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
   return dev;
 }

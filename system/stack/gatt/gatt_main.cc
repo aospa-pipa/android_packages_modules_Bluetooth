@@ -156,6 +156,10 @@ void gatt_init(void) {
   gatt_cb.srv_list_info = std::make_shared<std::list<tGATT_SRV_LIST_ELEM>>();
   gatt_profile_db_init();
 
+  if (com::android::bluetooth::flags::le_subrate_manager()) {
+    gatt_init_subrate_mode_config();
+  }
+
   EattExtension::GetInstance()->Start();
 
   if (com::android::bluetooth::flags::gatt_offload_api() && !gatt_offload_init()) {
@@ -221,7 +225,7 @@ void gatt_free(void) {
  *
  ******************************************************************************/
 static bool gatt_connect(const RawAddress& rem_bda, tBLE_ADDR_TYPE addr_type, tGATT_TCB* p_tcb,
-                         tBT_TRANSPORT transport, uint8_t /* initiating_phys */, tGATT_IF gatt_if) {
+                         tBT_TRANSPORT transport, tGATT_IF gatt_if) {
   if (gatt_get_ch_state(p_tcb) != GATT_CH_OPEN) {
     gatt_set_ch_state(p_tcb, GATT_CH_CONN);
   }
@@ -471,14 +475,14 @@ void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb, bool is_a
 
 /** GATT connection initiation */
 bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                      tBT_TRANSPORT transport, int8_t initiating_phys) {
+                      tBT_TRANSPORT transport) {
   log::verbose("address:{}, transport:{}", bd_addr, bt_transport_text(transport));
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bd_addr, transport);
   if (p_tcb != NULL) {
     /* before link down, another app try to open a GATT connection */
     uint8_t st = gatt_get_ch_state(p_tcb);
     if (st == GATT_CH_OPEN && p_tcb->app_hold_link.empty() && transport == BT_TRANSPORT_LE) {
-      if (!gatt_connect(bd_addr, addr_type, p_tcb, transport, initiating_phys, p_reg->gatt_if)) {
+      if (!gatt_connect(bd_addr, addr_type, p_tcb, transport, p_reg->gatt_if)) {
         return false;
       }
     } else if (st == GATT_CH_CLOSING) {
@@ -496,9 +500,11 @@ bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBLE_ADDR_TYP
     return false;
   }
 
-  if (!gatt_connect(bd_addr, addr_type, p_tcb, transport, initiating_phys, p_reg->gatt_if)) {
+  if (!gatt_connect(bd_addr, addr_type, p_tcb, transport, p_reg->gatt_if)) {
     log::error("gatt_connect failed");
     fixed_queue_free(p_tcb->pending_ind_q, NULL);
+    alarm_free(p_tcb->conf_timer);
+    alarm_free(p_tcb->ind_ack_timer);
     *p_tcb = tGATT_TCB();
     return false;
   }
@@ -506,9 +512,8 @@ bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBLE_ADDR_TYP
   return true;
 }
 
-bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBT_TRANSPORT transport,
-                      int8_t initiating_phys) {
-  return gatt_act_connect(p_reg, bd_addr, BLE_ADDR_PUBLIC, transport, initiating_phys);
+bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBT_TRANSPORT transport) {
+  return gatt_act_connect(p_reg, bd_addr, BLE_ADDR_PUBLIC, transport);
 }
 
 namespace connection_manager {
@@ -547,6 +552,12 @@ static void gatt_le_connect_cback(uint16_t /* chan */, const RawAddress& bd_addr
     }
     connection_manager::on_connection_complete(bd_addr);
     gatt_cleanup_upon_disc(bd_addr, static_cast<tGATT_DISCONN_REASON>(reason), transport);
+
+    if (com::android::bluetooth::flags::le_subrate_manager()) {
+      // release when acl disconnected
+      gatt_release_subrate_cb(bd_addr);
+    }
+
     return;
   }
 
@@ -689,13 +700,13 @@ static void gatt_channel_congestion(tGATT_TCB* p_tcb, bool congested) {
 }
 
 void gatt_notify_phy_updated(tHCI_STATUS status, uint16_t handle, uint8_t tx_phy, uint8_t rx_phy) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
-  if (!p_dev_rec) {
+  const BtmDevice* p_device = btm_find_dev_by_handle(handle);
+  if (!p_device) {
     log::warn("No Device Found!");
     return;
   }
 
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
+  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_device->ble.pseudo_addr, BT_TRANSPORT_LE);
   if (!p_tcb) {
     return;
   }
@@ -719,6 +730,13 @@ void gatt_notify_conn_update(const RawAddress& remote, uint16_t interval, uint16
     return;
   }
 
+  if (com::android::bluetooth::flags::le_subrate_manager()) {
+    if (status == HCI_SUCCESS) {
+      // call subrate function to adjust subrate parameter
+      gatt_handle_conn_parameter_cback_status(remote, interval);
+    }
+  }
+
   for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
     if (p_reg->in_use && p_reg->app_cb.p_conn_update_cb) {
       tCONN_ID conn_id = gatt_create_conn_id(p_tcb->tcb_idx, p_reg->gatt_if);
@@ -730,22 +748,40 @@ void gatt_notify_conn_update(const RawAddress& remote, uint16_t interval, uint16
 
 void gatt_notify_subrate_change(uint16_t handle, uint16_t subrate_factor, uint16_t latency,
                                 uint16_t cont_num, uint16_t timeout, uint8_t status) {
-  tBTM_SEC_DEV_REC* p_dev_rec = btm_find_dev_by_handle(handle);
-  if (!p_dev_rec) {
+  const BtmDevice* p_device = btm_find_dev_by_handle(handle);
+  if (!p_device) {
     log::warn("No Device Found!");
     return;
   }
 
-  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_dev_rec->ble.pseudo_addr, BT_TRANSPORT_LE);
+  tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_device->ble.pseudo_addr, BT_TRANSPORT_LE);
   if (!p_tcb) {
     return;
   }
 
-  for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
-    if (p_reg->in_use && p_reg->app_cb.p_subrate_chg_cb) {
-      tCONN_ID conn_id = gatt_create_conn_id(p_tcb->tcb_idx, p_reg->gatt_if);
-      (*p_reg->app_cb.p_subrate_chg_cb)(p_reg->gatt_if, conn_id, subrate_factor, latency, cont_num,
-                                        timeout, static_cast<tGATT_STATUS>(status));
+  if (com::android::bluetooth::flags::le_subrate_manager()) {
+    if (gatt_handle_subrate_cback_status(p_device->ble.pseudo_addr, subrate_factor, latency,
+                                    cont_num, timeout, status)) {
+      tGATT_SUBRATE_MODE mode
+              = gatt_cb.subrate_info[p_device->ble.pseudo_addr].current_config.mode;
+      log::verbose("Subrate event callback mode: {} status: {}", mode, status);
+      for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
+        if (p_reg->in_use && p_reg->app_cb.p_subrate_chg_cb) {
+          tCONN_ID conn_id = gatt_create_conn_id(p_tcb->tcb_idx, p_reg->gatt_if);
+          (*p_reg->app_cb.p_subrate_chg_cb)(p_reg->gatt_if, conn_id, subrate_factor,
+                                            latency, cont_num, timeout,
+                                            mode, static_cast<tGATT_STATUS>(status));
+        }
+      }
+    }
+  } else {
+    for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
+      if (p_reg->in_use && p_reg->app_cb.p_subrate_chg_cb) {
+        tCONN_ID conn_id = gatt_create_conn_id(p_tcb->tcb_idx, p_reg->gatt_if);
+        (*p_reg->app_cb.p_subrate_chg_cb)(p_reg->gatt_if, conn_id, subrate_factor,
+                                          latency, cont_num, timeout,
+                                          GATT_SUBRATE_MODE_OFF, static_cast<tGATT_STATUS>(status));
+      }
     }
   }
 }
@@ -1139,6 +1175,18 @@ void gatt_send_srv_chg_ind(const RawAddress& peer_bda, uint16_t start_handle) {
 void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt) {
   log::verbose("srv_changed={}, start_handle: {:#x}", p_srv_chg_clt->srv_changed,
                p_srv_chg_clt->start_handle);
+
+  if (com_android_bluetooth_flags_gatt_not_send_service_change_indication_iop() &&
+      p_srv_chg_clt->srv_changed) {
+    char remote_name[BD_NAME_LEN] = "";
+
+    if (btif_storage_get_stored_remote_name(p_srv_chg_clt->bda, remote_name)) {
+      if (interop_match_name(INTEROP_GATTC_NO_SERVICE_CHANGED_IND, remote_name)) {
+        log::verbose("discard srv chg - interop matched {}", remote_name);
+        p_srv_chg_clt->srv_changed = false;
+      }
+    }
+  }
 
   if (p_srv_chg_clt->srv_changed) {
     char remote_name[BD_NAME_LEN] = "";

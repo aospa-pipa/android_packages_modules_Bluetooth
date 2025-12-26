@@ -17,6 +17,7 @@
 #pragma once
 
 #include <bluetooth/types/address.h>
+#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/bt_transport.h>
 
 #include <cstdint>
@@ -24,7 +25,6 @@
 #include "stack/include/bt_dev_class.h"
 #include "stack/include/bt_device_type.h"
 #include "stack/include/bt_name.h"
-#include "stack/include/bt_octets.h"
 #include "stack/include/btm_ble_sec_api_types.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/hci_error_code.h"
@@ -42,9 +42,11 @@ typedef tBTM_STATUS(tBTM_AUTHORIZE_CALLBACK)(uint8_t service_id);
  *              Device Class of remote
  *              BD Name of remote
  *              Flag indicating the minimum pin code length to be 16 digits
+ *              Pairing Algorithm being used
  */
 typedef tBTM_STATUS(tBTM_PIN_CALLBACK)(const RawAddress& bd_addr, DEV_CLASS dev_class,
-                                       const BD_NAME bd_name, bool min_16_digit);
+                                       const BD_NAME bd_name, bool min_16_digit,
+                                       PairingAlgorithm pairing_algorithm);
 
 /* New Link Key for the connection.  Parameters are
  *              BD Address of remote
@@ -129,7 +131,7 @@ typedef struct {
   void (*BTM_RemoteOobDataReply)(tBTM_STATUS res, const RawAddress& bd_addr, const Octet16& c,
                                  const Octet16& r);
   void (*BTM_PINCodeReply)(const RawAddress& bd_addr, tBTM_STATUS res, uint8_t pin_len,
-                           uint8_t* p_pin);
+                           PinCode pin_code);
   void (*BTM_SecConfirmReqReply)(tBTM_STATUS res, tBT_TRANSPORT transport,
                                  const RawAddress bd_addr);
   void (*BTM_BleSirkConfirmDeviceReply)(const RawAddress& bd_addr, tBTM_STATUS res);

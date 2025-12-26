@@ -1472,6 +1472,15 @@ public:
     }
 
     groupStateMachine_->StopStream(group);
+    if (com_android_bluetooth_flags_leaudio_fix_stop_stream_race() && group->IsReleasing()) {
+      if (audio_sender_state_ != AudioState::IDLE) {
+        audio_sender_state_ = AudioState::RELEASING;
+      }
+
+      if (audio_receiver_state_ != AudioState::IDLE) {
+        audio_receiver_state_ = AudioState::RELEASING;
+      }
+    }
   }
 
   void GroupDestroy(const int group_id) override {
@@ -1960,6 +1969,11 @@ public:
     audio_dev_active_tracker_.Stop();
     audio_dev_active_tracker_history_.emplace_front(audio_dev_active_tracker_);
     audio_dev_active_tracker_.Reset();
+  }
+
+  void SetInGame(bool in_game) override {
+    log::debug("in_game: {}", in_game);
+    audioContextTypeManager_->SetInGame(in_game);
   }
 
   void StartAudioSession(LeAudioDeviceGroup* group) {
@@ -3202,7 +3216,7 @@ public:
     };
   }
 
-  void OnGattConnected(tGATT_STATUS status, tCONN_ID conn_id, tGATT_IF /*client_if*/,
+  void OnGattConnected(tGATT_STATUS status, tCONN_ID conn_id, tGATT_IF client_if,
                        RawAddress address, tBT_TRANSPORT transport, uint16_t mtu) {
     LeAudioDevice* leAudioDevice = leAudioDevices_.FindByAddress(address);
 
@@ -3269,6 +3283,7 @@ public:
       }
     }
 
+    leAudioDevice->client_if_ = client_if;
     leAudioDevice->conn_id_ = conn_id;
     leAudioDevice->mtu_ = mtu;
 
@@ -3581,7 +3596,7 @@ public:
                               std::chrono::milliseconds(kRecoveryReconnectDelayMs));
   }
 
-  void checkIfGroupMember(RawAddress address) {
+  void verifyIfValidCsisDevice(RawAddress address) {
     log::info("checking being a group member: {}", address);
     LeAudioDevice* leAudioDevice = leAudioDevices_.FindByAddress(address);
 
@@ -3591,6 +3606,15 @@ public:
     }
 
     if (leAudioDevice->group_id_ == bluetooth::groups::kGroupUnknown) {
+      auto csis_instance = bluetooth::csis::CsisClient::Get();
+
+      if (csis_instance && !csis_instance->ShallCsisBeUsedForTheDevice(leAudioDevice->address_)) {
+        log::info("{} Not a CSIS member. Create group by our own", leAudioDevice->address_);
+        DeviceGroups::Get()->AddDevice(leAudioDevice->address_,
+                                       bluetooth::le_audio::uuid::kCapServiceUuid);
+        return;
+      }
+
       disconnectInvalidDevice(leAudioDevice, ", device not a valid group member",
                               LeAudioHealthDeviceStatType::INVALID_CSIS);
       return;
@@ -3599,14 +3623,14 @@ public:
 
   /* This is called, when CSIS native module is about to add device to the
    * group once the CSIS service will be verified on the remote side.
-   * After some time (kCsisGroupMemberDelayMs)  a checkIfGroupMember will be
+   * After some time (kCsisGroupMemberDelayMs)  a verifyIfValidCsisDevice will be
    * called and will verify if the remote device has a group_id properly set.
    * if not, it means there is something wrong with CSIS service on the remote
    * side.
    */
   void scheduleGuardForCsisAdd(RawAddress& address) {
     log::info("Schedule reconnecting to {} after timeout on state machine.", address);
-    do_in_main_thread_delayed(base::BindOnce(&LeAudioClientImpl::checkIfGroupMember,
+    do_in_main_thread_delayed(base::BindOnce(&LeAudioClientImpl::verifyIfValidCsisDevice,
                                              weak_factory_.GetWeakPtr(), address),
                               std::chrono::milliseconds(kCsisGroupMemberDelayMs));
   }
@@ -3795,7 +3819,6 @@ public:
     }
 
     leAudioDevice->known_service_handles_ = false;
-    leAudioDevice->csis_member_ = false;
     BtaGattQueue::Clean(leAudioDevice->conn_id_);
     DeregisterNotifications(leAudioDevice);
 
@@ -3997,17 +4020,6 @@ public:
         gmap_svc = &tmp;
       }
     }
-
-    /* Check if CAS includes primary CSIS service */
-    if (!csis_primary_handles.empty() && cas_csis_included_handle) {
-      auto iter = std::find(csis_primary_handles.begin(), csis_primary_handles.end(),
-                            cas_csis_included_handle);
-      if (iter != csis_primary_handles.end()) {
-        leAudioDevice->csis_member_ = true;
-      }
-    }
-
-    log::info("Is csis_member: {}", leAudioDevice->csis_member_);
 
     if (!pac_svc || !ase_svc) {
       disconnectInvalidDevice(leAudioDevice, "No mandatory le audio services found (pacs or ascs)",
@@ -4298,11 +4310,15 @@ public:
       return;
     }
 
-    /* CSIS will trigger adding to group */
-    if (leAudioDevice->csis_member_) {
-      log::info("{},  waiting for CSIS to create group for device", leAudioDevice->address_);
-      scheduleGuardForCsisAdd(leAudioDevice->address_);
-      return;
+    /* Check if CAS includes primary CSIS service and use it for adding to the group if present*/
+    if (!csis_primary_handles.empty() && cas_csis_included_handle) {
+      auto iter = std::find(csis_primary_handles.begin(), csis_primary_handles.end(),
+                            cas_csis_included_handle);
+      if (iter != csis_primary_handles.end()) {
+        log::info("{},  waiting for CSIS to create group for device", leAudioDevice->address_);
+        scheduleGuardForCsisAdd(leAudioDevice->address_);
+        return;
+      }
     }
 
     log::info("{} Not a CSIS member. Create group by our own", leAudioDevice->address_);
@@ -4731,14 +4747,13 @@ public:
     /* Send data to the controller */
     if (left_cis_handle) {
       IsoManager::GetInstance()->SendIsoData(
-              left_cis_handle, (const uint8_t*)sw_enc_left->GetDecodedSamples().data(),
-              sw_enc_left->GetDecodedSamples().size() * 2);
+              left_cis_handle, (const uint8_t*)sw_enc_left->GetDecodedSamples().data(), byte_count);
     }
 
     if (right_cis_handle) {
       IsoManager::GetInstance()->SendIsoData(
               right_cis_handle, (const uint8_t*)sw_enc_right->GetDecodedSamples().data(),
-              sw_enc_right->GetDecodedSamples().size() * 2);
+              byte_count);
     }
   }
 
@@ -4778,7 +4793,7 @@ public:
 
     IsoManager::GetInstance()->SendIsoData(cis_handle,
                                            (const uint8_t*)sw_enc_left->GetDecodedSamples().data(),
-                                           sw_enc_left->GetDecodedSamples().size() * 2);
+                                           byte_count * num_channels);
   }
 
   const struct bluetooth::le_audio::stream_configuration* GetStreamSinkConfiguration(
@@ -5264,6 +5279,8 @@ public:
     stream << "  Active group (gID): " << +active_group_id_ << "\n";
     stream << "  GATT App ID: " << +gatt_if_ << "\n";
     stream << "  TBS state: " << (in_call_ ? " In call" : "No calls") << "\n";
+    stream << "  Game mode: " << (audioContextTypeManager_->IsInGame() ? "Enabled" : "Disabled")
+           << "\n";
     stream << "  Reconnection mode: "
            << (reconnection_mode_ == BTM_BLE_BKG_CONNECT_ALLOW_LIST ? "Allow List"
                                                                     : "Targeted Announcements")
@@ -7416,11 +7433,11 @@ public:
         }
         LeAudioDeviceGroup* group = aseGroups_.FindById(leAudioDevice->group_id_);
 
-        if (event->max_pdu_mtos > 0) {
+        if (event->max_payload_mtos > 0) {
           group->SetTransportLatency(bluetooth::le_audio::types::kLeAudioDirectionSink,
                                      event->trans_lat_mtos);
         }
-        if (event->max_pdu_stom > 0) {
+        if (event->max_payload_stom > 0) {
           group->SetTransportLatency(bluetooth::le_audio::types::kLeAudioDirectionSource,
                                      event->trans_lat_stom);
         }

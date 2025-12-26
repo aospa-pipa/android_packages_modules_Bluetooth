@@ -12,16 +12,6 @@ flag {
 }
 
 flag {
-    name: "hogp_encryption_collision"
-    namespace: "bluetooth"
-    description: "HOGP host may not be able to proceed with connection if the link is getting encrypted"
-    bug: "405437978"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "wait_hid_disconnect_before_marking_unused"
     namespace: "bluetooth"
     description: "Mark device unused only after it's properly disconnected"
@@ -116,6 +106,16 @@ flag {
     namespace: "bluetooth"
     description: "Always remove background connection when hogp disconnected so it can be re-armed later"
     bug: "444365103"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "not_set_l2cap_idle_timeout_0_when_disconnect_hid"
+    namespace: "bluetooth"
+    description: "remove l2cap idle timeout to 0 when disconnect HID host"
+    bug: "458592689"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

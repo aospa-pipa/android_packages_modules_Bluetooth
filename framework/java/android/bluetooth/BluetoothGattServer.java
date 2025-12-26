@@ -62,6 +62,7 @@ import android.annotation.FlaggedApi;
 import android.annotation.Hide;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.RequiresNoPermission;
 import android.annotation.RequiresPermission;
 import android.annotation.SystemApi;
@@ -503,7 +504,6 @@ public final class BluetoothGattServer implements BluetoothProfile {
             }
         }
     }
-    ;
 
     /** Create a BluetoothGattServer proxy object. */
     /* package */ BluetoothGattServer(
@@ -757,20 +757,20 @@ public final class BluetoothGattServer implements BluetoothProfile {
      * <p>{@link BluetoothGattServerCallback#onPhyUpdate} will be triggered as a result of this
      * call, even if no PHY change happens. It is also triggered when remote device updates the PHY.
      *
-     * @param device The remote device to send this response to
-     * @param txPhy preferred transmitter PHY. Bitwise OR of any of {@link
-     *     BluetoothDevice#PHY_LE_1M_MASK}, {@link BluetoothDevice#PHY_LE_2M_MASK}, and {@link
-     *     BluetoothDevice#PHY_LE_CODED_MASK}.
-     * @param rxPhy preferred receiver PHY. Bitwise OR of any of {@link
-     *     BluetoothDevice#PHY_LE_1M_MASK}, {@link BluetoothDevice#PHY_LE_2M_MASK}, and {@link
-     *     BluetoothDevice#PHY_LE_CODED_MASK}.
+     * @param device The remote device to send this response to.
+     * @param txPhy preferred transmitter PHY.
+     * @param rxPhy preferred receiver PHY.
      * @param phyOptions preferred coding to use when transmitting on the LE Coded PHY. Can be one
      *     of {@link BluetoothDevice#PHY_OPTION_NO_PREFERRED}, {@link BluetoothDevice#PHY_OPTION_S2}
-     *     or {@link BluetoothDevice#PHY_OPTION_S8}
+     *     or {@link BluetoothDevice#PHY_OPTION_S8}.
      */
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    public void setPreferredPhy(BluetoothDevice device, int txPhy, int rxPhy, int phyOptions) {
+    public void setPreferredPhy(
+            BluetoothDevice device,
+            @BluetoothDevice.PhyMask int txPhy,
+            @BluetoothDevice.PhyMask int rxPhy,
+            int phyOptions) {
         try {
             mService.serverSetPreferredPhy(
                     mBluetoothGattServerCallback,
@@ -823,7 +823,12 @@ public final class BluetoothGattServer implements BluetoothProfile {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean sendResponse(
-            BluetoothDevice device, int requestId, int status, int offset, byte[] value) {
+            @NonNull BluetoothDevice device,
+            int requestId,
+            int status,
+            int offset,
+            @Nullable byte[] value) {
+        requireNonNull(device);
         if (VDBG) Log.d(TAG, "sendResponse() - device: " + device);
         if (mService == null || !mServerRegistered) return false;
 
@@ -897,7 +902,10 @@ public final class BluetoothGattServer implements BluetoothProfile {
      *     false} to send a notification
      * @param value the characteristic value
      * @return whether the notification has been triggered successfully
-     * @throws IllegalArgumentException if the characteristic value or service is null
+     * @throws IllegalArgumentException if the device, characteristic, value, or the
+     *     characteristic's service is null, or if the value length exceeds the maximum attribute
+     *     length of 512 bytes (As defined in GATT max attribute length (Bluetooth Core
+     *     Specification 6.1 Volume 3, Part F, section 3.2.9).
      */
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission

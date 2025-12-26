@@ -67,6 +67,10 @@ class AdapterBinder(rawBinder: IBinder) {
     }
 
     @Throws(RemoteException::class)
+    fun setName(name: String) {
+        adapterBinder.setName(name)
+    }
+
     fun updateQuietModeStatus(quietEnabled: Boolean) {
         try {
             adapterBinder.updateQuietModeStatus(quietEnabled)
@@ -80,4 +84,3 @@ class AdapterBinder(rawBinder: IBinder) {
         adapterBinder.killBluetoothProcess()
     }
 }
-

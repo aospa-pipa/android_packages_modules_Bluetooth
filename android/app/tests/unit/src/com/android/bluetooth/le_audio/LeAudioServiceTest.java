@@ -46,7 +46,9 @@ import static com.android.bluetooth.le_audio.LeAudioTmapGattServer.TMAP_ROLE_FLA
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -56,6 +58,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.app.ActivityManager;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothLeAudio;
 import android.bluetooth.BluetoothLeAudioCodecConfig;
@@ -67,6 +70,8 @@ import android.bluetooth.le.IScannerCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.BluetoothProfileConnectionInfo;
@@ -77,6 +82,7 @@ import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.sysprop.BluetoothProperties;
+import android.util.Pair;
 
 import androidx.test.filters.MediumTest;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -108,6 +114,7 @@ import org.hamcrest.core.AllOf;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -119,9 +126,12 @@ import org.mockito.hamcrest.MockitoHamcrest;
 import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
 import platform.test.runner.parameterized.Parameters;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -132,17 +142,19 @@ import java.util.Set;
 public class LeAudioServiceTest {
     @Rule public final SetFlagsRule mSetFlagsRule;
     @Rule public final StaticMockitoRule mMockitoRule = new StaticMockitoRule(Config.class);
+    @Rule public final TemporaryFolder mTempFolder = new TemporaryFolder();
 
     @Mock private AdapterService mAdapterService;
-    @Mock private ScanController mScanController;
     @Mock private ActiveDeviceManager mActiveDeviceManager;
+    @Mock private ScanController mScanController;
     @Mock private AudioManager mAudioManager;
     @Mock private DatabaseManager mDatabaseManager;
-    @Mock private BluetoothStorageManager mStorage;
     @Mock private LeAudioNativeInterface mNativeInterface;
+    @Mock private ApplicationInfo mMockApplicationInfo;
     @Mock private LeAudioBroadcasterNativeInterface mLeAudioBroadcasterNativeInterface;
     @Mock private LeAudioTmapGattServer mTmapGattServer;
-
+    @Mock private ActivityManager mActivityManager;
+    @Mock private PackageManager mPackageManager;
     @Mock private A2dpService mA2dpService;
     @Mock private BassClientService mBassClientService;
     @Mock private CsipSetCoordinatorService mCsipSetCoordinatorService;
@@ -166,8 +178,6 @@ public class LeAudioServiceTest {
     private final BluetoothDevice mSingleDevice_2 = getTestDevice(3);
     private final BluetoothDevice mBroadcastDevice = getTestDevice("FF:FF:FF:FF:FF:FF");
 
-    private LeAudioService mService;
-    private TestLooper mLooper;
     private static final int TEST_GROUP_ID = 1;
     private static final int TEST_GROUP_ID2 = 2;
     private boolean onGroupStatusCallbackCalled = false;
@@ -244,11 +254,15 @@ public class LeAudioServiceTest {
     private static final List<BluetoothLeAudioCodecConfig> OPUS_SELECTABLE_CONFIGS =
             List.of(LC3_48KHZ_16KHZ_CONFIG, OPUS_48KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG);
 
+    private LeAudioService mService;
+    private BluetoothStorageManager mStorage;
+    private TestLooper mLooper;
     private InOrder mInOrder;
 
     @Parameters(name = "{0}")
     public static List<FlagsWrapper> getParams() {
-        return FlagsWrapper.progressionOf(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK);
+        return FlagsWrapper.progressionOf(
+                Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK, Flags.FLAG_MAINLINE_BETA_STORAGE);
     }
 
     public LeAudioServiceTest(FlagsWrapper flags) {
@@ -257,7 +271,13 @@ public class LeAudioServiceTest {
 
     @Before
     public void setUp() throws Exception {
-        mInOrder = inOrder(mAdapterService, mAudioManager, mNativeInterface, mDatabaseManager);
+        doReturn(mMockApplicationInfo).when(mAdapterService).getApplicationInfo();
+        doReturn(mTempFolder.getRoot()).when(mAdapterService).getFilesDir();
+        doAnswer(it -> new File(mTempFolder.getRoot(), it.getArgument(0)))
+                .when(mAdapterService)
+                .getDatabasePath(anyString());
+
+        doReturn(mAdapterService).when(mAdapterService).createDeviceProtectedStorageContext();
         mBondedDevices.clear();
 
         mockGetSystemService(mAdapterService, AudioManager.class, mAudioManager);
@@ -274,7 +294,6 @@ public class LeAudioServiceTest {
         ExtendedMockito.doReturn(true)
                 .when(() -> Config.isProfileSupported(BluetoothProfile.LE_AUDIO));
 
-        doReturn(mActiveDeviceManager).when(mAdapterService).getActiveDeviceManager();
         doReturn(mDatabaseManager).when(mAdapterService).getDatabaseManager();
         doReturn(Optional.of(mTbsService)).when(mAdapterService).getTbsService();
 
@@ -289,7 +308,6 @@ public class LeAudioServiceTest {
                         })
                 .when(mScanController)
                 .doOnScanThread(any(Runnable.class));
-        doReturn(mScanController).when(mAdapterService).getBluetoothScanController();
         mockGetSystemService(mAdapterService, AudioManager.class, mAudioManager);
         doAnswer(invocation -> mBondedDevices.toArray(new BluetoothDevice[] {}))
                 .when(mAdapterService)
@@ -331,13 +349,30 @@ public class LeAudioServiceTest {
 
         mLooper = new TestLooper();
 
+        if (Flags.mainlineBetaStorage()) {
+            mStorage = Mockito.spy(new BluetoothStorageManager(mAdapterService));
+        } else {
+            mStorage = Mockito.mock(BluetoothStorageManager.class);
+        }
+        mInOrder =
+                inOrder(
+                        mAdapterService,
+                        mAudioManager,
+                        mNativeInterface,
+                        mDatabaseManager,
+                        mStorage);
+
         mService =
                 new LeAudioService(
                         mAdapterService,
                         mStorage,
-                        mLooper.getLooper(),
                         mNativeInterface,
-                        mLeAudioBroadcasterNativeInterface);
+                        mLeAudioBroadcasterNativeInterface,
+                        mActiveDeviceManager,
+                        mScanController,
+                        mLooper.getLooper(),
+                        mActivityManager,
+                        mPackageManager);
         mService.setAvailable(true);
 
         LeAudioStackEvent stackEvent =
@@ -415,9 +450,13 @@ public class LeAudioServiceTest {
                 new LeAudioService(
                                 mAdapterService,
                                 mStorage,
-                                mLooper.getLooper(),
                                 mNativeInterface,
-                                mLeAudioBroadcasterNativeInterface)
+                                mLeAudioBroadcasterNativeInterface,
+                                mActiveDeviceManager,
+                                mScanController,
+                                mLooper.getLooper(),
+                                mActivityManager,
+                                mPackageManager)
                         .getTmapRoleMask();
         assertThat(mask).isEqualTo(expectedMasks);
     }
@@ -2423,11 +2462,19 @@ public class LeAudioServiceTest {
         /* AUDIO_DIRECTION_OUTPUT_BIT = 0x01 */
         int direction = 1;
         int availableContexts = 4;
+        List<BluetoothDevice> devices = new ArrayList<>();
+        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
+        when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
+        doReturn(mLeftDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
+
+        devices.add(mLeftDevice);
         connectTestDevice(mLeftDevice, TEST_GROUP_ID);
+        devices.add(0, mRightDevice);
         connectTestDevice(mRightDevice, TEST_GROUP_ID);
         assertThat(mService.setActiveDevice(mLeftDevice)).isFalse();
 
+        devices.add(0, mSingleDevice);
         connectTestDevice(mSingleDevice, TEST_GROUP_ID2);
 
         ArgumentCaptor<BluetoothProfileConnectionInfo> profileInfo =
@@ -2461,7 +2508,9 @@ public class LeAudioServiceTest {
         mService.setVolume(newVolume);
         verify(mVolumeControlService, never()).setGroupVolume(TEST_GROUP_ID, newVolume);
 
-        mService.mUnicastGroupIdDeactivatedForBroadcastTransition = TEST_GROUP_ID;
+        broadcastReceivers.addAll(Arrays.asList(mLeftDevice, mRightDevice, mSingleDevice));
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+
         // Verify setGroupVolume will be called if synced sinks
         doReturn(List.of(mLeftDevice, mRightDevice, mSingleDevice))
                 .when(mBassClientService)
@@ -2942,7 +2991,12 @@ public class LeAudioServiceTest {
         injectAndVerifyDeviceConnected(mLeftDevice);
         injectAudioConfChanged(mSingleDevice, TEST_GROUP_ID, availableContexts, direction);
 
-        verify(mScanController).registerScannerInternal(scanCallbacks.capture(), any(), any());
+        if (Flags.scanRegisterAndStart()) {
+            verify(mScanController)
+                    .registerAndStartScanInternal(scanCallbacks.capture(), any(), any(), any());
+        } else {
+            verify(mScanController).registerScannerInternal(scanCallbacks.capture(), any(), any());
+        }
 
         ScanResult scanResult = new ScanResult(mRightDevice, null, 0, 0);
 
@@ -3249,8 +3303,72 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
+    @EnableFlags({
+        Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API,
+        Flags.FLAG_MAINLINE_BETA_STORAGE
+    })
     public void testSetCodecConfigPreference() {
+        assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
+
+        connectTestDevice(mSingleDevice, TEST_GROUP_ID);
+
+        // Add location support
+        injectAudioConfChanged(
+                mSingleDevice,
+                TEST_GROUP_ID,
+                BluetoothLeAudio.CONTEXT_TYPE_RINGTONE,
+                0x01 /*AUDIO_DIRECTION_OUTPUT_BIT*/);
+
+        assertThat(mService.setActiveDevice(mSingleDevice)).isTrue();
+        mInOrder.verify(mNativeInterface).groupSetActive(TEST_GROUP_ID);
+
+        // Set group and device as active
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_ACTIVE);
+
+        // Set the initial group codec status
+        injectGroupSelectableCodecConfigChanged(
+                TEST_GROUP_ID, OPUS_SELECTABLE_CONFIGS, OPUS_SELECTABLE_CONFIGS);
+        injectGroupCurrentCodecConfigChanged(TEST_GROUP_ID, LC3_16KHZ_CONFIG, LC3_48KHZ_CONFIG);
+
+        // Update of codec config preference with LC3_16KHZ_CONFIG
+        mService.setCodecConfigPreference(TEST_GROUP_ID, LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG);
+        mInOrder.verify(mStorage)
+                .setLeAudioCodecPreferences(
+                        List.of(mSingleDevice),
+                        Map.of(
+                                LC3_16KHZ_CONFIG.getCodecType(),
+                                new Pair<>(LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG)));
+
+        // Update of codec config preference with OPUS_48KHZ_CONFIG
+        mService.setCodecConfigPreference(TEST_GROUP_ID, OPUS_48KHZ_CONFIG, OPUS_48KHZ_CONFIG);
+        mInOrder.verify(mStorage)
+                .setLeAudioCodecPreferences(
+                        List.of(mSingleDevice),
+                        Map.of(
+                                LC3_16KHZ_CONFIG.getCodecType(),
+                                new Pair<>(LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG),
+                                OPUS_48KHZ_CONFIG.getCodecType(),
+                                new Pair<>(OPUS_48KHZ_CONFIG, OPUS_48KHZ_CONFIG)));
+
+        // Update of codec config preference with OPUS_HI_RES_96KHZ_CONFIG
+        mService.setCodecConfigPreference(
+                TEST_GROUP_ID, OPUS_HI_RES_96KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG);
+        mInOrder.verify(mStorage)
+                .setLeAudioCodecPreferences(
+                        List.of(mSingleDevice),
+                        Map.of(
+                                LC3_16KHZ_CONFIG.getCodecType(),
+                                new Pair<>(LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG),
+                                OPUS_48KHZ_CONFIG.getCodecType(),
+                                new Pair<>(OPUS_48KHZ_CONFIG, OPUS_48KHZ_CONFIG),
+                                OPUS_HI_RES_96KHZ_CONFIG.getCodecType(),
+                                new Pair<>(OPUS_HI_RES_96KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG)));
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
+    @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
+    public void testSetCodecConfigPreference_old() {
         // Not connected device
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
 
@@ -3307,8 +3425,62 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
+    @EnableFlags({
+        Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API,
+        Flags.FLAG_MAINLINE_BETA_STORAGE
+    })
     public void testCodecConfigPreferenceRestore() {
+        assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
+        connectTestDevice(mSingleDevice, TEST_GROUP_ID);
+
+        // Add location support
+        injectAudioConfChanged(
+                mSingleDevice,
+                TEST_GROUP_ID,
+                BluetoothLeAudio.CONTEXT_TYPE_RINGTONE,
+                0x01 /*AUDIO_DIRECTION_OUTPUT_BIT*/);
+
+        assertThat(mService.setActiveDevice(mSingleDevice)).isTrue();
+        mInOrder.verify(mNativeInterface).groupSetActive(TEST_GROUP_ID);
+
+        // Set group and device as active
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_ACTIVE);
+
+        // Set the initial group codec status
+        injectGroupSelectableCodecConfigChanged(
+                TEST_GROUP_ID, OPUS_SELECTABLE_CONFIGS, OPUS_SELECTABLE_CONFIGS);
+        injectGroupCurrentCodecConfigChanged(TEST_GROUP_ID, LC3_16KHZ_CONFIG, LC3_48KHZ_CONFIG);
+
+        mService.setCodecConfigPreference(TEST_GROUP_ID, LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG);
+        mService.setCodecConfigPreference(TEST_GROUP_ID, OPUS_48KHZ_CONFIG, OPUS_48KHZ_CONFIG);
+        mService.setCodecConfigPreference(
+                TEST_GROUP_ID, OPUS_HI_RES_96KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG);
+
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_INACTIVE);
+
+        // Set group and device as active.
+        injectGroupStatusChange(TEST_GROUP_ID, LeAudioStackEvent.GROUP_STATUS_ACTIVE);
+        injectGroupSelectableCodecConfigChanged(
+                TEST_GROUP_ID, OPUS_SELECTABLE_CONFIGS, OPUS_SELECTABLE_CONFIGS);
+        injectGroupCurrentCodecConfigChanged(
+                TEST_GROUP_ID, OPUS_HI_RES_96KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG);
+
+        // Verify if preferences were retrieved and reapplied to native
+        mInOrder.verify(mStorage).getLeAudioCodecPreferences(List.of(mSingleDevice));
+
+        mInOrder.verify(mNativeInterface)
+                .setCodecConfigPreference(TEST_GROUP_ID, LC3_16KHZ_CONFIG, LC3_16KHZ_CONFIG);
+        mInOrder.verify(mNativeInterface)
+                .setCodecConfigPreference(TEST_GROUP_ID, OPUS_48KHZ_CONFIG, OPUS_48KHZ_CONFIG);
+        mInOrder.verify(mNativeInterface)
+                .setCodecConfigPreference(
+                        TEST_GROUP_ID, OPUS_HI_RES_96KHZ_CONFIG, OPUS_HI_RES_96KHZ_CONFIG);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
+    @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
+    public void testCodecConfigPreferenceRestore_old() {
         // Not connected device
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
 
@@ -3393,6 +3565,7 @@ public class LeAudioServiceTest {
 
     @Test
     @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
+    @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testSetGetCodecConfigPreferenceOpus() {
         // Not connected device
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
@@ -3493,8 +3666,10 @@ public class LeAudioServiceTest {
         int direction = 1;
         int availableContexts = 5 + BluetoothLeAudio.CONTEXT_TYPE_RINGTONE;
         List<BluetoothDevice> devices = new ArrayList<>();
+        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
         when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
+        doReturn(mSingleDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
 
         // Not connected device
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
@@ -3504,6 +3679,10 @@ public class LeAudioServiceTest {
         // Connect device
         devices.add(mSingleDevice);
         connectTestDevice(mSingleDevice, TEST_GROUP_ID);
+
+        /* Mock device1 as receiving broadcast device */
+        broadcastReceivers.add(mSingleDevice);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
 
         // Group should be updated to default (earliest connected)
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(TEST_GROUP_ID);
@@ -3526,9 +3705,13 @@ public class LeAudioServiceTest {
         mService.setBroadcastToUnicastFallbackGroup(TEST_GROUP_ID2);
 
         // Connect second device
-        devices.add(mLeftDevice);
+        devices.add(0, mLeftDevice);
         connectTestDevice(mLeftDevice, TEST_GROUP_ID2);
         mService.deviceConnected(mLeftDevice);
+
+        /* Mock device2 as receiving broadcast device */
+        broadcastReceivers.add(mLeftDevice);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
 
         // Fallback device should remain earliest connected
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(TEST_GROUP_ID);
@@ -3556,11 +3739,7 @@ public class LeAudioServiceTest {
         mostRecentDevices.add(mLeftDevice);
         mostRecentDevices.add(mRightDevice);
         doReturn(mostRecentDevices).when(mDatabaseManager).getMostRecentlyConnectedDevices();
-
-        // Prepare: List of broadcast receivers containing only the newer device.
-        Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
-        broadcastReceivers.add(mRightDevice);
-        broadcastReceivers.add(mSingleDevice);
+        doReturn(mRightDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
 
         // Connect devices to groups and create descriptors.
         int groupIdLeft = 1;
@@ -3571,7 +3750,7 @@ public class LeAudioServiceTest {
         connectTestDevice(mSingleDevice, groupIdSingle);
 
         // Invoke the new group selection function.
-        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(Set.of(mRightDevice, mSingleDevice));
 
         // Verification: Although mLeftDevice is in the "mostRecent" list, it is not a receiver,
         // so the selected group is from mRightDevice, which is the oldest connection among the
@@ -3579,9 +3758,8 @@ public class LeAudioServiceTest {
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(groupIdRight);
 
         // Change the list of receivers to contain only the oldest device.
-        broadcastReceivers.clear();
-        broadcastReceivers.add(mLeftDevice);
-        mService.selectDefaultBroadcastToUnicastFallbackGroup(broadcastReceivers);
+        doReturn(mLeftDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
+        mService.selectDefaultBroadcastToUnicastFallbackGroup(Set.of(mLeftDevice));
 
         // Verification: Now the selected group is from mLeftDevice.
         assertThat(mService.getBroadcastToUnicastFallbackGroup()).isEqualTo(groupIdLeft);
@@ -3605,6 +3783,168 @@ public class LeAudioServiceTest {
             assertThat(mService.mLeAudioCallbacks.beginBroadcast()).isEqualTo(0);
             mService.mLeAudioCallbacks.finishBroadcast();
         }
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_GAME_DETECTOR)
+    public void testGameModeActivation_singleGame() throws Exception {
+        int testUid = 1001;
+        String gamePackageName = "com.example.game";
+
+        // Mock package manager to identify the app as a game
+        when(mPackageManager.getPackagesForUid(testUid)).thenReturn(new String[] {gamePackageName});
+        ApplicationInfo gameAppInfo = new ApplicationInfo();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            gameAppInfo.category = ApplicationInfo.CATEGORY_GAME;
+        } else {
+            gameAppInfo.flags = ApplicationInfo.FLAG_IS_GAME;
+        }
+
+        when(mPackageManager.getApplicationInfo(eq(gamePackageName), anyInt()))
+                .thenReturn(gameAppInfo);
+
+        ArgumentCaptor<ActivityManager.OnUidImportanceListener> listenerCaptor =
+                ArgumentCaptor.forClass(ActivityManager.OnUidImportanceListener.class);
+
+        verify(mActivityManager)
+                .addOnUidImportanceListener(
+                        listenerCaptor.capture(),
+                        eq(ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE));
+
+        // Initial state: no games running
+        assertThat(mService.mGameTrackingList).isEmpty();
+        verify(mNativeInterface, never()).setInGame(anyBoolean());
+
+        // 1. Game app comes to foreground
+        listenerCaptor
+                .getValue()
+                .onUidImportance(
+                        testUid, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+
+        // Verify game mode is enabled
+        verify(mNativeInterface).setInGame(true);
+        assertThat(mService.mGameTrackingList).hasSize(1);
+        assertThat(mService.mGameTrackingList.get(0).getUid()).isEqualTo(testUid);
+
+        // 2. Game app goes to background (cached)
+        listenerCaptor
+                .getValue()
+                .onUidImportance(testUid, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mLooper.dispatchAll();
+
+        // Verify game mode is still enabled, and background monitor is active
+        verify(mNativeInterface, times(1)).setInGame(true); // no change
+        assertThat(mService.mGameTrackingList).hasSize(1);
+        assertThat(mService.mGameTrackingList.get(0).isBackgroundMonitorActive()).isTrue();
+
+        // 3. Game app is gone
+        listenerCaptor
+                .getValue()
+                .onUidImportance(testUid, ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE);
+        mLooper.dispatchAll();
+
+        // Verify game mode is disabled
+        verify(mNativeInterface).setInGame(false);
+        assertThat(mService.mGameTrackingList).isEmpty();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_GAME_DETECTOR)
+    public void testGameModeActivation_multipleGames() throws Exception {
+        int testUid1 = 1001;
+        String gamePackageName1 = "com.example.game1";
+        int testUid2 = 1002;
+        String gamePackageName2 = "com.example.game2";
+
+        // Mock package manager for two game apps
+        when(mPackageManager.getPackagesForUid(testUid1))
+                .thenReturn(new String[] {gamePackageName1});
+        when(mPackageManager.getPackagesForUid(testUid2))
+                .thenReturn(new String[] {gamePackageName2});
+        ApplicationInfo gameAppInfo = new ApplicationInfo();
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            gameAppInfo.category = ApplicationInfo.CATEGORY_GAME;
+        } else {
+            gameAppInfo.flags = ApplicationInfo.FLAG_IS_GAME;
+        }
+        when(mPackageManager.getApplicationInfo(eq(gamePackageName1), anyInt()))
+                .thenReturn(gameAppInfo);
+        when(mPackageManager.getApplicationInfo(eq(gamePackageName2), anyInt()))
+                .thenReturn(gameAppInfo);
+
+        ArgumentCaptor<ActivityManager.OnUidImportanceListener> listenerCaptor =
+                ArgumentCaptor.forClass(ActivityManager.OnUidImportanceListener.class);
+
+        verify(mActivityManager)
+                .addOnUidImportanceListener(
+                        listenerCaptor.capture(),
+                        eq(ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE));
+        // Initial state
+        assertThat(mService.mGameTrackingList).isEmpty();
+
+        // 1. First game app comes to foreground
+        listenerCaptor
+                .getValue()
+                .onUidImportance(
+                        testUid1, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+
+        // Verify game mode is enabled
+        verify(mNativeInterface, times(1)).setInGame(true);
+        assertThat(mService.mGameTrackingList).hasSize(1);
+
+        // 2. Second game app comes to foreground
+        listenerCaptor
+                .getValue()
+                .onUidImportance(
+                        testUid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+
+        // Verify setInGame(true) is not called again
+        verify(mNativeInterface, times(1)).setInGame(true);
+        assertThat(mService.mGameTrackingList).hasSize(2);
+
+        // 3. First game app goes away
+        listenerCaptor
+                .getValue()
+                .onUidImportance(testUid1, ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE);
+        mLooper.dispatchAll();
+
+        // Verify game mode is still enabled
+        verify(mNativeInterface, never()).setInGame(false);
+        assertThat(mService.mGameTrackingList).hasSize(1);
+
+        // 4. Second game app goes to background (cached)
+        listenerCaptor
+                .getValue()
+                .onUidImportance(testUid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mLooper.dispatchAll();
+
+        // Verify game mode is still enabled and background monitor is active
+        verify(mNativeInterface, never()).setInGame(false);
+        assertThat(mService.mGameTrackingList).hasSize(1);
+        assertThat(mService.mGameTrackingList.get(0).isBackgroundMonitorActive()).isTrue();
+
+        // 5. Second game app comes back to foreground
+        listenerCaptor
+                .getValue()
+                .onUidImportance(
+                        testUid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+
+        // Verify background monitor is stopped
+        assertThat(mService.mGameTrackingList.get(0).isBackgroundMonitorActive()).isFalse();
+
+        // 6. Second game app finally goes away
+        listenerCaptor
+                .getValue()
+                .onUidImportance(testUid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE);
+        mLooper.dispatchAll();
+
+        // Verify game mode is disabled
+        verify(mNativeInterface).setInGame(false);
+        assertThat(mService.mGameTrackingList).isEmpty();
     }
 
     private void verifyActiveDeviceStateIntent(BluetoothDevice device) {

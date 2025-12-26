@@ -26,16 +26,18 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.IBluetoothScan
 import android.bluetooth.le.IPeriodicAdvertisingCallback
 import android.bluetooth.le.IScannerCallback
+import android.bluetooth.le.ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.AttributionSource
 import android.os.WorkSource
 import android.util.Log
-import com.android.bluetooth.Utils.checkScanPermissionForDataDelivery
+import com.android.bluetooth.Util.enforceScanPermissionForDataDelivery
 import com.android.bluetooth.btservice.AdapterService
+import com.android.bluetooth.le_scan.ScanUtil.toStringShort
 
-private const val TAG = "ScanBinder"
+private const val TAG = ScanUtil.TAG_PREFIX + "ScanBinder"
 
 class ScanBinder(
     private val adapterService: AdapterService,
@@ -60,15 +62,12 @@ class ScanBinder(
 
     @RequiresPermission(BLUETOOTH_SCAN)
     private fun getController(source: AttributionSource, method: String): ScanController? {
-        if (
-            !isAvailable || !checkScanPermissionForDataDelivery(adapterService, source, TAG, method)
-        ) {
-            return null
-        }
-
+        if (!isAvailable) return null
+        if (!enforceScanPermissionForDataDelivery(adapterService, source, TAG, method)) return null
         return scanController
     }
 
+    // TODO(b/455057044) Delete on flag cleanup
     override fun registerScanner(
         callback: IScannerCallback,
         settings: ScanSettings,
@@ -85,10 +84,27 @@ class ScanBinder(
         }
     }
 
+    override fun registerAndStartScan(
+        callback: IScannerCallback,
+        settings: ScanSettings,
+        filters: List<ScanFilter>,
+        workSource: WorkSource?,
+        source: AttributionSource,
+    ) {
+        enforcePrivilegedPermissionIfNeeded(settings, filters)
+        if (workSource != null) {
+            adapterService.enforceCallingOrSelfPermission(UPDATE_DEVICE_STATS, null)
+        }
+        withControllerRunOnScanThread(source, "registerAndStartScan") {
+            registerAndStartScan(callback, workSource, source, settings, filters)
+        } ?: run { callback.onScannerRegistered(SCAN_FAILED_APPLICATION_REGISTRATION_FAILED, -1) }
+    }
+
     override fun unregisterScanner(scannerId: Int, source: AttributionSource) {
         withControllerRunOnScanThread(source, "unregisterScanner") { unregisterScanner(scannerId) }
     }
 
+    // TODO(b/455057044) Delete on flag cleanup
     override fun startScan(
         scannerId: Int,
         settings: ScanSettings,
@@ -176,6 +192,8 @@ class ScanBinder(
         settings: ScanSettings,
         filters: List<ScanFilter>,
     ) {
+        Log.d(TAG, "enforcePrivilegedPermissionIfNeeded(${settings.toStringShort()}, $filters")
+
         fun needsPrivilegedPermissionForScan(settings: ScanSettings): Boolean {
             // BLE scan only mode needs special permission.
             if (adapterService.getState() != BluetoothAdapter.STATE_ON) {
@@ -218,15 +236,6 @@ class ScanBinder(
                     }
                 }
             }
-
-        Log.d(
-            TAG,
-            "enforcePrivilegedPermissionIfNeeded: " +
-                "scanMode=${ScanUtil.scanModeToString(settings.scanMode)}, " +
-                "reportDelayMillis=${settings.reportDelayMillis}, " +
-                "scanResultType=${settings.scanResultType}, " +
-                "filters=$filters",
-        )
 
         if (needsPrivilegedPermissionForScan(settings)) {
             adapterService.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null)

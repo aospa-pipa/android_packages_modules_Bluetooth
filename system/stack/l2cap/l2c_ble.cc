@@ -90,6 +90,15 @@ hci_role_t L2CA_GetBleConnRole(const RawAddress& bd_addr) {
   return p_lcb->LinkRole();
 }
 
+uint16_t L2CA_GetBleSubrateFactor(const RawAddress& bd_addr) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_LE);
+  if (p_lcb == nullptr) {
+    log::error("lcb for {} is not available", bd_addr);
+    return 0;
+  }
+  return p_lcb->SubrateFactor();
+}
+
 uint16_t L2CA_GetBleConnInterval(const RawAddress& bd_addr) {
   tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_LE);
   if (p_lcb == nullptr) {
@@ -97,6 +106,24 @@ uint16_t L2CA_GetBleConnInterval(const RawAddress& bd_addr) {
     return 0;
   }
   return p_lcb->ConnInterval();
+}
+
+uint16_t L2CA_GetBlePeriphLatency(const RawAddress& bd_addr) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_LE);
+  if (p_lcb == nullptr) {
+    log::error("lcb for {} is not available", bd_addr);
+    return 0;
+  }
+  return p_lcb->PeriphLatency();
+}
+
+uint16_t L2CA_GetBleSupervisionTimeout(const RawAddress& bd_addr) {
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_LE);
+  if (p_lcb == nullptr) {
+    log::error("lcb for {} is not available", bd_addr);
+    return 0;
+  }
+  return p_lcb->SupervisionTimeout();
 }
 
 /*******************************************************************************
@@ -185,7 +212,9 @@ bool l2cble_conn_comp(uint16_t handle, tHCI_ROLE role, const RawAddress& bda,
   p_lcb->min_interval = p_lcb->max_interval = conn_interval;
   p_lcb->SetConnInterval(conn_interval);
   p_lcb->timeout = conn_timeout;
+  p_lcb->SetSupervisionTimeout(conn_timeout);
   p_lcb->latency = conn_latency;
+  p_lcb->SetPeriphLatency(conn_latency);
   p_lcb->conn_update_mask = L2C_BLE_NOT_DEFAULT_PARAM;
   if (com_android_bluetooth_flags_initial_conn_params_p1()) {
     uint16_t min_conn_interval_aggressive = LeConnectionParameters::GetMinConnIntervalAggressive();
@@ -630,9 +659,14 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
             l2cu_send_peer_disc_req(temp_p_ccb);
 
             temp_p_ccb = l2cu_find_ccb_by_cid(p_lcb, cid);
-            con_info.l2cap_result = static_cast<tL2CAP_CONN>(
-                    tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_UNACCEPTABLE_PARAMETERS);
-            l2c_csm_execute(temp_p_ccb, L2CEVT_L2CAP_CREDIT_BASED_CONNECT_RSP_NEG, &con_info);
+
+            if (temp_p_ccb != nullptr) {
+              con_info.l2cap_result = static_cast<tL2CAP_CONN>(
+                      tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_UNACCEPTABLE_PARAMETERS);
+              l2c_csm_execute(temp_p_ccb, L2CEVT_L2CAP_CREDIT_BASED_CONNECT_RSP_NEG, &con_info);
+            } else {
+              log::error("L2CAP - cannot find CCB for cid: {}", cid);
+            }
             continue;
           }
         }

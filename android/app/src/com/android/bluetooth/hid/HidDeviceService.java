@@ -87,7 +87,7 @@ public class HidDeviceService extends ProfileService {
             AdapterService adapterService,
             Looper looper,
             HidDeviceNativeInterface nativeInterface) {
-        super(BluetoothProfile.HID_DEVICE, requireNonNull(adapterService));
+        super(BluetoothProfile.HID_DEVICE, adapterService);
         mHandler = new HidDeviceServiceHandler(requireNonNull(looper));
         var nativeCallback = new HidDeviceNativeCallback(adapterService, this);
         mNativeInterface =
@@ -583,8 +583,9 @@ public class HidDeviceService extends ProfileService {
             return;
         }
 
-        mAdapterService.updateProfileConnectionAdapterProperties(
-                device, mProfileId, newState, prevState);
+        getAdapterService()
+                .updateProfileConnectionAdapterProperties(
+                        device, getProfileId(), newState, prevState);
 
         Intent intent = new Intent(BluetoothHidDevice.ACTION_CONNECTION_STATE_CHANGED);
         intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
