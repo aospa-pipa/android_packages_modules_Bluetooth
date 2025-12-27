@@ -1638,7 +1638,8 @@ static void bta_ag_hsp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
       /* close sco (also when codec negotiation is in progress) */
       if ((bta_ag_sco_is_open(p_scb) ||
            bta_ag_sco_is_opening(p_scb) ||
-           bta_ag_sco_is_codec_negotiating(p_scb)) &&
+           (com_android_bluetooth_flags_call_end_codec_negotiation() &&
+            bta_ag_sco_is_codec_negotiating(p_scb))) &&
           !(p_scb->features & BTA_AG_FEAT_NOSCO)) {
         bta_ag_sco_close(p_scb, tBTA_AG_DATA::kEmpty);
       } else {
@@ -1861,7 +1862,8 @@ static void bta_ag_hfp_result(tBTA_AG_SCB* p_scb, const tBTA_AG_API_RESULT& resu
       /* if sco open/opening or codec negotiating, close sco then send indicator values */
       if ((bta_ag_sco_is_open(p_scb) ||
            bta_ag_sco_is_opening(p_scb) ||
-           bta_ag_sco_is_codec_negotiating(p_scb)) &&
+           (com_android_bluetooth_flags_call_end_codec_negotiation() &&
+            bta_ag_sco_is_codec_negotiating(p_scb))) &&
           !(p_scb->features & BTA_AG_FEAT_NOSCO)) {
         p_scb->post_sco = BTA_AG_POST_SCO_CALL_END;
         bta_ag_sco_close(p_scb, tBTA_AG_DATA::kEmpty);

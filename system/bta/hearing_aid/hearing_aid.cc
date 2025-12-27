@@ -900,14 +900,8 @@ public:
        * Just in case, log such occurrence, letting us know we may use the old handle.
        */
       if (hearingDevice->service_changed_rcvd) {
-        if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-          log::error("Service change received before PSM read. Read omitted.");
-          return;
-        } else {
-          log::error(
-                  "Service change received before PSM read."
-                  "Attempting to read PSM using old handle");
-        }
+        log::error("Service change received before PSM read. Read omitted.");
+        return;
       }
       log::info("[gatt] ReadCharacteristic conn_id={:#x} handle=PSM({:#x})", hearingDevice->conn_id,
                 hearingDevice->read_psm_handle);
@@ -1177,14 +1171,8 @@ public:
      * Just in case, log such occurrence, letting us know we may use the old handle.
      */
     if (hearingDevice->service_changed_rcvd) {
-      if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-        log::error("Stream is starting, but service change received. Aborting.");
-        return;
-      } else {
-        log::error(
-                "Service change received, but stream is starting."
-                "Attempting to subscribe Audio Status using old handle");
-      }
+      log::error("Stream is starting, but service change received. Aborting.");
+      return;
     }
 
     log::info(
@@ -1271,15 +1259,10 @@ public:
          * Just in case, log such occurrence, letting us know we may use the old handle.
          */
         if (device.service_changed_rcvd) {
-          if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-            log::error(
-                    "Service change received during active stream."
-                    "Omit write to Audio Control Point");
-            return;
-          }
           log::error(
-                  "Service change received, but stream is active."
-                  "Attempting to write using old Audio Control Point handle");
+                  "Service change received during active stream."
+                  "Omit write to Audio Control Point");
+          return;
         }
 
         log::info(
@@ -1352,15 +1335,10 @@ public:
      * Just in case, log such occurrence, letting us know we may use the old handle.
      */
     if (device->service_changed_rcvd) {
-      if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-        log::error(
-                "Service change received, but stream is starting."
-                "Omit write to Service Changed CCC");
-        return;
-      }
       log::error(
               "Service change received, but stream is starting."
-              "Attempting to subscribe Service Changed using old handle");
+              "Omit write to Service Changed CCC");
+      return;
     }
 
     log::info(
@@ -1401,15 +1379,10 @@ public:
        * Just in case, log such occurrence, letting us know we may use the old handle.
        */
       if (device->service_changed_rcvd) {
-        if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-          log::error(
-                  "Service change received, but stream is starting."
-                  "Omit write using to Audio Control Point");
-          return;
-        }
         log::error(
                 "Service change received, but stream is starting."
-                "Attempting to write using old Audio Control Point handle");
+                "Omit write using to Audio Control Point");
+        return;
       }
 
       log::info(
@@ -2019,14 +1992,11 @@ public:
 
       std::vector<uint8_t> volume_value({static_cast<unsigned char>(volume)});
       if (device.volume_handle == 0 || device.service_changed_rcvd) {
-        if (com_android_bluetooth_flags_asha_omit_gatt_after_svc_changed()) {
-          log::error(
-                  "Volume handle not set or service changed received: bd_addr={}"
-                  "Write to Volume omitted",
-                  device.address);
-          return;
-        }
-        log::error("Volume handle not set or service changed received: bd_addr={}", device.address);
+        log::error(
+                "Volume handle not set or service changed received: bd_addr={}"
+                "Write to Volume omitted",
+                device.address);
+        return;
       }
 
       log::info("[gatt] WriteCharacteristic conn_id={:#x} handle=Volume({:#x}) value=[{:#x}]",
