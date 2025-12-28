@@ -22,6 +22,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_fix_clear_cises_in_the_cig"
+    namespace: "bluetooth"
+    description: "Improve operations around CIG, especially on the occasion of the controller issue."
+    bug: "465088801"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_fix_stop_stream_race"
     namespace: "bluetooth"
     description: "Fix race when resume is called just after stream release"
@@ -29,6 +39,14 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "leaudio_codec_id_support"
+    is_exported: true
+    namespace: "bluetooth"
+    description: "Allow application to get any codec id along with vendor specific codecs information"
+    bug: "463280176"
 }
 
 flag {
@@ -198,30 +216,10 @@ flag {
 }
 
 flag {
-    name: "leaudio_do_not_set_autoconnecting_on_connected_device"
-    namespace: "bluetooth"
-    description: "When `autoConnect` triggers, do not set CONNECTING_AUTOCONNECT for device that is already in CONNECTED state."
-    bug: "407958032"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "leaudio_broadcast_source_channel_map_classification"
     namespace: "bluetooth"
     description: "Uses channel classification from buds who synced with the phone's broadcast stream to determine the BIG channel map"
     bug: "417110361"
-}
-
-flag {
-    name: "leaudio_check_ecosystem_base_interval_support"
-    namespace: "bluetooth"
-    description: "Before sending Set Ecosystem Base Interval command, check that the controller actually supports it"
-    bug: "422626923"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {

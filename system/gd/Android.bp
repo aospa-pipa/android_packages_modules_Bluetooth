@@ -123,7 +123,6 @@ cc_defaults {
         "hci/le_scanning_reassembler.cc",
         "hci/msft.cc",
         "hci/remote_name_request_impl.cc",
-        "hci/uuid.cc",
         "lpp/lpp_offload_manager.cc",
         "os/rand.cc",
         "os/system_properties_common.cc",
@@ -131,8 +130,6 @@ cc_defaults {
         "storage/config_cache_helper.cc",
         "storage/device.cc",
         "storage/legacy_config_file.cc",
-        "storage/mutation.cc",
-        "storage/mutation_entry.cc",
         "storage/storage_module.cc",
     ],
     shared_libs: [
@@ -508,7 +505,6 @@ cc_test {
         "hci/le_scanning_reassembler_test.cc",
         "hci/msft_unittest.cc",
         "hci/remote_name_request_impl_test.cc",
-        "hci/uuid_unittest.cc",
         "os/handler_unittest.cc",
         "os/parameter_provider_test.cc",
         "os/system_properties_common_test.cc",
@@ -517,7 +513,6 @@ cc_test {
         "storage/device_test.cc",
         "storage/le_device_test.cc",
         "storage/legacy_config_file_test.cc",
-        "storage/mutation_test.cc",
         "storage/storage_module_test.cc",
     ],
     cflags: [

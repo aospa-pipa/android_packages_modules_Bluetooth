@@ -1,9 +1,9 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * You may obtain a copy of the License at:
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,27 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <queue>
+#include "common/message_loop_thread.h"
+#include "stack/include/main_thread.h"
 
-#include "storage/config_cache.h"
-#include "storage/mutation_entry.h"
+extern bluetooth::common::MessageLoopThread message_loop_thread;
 
-namespace bluetooth {
-namespace storage {
-
-class Mutation {
-public:
-  Mutation(ConfigCache* config);
-  void Add(MutationEntry entry);
-  void Commit();
-  friend ConfigCache;
-
-private:
-  ConfigCache* config_;
-  std::queue<MutationEntry> normal_config_entries_;
-};
-
-}  // namespace storage
-}  // namespace bluetooth
+bluetooth::common::MessageLoopThread* get_main_thread();
+void init_message_loop_thread(void);
+void cleanup_message_loop_thread(void);
+void SyncOnMainLoop();
