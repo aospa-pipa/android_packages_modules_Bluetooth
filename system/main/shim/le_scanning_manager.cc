@@ -138,9 +138,8 @@ void BleScannerInterfaceImpl::Init() {
 }
 
 /** Registers a scanner with the stack */
-void BleScannerInterfaceImpl::RegisterScanner(const bluetooth::Uuid& uuid, RegisterCallback) {
-  auto app_uuid = bluetooth::hci::Uuid::From128BitBE(uuid.To128BitBE());
-  log::info("in shim layer, UUID={}", app_uuid.ToString());
+void BleScannerInterfaceImpl::RegisterScanner(const bluetooth::Uuid& app_uuid, RegisterCallback) {
+  log::info("in shim layer, UUID={}", app_uuid);
   bluetooth::shim::GetScanning()->RegisterScanner(app_uuid);
 }
 
@@ -483,12 +482,12 @@ void BleScannerInterfaceImpl::RegisterCallbacksNative(ScanningCallbacks* callbac
   }
 }
 
-void BleScannerInterfaceImpl::OnScannerRegistered(const bluetooth::hci::Uuid app_uuid,
+void BleScannerInterfaceImpl::OnScannerRegistered(const bluetooth::Uuid app_uuid,
                                                   bluetooth::hci::ScannerId scanner_id,
                                                   ScanningStatus status) {
-  auto uuid = bluetooth::Uuid::From128BitBE(app_uuid.To128BitBE());
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnScannerRegistered,
-                                  base::Unretained(scanning_callbacks_), uuid, scanner_id, status));
+                                  base::Unretained(scanning_callbacks_), app_uuid, scanner_id,
+                                  status));
 }
 
 void BleScannerInterfaceImpl::OnSetScannerParameterComplete(bluetooth::hci::ScannerId scanner_id,
@@ -739,45 +738,11 @@ bool BleScannerInterfaceImpl::parse_filter_command(
           static_cast<bluetooth::hci::ApcfApplicationAddressType>(apcf_command.addr_type);
 
   if (!apcf_command.uuid.IsEmpty()) {
-    uint8_t uuid_len = apcf_command.uuid.GetShortestRepresentationSize();
-    switch (uuid_len) {
-      case bluetooth::Uuid::kNumBytes16: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From16Bit(apcf_command.uuid.As16Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes32: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From32Bit(apcf_command.uuid.As32Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes128: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From128BitBE(apcf_command.uuid.To128BitBE());
-      } break;
-      default:
-        log::warn("illegal UUID length {}", (uint16_t)uuid_len);
-        return false;
-    }
+    advertising_packet_content_filter_command.uuid = apcf_command.uuid;
   }
 
   if (!apcf_command.uuid_mask.IsEmpty()) {
-    uint8_t uuid_len = apcf_command.uuid.GetShortestRepresentationSize();
-    switch (uuid_len) {
-      case bluetooth::Uuid::kNumBytes16: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From16Bit(apcf_command.uuid_mask.As16Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes32: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From32Bit(apcf_command.uuid_mask.As32Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes128: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From128BitBE(apcf_command.uuid_mask.To128BitBE());
-      } break;
-      default:
-        log::warn("illegal UUID length {}", (uint16_t)uuid_len);
-        return false;
-    }
+    advertising_packet_content_filter_command.uuid_mask = apcf_command.uuid_mask;
   }
 
   advertising_packet_content_filter_command.name.assign(apcf_command.name.begin(),
@@ -858,16 +823,12 @@ void BleScannerInterfaceImpl::handle_remote_properties(RawAddress bd_addr, tBLE_
   bluetooth::hci::Address address = bd_addr;
 
   // update device type
-  auto mutation = storage_module->Modify();
   bluetooth::storage::Device device = storage_module->GetDeviceByLegacyKey(address);
-  mutation.Add(device.SetDeviceType(device_type));
-  mutation.Commit();
+  device.SetDeviceType(device_type);
 
   // update address type
-  auto mutation2 = storage_module->Modify();
   bluetooth::storage::LeDevice le_device = device.Le();
-  mutation2.Add(le_device.SetAddressType((bluetooth::hci::AddressType)addr_type));
-  mutation2.Commit();
+  le_device.SetAddressType((bluetooth::hci::AddressType)addr_type);
 }
 
 BleScannerInterface* bluetooth::shim::get_ble_scanner_instance() {
