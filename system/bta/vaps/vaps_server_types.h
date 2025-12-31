@@ -24,13 +24,15 @@
  static const uint16_t kVaeUuidSize = 16;
 
  namespace uuid {
- static const uint16_t kVapsService16Bit = 0x7F65;
- static const uint16_t kVaeNameCharacteristic16bit = 0x7F63;
- static const uint16_t kVaeUuidCharacteristic16bit = 0x7F62;
- static const uint16_t kVaeControlPointCharacteristic16bit = 0x7F61;
+ static const uint16_t kVapsService16Bit = 0x185F;
+ static const uint16_t kVaeNameCharacteristic16bit = 0x2C31;
+ static const uint16_t kVaeUuidCharacteristic16bit = 0x2C32;
+ static const uint16_t kVaeControlPointCharacteristic16bit = 0x2C33;
  static const uint16_t kVaeCcidCharacteristic16bit = 0x2BBA;
- static const uint16_t kVaSessionStateCharacteristic16bit = 0x7F5F;
- static const uint16_t kVaSupportedFeaturesCharacteristic16bit = 0x7F5C;
+ static const uint16_t kVaSessionStateCharacteristic16bit = 0x2C35;
+ static const uint16_t kVaSessionFlagCharacteristic16bit = 0x2C36;
+ static const uint16_t kVaSupportedLanguagesCharacteristic16bit = 0x2C37;
+ static const uint16_t kVaSupportedFeaturesCharacteristic16bit = 0x2C38;
  static const uint16_t kClientCharacteristicConfiguration16bit = 0x2902;
  static const uint16_t kDefaultGattMtu = 23;
 
@@ -45,6 +47,10 @@
          bluetooth::Uuid::From16Bit(kVaeCcidCharacteristic16bit);
  static const bluetooth::Uuid kVaSessionStateCharacteristic =
          bluetooth::Uuid::From16Bit(kVaSessionStateCharacteristic16bit);
+ static const bluetooth::Uuid kVaSessionFlagCharacteristic =
+         bluetooth::Uuid::From16Bit(kVaSessionFlagCharacteristic16bit);
+ static const bluetooth::Uuid kVaSupportedLanguagesCharacteristic =
+         bluetooth::Uuid::From16Bit(kVaSupportedLanguagesCharacteristic16bit);
  static const bluetooth::Uuid kVaSupportedFeaturesCharacteristic =
          bluetooth::Uuid::From16Bit(kVaSupportedFeaturesCharacteristic16bit);
  static const bluetooth::Uuid kClientCharacteristicConfiguration =
