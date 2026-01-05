@@ -536,10 +536,19 @@ void AvrcpService::SendMediaUpdate(bool track_changed, bool play_state, bool que
     return;
   }
   // This function may be called on any thread, we need to make sure that the
-  // device update happens on the main thread.
+  // device update happens on the main thread. Additionally, validate the weak
+  // pointer before accessing the device to prevent the use after free in case
+  // device is cleaned-up before callback execution.
   for (const auto& device : instance_->connection_handler_->GetListOfDevices()) {
-    do_in_main_thread(base::BindOnce(&Device::SendMediaUpdate, device.get()->Get(), track_changed,
-                                     play_state, queue));
+    do_in_main_thread(base::BindOnce(
+        [](base::WeakPtr<Device> device, bool track_changed, bool play_state, bool queue) {
+          if (!device) {
+            log::verbose("Device destroyed before media update could be delivered");
+            return;
+          }
+          device->SendMediaUpdate(track_changed, play_state, queue);
+        },
+        device.get()->Get(), track_changed, play_state, queue));
   }
 }
 
