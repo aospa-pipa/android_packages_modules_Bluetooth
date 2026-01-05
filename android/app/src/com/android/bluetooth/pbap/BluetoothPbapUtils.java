@@ -361,6 +361,7 @@ class BluetoothPbapUtils {
             // to decrement totalFields and totalSvcFields count
             for (String deletedContact : deletedContacts) {
                 sContactSet.remove(deletedContact);
+                sContactDataset.remove(deletedContact);
                 String[] selectionArgs = {deletedContact};
                 try (Cursor dataCursor =
                         BluetoothMethodProxy.getInstance()
@@ -633,4 +634,11 @@ class BluetoothPbapUtils {
         sSecondaryVersionCounter = (sSecondaryVersionCounter < 0) ? 0 : sSecondaryVersionCounter;
         Log.v(TAG, "DbIdentifier rolled over to:" + sDbIdentifier);
     }
+
+    static void clearContactsCache() {
+        sContactDataset.clear();
+        sContactSet.clear();
+        sTotalContacts = 0;
+    }
+
 }
