@@ -13,19 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package android.bluetooth.pairing
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothAdapter.OobDataCallback
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
 import android.bluetooth.OobData
 import android.bluetooth.PandoraDevice
 import android.bluetooth.StreamObserverSpliterator
 import android.bluetooth.Utils
+import android.bluetooth.adapter
 import android.bluetooth.cts.EnableBluetoothRule
 import android.bluetooth.pairing.utils.IntentReceiver
 import android.bluetooth.pairing.utils.TestUtil
+import android.bluetooth.toAddressBytes
+import android.bluetooth.toAddressString
 import android.content.Context
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
@@ -43,7 +46,11 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import pandora.HostProto.*
+import pandora.HostProto.AdvertiseRequest
+import pandora.HostProto.ConnectLERequest
+import pandora.HostProto.OwnAddressType
+import pandora.HostProto.ScanRequest
+import pandora.HostProto.ScanningResponse
 import pandora.OobProto.OobDataRequest
 import pandora.OobProto.OobDataResponse
 import pandora.SecurityProto.LESecurityLevel
@@ -59,8 +66,6 @@ class OobPairingTest {
     @get:Rule(order = 3) val enableBluetoothRule = EnableBluetoothRule(false, true)
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val adapter: BluetoothAdapter =
-        context.getSystemService(BluetoothManager::class.java).adapter
     private lateinit var device: BluetoothDevice
     private lateinit var remoteOobData: OobDataResponse
     private lateinit var dutAddr: String
@@ -245,7 +250,7 @@ class OobPairingTest {
             if (scanningResponseIterator.hasNext()) {
                 val scanningResponse = scanningResponseIterator.next()
                 // Select DUT address from scan results
-                val scannedDevice = Utils.addressStringFromByteString(scanningResponse.random)
+                val scannedDevice = scanningResponse.random.toAddressString()
                 Log.d(TAG, "Scanned Devices: $scannedDevice")
                 if (scannedDevice == dutAddr) {
                     deviceAddr = scanningResponse.random
@@ -284,7 +289,7 @@ class OobPairingTest {
             remoteOobData.oob
                 .substring(RANDOMIZER_START_POSITION, RANDOMIZER_END_POSITION)
                 .toByteArray()
-        val address = Utils.addressBytesFromString(Utils.BUMBLE_RANDOM_ADDRESS)
+        val address = Utils.BUMBLE_RANDOM_ADDRESS.toAddressBytes()
         val addressType = byteArrayOf(BluetoothDevice.ADDRESS_TYPE_RANDOM.toByte())
 
         return OobData.LeBuilder(

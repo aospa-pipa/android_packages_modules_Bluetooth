@@ -76,6 +76,7 @@ cc_defaults {
         "libbt-audio-asrc",
         "libbt-audio-hal-interface",
         "libbt-bta",
+        "libbt-btu-main-thread",
         "libbt-common",
         "libbt-hci",
         "libbt-sbc-decoder",
@@ -152,9 +153,5 @@ cc_test {
             ],
         },
         host: {},
-    },
-    // TODO(b/457825862): Temporary workaround to fix the long link time
-    sanitize: {
-        cfi: false,
     },
 }

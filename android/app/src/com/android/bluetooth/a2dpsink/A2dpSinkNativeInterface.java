@@ -59,7 +59,7 @@ public class A2dpSinkNativeInterface extends NativeInterface<A2dpSinkNativeCallb
      * @return true on success, otherwise false.
      */
     public boolean connectA2dpSink(BluetoothDevice device) {
-        return connectA2dpNative(Utils.getByteBrEdrAddress(mAdapterService, device));
+        return connectA2dpNative(mAdapterService.getByteBrEdrAddress(device));
     }
 
     /**
@@ -69,7 +69,7 @@ public class A2dpSinkNativeInterface extends NativeInterface<A2dpSinkNativeCallb
      * @return true on success, otherwise false.
      */
     public boolean disconnectA2dpSink(BluetoothDevice device) {
-        return disconnectA2dpNative(Utils.getByteBrEdrAddress(mAdapterService, device));
+        return disconnectA2dpNative(mAdapterService.getByteBrEdrAddress(device));
     }
 
     /**
@@ -86,7 +86,7 @@ public class A2dpSinkNativeInterface extends NativeInterface<A2dpSinkNativeCallb
         // Translate to byte address for JNI. Use an all 0 MAC for no active device
         byte[] address = null;
         if (device != null) {
-            address = Utils.getByteBrEdrAddress(mAdapterService, device);
+            address = mAdapterService.getByteBrEdrAddress(device);
         } else {
             address = Utils.getBytesFromAddress("00:00:00:00:00:00");
         }
@@ -101,6 +101,15 @@ public class A2dpSinkNativeInterface extends NativeInterface<A2dpSinkNativeCallb
     /** Inform A2DP decoder the desired audio gain */
     public void informAudioTrackGain(float gain) {
         informAudioTrackGainNative(gain);
+    }
+
+    public static String audioStateToString(int state) {
+        return switch (state) {
+            case A2dpSinkNativeInterface.AUDIO_STATE_STARTED -> "AUDIO_STATE_STARTED";
+            case A2dpSinkNativeInterface.AUDIO_STATE_STOPPED -> "AUDIO_STATE_STOPPED";
+            case A2dpSinkNativeInterface.AUDIO_STATE_REMOTE_SUSPEND -> "AUDIO_STATE_REMOTE_SUSPEND";
+            default -> "UNKNOWN (" + state + ")";
+        };
     }
 
     // Native methods that call into the JNI interface

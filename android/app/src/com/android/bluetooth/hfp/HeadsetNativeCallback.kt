@@ -19,10 +19,8 @@ package com.android.bluetooth.hfp
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.profile.NativeCallback
 
-class HeadsetNativeCallback(
-    private val adapterService: AdapterService,
-    private val service: HeadsetService,
-) : NativeCallback {
+class HeadsetNativeCallback(adapterService: AdapterService, private val service: HeadsetService) :
+    NativeCallback(adapterService) {
 
     fun onConnectionStateChanged(state: Int, address: ByteArray, reason: Int) {
         val event =
@@ -35,13 +33,14 @@ class HeadsetNativeCallback(
         service.messageFromNative(event)
     }
 
-    private fun onAudioStateChanged(state: Int, address: ByteArray) {
+    private fun onAudioStateChanged(state: Int, address: ByteArray, reason: Int) {
         val event =
             HeadsetStackEvent(
                 HeadsetStackEvent.EVENT_TYPE_AUDIO_STATE_CHANGED,
                 state,
                 getDevice(address),
             )
+        event.reason = reason
         service.messageFromNative(event)
     }
 
@@ -188,6 +187,4 @@ class HeadsetNativeCallback(
         val event = HeadsetStackEvent(HeadsetStackEvent.EVENT_TYPE_BCC, getDevice(address))
         service.messageFromNative(event)
     }
-
-    private fun getDevice(address: ByteArray) = adapterService.getDeviceFromByte(address)
 }

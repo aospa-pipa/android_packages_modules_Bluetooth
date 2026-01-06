@@ -16,15 +16,9 @@
 
 package com.android.bluetooth;
 
-import static android.Manifest.permission.ACCESS_COARSE_LOCATION;
-import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
-import static android.Manifest.permission.BLUETOOTH_SCAN;
-import static android.Manifest.permission.RENOUNCE_PERMISSIONS;
 import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringRunnable;
 import static android.bluetooth.BluetoothUtils.USER_HANDLE_NULL;
-import static android.content.pm.PackageManager.GET_PERMISSIONS;
-import static android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static android.os.PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_FOREGROUND_SERVICE_ALLOWED;
 
@@ -36,19 +30,15 @@ import android.annotation.RequiresPermission;
 import android.app.Activity;
 import android.app.BroadcastOptions;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.companion.AssociationInfo;
 import android.companion.CompanionDeviceManager;
 import android.content.AttributionSource;
 import android.content.ContentValues;
 import android.content.Context;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
 import android.os.ParcelUuid;
@@ -58,7 +48,6 @@ import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
-import android.permission.PermissionManager;
 import android.provider.DeviceConfig;
 import android.provider.Telephony;
 import android.util.Log;
@@ -66,8 +55,6 @@ import android.util.Log;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.graphics.Insets;
-
-import com.android.bluetooth.btservice.AdapterService;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -147,31 +134,6 @@ public final class Utils {
     }
 
     /**
-     * Checks CoD and metadata to determine if the remote device is a watch
-     *
-     * @return whether it's a watch or not
-     */
-    public static boolean remoteDeviceIsWatch(
-            @NonNull AdapterService service, @NonNull BluetoothDevice device) {
-        // Check CoD
-        BluetoothClass deviceClass = new BluetoothClass(service.getRemoteClass(device));
-        if (deviceClass.getDeviceClass() == BluetoothClass.Device.WEARABLE_WRIST_WATCH) {
-            return true;
-        }
-
-        // Check metadata
-        byte[] deviceType = service.getMetadata(device, BluetoothDevice.METADATA_DEVICE_TYPE);
-        if (deviceType == null) {
-            return false;
-        }
-        String deviceTypeStr = new String(deviceType);
-        if (deviceTypeStr.equals(BluetoothDevice.DEVICE_TYPE_WATCH)) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * Only exposed for testing, do not invoke this method outside of tests.
      *
      * @param enabled true if the dual mode state is enabled, false otherwise
@@ -205,40 +167,6 @@ public final class Utils {
         }
 
         return String.format("XX:XX:XX:XX:%02X:%02X", address[4], address[5]);
-    }
-
-    /**
-     * Returns the correct device address to be used for connections over BR/EDR transport.
-     *
-     * @param address the device address for which to obtain the connection address
-     * @param service the adapter service to make the identity address retrieval call
-     * @return either identity address or device address in String format
-     */
-    public static String getBrEdrAddress(String address, AdapterService service) {
-        String identity = service.getIdentityAddress(address);
-        return identity != null ? identity : address;
-    }
-
-    /** {@link #getBrEdrAddress(String, AdapterService)} */
-    public static String getBrEdrAddress(BluetoothDevice device, AdapterService service) {
-        return getBrEdrAddress(device.getAddress(), service);
-    }
-
-    /**
-     * Returns the correct device address to be used for connections over BR/EDR transport.
-     *
-     * @param service the provided AdapterService
-     * @param device the device for which to obtain the connection address
-     * @return either identity address or device address as a byte array
-     */
-    public static byte[] getByteBrEdrAddress(AdapterService service, BluetoothDevice device) {
-        // If dual mode device bonded over BLE first, BR/EDR address will be identity address
-        // Otherwise, BR/EDR address will be same address as in BluetoothDevice#getAddress
-        byte[] address = service.getByteIdentityAddress(device);
-        if (address == null) {
-            address = getByteAddress(device);
-        }
-        return address;
     }
 
     public static byte[] getByteAddress(BluetoothDevice device) {
@@ -444,62 +372,6 @@ public final class Utils {
         return true;
     }
 
-    public static AttributionSource getCallingAttributionSource(Context context) {
-        int callingUid = Binder.getCallingUid();
-        if (callingUid == android.os.Process.ROOT_UID) {
-            callingUid = android.os.Process.SYSTEM_UID;
-        }
-        return new AttributionSource.Builder(callingUid)
-                .setPackageName(context.getPackageManager().getPackagesForUid(callingUid)[0])
-                .build();
-    }
-
-    /**
-     * Returns true if the specified package has disavowed the use of bluetooth scans for location,
-     * that is, if they have specified the {@code neverForLocation} flag on the BLUETOOTH_SCAN
-     * permission.
-     */
-    public static boolean hasDisavowedLocationForScan(
-            Context context, AttributionSource source, boolean inTestMode) {
-
-        // Check every step along the attribution chain for a renouncement.
-        // If location has been renounced anywhere in the chain we treat it as a disavowal.
-        AttributionSource currentAttrib = source;
-        while (true) {
-            if (currentAttrib.getRenouncedPermissions().contains(ACCESS_FINE_LOCATION)
-                    && (inTestMode
-                            || context.checkPermission(
-                                            RENOUNCE_PERMISSIONS, -1, currentAttrib.getUid())
-                                    == PackageManager.PERMISSION_GRANTED)) {
-                return true;
-            }
-            AttributionSource nextAttrib = currentAttrib.getNext();
-            if (nextAttrib == null) {
-                break;
-            }
-            currentAttrib = nextAttrib;
-        }
-
-        // Check the last attribution in the chain for a neverForLocation disavowal.
-        String packageName = currentAttrib.getPackageName();
-        PackageManager pm = context.getPackageManager();
-        try {
-            // TODO(b/183478032): Cache PackageInfo for use here.
-            PackageInfo pkgInfo =
-                    pm.getPackageInfo(packageName, GET_PERMISSIONS | MATCH_UNINSTALLED_PACKAGES);
-            for (int i = 0; i < pkgInfo.requestedPermissions.length; i++) {
-                if (pkgInfo.requestedPermissions[i].equals(BLUETOOTH_SCAN)) {
-                    return (pkgInfo.requestedPermissionsFlags[i]
-                                    & PackageInfo.REQUESTED_PERMISSION_NEVER_FOR_LOCATION)
-                            != 0;
-                }
-            }
-        } catch (PackageManager.NameNotFoundException e) {
-            Log.w(TAG, "Could not find package for disavowal check: " + packageName);
-        }
-        return false;
-    }
-
     private static boolean checkCallerIsSystem() {
         int callingUid = Binder.getCallingUid();
         return UserHandle.getAppId(Process.SYSTEM_UID) == UserHandle.getAppId(callingUid);
@@ -582,131 +454,6 @@ public final class Utils {
     public static boolean callerIsSystemOrActiveOrManagedUser(
             Context context, String tag, String method) {
         return checkCallerIsSystemOrActiveOrManagedUser(context, tag + "." + method + "()");
-    }
-
-    /** Checks whether location is off and must be on for us to perform some operation */
-    public static boolean blockedByLocationOff(Context context, UserHandle userHandle) {
-        return !context.getSystemService(LocationManager.class)
-                .isLocationEnabledForUser(userHandle);
-    }
-
-    /** Checks that calling process has ACCESS_COARSE_LOCATION and OP_COARSE_LOCATION is allowed */
-    public static boolean checkCallerHasCoarseLocation(
-            Context context, AttributionSource source, UserHandle userHandle) {
-        if (blockedByLocationOff(context, userHandle)) {
-            Log.e(TAG, "Permission denial: Location is off.");
-            return false;
-        }
-        AttributionSource currentAttribution =
-                new AttributionSource.Builder(context.getAttributionSource())
-                        .setNext(requireNonNull(source))
-                        .build();
-        // STOPSHIP(b/188391719): enable this security enforcement
-        // source.enforceCallingUid();
-        PermissionManager pm = context.getSystemService(PermissionManager.class);
-        if (pm == null) {
-            return false;
-        }
-        if (pm.checkPermissionForDataDeliveryFromDataSource(
-                        ACCESS_COARSE_LOCATION, currentAttribution, "Bluetooth location check")
-                == PERMISSION_GRANTED) {
-            return true;
-        }
-
-        Log.e(TAG, "Need ACCESS_COARSE_LOCATION permission for " + currentAttribution);
-        return false;
-    }
-
-    /**
-     * Checks that calling process has ACCESS_COARSE_LOCATION and OP_COARSE_LOCATION is allowed or
-     * ACCESS_FINE_LOCATION and OP_FINE_LOCATION is allowed
-     */
-    public static boolean checkCallerHasCoarseOrFineLocation(
-            Context context, AttributionSource source, UserHandle userHandle) {
-        if (blockedByLocationOff(context, userHandle)) {
-            Log.e(TAG, "Permission denial: Location is off.");
-            return false;
-        }
-
-        final AttributionSource currentAttribution =
-                new AttributionSource.Builder(context.getAttributionSource())
-                        .setNext(requireNonNull(source))
-                        .build();
-        // STOPSHIP(b/188391719): enable this security enforcement
-        // source.enforceCallingUid();
-        PermissionManager pm = context.getSystemService(PermissionManager.class);
-        if (pm == null) {
-            return false;
-        }
-        if (pm.checkPermissionForDataDeliveryFromDataSource(
-                        ACCESS_FINE_LOCATION, currentAttribution, "Bluetooth location check")
-                == PERMISSION_GRANTED) {
-            return true;
-        }
-
-        if (pm.checkPermissionForDataDeliveryFromDataSource(
-                        ACCESS_COARSE_LOCATION, currentAttribution, "Bluetooth location check")
-                == PERMISSION_GRANTED) {
-            return true;
-        }
-
-        Log.e(
-                TAG,
-                "Need ACCESS_COARSE_LOCATION or ACCESS_FINE_LOCATION permission for "
-                        + currentAttribution);
-        return false;
-    }
-
-    /** Checks that calling process has ACCESS_FINE_LOCATION and OP_FINE_LOCATION is allowed */
-    public static boolean checkCallerHasFineLocation(
-            Context context, AttributionSource source, UserHandle userHandle) {
-        if (blockedByLocationOff(context, userHandle)) {
-            Log.e(TAG, "Permission denial: Location is off.");
-            return false;
-        }
-
-        AttributionSource currentAttribution =
-                new AttributionSource.Builder(context.getAttributionSource())
-                        .setNext(requireNonNull(source))
-                        .build();
-        // STOPSHIP(b/188391719): enable this security enforcement
-        // source.enforceCallingUid();
-        PermissionManager pm = context.getSystemService(PermissionManager.class);
-        if (pm == null) {
-            return false;
-        }
-        if (pm.checkPermissionForDataDeliveryFromDataSource(
-                        ACCESS_FINE_LOCATION, currentAttribution, "Bluetooth location check")
-                == PERMISSION_GRANTED) {
-            return true;
-        }
-
-        Log.e(TAG, "Need ACCESS_FINE_LOCATION permission for " + currentAttribution);
-        return false;
-    }
-
-    /**
-     * Checks that the target sdk of the app corresponding to the provided package name is greater
-     * than or equal to the passed in target sdk.
-     *
-     * <p>For example, if the calling app has target SDK {@link Build.VERSION_CODES#S} and we pass
-     * in the targetSdk {@link Build.VERSION_CODES#R}, the API will return true because S >= R.
-     *
-     * @param context Bluetooth service context
-     * @param pkgName caller's package name
-     * @param expectedMinimumTargetSdk one of the values from {@link Build.VERSION_CODES}
-     * @return {@code true} if the caller's target sdk is greater than or equal to
-     *     expectedMinimumTargetSdk, {@code false} otherwise
-     */
-    public static boolean checkCallerTargetSdk(
-            Context context, String pkgName, int expectedMinimumTargetSdk) {
-        try {
-            return context.getPackageManager().getApplicationInfo(pkgName, 0).targetSdkVersion
-                    >= expectedMinimumTargetSdk;
-        } catch (PackageManager.NameNotFoundException e) {
-            // In case of exception, assume true
-        }
-        return true;
     }
 
     /** Converts {@code milliseconds} to unit. Each unit is 0.625 millisecond. */
@@ -794,7 +541,7 @@ public final class Utils {
      */
     public static boolean isBapNoPacsPtsTestMode() {
         return SystemProperties.getBoolean(BAP_NO_PACS_PTS_MODE_PROPERTY, false);
-		}
+    }
 
     /**
      * Check if we are running in PTS TBS test mode. To enable/disable TBS PTS test mode, invoke
@@ -802,19 +549,9 @@ public final class Utils {
      *
      * @return true if in PTS Test mode, false otherwise
      */
-     public static boolean isTbsPtsTestMode() {
+    public static boolean isTbsPtsTestMode() {
         return SystemProperties.getBoolean(TBS_PTS_MODE_PROPERTY, false);
     }
-
-    /**
-     * Get uid/pid string in a binder call
-     *
-     * @return "uid/pid=xxxx/yyyy"
-     */
-    public static String getUidPidString() {
-        return "uid/pid=" + Binder.getCallingUid() + "/" + Binder.getCallingPid();
-    }
-
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
 
@@ -1055,5 +792,10 @@ public final class Utils {
         if (Looper.getMainLooper().isCurrentThread()) {
             throw new IllegalThreadStateException("Must NOT be called on main thread");
         }
+    }
+
+    public static boolean isAutonomousRepairingSupported() {
+        // TODO (b/440298497): Change this to flag and android check once the SDK check CL is in.
+        return false;
     }
 }

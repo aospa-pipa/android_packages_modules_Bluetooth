@@ -113,7 +113,8 @@ static void bta_ag_sdp_cback(tSDP_STATUS status, uint8_t idx) {
     p_scb->sdp_metrics.status = (status == tSDP_STATUS::SDP_SUCCESS) ? tBTA_JV_STATUS::SUCCESS
                                                                      : tBTA_JV_STATUS::FAILURE;
     p_scb->sdp_metrics.sdp_end_ms = common::time_gettimeofday_us();
-    do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, idx, event, disc_result));
+    do_in_main_thread(
+            base::BindOnce(&bta_ag_sm_execute_by_handle, idx, event, disc_result, NO_FAILURE));
   }
 }
 
@@ -434,9 +435,9 @@ bool bta_ag_sdp_find_attr(tBTA_AG_SCB* p_scb, tBTA_SERVICE_MASK service) {
         }
         /* Remote supports 1.7, store it in HFP 1.7 BL file */
         if (p_scb->peer_version >= HFP_VERSION_1_9) {
-          interop_database_add_addr(INTEROP_HFP_1_9_ALLOWLIST, &p_scb->peer_addr, 3);
+          interop_database_add_addr(INTEROP_HFP_1_9_ALLOWLIST, p_scb->peer_addr, 3);
         } else if (p_scb->peer_version >= HFP_VERSION_1_7) {
-          interop_database_add_addr(INTEROP_HFP_1_7_ALLOWLIST, &p_scb->peer_addr, 3);
+          interop_database_add_addr(INTEROP_HFP_1_7_ALLOWLIST, p_scb->peer_addr, 3);
         }
       }
     } else {

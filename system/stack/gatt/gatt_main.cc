@@ -561,21 +561,7 @@ static void gatt_le_connect_cback(uint16_t /* chan */, const RawAddress& bd_addr
     return;
   }
 
-  /* do we have a channel initiating a connection? */
-  if (p_tcb) {
-    /* we are initiating connection */
-    if (gatt_get_ch_state(p_tcb) == GATT_CH_CONN) {
-      /* send callback */
-      gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
-      p_tcb->payload_size = GATT_DEF_BLE_MTU_SIZE;
-
-      gatt_send_conn_cback(p_tcb);
-    }
-    if (check_srv_chg) {
-      gatt_chk_srv_chg(p_srv_chg_clt);
-    }
-  } else {
-    /* this is incoming connection or background connection callback */
+  if (!p_tcb) {
     p_tcb = gatt_allocate_tcb_by_bdaddr(bd_addr, BT_TRANSPORT_LE);
     if (!p_tcb) {
       log::error("Disconnecting address:{} due to out of resources.", bd_addr);
@@ -584,17 +570,25 @@ static void gatt_le_connect_cback(uint16_t /* chan */, const RawAddress& bd_addr
       btm_remove_acl(bd_addr, transport);
       return;
     }
-
     p_tcb->att_lcid = L2CAP_ATT_CID;
+    p_tcb->ch_state = GATT_CH_CONN;
+  }
 
+  /* this is incoming connection or background connection callback */
+  if (gatt_get_ch_state(p_tcb) == GATT_CH_CONN) {
+    /* send callback */
     gatt_set_ch_state(p_tcb, GATT_CH_OPEN);
-
     p_tcb->payload_size = GATT_DEF_BLE_MTU_SIZE;
 
     gatt_send_conn_cback(p_tcb);
-    if (check_srv_chg) {
-      gatt_chk_srv_chg(p_srv_chg_clt);
+  }
+  if (check_srv_chg) {
+    // If the database hash has been changed, we should send it.
+    if (com_android_bluetooth_flags_send_service_changed_indication_upon_reconnection() &&
+        !p_srv_chg_clt->srv_changed && !p_tcb->is_robust_cache_change_aware) {
+      p_srv_chg_clt->srv_changed = true;
     }
+    gatt_chk_srv_chg(p_srv_chg_clt);
   }
 
   auto advertising_set = bluetooth::shim::ACL_GetAdvertisingSetConnectedTo(bd_addr);
@@ -635,7 +629,7 @@ static bool check_cached_model_name(const RawAddress& bd_addr) {
   bt_bdname_t model_name;
   BTIF_STORAGE_FILL_PROPERTY(&prop, BT_PROPERTY_REMOTE_MODEL_NUM, sizeof(model_name), &model_name);
 
-  if (btif_storage_get_remote_device_property(&bd_addr, &prop) != BT_STATUS_SUCCESS ||
+  if (btif_storage_get_remote_device_property(bd_addr, &prop) != BT_STATUS_SUCCESS ||
       prop.len == 0) {
     log::info("Device {} no cached model name", bd_addr);
     return false;
@@ -643,7 +637,7 @@ static bool check_cached_model_name(const RawAddress& bd_addr) {
 
   tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
   bt_property_t addr_type_prop = {BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type), &addr_type};
-  btif_storage_get_remote_device_property(&bd_addr, &addr_type_prop);
+  btif_storage_get_remote_device_property(bd_addr, &addr_type_prop);
 
   GetInterfaceToProfiles()->events->invoke_remote_device_properties_cb(BT_STATUS_SUCCESS, bd_addr,
                                                                        addr_type, 1, &prop);
@@ -666,12 +660,12 @@ static void read_dis_cback(const RawAddress& bd_addr, tDIS_VALUE* p_dis_value) {
 
         log::info("Device {}, model name: {}", bd_addr, (char*)prop.val);
 
-        btif_storage_set_remote_device_property(&bd_addr, &prop);
+        btif_storage_set_remote_device_property(bd_addr, &prop);
 
         tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
         bt_property_t addr_type_prop = {BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type),
                                         &addr_type};
-        btif_storage_get_remote_device_property(&bd_addr, &addr_type_prop);
+        btif_storage_get_remote_device_property(bd_addr, &addr_type_prop);
 
         GetInterfaceToProfiles()->events->invoke_remote_device_properties_cb(
                 BT_STATUS_SUCCESS, bd_addr, addr_type, 1, &prop);
@@ -1026,6 +1020,15 @@ static void gatt_send_conn_cback(tGATT_TCB* p_tcb) {
 
     if (apps.find(p_reg->gatt_if) != apps.end()) {
       gatt_update_app_use_link_flag(p_reg->gatt_if, p_tcb, true, true);
+    }
+
+    if (com::android::bluetooth::flags::gatt_conn_settings()) {
+      conn_id = gatt_create_conn_id(p_tcb->tcb_idx, p_reg->gatt_if);
+      /*Set the default based on the APP's preference*/
+      if (is_app_prefer_auto_mtu(p_reg.get(), p_tcb->peer_bda)) {
+        tGATT_STATUS status = GATTC_ConfigureMTU(conn_id, gatt_get_local_mtu());
+        log::verbose("set default MTU for the app: {}, status: {}", p_reg->gatt_if, status);
+      }
     }
 
     if (p_reg->app_cb.p_conn_cb) {

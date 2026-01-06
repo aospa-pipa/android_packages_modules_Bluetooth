@@ -31,6 +31,7 @@ import static com.android.server.bluetooth.BluetoothManagerService.MESSAGE_RESTA
 import static com.android.server.bluetooth.BluetoothManagerService.MESSAGE_RESTORE_USER_SETTING_OFF;
 import static com.android.server.bluetooth.BluetoothManagerService.MESSAGE_TIMEOUT_BIND;
 import static com.android.server.bluetooth.BluetoothManagerService.SERVICE_RESTART_DELAY;
+import static com.android.server.bluetooth.BluetoothManagerService.TIMEOUT_BIND;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -71,7 +72,6 @@ import android.permission.PermissionManager;
 import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
-import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
 
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -182,10 +182,10 @@ public class BluetoothManagerServiceTest {
         // Mock these functions so security errors won't throw
         doReturn("name")
                 .when(mBluetoothServerProxy)
-                .settingsSecureGetString(any(), eq(Settings.Secure.BLUETOOTH_NAME));
+                .settingsSecureGetString(any(), eq("bluetooth_name"));
         doReturn("00:11:22:33:44:55")
                 .when(mBluetoothServerProxy)
-                .settingsSecureGetString(any(), eq(Settings.Secure.BLUETOOTH_ADDRESS));
+                .settingsSecureGetString(any(), eq("bluetooth_address"));
         doAnswer(
                         inv -> {
                             return mPersistedState;
@@ -337,11 +337,13 @@ public class BluetoothManagerServiceTest {
     }
 
     @Test
-    public void enable_bindTimeout() throws Exception {
-        mManagerService.enableBle("enable_bindTimeout", mBleBinder);
+    public void enable_beforeBootCompleted_extendedBindTimeout() throws Exception {
+        mManagerService.enableBle("enable_beforeBootCompleted_extendedBindTimeout", mBleBinder);
         verifyBleStateIntentSent(State.OFF, State.BLE_TURNING_ON);
 
-        mLooper.moveTimeForward(120_000); // 120 seconds
+        mLooper.moveTimeForward(TIMEOUT_BIND.multipliedBy(20).toMillis() - 1);
+        assertThat(mLooper.nextMessage()).isNull();
+        mLooper.moveTimeForward(1);
         syncHandler(MESSAGE_TIMEOUT_BIND);
 
         mInOrder.verify(mContext).unbindService(any());
@@ -349,6 +351,57 @@ public class BluetoothManagerServiceTest {
 
         mLooper.moveTimeForward(120_000);
         discardMessage(MESSAGE_RESTART_BLUETOOTH_SERVICE); // verify recovery process is started
+
+        endTest();
+    }
+
+    @Test
+    public void enable_afterBootCompleted_bindTimeout() throws Exception {
+        mManagerService.onBootCompleted();
+        mManagerService.enableBle("enable_afterBootCompleted_bindTimeout", mBleBinder);
+        verifyBleStateIntentSent(State.OFF, State.BLE_TURNING_ON);
+
+        mLooper.moveTimeForward(TIMEOUT_BIND.toMillis());
+        syncHandler(MESSAGE_TIMEOUT_BIND);
+
+        mInOrder.verify(mContext).unbindService(any());
+        verifyBleStateIntentSent(State.BLE_TURNING_ON, State.OFF);
+
+        mLooper.moveTimeForward(120_000);
+        discardMessage(MESSAGE_RESTART_BLUETOOTH_SERVICE); // verify recovery process is started
+
+        endTest();
+    }
+
+    @Test
+    public void onBootCompleted_whileBinding_rescheduleTimeout() throws Exception {
+        mManagerService.enableBle("onBootCompleted_whileBinding_rescheduleTimeout", mBleBinder);
+        verifyBleStateIntentSent(State.OFF, State.BLE_TURNING_ON);
+
+        mLooper.moveTimeForward(TIMEOUT_BIND.multipliedBy(20).toMillis() - 1);
+        assertThat(mLooper.nextMessage()).isNull();
+        mManagerService.onBootCompleted();
+        mLooper.moveTimeForward(TIMEOUT_BIND.toMillis() - 1);
+        assertThat(mLooper.nextMessage()).isNull();
+        mLooper.moveTimeForward(1);
+        syncHandler(MESSAGE_TIMEOUT_BIND);
+
+        mInOrder.verify(mContext).unbindService(any());
+        verifyBleStateIntentSent(State.BLE_TURNING_ON, State.OFF);
+
+        // Calculate the expected delay for the first retry after a timeout.
+        // It should be SERVICE_RESTART_DELAY * 1 (retry) * 10 (for timeout).
+        Duration expectedDelay = SERVICE_RESTART_DELAY.multipliedBy(10);
+
+        // Check that the restart message is scheduled with the correct delay.
+        mLooper.moveTimeForward(expectedDelay.toMillis() - 1);
+        assertThat(mLooper.nextMessage()).isNull();
+        mLooper.moveTimeForward(1);
+        syncHandler(MESSAGE_RESTART_BLUETOOTH_SERVICE);
+
+        // Let the restart proceed to ensure no other issues.
+        transition_offToBleOn();
+        assertThat(mManagerService.getState()).isEqualTo(State.BLE_ON);
 
         endTest();
     }

@@ -82,8 +82,7 @@ static tBTA_DM_DEVICE_SEARCH_STATE bta_dm_search_get_state() {
 }
 
 static void post_search_evt(tBTA_DM_DEV_SEARCH_EVT event, std::unique_ptr<tBTA_DM_SEARCH_MSG> msg) {
-  if (do_in_main_thread(base::BindOnce(&bta_dm_search_sm_execute, event, std::move(msg))) !=
-      BT_STATUS_SUCCESS) {
+  if (!do_in_main_thread(base::BindOnce(&bta_dm_search_sm_execute, event, std::move(msg)))) {
     log::error("post_search_evt failed");
   }
 }
@@ -547,7 +546,7 @@ static void bta_dm_discover_name(const RawAddress& remote_bd_addr) {
        (bta_dm_search_cb.p_btm_inq_info->results.inq_result_type == BT_DEVICE_TYPE_BLE) &&
        (bta_dm_search_get_state() == BTA_DM_SEARCH_ACTIVE)) ||
       (transport == BT_TRANSPORT_LE &&
-       interop_match_addr(INTEROP_DISABLE_NAME_REQUEST, &bta_dm_search_cb.peer_bdaddr))) {
+       interop_match_addr(INTEROP_DISABLE_NAME_REQUEST, bta_dm_search_cb.peer_bdaddr))) {
     /* Do not perform RNR for LE devices at inquiry complete*/
     bta_dm_search_cb.name_discover_done = true;
   }

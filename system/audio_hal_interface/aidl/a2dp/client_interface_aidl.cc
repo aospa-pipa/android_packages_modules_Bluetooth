@@ -39,7 +39,7 @@ namespace audio {
 namespace aidl {
 namespace a2dp {
 
-BluetoothAudioClientInterface::BluetoothAudioClientInterface(IBluetoothTransportInstance* instance)
+BluetoothAudioClientInterface::BluetoothAudioClientInterface(A2dpTransport* instance)
     : provider_(nullptr),
       provider_factory_(nullptr),
       session_started_(false),
@@ -222,7 +222,10 @@ void BluetoothAudioClientInterface::FetchAudioProvider() {
       break;
     }
   }
-  log::assert_that(provider_factory_ != nullptr, "assert failed: provider_factory_ != nullptr");
+
+  log::assert_that(provider_factory_ != nullptr,
+                   "IBluetoothAudioProvidersFactory::openProvider({}) failed {} times",
+                   toString(transport_->GetSessionType()), kFetchAudioProviderRetryNumber);
   log::assert_that(provider_ != nullptr, "assert failed: provider_ != nullptr");
 
   binder_status_t binder_status =

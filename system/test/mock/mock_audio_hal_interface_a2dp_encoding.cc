@@ -47,6 +47,7 @@ struct codec_info codec_info;
 struct end_session end_session;
 struct get_a2dp_configuration get_a2dp_configuration;
 struct init init;
+struct init_decoder init_decoder;
 struct is_hal_enabled is_hal_enabled;
 struct is_hal_offloading is_hal_offloading;
 struct is_offload_session_unknown is_offload_session_unknown;
@@ -75,6 +76,7 @@ std::optional<const char*> codec_index_str::return_value = std::nullopt;
 bool codec_info::return_value = false;
 std::optional<a2dp_configuration> get_a2dp_configuration::return_value = std::nullopt;
 bool init::return_value = false;
+bool init_decoder::return_value = false;
 bool is_hal_enabled::return_value = false;
 bool is_hal_offloading::return_value = false;
 bool is_offload_session_unknown::return_value = false;
@@ -123,16 +125,22 @@ void end_session() {
 std::optional<a2dp_configuration> provider::get_a2dp_configuration(
         RawAddress peer_address, std::vector<a2dp_remote_capabilities> const& remote_seps,
         btav_a2dp_codec_config_t const& user_preferences,
-        ::bluetooth::a2dp::CodecId user_preferred_codec_id) {
+        ::bluetooth::a2dp::CodecId user_preferred_codec_id, bool is_source) {
   inc_func_call_count(__func__);
   return test::mock::audio_hal_interface_a2dp_encoding::get_a2dp_configuration(
-          peer_address, remote_seps, user_preferences, user_preferred_codec_id);
+          peer_address, remote_seps, user_preferences, user_preferred_codec_id, is_source);
 }
 bool init(bluetooth::common::MessageLoopThread* message_loop,
           bluetooth::audio::a2dp::StreamCallbacks const* audio_port, bool offload_enabled) {
   inc_func_call_count(__func__);
   return test::mock::audio_hal_interface_a2dp_encoding::init(message_loop, audio_port,
                                                              offload_enabled);
+}
+bool init_decoder(bluetooth::audio::a2dp::StreamCallbacks const* stream_callbacks,
+                  bool offload_enabled) {
+  inc_func_call_count(__func__);
+  return test::mock::audio_hal_interface_a2dp_encoding::init_decoder(stream_callbacks,
+                                                                     offload_enabled);
 }
 bool is_hal_enabled() {
   inc_func_call_count(__func__);

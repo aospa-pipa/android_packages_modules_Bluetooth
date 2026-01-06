@@ -34,9 +34,9 @@ import javax.crypto.IllegalBlockSizeException
 import javax.crypto.NoSuchPaddingException
 import javax.crypto.spec.SecretKeySpec
 import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
+import org.mockito.kotlin.eq
 
 class TestUtil
 private constructor(
@@ -88,8 +88,8 @@ private constructor(
      *
      * @param profile The profile to get the proxy for
      * @return The profile proxy
-     * @throws RuntimeException if mProfileServiceListener || mAdapter is null (passed during
-     *   instance creation)
+     * @throws RuntimeException if profileServiceListener || adapter is null (passed during instance
+     *   creation)
      */
     fun getProfileProxy(profile: Int): BluetoothProfile {
         if (profileServiceListener == null || adapter == null) {

@@ -931,7 +931,7 @@ static bool read_sr_sirk_req(const RawAddress& peer_bda, tCONN_ID conn_id,
   btm_random_pseudo_to_identity_addr(&identity_address, &address_type);
 
   if (address_type == BLE_ADDR_PUBLIC &&
-      interop_match_addr(INTEROP_DISABLE_SIRK_READ_BY_TYPE, &identity_address)) {
+      interop_match_addr(INTEROP_DISABLE_SIRK_READ_BY_TYPE, identity_address)) {
     if (GATTC_Read(conn_id, GATT_READ_CHAR_VALUE, &param) != GATT_SUCCESS) {
       log::error("Read GATT Support features GATT_Read Failed, conn_id: {}",
                  static_cast<int>(conn_id));
@@ -1165,7 +1165,8 @@ void gatt_sr_init_cl_status(tGATT_TCB& tcb) {
     tcb.cl_supp_feat &= ~BLE_GATT_CL_SUP_FEAT_CACHING_BITMASK;
   }
 
-  if (gatt_sr_is_cl_robust_caching_supported(tcb)) {
+  if (com_android_bluetooth_flags_send_service_changed_indication_upon_reconnection() ||
+      gatt_sr_is_cl_robust_caching_supported(tcb)) {
     Octet16 stored_hash = btif_storage_get_gatt_cl_db_hash(tcb.peer_bda);
     tcb.is_robust_cache_change_aware = (stored_hash == gatt_cb.database_hash);
   } else {
@@ -1188,7 +1189,8 @@ void gatt_sr_init_cl_status(tGATT_TCB& tcb) {
  ******************************************************************************/
 void gatt_sr_update_cl_status(tGATT_TCB& tcb, bool chg_aware) {
   // if robust caching is not supported, do nothing
-  if (!gatt_sr_is_cl_robust_caching_supported(tcb)) {
+  if (!com_android_bluetooth_flags_send_service_changed_indication_upon_reconnection() &&
+      !gatt_sr_is_cl_robust_caching_supported(tcb)) {
     return;
   }
 

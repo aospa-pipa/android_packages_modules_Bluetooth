@@ -54,7 +54,9 @@ import android.content.res.Resources;
 import android.location.LocationManager;
 import android.os.Binder;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.Process;
+import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.provider.Settings;
@@ -64,6 +66,7 @@ import android.test.mock.MockContentResolver;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.TestLooper;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
@@ -77,6 +80,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.stubbing.Answer;
@@ -227,6 +231,7 @@ public class GattServiceTest {
         mockGetBluetoothManager(mAdapterService);
         mockGetSystemService(mAdapterService, LocationManager.class);
         mockGetSystemService(mAdapterService, ActivityManager.class);
+        doReturn(mSource).when(mAdapterService).getAttributionSource();
 
         CompanionManager mBtCompanionManager = new CompanionManager(mAdapterService);
         doReturn(mBtCompanionManager).when(mAdapterService).getCompanionManager();
@@ -278,7 +283,8 @@ public class GattServiceTest {
     }
 
     @Test
-    public void subrateModeRequest() {
+    @DisableFlags(Flags.FLAG_LE_SUBRATE_MANAGER)
+    public void subrateModeRequest_withLeSubrateManagerDisabled() {
         InOrder inOrder = inOrder(mNativeInterface);
 
         for (int subrateMode = BluetoothGatt.SUBRATE_MODE_OFF;
@@ -286,20 +292,33 @@ public class GattServiceTest {
                 subrateMode++) {
             mService.subrateModeRequest(mGattCallback, mDevice, subrateMode);
 
-            if (Flags.leSubrateManager()) {
-                inOrder.verify(mNativeInterface)
-                        .gattSubrateModeRequest(eq(CLIENT_IF), eq(mDevice), eq(subrateMode));
-            } else {
-                inOrder.verify(mNativeInterface)
-                        .gattSubrateRequest(
-                                eq(CLIENT_IF),
-                                eq(mDevice),
-                                anyInt(),
-                                anyInt(),
-                                anyInt(),
-                                anyInt(),
-                                anyInt());
-            }
+            // With no cached latency, latency for SUBRATE_MODE_OFF is 0.
+            // For other modes, latency is hardcoded to 0.
+            final int expectedLatency = 0;
+            inOrder.verify(mNativeInterface)
+                    .gattSubrateRequest(
+                            eq(CLIENT_IF),
+                            eq(mDevice),
+                            anyInt(),
+                            anyInt(),
+                            eq(expectedLatency),
+                            anyInt(),
+                            anyInt());
+        }
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LE_SUBRATE_MANAGER)
+    public void subrateModeRequest_withLeSubrateManagerEnabled() {
+        InOrder inOrder = inOrder(mNativeInterface);
+
+        for (int subrateMode = BluetoothGatt.SUBRATE_MODE_OFF;
+                subrateMode <= BluetoothGatt.SUBRATE_MODE_HIGH;
+                subrateMode++) {
+            mService.subrateModeRequest(mGattCallback, mDevice, subrateMode);
+
+            inOrder.verify(mNativeInterface)
+                    .gattSubrateModeRequest(eq(CLIENT_IF), eq(mDevice), eq(subrateMode));
         }
     }
 
@@ -416,14 +435,63 @@ public class GattServiceTest {
     }
 
     @Test
+    public void onClientRegisteredFromNative_success_unregistersOnBinderDied() throws Exception {
+        final UUID uuid = UUID.randomUUID();
+        final int clientIf = 1;
+        final int status = BluetoothGatt.GATT_SUCCESS;
+        final IBluetoothGattCallback callback = mock(IBluetoothGattCallback.class);
+        final ContextApp<IBluetoothGattCallback> app = mock(ContextApp.class);
+
+        doReturn(callback).when(app).getCallback();
+        doReturn(app).when(mClientMap).getByUuid(uuid);
+        doReturn(app).when(mClientMap).getByCallbackId(callback);
+        doReturn(clientIf).when(app).getId();
+        // This mock is needed for unregisterClient to proceed
+        doReturn(app)
+                .when(mClientMap)
+                .remove(eq(clientIf), eq(ContextMap.RemoveReason.REASON_BINDER_DIED));
+
+        // Call the method under test
+        mService.setAvailable(true);
+        mService.onClientRegisteredFromNative(status, clientIf, uuid);
+
+        // Verify that the app ID is set
+        verify(app).setId(clientIf);
+
+        // Verify that linkToDeath is called and capture the DeathRecipient
+        ArgumentCaptor<IBinder.DeathRecipient> captor =
+                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
+        verify(app).linkToDeath(captor.capture());
+        assertThat(captor.getValue()).isInstanceOf(ActionOnDeathRecipient.class);
+
+        // Verify that the callback is invoked
+        verify(callback).onClientRegistered(status);
+
+        // Trigger binderDied on the captured recipient
+        captor.getValue().binderDied();
+        mLooper.dispatchAll();
+
+        // Verify that unregisterClient logic is executed
+        verify(mNativeInterface).gattClientUnregisterApp(clientIf);
+    }
+
+    @Test
     public void clientConnect() throws Exception {
         int addressType = BluetoothDevice.ADDRESS_TYPE_RANDOM;
         boolean isDirect = false;
         int transport = 2;
         boolean opportunistic = true;
+        boolean isAutomaticMtuEnabled = false;
 
         mService.clientConnect(
-                mGattCallback, mDevice, addressType, isDirect, transport, opportunistic, mSource);
+                mGattCallback,
+                mDevice,
+                addressType,
+                isDirect,
+                transport,
+                opportunistic,
+                isAutomaticMtuEnabled,
+                mSource);
 
         verify(mNativeInterface)
                 .gattClientConnect(
@@ -434,7 +502,8 @@ public class GattServiceTest {
                         transport,
                         opportunistic,
                         0,
-                        false);
+                        false,
+                        isAutomaticMtuEnabled);
     }
 
     @Test
@@ -443,6 +512,8 @@ public class GattServiceTest {
         boolean isDirect = false;
         int transport = 2;
         boolean opportunistic = true;
+        boolean isAutomaticMtuEnabled = false;
+
         AttributionSource source =
                 new AttributionSource.Builder(Process.myUid())
                         .setPackageName("com.test.package")
@@ -450,7 +521,14 @@ public class GattServiceTest {
                         .build();
 
         mService.clientConnect(
-                mGattCallback, mDevice, addressType, isDirect, transport, opportunistic, source);
+                mGattCallback,
+                mDevice,
+                addressType,
+                isDirect,
+                transport,
+                opportunistic,
+                isAutomaticMtuEnabled,
+                source);
 
         verify(mNativeInterface)
                 .gattClientConnect(
@@ -461,7 +539,8 @@ public class GattServiceTest {
                         transport,
                         opportunistic,
                         0,
-                        true /* preferRelaxMode */);
+                        true /* preferRelaxMode */,
+                        isAutomaticMtuEnabled);
     }
 
     @Test
@@ -470,6 +549,7 @@ public class GattServiceTest {
         boolean isDirect = true;
         int transport = TRANSPORT_LE;
         boolean opportunistic = false;
+        boolean isAutomaticMtuEnabled = false;
 
         AttributionSource testAttributeSource =
                 new AttributionSource.Builder(Process.SYSTEM_UID)
@@ -486,6 +566,7 @@ public class GattServiceTest {
                 isDirect,
                 transport,
                 opportunistic,
+                isAutomaticMtuEnabled,
                 testAttributeSource);
 
         verify(mAdapterService).notifyDirectLeGattClientConnect(anyInt(), any());
@@ -498,7 +579,9 @@ public class GattServiceTest {
                         transport,
                         opportunistic,
                         0,
-                        false);
+                        false,
+                        isAutomaticMtuEnabled);
+
         mService.onConnectedFromNative(
                 CLIENT_IF, 0, transport, BluetoothGatt.GATT_CONNECTION_TIMEOUT, mDevice);
         verify(mAdapterService).notifyGattClientConnectFailed(anyInt(), any());
@@ -510,6 +593,7 @@ public class GattServiceTest {
         boolean isDirect = true;
         int transport = TRANSPORT_LE;
         boolean opportunistic = false;
+        boolean isAutomaticMtuEnabled = false;
 
         AttributionSource testAttributeSource =
                 new AttributionSource.Builder(Process.SYSTEM_UID)
@@ -526,6 +610,7 @@ public class GattServiceTest {
                 isDirect,
                 transport,
                 opportunistic,
+                isAutomaticMtuEnabled,
                 testAttributeSource);
 
         verify(mAdapterService).notifyDirectLeGattClientConnect(anyInt(), any());
@@ -538,7 +623,9 @@ public class GattServiceTest {
                         transport,
                         opportunistic,
                         0,
-                        false);
+                        false,
+                        isAutomaticMtuEnabled);
+
         mService.onConnectedFromNative(
                 CLIENT_IF, 15, transport, BluetoothGatt.GATT_SUCCESS, mDevice);
         mService.clientDisconnect(mGattCallback, mDevice, mSource);
@@ -552,6 +639,7 @@ public class GattServiceTest {
         boolean isDirect = true;
         int transport = TRANSPORT_LE;
         boolean opportunistic = false;
+        boolean isAutomaticMtuEnabled = false;
 
         AttributionSource testAttributeSource =
                 new AttributionSource.Builder(Process.SYSTEM_UID)
@@ -568,6 +656,7 @@ public class GattServiceTest {
                 isDirect,
                 transport,
                 opportunistic,
+                isAutomaticMtuEnabled,
                 testAttributeSource);
 
         verify(mAdapterService).notifyDirectLeGattClientConnect(anyInt(), any());
@@ -580,7 +669,9 @@ public class GattServiceTest {
                         transport,
                         opportunistic,
                         0,
-                        false);
+                        false,
+                        isAutomaticMtuEnabled);
+
         mService.onConnectedFromNative(
                 CLIENT_IF, 15, transport, BluetoothGatt.GATT_SUCCESS, mDevice);
         mService.onDisconnectedFromNative(CLIENT_IF, 15, transport, 1, mDevice);
@@ -857,12 +948,13 @@ public class GattServiceTest {
 
         mService.onGetGattDbFromNative(CLIENT_CONN_ID, db);
         // HID characteristics should be restricted
-        assertThat(mService.mRestrictedHandles.get(CLIENT_CONN_ID)).contains(hidInfoChar.id);
-        assertThat(mService.mRestrictedHandles.get(CLIENT_CONN_ID)).doesNotContain(randomChar.id);
+        assertThat(mService.getRestrictedHandles().get(CLIENT_CONN_ID)).contains(hidInfoChar.id);
+        assertThat(mService.getRestrictedHandles().get(CLIENT_CONN_ID))
+                .doesNotContain(randomChar.id);
 
         mService.onDisconnectedFromNative(
                 CLIENT_IF, CLIENT_CONN_ID, TRANSPORT_LE, BluetoothGatt.GATT_SUCCESS, mDevice);
-        assertThat(mService.mRestrictedHandles).doesNotContainKey(CLIENT_CONN_ID);
+        assertThat(mService.getRestrictedHandles()).doesNotContainKey(CLIENT_CONN_ID);
     }
 
     @Test
@@ -889,10 +981,10 @@ public class GattServiceTest {
 
         mService.onGetGattDbFromNative(CLIENT_CONN_ID, db);
         // ANCS should be restricted
-        assertThat(mService.mRestrictedHandles.get(CLIENT_CONN_ID)).contains(ancsService.id);
+        assertThat(mService.getRestrictedHandles().get(CLIENT_CONN_ID)).contains(ancsService.id);
 
         mService.onDisconnectedFromNative(
                 CLIENT_IF, CLIENT_CONN_ID, TRANSPORT_LE, BluetoothGatt.GATT_SUCCESS, mDevice);
-        assertThat(mService.mRestrictedHandles).doesNotContainKey(CLIENT_CONN_ID);
+        assertThat(mService.getRestrictedHandles()).doesNotContainKey(CLIENT_CONN_ID);
     }
 }

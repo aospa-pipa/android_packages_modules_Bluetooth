@@ -33,6 +33,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.AttributionSource
 import android.os.WorkSource
 import android.util.Log
+import com.android.bluetooth.Util
 import com.android.bluetooth.Util.enforceScanPermissionForDataDelivery
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.le_scan.ScanUtil.toStringShort
@@ -55,10 +56,7 @@ class ScanBinder(
         source: AttributionSource,
         method: String,
         block: ScanController.() -> Unit,
-    ) =
-        getController(source, method)?.let { controller ->
-            controller.doOnScanThread { controller.block() }
-        }
+    ) = getController(source, method)?.let { it.runOrDoOnScanThread(it, block) }
 
     @RequiresPermission(BLUETOOTH_SCAN)
     private fun getController(source: AttributionSource, method: String): ScanController? {
@@ -79,8 +77,9 @@ class ScanBinder(
         if (workSource != null) {
             adapterService.enforceCallingOrSelfPermission(UPDATE_DEVICE_STATS, null)
         }
+        val hasPrivilegedPermission = Util.checkCallerHasPrivilegedPermission(adapterService)
         withControllerRunOnScanThread(source, "registerScanner") {
-            registerScanner(callback, workSource, source)
+            registerScanner(callback, workSource, source, hasPrivilegedPermission)
         }
     }
 
@@ -95,8 +94,16 @@ class ScanBinder(
         if (workSource != null) {
             adapterService.enforceCallingOrSelfPermission(UPDATE_DEVICE_STATS, null)
         }
+        val hasPrivilegedPermission = Util.checkCallerHasPrivilegedPermission(adapterService)
         withControllerRunOnScanThread(source, "registerAndStartScan") {
-            registerAndStartScan(callback, workSource, source, settings, filters)
+            registerAndStartScan(
+                callback,
+                workSource,
+                source,
+                hasPrivilegedPermission,
+                settings,
+                filters,
+            )
         } ?: run { callback.onScannerRegistered(SCAN_FAILED_APPLICATION_REGISTRATION_FAILED, -1) }
     }
 
@@ -183,8 +190,8 @@ class ScanBinder(
     }
 
     override fun numHwTrackFiltersAvailable(source: AttributionSource): Int {
-        val controller = getController(source, "numHwTrackFiltersAvailable") ?: return 0
-        return controller.fetchOnScanThread({ controller.numHwTrackFiltersAvailable() }, 0)
+        val scan = getController(source, "numHwTrackFiltersAvailable") ?: return 0
+        return scan.runOrFetchOnScanThread(scan, 0) { scan.numHwTrackFiltersAvailable() }
     }
 
     @RequiresPermission(value = BLUETOOTH_PRIVILEGED, conditional = true)
@@ -243,5 +250,27 @@ class ScanBinder(
         }
 
         enforcePrivilegedPermissionIfNeeded(filters)
+    }
+
+    // TODO(b/444010402) Delete on Flags.leaudioBroadcastImproveSourceOperations() cleanup
+    private fun <T> ScanController.runOrDoOnScanThread(target: T, block: T.() -> Unit) {
+        if (isOnScanThread) {
+            target.block()
+        } else {
+            doOnScanThread { target.block() }
+        }
+    }
+
+    // TODO(b/444010402) Delete on Flags.leaudioBroadcastImproveSourceOperations() cleanup
+    private fun <T, R> ScanController.runOrFetchOnScanThread(
+        target: T,
+        defaultValue: R,
+        block: T.() -> R,
+    ): R {
+        return if (isOnScanThread) {
+            target.block()
+        } else {
+            fetchOnScanThread<R>({ target.block() }, defaultValue)
+        }
     }
 }

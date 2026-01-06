@@ -202,41 +202,6 @@ bool A2DP_VendorUsesRtpHeader(bool content_protection_enabled, const uint8_t* p_
   return true;
 }
 
-const char* A2DP_VendorCodecName(const uint8_t* p_codec_info) {
-  uint32_t vendor_id = A2DP_VendorCodecGetVendorId(p_codec_info);
-  uint16_t codec_id = A2DP_VendorCodecGetCodecId(p_codec_info);
-
-  // Check for aptX
-  if (vendor_id == A2DP_APTX_VENDOR_ID && codec_id == A2DP_APTX_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorCodecNameAptx(p_codec_info);
-  }
-
-  // Check for aptX-HD
-  if (vendor_id == A2DP_APTX_HD_VENDOR_ID && codec_id == A2DP_APTX_HD_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorCodecNameAptxHd(p_codec_info);
-  }
-
-  // Check for aptX-Adaptive
-  if (vendor_id == A2DP_APTX_ADAPTIVE_VENDOR_ID &&
-      codec_id == A2DP_APTX_ADAPTIVE_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorCodecNameAptxAdaptive(p_codec_info);
-  }
-
-  // Check for LDAC
-  if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorCodecNameLdac(p_codec_info);
-  }
-
-  // Check for Opus
-  if (vendor_id == A2DP_OPUS_VENDOR_ID && codec_id == A2DP_OPUS_CODEC_ID) {
-    return A2DP_VendorCodecNameOpus(p_codec_info);
-  }
-
-  // Add checks based on <vendor_id, codec_id>
-
-  return "UNKNOWN VENDOR CODEC";
-}
-
 bool A2DP_VendorCodecTypeEquals(const uint8_t* p_codec_info_a, const uint8_t* p_codec_info_b) {
   tA2DP_CODEC_TYPE codec_type_a = A2DP_GetCodecType(p_codec_info_a);
   tA2DP_CODEC_TYPE codec_type_b = A2DP_GetCodecType(p_codec_info_b);
@@ -477,12 +442,12 @@ btav_a2dp_codec_index_t A2DP_VendorSourceCodecIndex(const uint8_t* p_codec_info)
 
   // Check for aptX
   if (vendor_id == A2DP_APTX_VENDOR_ID && codec_id == A2DP_APTX_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorSourceCodecIndexAptx(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SOURCE_APTX;
   }
 
   // Check for aptX-HD
   if (vendor_id == A2DP_APTX_HD_VENDOR_ID && codec_id == A2DP_APTX_HD_CODEC_ID_BLUETOOTH) {
-    return A2DP_VendorSourceCodecIndexAptxHd(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD;
   }
 
   // Check for aptX-Adaptive
@@ -493,17 +458,17 @@ btav_a2dp_codec_index_t A2DP_VendorSourceCodecIndex(const uint8_t* p_codec_info)
 
   // Check for LDAC
   if (vendor_id == A2DP_LDAC_VENDOR_ID && codec_id == A2DP_LDAC_CODEC_ID) {
-    return A2DP_VendorSourceCodecIndexLdac(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC;
   }
 
   // Check for Opus
   if (vendor_id == A2DP_OPUS_VENDOR_ID && codec_id == A2DP_OPUS_CODEC_ID) {
-    return A2DP_VendorSourceCodecIndexOpus(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS;
   }
 
   // Check for LHDCv5
   if (vendor_id == A2DP_LHDC_VENDOR_ID && codec_id == A2DP_LHDCV5_CODEC_ID) {
-    return A2DP_VendorSourceCodecIndexLhdcV5(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5;
   }
 
   // Add checks based on <vendor_id, codec_id>
@@ -520,46 +485,10 @@ btav_a2dp_codec_index_t A2DP_VendorSinkCodecIndex(const uint8_t* p_codec_info) {
 
   // Check for Opus
   if (vendor_id == A2DP_OPUS_VENDOR_ID && codec_id == A2DP_OPUS_CODEC_ID) {
-    return A2DP_VendorSinkCodecIndexOpus(p_codec_info);
+    return BTAV_A2DP_CODEC_INDEX_SINK_OPUS;
   }
 
   return BTAV_A2DP_CODEC_INDEX_MAX;
-}
-
-const char* A2DP_VendorCodecIndexStr(btav_a2dp_codec_index_t codec_index) {
-  // Add checks based on codec_index
-  switch (codec_index) {
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_SBC:
-    case BTAV_A2DP_CODEC_INDEX_SINK_SBC:
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_AAC:
-    case BTAV_A2DP_CODEC_INDEX_SINK_AAC:
-    // scase BTAV_A2DP_CODEC_INDEX_SOURCE_MAX:
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_TWS:
-      break;  // These are not vendor-specific codecs
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX:
-      return A2DP_VendorCodecIndexStrAptx();
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_HD:
-      return A2DP_VendorCodecIndexStrAptxHd();
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_APTX_ADAPTIVE:
-      return A2DP_VendorCodecIndexStrAptxAdaptive();
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC:
-      return A2DP_VendorCodecIndexStrLdac();
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
-      return A2DP_VendorCodecIndexStrOpus();
-    case BTAV_A2DP_CODEC_INDEX_SINK_OPUS:
-      return A2DP_VendorCodecIndexStrOpusSink();
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_LHDCV5:
-      return A2DP_VendorCodecIndexStrLhdcV5();
-    // Add a switch statement for each vendor-specific codec
-    case BTAV_A2DP_CODEC_INDEX_MAX:
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_LC3:
-      break;
-    case BTAV_A2DP_CODEC_INDEX_SOURCE_EXT_MIN:
-    case BTAV_A2DP_CODEC_INDEX_SINK_EXT_MIN:
-      break;
-  }
-
-  return "UNKNOWN CODEC INDEX";
 }
 
 bool A2DP_VendorInitCodecConfig(btav_a2dp_codec_index_t codec_index, AvdtpSepConfig* p_cfg) {
@@ -634,5 +563,6 @@ std::string A2DP_VendorCodecInfoString(const uint8_t* p_codec_info) {
 
   // Add checks based on <vendor_id, codec_id>
 
-  return std::format("Unsupported codec vendor_id: 0x{:x} codec_id: 0x{:x}", vendor_id, codec_id);
+  return std::format("Unsupported codec vendor_id: 0x{:x} codec_id: 0x{:x}, codec info: {}",
+                     vendor_id, codec_id, DumpAvdtCodecInfo(p_codec_info));
 }

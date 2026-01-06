@@ -93,7 +93,7 @@ static void wipe_secrets_and_remove(BtmDevice* p_device) {
  ******************************************************************************/
 void BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class, LinkKey link_key,
                       uint8_t key_type, uint8_t pin_length) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  BtmDevice* p_device = btm_get_dev(bd_addr);
 
   if (p_device == nullptr) {
     p_device = btm_sec_allocate_dev_rec(bd_addr);
@@ -159,42 +159,53 @@ void BTM_SecAddDevice(const RawAddress& bd_addr, DEV_CLASS dev_class, LinkKey li
  * no longer valid!
  * *** WARNING ***
  *
- * Returns true if removed OK, false if not found or ACL link is active.
+ * Returns true if removed successfully, false if not found.
  */
 bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  if (com_android_bluetooth_flags_btm_disconnect_on_remove()) {
+    // BTA may not know about the connection if BTM is still reading remote features and version.
+    // If so, just disconnect the link here.
+    uint16_t handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
+    if (handle != HCI_INVALID_HANDLE) {
+      log::warn("Disconnecting unreported LE connection {}", bd_addr);
+      acl_disconnect_after_role_switch(handle, HCI_SUCCESS, "BTM_SecDeleteDevice");
+    }
+    handle = BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_BR_EDR);
+    if (handle != HCI_INVALID_HANDLE) {
+      log::warn("Disconnecting unreported BR/EDR connection {}", bd_addr);
+      acl_disconnect_after_role_switch(handle, HCI_SUCCESS, "BTM_SecDeleteDevice");
+    }
+  }
+
+  BtmDevice* p_device = btm_get_dev(bd_addr);
   if (p_device == nullptr) {
-    log::warn("Unable to delete link key for unknown device {}", bd_addr);
-    return true;
+    log::warn("Unknown device {}", bd_addr);
+    return false;
   }
 
   /* Invalidate bonded status */
   p_device->sec_rec.sec_flags &= ~BTM_SEC_LINK_KEY_KNOWN;
   p_device->sec_rec.sec_flags &= ~BTM_SEC_LE_LINK_KEY_KNOWN;
 
-  if (get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE) ||
-      get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_BR_EDR)) {
-    log::warn("FAILED: Cannot Delete when connection to {} is active", bd_addr);
-    return false;
+  if (!com_android_bluetooth_flags_btm_disconnect_on_remove()) {
+    if (get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE) ||
+        get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_BR_EDR)) {
+      log::warn("FAILED: Cannot Delete when connection to {} is active", bd_addr);
+      return false;
+    }
   }
-
-  RawAddress bda = p_device->bd_addr;
 
   log::info("Remove device {} from filter accept list before delete record", bd_addr);
   connection_manager::remove_unconditional(bd_addr);
-
-  const auto device_type = p_device->device_type;
-  const auto bond_type = p_device->sec_rec.bond_type;
 
   /* Clear out any saved BLE keys */
   btm_sec_clear_ble_keys(p_device);
   wipe_secrets_and_remove(p_device);
   /* Tell controller to get rid of the link key, if it has one stored */
-  btm_sec_hci_delete_stored_link_key(bda);
-  log::info("{} complete", bd_addr);
+  btm_sec_hci_delete_stored_link_key(p_device->bd_addr);
   BTM_LogHistory(kBtmLogTag, bd_addr, "Device removed",
-                 std::format("device_type:{} bond_type:{}", DeviceTypeText(device_type),
-                             bond_type_text(bond_type)));
+                 std::format("device_type:{} bond_type:{}", DeviceTypeText(p_device->device_type),
+                             bond_type_text(p_device->sec_rec.bond_type)));
 
   return true;
 }
@@ -208,7 +219,7 @@ bool BTM_SecDeleteDevice(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 void BTM_SecClearSecurityFlags(const RawAddress& bd_addr) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  BtmDevice* p_device = btm_get_dev(bd_addr);
   if (p_device == nullptr) {
     log::warn("Unable to clear security flags for unknown device {}", bd_addr);
     return;
@@ -253,7 +264,7 @@ const char* BTM_SecReadDevName(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 DEV_CLASS BTM_SecReadDevClass(const RawAddress& bd_addr) {
-  BtmDevice* p_srec = btm_find_dev(bd_addr);
+  const BtmDevice* p_srec = btm_find_dev(bd_addr);
   if (p_srec != nullptr) {
     return p_srec->dev_class;
   }
@@ -340,6 +351,10 @@ static BtmDevice* btm_find_dev_by_handle_(uint16_t handle) {
 
   if (com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
     // Get the security device record with matching handle, and return directly.
+    if (!btm_sec_cb.IsSecCBInitialized()) {
+      return nullptr;
+    }
+
     return btm_sec_cb.for_each_dev_rec(is_handle_equal, &handle);
   }
 
@@ -402,7 +417,7 @@ static bool is_rpa_unresolvable(void* data, void* context) {
  *
  ******************************************************************************/
 // TODO(b/444620685): Remove when use_array_instead_list_in_sec_dev_rec is shipped.
-static BtmDevice* btm_find_dev_(const RawAddress& bd_addr) {
+static BtmDevice* find_dev_from_list(const RawAddress& bd_addr) {
   if (btm_sec_cb.sec_dev_rec == nullptr) {
     return nullptr;
   }
@@ -426,9 +441,13 @@ static BtmDevice* btm_find_dev_(const RawAddress& bd_addr) {
   return nullptr;
 }
 
-BtmDevice* btm_find_dev(const RawAddress& bd_addr) {
+static BtmDevice* find_dev(const RawAddress& bd_addr) {
   if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
-    return btm_find_dev_(bd_addr);
+    return find_dev_from_list(bd_addr); // finds device from sec_dev_rec list
+  }
+
+  if (!btm_sec_cb.IsSecCBInitialized()) {
+    return nullptr;
   }
 
   BtmDevice* p_device =
@@ -443,6 +462,18 @@ BtmDevice* btm_find_dev(const RawAddress& bd_addr) {
   }
 
   return p_device;
+}
+
+const BtmDevice* btm_find_dev(const RawAddress& bd_addr) {
+  return find_dev(bd_addr);
+}
+
+BtmDevice* btm_get_dev(const RawAddress& bd_addr) {
+  if (!com::android::bluetooth::flags::fix_sec_dev_rec_access()) {
+    return find_dev(bd_addr);
+  }
+
+  return get_main_thread()->DoInThreadSynchronously(&find_dev, bd_addr);
 }
 
 static bool has_lenc_and_address_is_equal(void* data, void* context) {
@@ -464,8 +495,12 @@ static bool has_lenc_and_address_is_equal(void* data, void* context) {
  * Returns          Pointer to the record or NULL
  *
  ******************************************************************************/
-BtmDevice* btm_find_dev_with_lenc(const RawAddress& bd_addr) {
+static BtmDevice* find_dev_with_lenc(const RawAddress& bd_addr) {
   if (com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
+    if (!btm_sec_cb.IsSecCBInitialized()) {
+      return nullptr;
+    }
+
     return btm_sec_cb.for_each_dev_rec(has_lenc_and_address_is_equal, (void*)&bd_addr);
   }
 
@@ -481,6 +516,19 @@ BtmDevice* btm_find_dev_with_lenc(const RawAddress& bd_addr) {
 
   return NULL;
 }
+
+const BtmDevice* btm_find_dev_with_lenc(const RawAddress& bd_addr) {
+  return find_dev_with_lenc(bd_addr);
+}
+
+BtmDevice* btm_get_dev_with_lenc(const RawAddress& bd_addr) {
+  if (!com::android::bluetooth::flags::fix_sec_dev_rec_access()) {
+    return find_dev_with_lenc(bd_addr);
+  }
+
+  return get_main_thread()->DoInThreadSynchronously(&find_dev_with_lenc, bd_addr);
+}
+
 /*******************************************************************************
  *
  * Function         btm_consolidate_dev
@@ -602,7 +650,7 @@ static void consolidate_existing_dev(BtmDevice* p_target, BtmDevice* p_device,
 /* combine security records of established LE connections after Classic pairing
  * succeeded. */
 void btm_dev_consolidate_existing_connections(const RawAddress& bd_addr) {
-  BtmDevice* p_target = btm_find_dev(bd_addr);
+  BtmDevice* p_target = btm_get_dev(bd_addr);
   if (!p_target) {
     log::error("No security record for just bonded device!?!?");
     return;
@@ -648,7 +696,7 @@ void btm_dev_consolidate_existing_connections(const RawAddress& bd_addr) {
  ******************************************************************************/
 BtmDevice* btm_find_or_alloc_dev(const RawAddress& bd_addr) {
   BtmDevice* p_device;
-  p_device = btm_find_dev(bd_addr);
+  p_device = btm_get_dev(bd_addr);
   if (p_device == nullptr) {
     /* Allocate a new device record or reuse the oldest one */
     p_device = btm_sec_alloc_dev(bd_addr);
@@ -844,7 +892,7 @@ BtmDevice* btm_sec_allocate_dev_rec(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  const BtmDevice* p_device = btm_find_dev(bd_addr);
 
   if (p_device == nullptr) {
     return BOND_TYPE_UNKNOWN;
@@ -864,7 +912,7 @@ tBTM_BOND_TYPE btm_get_bond_type_dev(const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 bool btm_set_bond_type_dev(const RawAddress& bd_addr, tBTM_BOND_TYPE bond_type) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  BtmDevice* p_device = btm_get_dev(bd_addr);
 
   if (p_device == nullptr) {
     log::warn("No security record for device {}", bd_addr);
@@ -930,7 +978,7 @@ std::vector<BtmDevice*> btm_get_sec_dev_rec() {
  *
  ******************************************************************************/
 bool BTM_Sec_AddressKnown(const RawAddress& address) {
-  BtmDevice* p_device = btm_find_dev(address);
+  const BtmDevice* p_device = btm_find_dev(address);
 
   // not a known device, we assume public address
   if (p_device == nullptr) {
@@ -961,7 +1009,7 @@ bool BTM_Sec_AddressKnown(const RawAddress& address) {
 }
 
 const tBLE_BD_ADDR BTM_Sec_GetAddressWithType(const RawAddress& bd_addr) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  const BtmDevice* p_device = btm_find_dev(bd_addr);
   if (p_device == nullptr || !p_device->is_device_type_has_ble()) {
     return {
             .type = BLE_ADDR_PUBLIC,
@@ -1027,6 +1075,11 @@ static void DumpsysRecord_(int fd) {
 void DumpsysRecord(int fd) {
   if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
     DumpsysRecord_(fd);
+    return;
+  }
+
+  if (!btm_sec_cb.IsSecCBInitialized()) {
+    LOG_DUMPSYS(fd, "Record is empty - no devices");
     return;
   }
 

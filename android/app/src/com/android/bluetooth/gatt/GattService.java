@@ -193,7 +193,7 @@ public class GattService extends ProfileService {
     /**
      * Set of restricted (which require a BLUETOOTH_PRIVILEGED permission) handles per connectionId.
      */
-    final Map<Integer, Set<Integer>> mRestrictedHandles = new HashMap<>();
+    private final Map<Integer, Set<Integer>> mRestrictedHandles = new HashMap<>();
 
     /**
      * HashMap used to synchronize writeCharacteristic calls mapping remote device to available
@@ -208,8 +208,6 @@ public class GattService extends ProfileService {
 
     /** HashMap used for storing RSSI cache entries */
     @VisibleForTesting final Map<String, RssiCacheEntry> mRssiCache = new HashMap<>();
-
-    final Object mOffloadLock = new Object();
 
     private final CompanionDeviceManager mCompanionDeviceManager;
     private final GattServerManager mServerManager;
@@ -372,7 +370,7 @@ public class GattService extends ProfileService {
                 () -> {
                     mClientMap.clear();
                     mRestrictedHandles.clear();
-                    mServerManager.clear();
+                    mServerManager.cleanup();
                     mRssiCache.clear();
                     mReliableQueue.clear();
                     mNativeInterface.cleanup();
@@ -417,14 +415,22 @@ public class GattService extends ProfileService {
     }
 
     ContextMap<IBluetoothGattCallback> getClientMap() {
+        enforceGattThread();
         return mClientMap;
     }
 
     ContextMap<IBluetoothGattServerCallback> getServerMap() {
+        enforceGattThread();
         return mServerManager.getServerMap();
     }
 
+    Map<Integer, Set<Integer>> getRestrictedHandles() {
+        enforceGattThread();
+        return mRestrictedHandles;
+    }
+
     Map<BluetoothDevice, Integer> getCachedPeripheralLatency() {
+        enforceGattThread();
         return mCachedPeripheralLatency;
     }
 
@@ -449,9 +455,10 @@ public class GattService extends ProfileService {
         } else {
             app.setId(clientIf);
             var message = "Unregistering client " + app + ", callback=" + callback;
-            Runnable onDeathAction =
-                    () -> unregisterClient(callback, getAttributionSource(), REASON_BINDER_DIED);
-            app.linkToDeath(new ActionOnDeathRecipient(TAG, message, onDeathAction));
+            var source = getAttributionSource();
+            var died = REASON_BINDER_DIED;
+            Runnable action = () -> doOnGattThread(() -> unregisterClient(callback, source, died));
+            app.linkToDeath(new ActionOnDeathRecipient(TAG, message, action));
         }
         callbackToApp(() -> callback.onClientRegistered(status));
     }
@@ -479,7 +486,7 @@ public class GattService extends ProfileService {
         }
 
         var app = mClientMap.getById(clientIf);
-        mMetricsReporter.logGattConnectionStateChange(device, clientIf, connectionState, status);
+        mMetricsReporter.logConnectionStateChange(device, clientIf, connectionState, status);
         if (app == null) {
             return;
         }
@@ -516,7 +523,7 @@ public class GattService extends ProfileService {
             }
         }
 
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTED, status);
         if (app == null) {
             return;
@@ -1048,6 +1055,7 @@ public class GattService extends ProfileService {
             boolean isDirect,
             int transport,
             boolean opportunistic,
+            boolean autoMtuEnabled,
             AttributionSource source) {
         enforceGattThread();
         var clientApp = mClientMap.getByCallbackId(callback);
@@ -1060,14 +1068,15 @@ public class GattService extends ProfileService {
                 TAG,
                 ("clientConnect(): device=" + device)
                         + (", transport=" + transportToString(transport))
-                        + (", addressType=" + addressType + ", isDirect=" + isDirect)
-                        + (", opportunistic=" + opportunistic));
+                        + (", addressType=" + addressType)
+                        + (", isDirect=" + isDirect)
+                        + (", opportunistic=" + opportunistic)
+                        + (", autoMtuEnabled=" + autoMtuEnabled));
         mMetricsReporter.logAppPackage(clientIf, device, source.getUid());
         mMetricsReporter.logClientForegroundInfo(source.getUid(), isDirect);
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_CONNECTING, -1);
         mMetricsReporter.logConnect(device, isDirect, source.getUid());
-
         int preferredMtu = 0;
 
         final var packageName = source.getPackageName();
@@ -1117,7 +1126,8 @@ public class GattService extends ProfileService {
                 transport,
                 opportunistic,
                 preferredMtu,
-                preferRelaxMode);
+                preferRelaxMode,
+                autoMtuEnabled);
     }
 
     void clientDisconnect(
@@ -1135,7 +1145,7 @@ public class GattService extends ProfileService {
             int clientIf, BluetoothDevice device, AttributionSource source) {
         final var connId = getFirstConnectionIdForDevice(clientIf, device);
         Log.d(TAG, "clientDisconnectInternal(): device=" + device + ", connId=" + connId);
-        mMetricsReporter.logGattConnectionStateChange(
+        mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_DISCONNECTING, -1);
         mMetricsReporter.logDisconnectStart(device, source.getUid());
         getAdapterService().notifyGattClientDisconnect(clientIf, device);
@@ -1486,7 +1496,7 @@ public class GattService extends ProfileService {
                 companionManager.getGattConnParameters(
                         device, CompanionManager.GATT_CONN_LATENCY, connectionPriority);
 
-        final int timeout = 500; // 5s. Link supervision timeout is measured in N * 10ms
+        final int timeout = companionManager.getGattSupervisionTimeout(device);
         Log.d(
                 TAG,
                 ("connectionParameterUpdate(): device=" + device + ", params=" + connectionPriority)
@@ -1555,7 +1565,8 @@ public class GattService extends ProfileService {
             maxLatency = mCachedPeripheralLatency.getOrDefault(device, 0);
         }
 
-        int supervisionTimeout = 500; // 5s. Link supervision timeout is measured in N * 10ms
+        final int supervisionTimeout =
+                getAdapterService().getCompanionManager().getGattSupervisionTimeout(device);
 
         // Confirm flag config
         if (Flags.leSubrateManager()) {
@@ -1738,6 +1749,12 @@ public class GattService extends ProfileService {
             task.cancel(true);
         }
         return defaultValue;
+    }
+
+    // TODO(b/377424060) Remove when "use internal APIs instead of framework APIs" is fixed
+    boolean isOnGattThread() {
+        if (!Flags.gattThread() || Utils.isInstrumentationTestMode()) return false;
+        return mGattHandler.getLooper().isCurrentThread();
     }
 
     void enforceGattThread() {

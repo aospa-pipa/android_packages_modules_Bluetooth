@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package android.bluetooth
 
 import android.bluetooth.le.AdvertiseData
@@ -32,12 +33,10 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class LeLegacyAdvertisingTest {
-    @get:Rule(order = 1) val permissionRule = AdoptShellPermissionsRule()
+    @get:Rule(order = 0) val permissionRule = AdoptShellPermissionsRule()
 
     @Test
     fun setAdvertisingDataOver31Bytes() {
-        val advertiser = BluetoothAdapter.getDefaultAdapter().bluetoothLeAdvertiser
-
         // Set legacy scan mode
         val params =
             AdvertisingSetParameters.Builder()
@@ -72,7 +71,7 @@ class LeLegacyAdvertisingTest {
             }
 
         try {
-            advertiser.startAdvertisingSet(params, advertiseData, null, null, null, callback)
+            leAdvertiser.startAdvertisingSet(params, advertiseData, null, null, null, callback)
             future.completeOnTimeout(null, TIMEOUT_MS, TimeUnit.MILLISECONDS).join()
 
             val setAdvertingDataResult = future.get()
@@ -80,14 +79,12 @@ class LeLegacyAdvertisingTest {
             assertThat(setAdvertingDataResult)
                 .isEqualTo(AdvertisingSetCallback.ADVERTISE_FAILED_DATA_TOO_LARGE)
         } finally {
-            advertiser.stopAdvertisingSet(callback)
+            leAdvertiser.stopAdvertisingSet(callback)
         }
     }
 
     @Test
     fun setScanResponseDataOver31Bytes() {
-        val advertiser = BluetoothAdapter.getDefaultAdapter().bluetoothLeAdvertiser
-
         // Set legacy scan mode
         val params =
             AdvertisingSetParameters.Builder()
@@ -122,7 +119,7 @@ class LeLegacyAdvertisingTest {
             }
 
         try {
-            advertiser.startAdvertisingSet(params, advertiseData, null, null, null, callback)
+            leAdvertiser.startAdvertisingSet(params, advertiseData, null, null, null, callback)
             future.completeOnTimeout(null, TIMEOUT_MS, TimeUnit.MILLISECONDS).join()
 
             val setScanResponseResult = future.get()
@@ -130,7 +127,7 @@ class LeLegacyAdvertisingTest {
             assertThat(setScanResponseResult)
                 .isEqualTo(AdvertisingSetCallback.ADVERTISE_FAILED_DATA_TOO_LARGE)
         } finally {
-            advertiser.stopAdvertisingSet(callback)
+            leAdvertiser.stopAdvertisingSet(callback)
         }
     }
 

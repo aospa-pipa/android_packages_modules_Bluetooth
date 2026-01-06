@@ -16,21 +16,22 @@
 
 package com.android.bluetooth.hid
 
-import android.bluetooth.BluetoothDevice
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.profile.NativeCallback
 
 class HidDeviceNativeCallback(
-    private val adapterService: AdapterService,
+    adapterService: AdapterService,
     private val service: HidDeviceService,
-) : NativeCallback {
+) : NativeCallback(adapterService) {
 
     @Synchronized
-    fun onApplicationStateChanged(address: ByteArray?, registered: Boolean) =
-        service.onApplicationStateChangedFromNative(getDevice(address), registered)
+    fun onApplicationStateChanged(address: ByteArray?, registered: Boolean) {
+        val device = if (address != null) getDevice(address) else null
+        service.onApplicationStateChangedFromNative(device, registered)
+    }
 
     @Synchronized
-    fun onConnectStateChanged(address: ByteArray?, state: Int) =
+    fun onConnectStateChanged(address: ByteArray, state: Int) =
         service.onConnectStateChangedFromNative(getDevice(address), state)
 
     @Synchronized
@@ -48,11 +49,4 @@ class HidDeviceNativeCallback(
         service.onInterruptDataFromNative(reportId, data)
 
     @Synchronized fun onVirtualCableUnplug() = service.onVirtualCableUnplugFromNative()
-
-    private fun getDevice(address: ByteArray?): BluetoothDevice? {
-        if (address == null) {
-            return null
-        }
-        return adapterService.getDeviceFromByte(address)
-    }
 }

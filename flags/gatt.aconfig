@@ -117,3 +117,24 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "send_service_changed_indication_upon_reconnection"
+    namespace: "bluetooth"
+    description: "Send service change indication upon reconnection if required"
+    bug: "459450198"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "gatt_reg_notification_on_jni_thread"
+    namespace: "bluetooth"
+    description: "Push register notification callback on JNI thread"
+    bug: "462776109"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+

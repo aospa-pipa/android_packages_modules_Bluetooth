@@ -25,6 +25,7 @@
 
 #include <base/functional/bind.h>
 #include <bluetooth/log.h>
+#include <bluetooth/metrics/bluetooth_event.h>
 #include <bluetooth/types/address.h>
 
 #include <cstdint>
@@ -93,7 +94,7 @@ static void bta_ag_port_cback(uint32_t /* code */, uint16_t port_handle, uint16_
                  p_scb->peer_addr, bta_ag_state_str(p_scb->state));
     }
     do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, handle, BTA_AG_RFC_DATA_EVT,
-                                     tBTA_AG_DATA::kEmpty));
+                                     tBTA_AG_DATA::kEmpty, NO_FAILURE));
   }
 }
 
@@ -128,6 +129,8 @@ static void bta_ag_mgmt_cback(const tPORT_RESULT code, uint16_t port_handle, uin
       /* Outgoing connection */
       if (port_handle == p_scb->conn_handle) {
         found_handle = true;
+        bluetooth::metrics::LogRfcommNativeConnectionCompleteEvent(
+                p_scb->peer_addr, bluetooth::metrics::EventType::RFCOMM_HFP_AG_CONNECTION, true, 0);
       }
     } else {
       /* Incoming connection */
@@ -144,16 +147,21 @@ static void bta_ag_mgmt_cback(const tPORT_RESULT code, uint16_t port_handle, uin
       return;
     }
     event = BTA_AG_RFC_OPEN_EVT;
-  } else if (port_handle == p_scb->conn_handle) {
-    /* distinguish server close events */
-    event = BTA_AG_RFC_CLOSE_EVT;
   } else {
-    event = BTA_AG_RFC_SRV_CLOSE_EVT;
+    bluetooth::metrics::LogRfcommPortFailureEvent(
+            p_scb->peer_addr, bluetooth::metrics::EventType::RFCOMM_HFP_AG_CONNECTION_FAILURE, 0,
+            code);
+    if (port_handle == p_scb->conn_handle) {
+      /* distinguish server close events */
+      event = BTA_AG_RFC_CLOSE_EVT;
+    } else {
+      event = BTA_AG_RFC_SRV_CLOSE_EVT;
+    }
   }
 
   tBTA_AG_DATA data = {};
   data.rfc.port_handle = port_handle;
-  do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, handle, event, data));
+  do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, handle, event, data, NO_FAILURE));
 }
 
 /*******************************************************************************
@@ -333,6 +341,8 @@ bool bta_ag_is_server_closed(tBTA_AG_SCB* p_scb) {
  ******************************************************************************/
 void bta_ag_rfc_do_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
   int management_callback_index = bta_ag_scb_to_idx(p_scb) - 1;
+  bluetooth::metrics::LogRfcommNativeStartEvent(
+          p_scb->peer_addr, bluetooth::metrics::EventType::RFCOMM_HFP_AG_CONNECTION, 0);
   get_btm_client_interface().security.BTM_SetSecurityLevel(
          true, "HFP_AG", BTM_SEC_SERVICE_AG_HANDSFREE , (BTA_SEC_AUTHENTICATE | BTA_SEC_ENCRYPT),
          BT_PSM_RFCOMM,BTM_SEC_PROTO_RFCOMM, 0);
@@ -371,12 +381,14 @@ void bta_ag_rfc_do_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
     if (RFCOMM_RemoveConnection(p_scb->conn_handle) != PORT_SUCCESS) {
       log::warn("Unable to remove RFCOMM connection handle:0x{:04x}", p_scb->conn_handle);
     }
+    bluetooth::metrics::LogRfcommNativeDisconnectionEvent(
+            p_scb->peer_addr, bluetooth::metrics::EventType::RFCOMM_HFP_AG_CONNECTION, 0);
   } else {
     /* Close API was called while AG is in Opening state.               */
     /* Need to trigger the state machine to send callback to the app    */
     /* and move back to INIT state.                                     */
     do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, bta_ag_scb_to_idx(p_scb),
-                                     BTA_AG_RFC_CLOSE_EVT, tBTA_AG_DATA::kEmpty));
+                                     BTA_AG_RFC_CLOSE_EVT, tBTA_AG_DATA::kEmpty, NO_FAILURE));
 
     /* Cancel SDP if it had been started. */
     /*

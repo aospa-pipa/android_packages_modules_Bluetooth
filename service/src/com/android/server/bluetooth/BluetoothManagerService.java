@@ -88,15 +88,12 @@ import kotlin.time.TimeSource;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -118,7 +115,7 @@ class BluetoothManagerService {
             SystemProperties.getBoolean(
                     "bluetooth.hardware.degraded_performance_mode.enabled", false);
 
-    private static final Duration TIMEOUT_BIND;
+    @VisibleForTesting static final Duration TIMEOUT_BIND;
     private static final Duration STATE_TIMEOUT;
     @VisibleForTesting static final Duration SERVICE_RESTART_DELAY;
     private static final Duration ADD_PROXY_DELAY;
@@ -206,7 +203,8 @@ class BluetoothManagerService {
     private boolean mQuietEnableExternal = false;
     private boolean mEnableExternal = false;
 
-    private int mErrorRecoveryRetryCounter = 0;
+    private int mRetryCounter = 0;
+    private boolean mIsBootCompleted = false;
 
     // The code in mBluetoothCallback is running on Binder thread.
     // It must be posted on the local looper to prevent concurrent access.
@@ -1141,6 +1139,16 @@ class BluetoothManagerService {
         mHandler.removeMessages(MESSAGE_TIMEOUT_BIND);
     }
 
+    void onBootCompleted() {
+        mIsBootCompleted = true;
+        if (!mHandler.hasMessages(MESSAGE_TIMEOUT_BIND)) {
+            return;
+        }
+
+        mHandler.removeMessages(MESSAGE_TIMEOUT_BIND);
+        sendMessageDelayed(MESSAGE_TIMEOUT_BIND, TIMEOUT_BIND);
+    }
+
     public boolean isBluetoothAvailableForBinding() {
         if (mAdapter != null && ((getState() == State.ON) ||
             (getState() == State.TURNING_ON))) {
@@ -1149,6 +1157,7 @@ class BluetoothManagerService {
             return false;
         }
     }
+
     /**
      * Send enable message and set adapter name and address. Called when the boot phase becomes
      * PHASE_SYSTEM_SERVICES_READY.
@@ -1294,7 +1303,7 @@ class BluetoothManagerService {
         public void onServiceDisconnected(ComponentName componentName) {
             // Called if we unexpectedly disconnect.
             String name = componentName.getClassName();
-            Log.d(TAG, "ServiceConnection.onServiceDisconnected(" + name + ")");
+            Log.e(TAG, "ServiceConnection.onServiceDisconnected(" + name + ")");
             if (!name.equals("com.android.bluetooth.btservice.AdapterService")) {
                 Log.e(TAG, "Unknown service disconnected: " + name);
                 return;
@@ -1417,9 +1426,9 @@ class BluetoothManagerService {
                     }
                     if (newState == State.ON || newState == State.BLE_ON) {
                         // bluetooth is working, reset the counter
-                        if (mErrorRecoveryRetryCounter != 0) {
+                        if (mRetryCounter != 0) {
                             Log.w(TAG, "bluetooth is recovered from error");
-                            mErrorRecoveryRetryCounter = 0;
+                            mRetryCounter = 0;
                         }
                     }
                 }
@@ -1451,7 +1460,7 @@ class BluetoothManagerService {
                     addCrashLog();
                     mActiveLogs.add(ENABLE_DISABLE_REASON_CRASH, false);
                     if (mEnable) {
-                        prepareRestartMessage();
+                        prepareRestartMessage(false);
                     }
 
                     sendBluetoothServiceDownCallback();
@@ -1496,7 +1505,7 @@ class BluetoothManagerService {
                         mTryBindOnBindTimeout = false;
                     }
                     if (mEnable) {
-                        prepareRestartMessage();
+                        prepareRestartMessage(true);
                     }
                 }
 
@@ -1509,23 +1518,30 @@ class BluetoothManagerService {
         return mHandler.hasMessages(MESSAGE_TIMEOUT_BIND);
     }
 
-    private void prepareRestartMessage() {
+    private void prepareRestartMessage(boolean recoverFromTimeout) {
         mEnable = false;
 
-        mErrorRecoveryRetryCounter++;
-        if (mErrorRecoveryRetryCounter > MAX_ERROR_RESTART_RETRIES) {
+        mRetryCounter++;
+        if (mRetryCounter > MAX_ERROR_RESTART_RETRIES) {
             resetAdapter();
             Log.e(TAG, "Reached maximum retry to restart Bluetooth!");
             return;
         }
 
-        var delay = SERVICE_RESTART_DELAY.multipliedBy(mErrorRecoveryRetryCounter);
-        if (mErrorRecoveryRetryCounter > MAX_ERROR_RESTART_RETRIES / 2) {
+        var delay = SERVICE_RESTART_DELAY.multipliedBy(mRetryCounter);
+        if (mRetryCounter > MAX_ERROR_RESTART_RETRIES / 2) {
             // Last attempts should leave way more time
             delay = delay.multipliedBy(10);
         }
+        if (recoverFromTimeout) {
+            // Leave more time to recover when it come from a timeout, to not add load on an already
+            // performance limited device.
+            // This should also give enough time to terminate the Bluetooth process and make sure it
+            // is not being re-used.
+            delay = delay.multipliedBy(10);
+        }
 
-        Log.d(TAG, "Recovery " + mErrorRecoveryRetryCounter + " scheduled in " + delay + "ms");
+        Log.e(TAG, "Recovery #" + mRetryCounter + " scheduled in " + delay.toString().substring(2));
         sendMessageDelayed(MESSAGE_RESTART_BLUETOOTH_SERVICE, delay);
     }
 
@@ -1653,7 +1669,10 @@ class BluetoothManagerService {
             mActiveLogs.add(ENABLE_DISABLE_REASON_START_ERROR, false);
             return;
         }
-        sendMessageDelayed(MESSAGE_TIMEOUT_BIND, TIMEOUT_BIND);
+
+        // Leave more time to bind to Bluetooth if the boot is not completed
+        var delay = mIsBootCompleted ? TIMEOUT_BIND : TIMEOUT_BIND.multipliedBy(20);
+        sendMessageDelayed(MESSAGE_TIMEOUT_BIND, delay);
     }
 
     private void propagateOffToBleOn(String hciInstanceName) {
@@ -2050,7 +2069,7 @@ class BluetoothManagerService {
             mBleAppManager.clearBleApps();
         }
 
-        prepareRestartMessage();
+        prepareRestartMessage(false);
 
         if (repeatAirplaneRunnable) {
             onAirplaneModeChanged(mAirplaneModeController.isOnForUser());
@@ -2094,9 +2113,6 @@ class BluetoothManagerService {
 
         writer.println("");
 
-        dumpBluetoothFlags(writer);
-        writer.println("");
-
         writer.flush();
 
         if (mAdapter == null) {
@@ -2117,42 +2133,6 @@ class BluetoothManagerService {
         if (errorMsg != null) {
             writer.println(errorMsg);
         }
-    }
-
-    private static void dumpBluetoothFlags(PrintWriter writer) {
-        writer.println("🚩Flag dump:");
-        Pattern pattern = Pattern.compile("_([0-9a-z])");
-        // When a flag contains a number, the camelCase method doesn't provide information if the
-        // number should have an underscore before or not. Example: a2dpVersion14 is for
-        // a2dp_version_1_4...
-        // To fix that, we first need to get the static flag value, then we convert the SNAKE_NAME
-        // to camelCase and call the associated method to get the flag value
-        Arrays.stream(Flags.class.getDeclaredFields())
-                .filter((Field f) -> f.getType() == String.class)
-                .forEach(
-                        (Field f) -> {
-                            try {
-                                String flagName =
-                                        ((String) f.get(null))
-                                                .replaceFirst(
-                                                        "com.android.bluetooth.*\\.flags\\.", "");
-                                String methodName =
-                                        pattern.matcher(flagName)
-                                                .replaceAll(m -> m.group(1).toUpperCase(Locale.US));
-                                boolean flagValue =
-                                        (boolean)
-                                                Flags.class
-                                                        .getDeclaredMethod(methodName)
-                                                        .invoke(null);
-                                writer.println(
-                                        "\t" + (flagValue ? "[■]" : "[ ]") + ": " + flagName);
-                            } catch (IllegalAccessException
-                                    | InvocationTargetException
-                                    | NoSuchMethodException e) {
-                                writer.println("Cannot invoke flag value for " + f);
-                                throw new RuntimeException(e);
-                            }
-                        });
     }
 
     static @NonNull Bundle getTempAllowlistBroadcastOptions() {

@@ -964,9 +964,9 @@ public final class BluetoothAdapter {
      *
      * @return the default local adapter, or null if Bluetooth is not supported on this hardware
      *     platform
-     * @deprecated this method will continue to work, but developers are strongly encouraged to
-     *     migrate to using {@link BluetoothManager#getAdapter()}, since that approach enables
-     *     support for {@link Context#createAttributionContext}.
+     * @deprecated Use {@code context.getSystemService(BluetoothManager.class).getAdapter()} instead
+     *     to allows context override such as {@link Context#createAttributionContext} or {@link
+     *     Context#createContextAsUser}.
      */
     @Deprecated
     @RequiresNoPermission
@@ -977,8 +977,7 @@ public final class BluetoothAdapter {
         return sAdapter;
     }
 
-    @Hide
-    public static BluetoothAdapter createAdapter(Context context) {
+    static BluetoothAdapter createAdapter(Context context) {
         BluetoothServiceManager manager =
                 BluetoothFrameworkInitializer.getBluetoothServiceManager();
         if (manager == null) {
@@ -988,12 +987,11 @@ public final class BluetoothAdapter {
         IBluetoothManager service =
                 IBluetoothManager.Stub.asInterface(
                         manager.getBluetoothManagerServiceRegisterer().get());
-        if (service != null) {
-            return new BluetoothAdapter(service, context);
-        } else {
+        if (service == null) {
             Log.e(TAG, "Bluetooth service is null");
             return null;
         }
+        return new BluetoothAdapter(service, context);
     }
 
     private BluetoothAdapter(IBluetoothManager managerService, @Nullable Context context) {
@@ -1095,7 +1093,7 @@ public final class BluetoothAdapter {
     @RequiresNoPermission
     public BluetoothDevice getRemoteDevice(String address) {
         //android.util.SeempLog.record(62);
-        final BluetoothDevice res = new BluetoothDevice(address);
+        final BluetoothDevice res = new BluetoothDevice(this, address);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -1119,7 +1117,7 @@ public final class BluetoothAdapter {
     @NonNull
     public BluetoothDevice getRemoteLeDevice(
             @NonNull String address, @AddressType int addressType) {
-        final BluetoothDevice res = new BluetoothDevice(address, addressType);
+        final BluetoothDevice res = new BluetoothDevice(this, address, addressType);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -1142,17 +1140,17 @@ public final class BluetoothAdapter {
         if (address == null || address.length != 6) {
             throw new IllegalArgumentException("Bluetooth address must have 6 bytes");
         }
-        final BluetoothDevice res =
-                new BluetoothDevice(
-                        String.format(
-                                Locale.US,
-                                "%02X:%02X:%02X:%02X:%02X:%02X",
-                                address[0],
-                                address[1],
-                                address[2],
-                                address[3],
-                                address[4],
-                                address[5]));
+        final String addressString =
+                String.format(
+                        Locale.US,
+                        "%02X:%02X:%02X:%02X:%02X:%02X",
+                        address[0],
+                        address[1],
+                        address[2],
+                        address[3],
+                        address[4],
+                        address[5]);
+        final BluetoothDevice res = new BluetoothDevice(this, addressString);
         res.setAttributionSource(mAttributionSource);
         return res;
     }
@@ -1162,11 +1160,12 @@ public final class BluetoothAdapter {
      * return null if Bluetooth is turned off or if Bluetooth LE Advertising is not supported on
      * this device.
      *
-     * <p>Use {@link #isMultipleAdvertisementSupported()} to check whether LE Advertising is
-     * supported on this device before calling this method.
+     * <p>Use {@link #isEnabled()} to check if Bluetooth is currently enabled. Use {@link
+     * #isMultipleAdvertisementSupported()} to check whether LE Advertising is supported on this
+     * device before calling this method.
      */
     @RequiresNoPermission
-    public BluetoothLeAdvertiser getBluetoothLeAdvertiser() {
+    public @Nullable BluetoothLeAdvertiser getBluetoothLeAdvertiser() {
         if (!getLeAccess()) {
             return null;
         }
@@ -1183,12 +1182,13 @@ public final class BluetoothAdapter {
      * operations. Will return null if Bluetooth is turned off or if Bluetooth LE Periodic
      * Advertising is not supported on this device.
      *
-     * <p>Use {@link #isLePeriodicAdvertisingSupported()} to check whether LE Periodic Advertising
-     * is supported on this device before calling this method.
+     * <p>Use {@link #isEnabled()} to check if Bluetooth is currently enabled. Use {@link
+     * #isLePeriodicAdvertisingSupported()} to check whether LE Periodic Advertising is supported on
+     * this device before calling this method.
      */
     @Hide
     @RequiresNoPermission
-    public PeriodicAdvertisingManager getPeriodicAdvertisingManager() {
+    public @Nullable PeriodicAdvertisingManager getPeriodicAdvertisingManager() {
         if (!getLeAccess()) {
             return null;
         }
@@ -1205,9 +1205,14 @@ public final class BluetoothAdapter {
         }
     }
 
-    /** Returns a {@link BluetoothLeScanner} object for Bluetooth LE scan operations. */
+    /**
+     * Returns a {@link BluetoothLeScanner} object for Bluetooth LE scan operations. Will return
+     * null if Bluetooth is turned off.
+     *
+     * <p>Use {@link #isEnabled()} to check if Bluetooth is currently enabled.
+     */
     @RequiresNoPermission
-    public BluetoothLeScanner getBluetoothLeScanner() {
+    public @Nullable BluetoothLeScanner getBluetoothLeScanner() {
         if (!getLeAccess()) {
             return null;
         }
@@ -1733,7 +1738,10 @@ public final class BluetoothAdapter {
     @RequiresPermission(BLUETOOTH_CONNECT)
     public @NonNull List<ParcelUuid> getUuidsList() {
         List<ParcelUuid> defaultValue = new ArrayList<>();
-        if (getState() != STATE_ON && getState() != STATE_TURNING_ON) {
+        int state = getState();
+        // Exceptionally allow call to go through during TURNING_ON, as this method can be called in
+        // response to loading the stored bonded devices.
+        if (state != STATE_ON && state != STATE_TURNING_ON) {
             return defaultValue;
         }
         return callServiceIfEnabled(s -> s.getUuids(mAttributionSource), defaultValue);
@@ -2799,7 +2807,13 @@ public final class BluetoothAdapter {
         int channel = SOCKET_CHANNEL_AUTO_STATIC_NO_SDP;
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_RFCOMM, true, true, channel, mitm, min16DigitPin);
+                        this,
+                        BluetoothSocket.TYPE_RFCOMM,
+                        true,
+                        true,
+                        channel,
+                        mitm,
+                        min16DigitPin);
         int errno = socket.mSocket.bindListen();
         socket.setChannel(socket.mSocket.getPort());
         if (errno != 0) {
@@ -2935,7 +2949,7 @@ public final class BluetoothAdapter {
             case BluetoothStatusCodes.SUCCESS -> {
                 try {
                     yield BluetoothSocket.createSocketFromOpenFd(
-                            socketInfo.pfd, socketInfo.bluetoothDevice, new ParcelUuid(uuid));
+                            this, socketInfo.pfd, socketInfo.bluetoothDevice, new ParcelUuid(uuid));
                 } catch (IOException e) {
                     yield null;
                 }
@@ -3041,12 +3055,12 @@ public final class BluetoothAdapter {
 
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
-    private static BluetoothServerSocket createNewRfcommSocketAndRecord(
+    private BluetoothServerSocket createNewRfcommSocketAndRecord(
             String name, UUID uuid, boolean auth, boolean encrypt) throws IOException {
         BluetoothServerSocket socket;
         socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_RFCOMM, auth, encrypt, new ParcelUuid(uuid));
+                        this, BluetoothSocket.TYPE_RFCOMM, auth, encrypt, new ParcelUuid(uuid));
         socket.setServiceName(name);
         int errno = socket.mSocket.bindListen();
         if (errno != 0) {
@@ -3072,7 +3086,7 @@ public final class BluetoothAdapter {
     public BluetoothServerSocket listenUsingInsecureRfcommOn() throws IOException {
         int port = SOCKET_CHANNEL_AUTO_STATIC_NO_SDP;
         BluetoothServerSocket socket =
-                new BluetoothServerSocket(BluetoothSocket.TYPE_RFCOMM, false, false, port);
+                new BluetoothServerSocket(this, BluetoothSocket.TYPE_RFCOMM, false, false, port);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             socket.setChannel(socket.mSocket.getPort());
@@ -3107,7 +3121,7 @@ public final class BluetoothAdapter {
             throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_L2CAP, true, true, port, mitm, min16DigitPin);
+                        this, BluetoothSocket.TYPE_L2CAP, true, true, port, mitm, min16DigitPin);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             int assignedChannel = socket.mSocket.getPort();
@@ -3161,7 +3175,7 @@ public final class BluetoothAdapter {
         Log.d(TAG, "listenUsingInsecureL2capOn: port=" + port);
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
-                        BluetoothSocket.TYPE_L2CAP, false, false, port, false, false);
+                        this, BluetoothSocket.TYPE_L2CAP, false, false, port, false, false);
         int errno = socket.mSocket.bindListen();
         if (port == SOCKET_CHANNEL_AUTO_STATIC_NO_SDP) {
             int assignedChannel = socket.mSocket.getPort();
@@ -4228,6 +4242,7 @@ public final class BluetoothAdapter {
     public @NonNull BluetoothServerSocket listenUsingL2capChannel() throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
+                        this,
                         BluetoothSocket.TYPE_LE,
                         true,
                         true,
@@ -4281,6 +4296,7 @@ public final class BluetoothAdapter {
     public @NonNull BluetoothServerSocket listenUsingInsecureL2capChannel() throws IOException {
         BluetoothServerSocket socket =
                 new BluetoothServerSocket(
+                        this,
                         BluetoothSocket.TYPE_LE,
                         false,
                         false,
@@ -4353,6 +4369,7 @@ public final class BluetoothAdapter {
             if (settings.getDataPath() == BluetoothSocketSettings.DATA_PATH_NO_OFFLOAD) {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4360,6 +4377,7 @@ public final class BluetoothAdapter {
             } else {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4382,6 +4400,7 @@ public final class BluetoothAdapter {
                 }
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -4391,6 +4410,7 @@ public final class BluetoothAdapter {
             } else {
                 socket =
                         new BluetoothServerSocket(
+                                this,
                                 settings.getSocketType(),
                                 settings.isAuthenticationRequired(),
                                 settings.isEncryptionRequired(),
@@ -5397,25 +5417,39 @@ public final class BluetoothAdapter {
          * @param data from 0 to 254 Bytes.
          */
         void onEvent(@IntRange(from = 0x00, to = 0xfe) int code, @NonNull byte[] data);
+
+        /**
+         * Invoked when an event is received as HCI ACL packet.
+         *
+         * @param handle The vendor-specific ACL connection handle.
+         * @param data from 0 to 655256 Bytes.
+         */
+        @FlaggedApi(Flags.FLAG_REPORT_VENDOR_EVENTS_FROM_ACL)
+        default void onAclEvent(
+                @IntRange(from = 0x001, to = 0xfff) int handle, @NonNull byte[] data) {}
     }
 
     private static final class HciVendorSpecificCallbackRegistration {
         private BluetoothHciVendorSpecificCallback mCallback;
         private Executor mExecutor;
         private Set<Integer> mEventCodeSet;
+        private Set<Integer> mAclHandleSet;
 
         void set(
                 BluetoothHciVendorSpecificCallback callback,
                 Set<Integer> eventCodeSet,
+                Set<Integer> aclHandleSet,
                 Executor executor) {
             mCallback = callback;
             mEventCodeSet = eventCodeSet;
+            mAclHandleSet = aclHandleSet;
             mExecutor = executor;
         }
 
         void reset() {
             mCallback = null;
             mEventCodeSet = null;
+            mAclHandleSet = null;
             mExecutor = null;
         }
 
@@ -5434,8 +5468,9 @@ public final class BluetoothAdapter {
             }
 
             int[] eventCodes = mEventCodeSet.stream().mapToInt(i -> i).toArray();
+            int[] aclHandles = mAclHandleSet.stream().mapToInt(i -> i).toArray();
             try {
-                service.registerHciVendorSpecificCallback(stub, eventCodes);
+                service.registerHciVendorSpecificCallback(stub, eventCodes, aclHandles);
             } catch (RemoteException e) {
                 logRemoteException(TAG, e);
             }
@@ -5495,6 +5530,19 @@ public final class BluetoothAdapter {
                                 (cb) -> cb.onEvent(code, data));
                     }
                 }
+
+                @Override
+                @RequiresNoPermission
+                public void onAclEvent(int handle, byte[] data) {
+                    synchronized (mHciVendorSpecificCallbackRegistration) {
+                        mHciVendorSpecificCallbackRegistration.execute(
+                                (cb) -> {
+                                    if (Flags.reportVendorEventsFromAcl()) {
+                                        cb.onAclEvent(handle, data);
+                                    }
+                                });
+                    }
+                }
             };
 
     /**
@@ -5531,7 +5579,65 @@ public final class BluetoothAdapter {
                 if (mHciVendorSpecificCallbackRegistration.isSet()) {
                     throw new IllegalArgumentException("Only one registration allowed");
                 }
-                mHciVendorSpecificCallbackRegistration.set(callback, eventCodeSet, executor);
+                mHciVendorSpecificCallbackRegistration.set(
+                        callback, eventCodeSet, Collections.emptySet(), executor);
+                try {
+                    mHciVendorSpecificCallbackRegistration.registerToService(
+                            mService, mHciVendorSpecificCallbackStub);
+                } catch (Exception e) {
+                    mHciVendorSpecificCallbackRegistration.reset();
+                    throw e;
+                }
+            }
+        } finally {
+            mServiceLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Register an {@link BluetoothHciVendorCallback} to listen for HCI vendor responses and events
+     *
+     * @param eventCodeSet Set of vendor-specific event codes to listen for updates. Each
+     *     vendor-specific event code must be in the range 0x00 to 0x4f or 0x60 to 0xff. The
+     *     inclusive range 0x52-0x5f is reserved by the system.
+     * @param executor an {@link Executor} to execute given callback
+     * @param callback user implementation of the {@link BluetoothHciVendorCallback}
+     * @param aclHandleSet Set of vendor-specific ACL handles to listen for events.
+     * @throws IllegalArgumentException if the callback is already registered, or event codes not in
+     *     a valid range
+     */
+    @Hide
+    @SystemApi
+    @RequiresPermission(BLUETOOTH_PRIVILEGED)
+    @FlaggedApi(Flags.FLAG_REPORT_VENDOR_EVENTS_FROM_ACL)
+    public void registerBluetoothHciVendorSpecificCallback(
+            @NonNull Set<Integer> eventCodeSet,
+            @NonNull Set<Integer> aclHandleSet,
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull BluetoothHciVendorSpecificCallback callback) {
+        Log.v(TAG, "registerBluetoothHciVendorSpecificCallback()");
+
+        requireNonNull(eventCodeSet);
+        requireNonNull(aclHandleSet);
+        requireNonNull(executor);
+        requireNonNull(callback);
+        if (eventCodeSet.stream()
+                .anyMatch((n) -> (n < 0) || (n >= 0x52 && n < 0x60) || (n > 0xff))) {
+            throw new IllegalArgumentException("Event code not in valid range");
+        }
+
+        if (aclHandleSet.stream().anyMatch((n) -> (n <= 0) || (n > 0xfff))) {
+            throw new IllegalArgumentException("ACL handle not in valid range");
+        }
+
+        mServiceLock.readLock().lock();
+        try {
+            synchronized (mHciVendorSpecificCallbackRegistration) {
+                if (mHciVendorSpecificCallbackRegistration.isSet()) {
+                    throw new IllegalArgumentException("Only one registration allowed");
+                }
+                mHciVendorSpecificCallbackRegistration.set(
+                        callback, eventCodeSet, aclHandleSet, executor);
                 try {
                     mHciVendorSpecificCallbackRegistration.registerToService(
                             mService, mHciVendorSpecificCallbackStub);

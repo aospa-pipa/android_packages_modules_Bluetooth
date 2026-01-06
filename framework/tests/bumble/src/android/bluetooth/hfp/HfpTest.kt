@@ -13,10 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package android.bluetooth.hfp
 
 import android.bluetooth.BluetoothA2dp
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED
 import android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED
@@ -33,7 +33,6 @@ import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothHeadset.STATE_AUDIO_CONNECTED
 import android.bluetooth.BluetoothHeadset.STATE_AUDIO_CONNECTING
 import android.bluetooth.BluetoothHeadset.STATE_AUDIO_DISCONNECTED
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED
 import android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN
@@ -44,17 +43,18 @@ import android.bluetooth.BluetoothProfile.STATE_DISCONNECTED
 import android.bluetooth.BluetoothProfile.STATE_DISCONNECTING
 import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.PandoraDevice
-import android.bluetooth.Utils
+import android.bluetooth.adapter
+import android.bluetooth.setupIntentLogger
 import android.bluetooth.test_utils.EnableBluetoothRule
+import android.bluetooth.toAddressBytes
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.Uri
 import android.util.Log
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
-import androidx.test.platform.app.InstrumentationRegistry
 import com.android.compatibility.common.util.AdoptShellPermissionsRule
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
@@ -99,9 +99,7 @@ class HfpTest {
     @Mock private lateinit var receiver: BroadcastReceiver
     @Mock private lateinit var serviceListener: BluetoothProfile.ServiceListener
 
-    private val targetContext: Context = InstrumentationRegistry.getInstrumentation().targetContext
-    private val adapter: BluetoothAdapter =
-        targetContext.getSystemService(BluetoothManager::class.java).adapter
+    private val context = ApplicationProvider.getApplicationContext<Context>()
 
     private lateinit var hfBlockingStub: HFPGrpc.HFPBlockingStub
     private lateinit var bumbleDevice: BluetoothDevice
@@ -125,8 +123,8 @@ class HfpTest {
                 addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
                 addAction(BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED)
             }
-        targetContext.registerReceiver(receiver, filter)
-        Utils.setupIntentLogger(TAG, receiver)
+        context.registerReceiver(receiver, filter)
+        receiver.setupIntentLogger(TAG)
 
         hfpService = connectToProfile(BluetoothProfile.HEADSET) as BluetoothHeadset
         a2dpService = connectToProfile(BluetoothProfile.A2DP) as BluetoothA2dp
@@ -177,7 +175,7 @@ class HfpTest {
     @After
     fun tearDown() {
         removeBond()
-        targetContext.unregisterReceiver(receiver)
+        context.unregisterReceiver(receiver)
     }
 
     @Test
@@ -200,7 +198,7 @@ class HfpTest {
         prepareBumbleDeviceAsBondedAndDisconnected()
 
         // Obtain the connection which will be used for EnableSlc
-        val address = ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
+        val address = ByteString.copyFrom(adapter.address.toAddressBytes())
         val connectRequest = HostProto.ConnectRequest.newBuilder().setAddress(address).build()
         val response = bumble.hostBlocking().connect(connectRequest)
 
@@ -260,16 +258,13 @@ class HfpTest {
         verifyConnectionState(STATE_CONNECTING, bumbleDevice)
         verifyConnectionState(STATE_CONNECTED, bumbleDevice)
         assertThat(hfpService.getConnectionState(bumbleDevice)).isEqualTo(STATE_CONNECTED)
-        assertThat(hfpService.setActiveDevice(bumbleDevice)).isTrue()
-        dialOutgoingCall()
         // Allow one second delay to complete  SLC on bumble side
         Thread.sleep(1000)
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, bumbleDevice)
         verifyAudioState(STATE_AUDIO_CONNECTED, bumbleDevice)
-        assertThat(hfpService.disconnectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.stopVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_DISCONNECTED, bumbleDevice)
-        endActiveCall()
     }
 
     /**
@@ -306,22 +301,18 @@ class HfpTest {
         verifyConnectionState(STATE_CONNECTING, bumbleDevice)
         verifyConnectionState(STATE_CONNECTED, bumbleDevice)
         assertThat(hfpService.getConnectionState(bumbleDevice)).isEqualTo(STATE_CONNECTED)
-        assertThat(hfpService.setActiveDevice(bumbleDevice)).isTrue()
-
-        dialOutgoingCall()
         // Disconnect sco to first bumble device while in connecting state
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, bumbleDevice)
         assertThat(hfpService.disconnectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
         verifyAudioState(STATE_AUDIO_DISCONNECTED, bumbleDevice)
 
         // Try to connect SCO to Bumble device
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, bumbleDevice)
         verifyAudioState(STATE_AUDIO_CONNECTED, bumbleDevice)
-        assertThat(hfpService.disconnectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.stopVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_DISCONNECTED, bumbleDevice)
-        endActiveCall()
     }
 
     @Test
@@ -342,21 +333,17 @@ class HfpTest {
 
         assertThat(hfpService.getConnectionState(secondBumbleDevice)).isEqualTo(STATE_CONNECTED)
 
-        assertThat(hfpService.setActiveDevice(bumbleDevice)).isTrue()
-        dialOutgoingCall()
         // Disconnect sco to first bumble device while in connecting state
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, bumbleDevice)
         assertThat(hfpService.disconnectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
         verifyAudioState(STATE_AUDIO_DISCONNECTED, bumbleDevice)
 
-        assertThat(hfpService.setActiveDevice(secondBumbleDevice)).isTrue()
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(secondBumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, secondBumbleDevice)
         verifyAudioState(STATE_AUDIO_CONNECTED, secondBumbleDevice)
-        assertThat(hfpService.disconnectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.stopVoiceRecognition(secondBumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_DISCONNECTED, secondBumbleDevice)
-        endActiveCall()
     }
 
     @Test
@@ -377,19 +364,17 @@ class HfpTest {
         verifyConnectionState(STATE_CONNECTED, secondBumbleDevice)
         assertThat(hfpService.getConnectionState(secondBumbleDevice)).isEqualTo(STATE_CONNECTED)
 
-        assertThat(hfpService.setActiveDevice(bumbleDevice)).isTrue()
-        dialOutgoingCall()
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(bumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, bumbleDevice)
         verifyAudioState(STATE_AUDIO_CONNECTED, bumbleDevice)
 
         assertThat(hfpService.setActiveDevice(secondBumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_DISCONNECTED, bumbleDevice)
+        assertThat(hfpService.stopVoiceRecognition(bumbleDevice)).isTrue()
 
-        assertThat(hfpService.connectAudio()).isEqualTo(BluetoothStatusCodes.SUCCESS)
+        assertThat(hfpService.startVoiceRecognition(secondBumbleDevice)).isTrue()
         verifyAudioState(STATE_AUDIO_CONNECTING, secondBumbleDevice)
         verifyAudioState(STATE_AUDIO_CONNECTED, secondBumbleDevice)
-        endActiveCall()
     }
 
     private fun prepareBumbleDeviceAsBondedAndDisconnected() {
@@ -519,7 +504,7 @@ class HfpTest {
             )
         }
         // Remove the bond on the Bumble device as well.
-        val localAddress = ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
+        val localAddress = ByteString.copyFrom(adapter.address.toAddressBytes())
         bumble
             .securityStorageBlocking()
             .deleteBond(
@@ -530,19 +515,6 @@ class HfpTest {
             .deleteBond(
                 SecurityProto.DeleteBondRequest.newBuilder().setPublic(localAddress).build()
             )
-    }
-
-    private fun dialOutgoingCall() {
-        val address: Uri = Uri.fromParts("tel", TEST_PHONE_NUMBER, null)
-        val intent =
-            Intent(Intent.ACTION_CALL, address).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        targetContext.startActivity(intent)
-        // Allow some time to launch call screen.
-        Thread.sleep(300)
-    }
-
-    private fun endActiveCall() {
-        Runtime.getRuntime().exec("input keyevent 6").waitFor()
     }
 
     private fun verifyIntentReceived(vararg matchers: Matcher<Intent>) {
@@ -578,7 +550,7 @@ class HfpTest {
     }
 
     private fun connectToProfile(profile: Int): BluetoothProfile {
-        adapter.getProfileProxy(targetContext, serviceListener, profile)
+        adapter.getProfileProxy(context, serviceListener, profile)
         val proxyCaptor = ArgumentCaptor.forClass(BluetoothProfile::class.java)
         verify(serviceListener, timeout(INTENT_TIMEOUT.toMillis()))
             .onServiceConnected(eq(profile), proxyCaptor.capture())

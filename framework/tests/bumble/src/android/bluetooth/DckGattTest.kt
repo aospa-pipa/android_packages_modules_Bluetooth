@@ -55,12 +55,9 @@ import pandora.HostProto.OwnAddressType
 
 /** DCK GATT Tests */
 @RunWith(TestParameterInjector::class)
-public class DckGattTest() {
+class DckGattTest() {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)!!
-    private val bluetoothAdapter = bluetoothManager.adapter
-    private val leScanner = bluetoothAdapter.bluetoothLeScanner
 
     private val scanResultCaptor = argumentCaptor<ScanResult>()
     private val scanCallbackMock = mock<ScanCallback>()
@@ -94,7 +91,7 @@ public class DckGattTest() {
 
             // Connect DUT to Ref as prerequisite
             val device =
-                bluetoothAdapter.getRemoteLeDevice(
+                adapter.getRemoteLeDevice(
                     Utils.BUMBLE_RANDOM_ADDRESS,
                     BluetoothDevice.ADDRESS_TYPE_RANDOM,
                 )
@@ -172,7 +169,7 @@ public class DckGattTest() {
 
         // 3. Fetch a remote Bluetooth device instance (here, Bumble).
         val bumbleDevice =
-            bluetoothAdapter.getRemoteLeDevice(
+            adapter.getRemoteLeDevice(
                 // To keep things straightforward, the Bumble RANDOM address is set to a predefined
                 // constant.
                 // Typically, an LE scan would be conducted to identify the Bumble device, matching
@@ -189,7 +186,7 @@ public class DckGattTest() {
         val gattCallback = mock<BluetoothGattCallback>()
 
         // 5. Connect to the Bumble device and expect a successful connection callback.
-        var bumbleGatt = bumbleDevice.connectGatt(context, false, gattCallback)
+        val bumbleGatt = bumbleDevice.connectGatt(context, false, gattCallback)
         verify(gattCallback, timeout(TIMEOUT))
             .onConnectionStateChange(any(), eq(BluetoothGatt.GATT_SUCCESS), eq(STATE_CONNECTED))
 
@@ -315,9 +312,8 @@ public class DckGattTest() {
     }
 
     companion object {
-        private const val TAG = "DckGattTest"
-        private const val TIMEOUT: Long = 2000
-        private const val DISCOVERY_TIMEOUT: Long = 5000
+        private const val TIMEOUT = 2000L
+        private const val DISCOVERY_TIMEOUT = 5000L
         private const val TEST_ADDRESS_RANDOM_STATIC = "F0:43:A8:23:10:11"
 
         // CCC DK Specification R3 1.2.0 r14 section 19.2.1.2 Bluetooth Le Pairing

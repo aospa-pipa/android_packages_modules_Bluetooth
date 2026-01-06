@@ -157,6 +157,16 @@ flag {
 }
 
 flag {
+    name: "sco_state_machine_update_revision"
+    namespace: "bluetooth"
+    description: "Flag check correction for ag/33454932"
+    bug: "459353324"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "mode_change_before_sco_unpark"
     namespace: "bluetooth"
     description: "Do mode change before SCO unpark"
@@ -192,4 +202,14 @@ flag {
     is_exported: true
     description: "Deprecate methods that will not be used for Audio managed by Sco"
     bug: "456541678"
+}
+
+flag {
+    name: "hangup_callstate_simulated_ringing"
+    namespace: "bluetooth"
+    description: "Reject to hang up call that is STATE_SIMULATED_RINGING state"
+    bug: "460640390"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

@@ -19,13 +19,11 @@ package com.android.bluetooth.le_scan
 import android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanSettings
-import android.os.BatteryStatsManager
-import android.os.WorkSource
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
-import com.android.bluetooth.TestUtils.mockGetSystemService
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.util.TimeProvider
+import com.android.bluetooth.util.WorkSourceUtil
 import com.android.tests.bluetooth.MockitoRule
 import com.google.common.truth.Truth.assertThat
 import java.util.UUID
@@ -34,8 +32,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito.mock
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 /** Test cases for [AppScanStats]. */
@@ -45,39 +43,55 @@ class AppScanStatsTest {
     @get:Rule val mockitoRule = MockitoRule()
 
     @Mock private lateinit var adapterService: AdapterService
-    @Mock private lateinit var batteryStatsManager: BatteryStatsManager
+    @Mock private lateinit var workSourceUtil: WorkSourceUtil
+    @Mock private lateinit var metricsReporter: ScanMetricsReporter
     @Mock private lateinit var timeProvider: TimeProvider
 
     @Before
     fun setUp() {
-        mockGetSystemService(adapterService, BatteryStatsManager::class.java, batteryStatsManager)
         doReturn(ScanUtil.DEFAULT_SCAN_QUOTA_COUNT).whenever(adapterService).scanQuotaCount
     }
 
     @Test
     fun constructor_initializesCorrectly() {
         val name = "appName"
-        val source: WorkSource? = null
         val uid = 1234
         val pid = 5678
-        val appScanStats = AppScanStats(uid, pid, name, source, adapterService, timeProvider)
+        val appScanStats =
+            AppScanStats(
+                uid,
+                pid,
+                name,
+                workSourceUtil,
+                adapterService,
+                metricsReporter,
+                timeProvider,
+            )
         assertThat(appScanStats.isScanning()).isFalse()
     }
 
     @Test
     fun dump_doesNotCrash() {
         val name = "appName"
-        val source: WorkSource? = null
         val uid = 1234
         val pid = 5678
-        val appScanStats = AppScanStats(uid, pid, name, source, adapterService, timeProvider)
+        val appScanStats =
+            AppScanStats(
+                uid,
+                pid,
+                name,
+                workSourceUtil,
+                adapterService,
+                metricsReporter,
+                timeProvider,
+            )
 
-        val app1 = mock(ScannerApp::class.java)
+        val app1 = mock<ScannerApp>()
         whenever(app1.id).thenReturn(101)
         whenever(app1.uuid).thenReturn(UUID.randomUUID())
         whenever(app1.attributionTag).thenReturn("appTag1")
 
-        val app2 = mock(ScannerApp::class.java)
+        val app2 = mock<ScannerApp>()
         whenever(app2.id).thenReturn(102)
         whenever(app2.uuid).thenReturn(UUID.randomUUID())
         whenever(app2.attributionTag).thenReturn(null)

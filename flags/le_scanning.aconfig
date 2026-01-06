@@ -48,3 +48,20 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "treat_empty_filters_as_unfiltered"
+    namespace: "bluetooth"
+    description: "Treat scans with all-fields-empty filters as unfiltered"
+    bug: "461650493"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "support_native_pa_callback"
+    namespace: "bluetooth"
+    description: "Support native pa callback"
+    bug: "462892602"
+}

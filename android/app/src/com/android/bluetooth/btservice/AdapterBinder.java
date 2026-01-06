@@ -81,10 +81,10 @@ class AdapterBinder extends IAdapter.Stub {
             Log.e(TAG, "killBluetoothProcess: Interrupted while waiting for kill");
         }
 
-        // Bluetooth cannot be killed on the main thread; it is in a deadLock.
+        // Bluetooth cannot be killed on the main thread; it is in a deadlock.
         // Trying to recover by killing the Bluetooth from the binder thread.
         // This is bad :(
-        Log.wtf(TAG, "Failed to kill Bluetooth using its main thread. Trying from binder");
+        Log.wtf(TAG, "killBluetoothProcess: Deadlock on main thread. Trying from binder");
         killAction.run();
     }
 
@@ -157,7 +157,7 @@ class AdapterBinder extends IAdapter.Stub {
         if (service == null) {
             return;
         }
-        service.setName(name);
+        service.getHandler().post(() -> service.setName(name));
     }
 
     @Override

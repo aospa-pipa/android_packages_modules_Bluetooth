@@ -60,3 +60,19 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "enable_get_bond_status"
+    is_exported: true
+    namespace: "bluetooth"
+    description: "Enable getBondStatus API"
+    bug: "459659453"
+}
+
+flag {
+    name: "bluetooth_quality_report_v8"
+    namespace: "bluetooth"
+    description: "Enhanced Bluetooth Framework Support for Accessing Bluetooth Quality Report v8 Information"
+    bug: "457686158"
+    is_exported: true
+}

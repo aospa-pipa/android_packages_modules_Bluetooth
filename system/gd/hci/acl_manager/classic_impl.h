@@ -63,7 +63,6 @@ struct classic_impl {
         remote_name_request_module_(remote_name_request_module) {
     handler_ = handler;
     connections.crash_on_unknown_handle_ = crash_on_unknown_handle;
-    should_accept_connection_ = common::Bind([](Address, ClassOfDevice) { return true; });
     acl_connection_interface_ = hci_layer_.GetAclConnectionInterface(
             handler_->BindOn(this, &classic_impl::on_classic_event),
             handler_->BindOn(this, &classic_impl::on_classic_disconnect),
@@ -271,11 +270,8 @@ public:
     if (is_classic_link_already_connected(address)) {
       auto reason = RejectConnectionReason::UNACCEPTABLE_BD_ADDR;
       this->reject_connection(RejectConnectionRequestBuilder::Create(address, reason));
-    } else if (should_accept_connection_.Run(address, cod)) {
-      this->accept_connection(address);
     } else {
-      auto reason = RejectConnectionReason::LIMITED_RESOURCES;  // TODO: determine reason
-      this->reject_connection(RejectConnectionRequestBuilder::Create(address, reason));
+      this->accept_connection(address);
     }
   }
 
@@ -750,10 +746,11 @@ public:
   void accept_connection(Address address) {
     auto role = get_preferred_role();
 
-    // Some devices would not respond when local  accept connection as central.
+    // Some devices would not respond when local accept connection as central.
     RawAddress raw_address = ToRawAddress(address);
     if (role == AcceptConnectionRequestRole::BECOME_CENTRAL &&
-        interop_match_addr(INTEROP_REMAIN_PERIPHERAL_ON_ACCEPT_CONNECTION_REQUEST, &raw_address)) {
+        (interop_match_addr(INTEROP_REMAIN_PERIPHERAL_ON_ACCEPT_CONNECTION_REQUEST, raw_address) ||
+         interop_match_addr(INTEROP_DISABLE_ROLE_SWITCH, raw_address))) {
       log::info("IOP workaround for {}, accept connection as peripheral", raw_address);
       role = AcceptConnectionRequestRole::REMAIN_PERIPHERAL;
     }
@@ -795,7 +792,6 @@ public:
   ConnectionCallbacks* client_callbacks_ = nullptr;
   os::Handler* client_handler_ = nullptr;
 
-  common::Callback<bool(Address, ClassOfDevice)> should_accept_connection_;
   std::unique_ptr<RoleChangeView> delayed_role_change_ = nullptr;
 };
 

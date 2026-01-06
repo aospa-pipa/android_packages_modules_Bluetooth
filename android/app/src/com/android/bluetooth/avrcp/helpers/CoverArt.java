@@ -32,7 +32,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * An object to represent a piece of cover artwork/
+ * An object to represent a piece of cover artwork.
  *
  * <p>This object abstracts away the actual storage method and provides a means for others to
  * understand available formats and get the underlying image in a particular format.
@@ -227,7 +227,8 @@ public class CoverArt {
 
         int encodingType = encoding.getType();
         if ((encodingType == BipEncoding.JPEG || encodingType == BipEncoding.PNG)
-                && (Flags.implementGetImageFromDescriptorForCoverArt()
+                && ((Flags.implementGetImageFromDescriptorForCoverArt()
+                                && PIXEL_THUMBNAIL.isBiggerOrEquals(pixel))
                         || PIXEL_THUMBNAIL.equals(pixel))) {
             return true;
         }

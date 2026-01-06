@@ -121,7 +121,6 @@ struct RoleChangeView {
 
 namespace {
 StackAclBtmAcl internal_;
-std::unique_ptr<RoleChangeView> delayed_role_change_ = nullptr;
 std::set<struct acl_client_callback_s*> acl_client_callbacks_;
 }  // namespace
 
@@ -152,7 +151,6 @@ static bool IsEprAvailable(const tACL_CONN& p_acl) {
 }
 
 static void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_number);
-static void btm_read_remote_ext_features(uint16_t handle, uint8_t page_number);
 static void btm_read_rssi_timeout(void* data);
 static void btm_set_link_policy(tACL_CONN* conn, tLINK_POLICY policy);
 static void check_link_policy(tLINK_POLICY* settings);
@@ -539,7 +537,7 @@ tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
     return tBTM_STATUS::BTM_SUCCESS;
   }
 
-  if (interop_match_addr(INTEROP_DISABLE_ROLE_SWITCH, &remote_bd_addr)) {
+  if (interop_match_addr(INTEROP_DISABLE_ROLE_SWITCH, remote_bd_addr)) {
     log::info("Remote device is on list preventing role switch");
     return tBTM_STATUS::BTM_DEV_RESTRICT_LISTED;
   }
@@ -554,7 +552,7 @@ tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
     return tBTM_STATUS::BTM_BUSY;
   }
 
-  if (interop_match_addr(INTEROP_DYNAMIC_ROLE_SWITCH, &remote_bd_addr)) {
+  if (interop_match_addr(INTEROP_DYNAMIC_ROLE_SWITCH, remote_bd_addr)) {
     log::debug("Device restrict listed under INTEROP_DYNAMIC_ROLE_SWITCH");
     return tBTM_STATUS::BTM_DEV_RESTRICT_LISTED;
   }
@@ -679,7 +677,7 @@ static void btm_set_link_policy(tACL_CONN* conn, tLINK_POLICY policy) {
   conn->link_policy = policy;
   check_link_policy(&conn->link_policy);
   if ((conn->link_policy & HCI_ENABLE_CENTRAL_PERIPHERAL_SWITCH) &&
-      interop_match_addr(INTEROP_DISABLE_SNIFF, &(conn->link_spec.addrt.bda))) {
+      interop_match_addr(INTEROP_DISABLE_SNIFF, conn->link_spec.addrt.bda)) {
     conn->link_policy &= (~HCI_ENABLE_SNIFF_MODE);
   }
   btsnd_hcic_write_policy_set(conn->hci_handle, static_cast<uint16_t>(conn->link_policy));
@@ -835,7 +833,7 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_numbe
     log::warn("Checking remote features but remote feature read is incomplete");
   }
 
-  p_device = btm_find_dev(p_acl_cb->link_spec.addrt.bda);
+  p_device = btm_get_dev(p_acl_cb->link_spec.addrt.bda);
 
   if (p_device == nullptr) {
     log::warn("Unable to find p_device");
@@ -872,125 +870,6 @@ void btm_process_remote_ext_features(tACL_CONN* p_acl_cb, uint8_t max_page_numbe
   btm_sec_set_peer_sec_caps(p_acl_cb->hci_handle, ssp_supported, host_secure_connections_supported,
                             controller_secure_connections_supported, role_switch_supported,
                             br_edr_supported, le_supported);
-}
-
-/*******************************************************************************
- *
- * Function         btm_read_remote_ext_features
- *
- * Description      Local function called to send a read remote extended
- *                  features
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_read_remote_ext_features(uint16_t handle, uint8_t page_number) {
-  btsnd_hcic_rmt_ext_features(handle, page_number);
-}
-
-/*******************************************************************************
- *
- * Function         btm_read_remote_ext_features_complete
- *
- * Description      This function is called when the remote extended features
- *                  complete event is received from the HCI.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_read_remote_ext_features_complete_raw(uint8_t* p, uint8_t evt_len) {
-  uint8_t page_num, max_page;
-  uint16_t handle;
-
-  if (evt_len < HCI_EXT_FEATURES_SUCCESS_EVT_LEN) {
-    log::warn("Remote extended feature length too short. length={}", evt_len);
-    return;
-  }
-
-  ++p;
-  STREAM_TO_UINT16(handle, p);
-  STREAM_TO_UINT8(page_num, p);
-  STREAM_TO_UINT8(max_page, p);
-
-  if (max_page > HCI_EXT_FEATURES_PAGE_MAX) {
-    log::warn("Too many max pages read page={} unknown", max_page);
-    return;
-  }
-
-  if (page_num > HCI_EXT_FEATURES_PAGE_MAX) {
-    log::warn("Too many received pages num_page={} invalid", page_num);
-    return;
-  }
-
-  if (page_num > max_page) {
-    log::warn("num_page={}, max_page={} invalid", page_num, max_page);
-  }
-
-  btm_read_remote_ext_features_complete(handle, page_num, max_page, p);
-}
-
-void btm_read_remote_ext_features_complete(uint16_t handle, uint8_t page_num, uint8_t max_page,
-                                           uint8_t* features) {
-  /* Validate parameters */
-  auto* p_acl_cb = internal_.acl_get_connection_from_handle(handle);
-  if (p_acl_cb == nullptr) {
-    log::warn("Unable to find active acl");
-    return;
-  }
-
-  /* Copy the received features page */
-  STREAM_TO_ARRAY(p_acl_cb->peer_lmp_feature_pages[page_num], features, HCI_FEATURE_BYTES_PER_PAGE);
-  p_acl_cb->peer_lmp_feature_valid[page_num] = true;
-
-  /* save remote extended features to iot conf file */
-  std::string key = IOT_CONF_KEY_RT_EXT_FEATURES "_" + std::to_string(page_num);
-
-  DEVICE_IOT_CONFIG_ADDR_SET_BIN(p_acl_cb->link_spec.addrt.bda, key,
-                                 p_acl_cb->peer_lmp_feature_pages[page_num], BD_FEATURES_LEN);
-
-  /* If there is the next remote features page and
-   * we have space to keep this page data - read this page */
-  if ((page_num < max_page) && (page_num < HCI_EXT_FEATURES_PAGE_MAX)) {
-    page_num++;
-    log::debug("BTM reads next remote extended features page ({})", page_num);
-    btm_read_remote_ext_features(handle, page_num);
-    return;
-  }
-
-  /* Reading of remote feature pages is complete */
-  log::debug("BTM reached last remote extended features page ({})", page_num);
-
-  /* Process the pages */
-  btm_process_remote_ext_features(p_acl_cb, max_page);
-
-  /* Continue with HCI connection establishment */
-  internal_.btm_establish_continue(p_acl_cb);
-}
-
-/*******************************************************************************
- *
- * Function         btm_read_remote_ext_features_failed
- *
- * Description      This function is called when the remote extended features
- *                  complete event returns a failed status.
- *
- * Returns          void
- *
- ******************************************************************************/
-void btm_read_remote_ext_features_failed(uint8_t status, uint16_t handle) {
-  log::warn("status 0x{:02x} for handle {}", status, handle);
-
-  tACL_CONN* p_acl_cb = internal_.acl_get_connection_from_handle(handle);
-  if (p_acl_cb == nullptr) {
-    log::warn("Unable to find active acl");
-    return;
-  }
-
-  /* Process supported features only */
-  btm_process_remote_ext_features(p_acl_cb, 0);
-
-  /* Continue HCI connection establishment */
-  internal_.btm_establish_continue(p_acl_cb);
 }
 
 /*******************************************************************************
@@ -1301,37 +1180,15 @@ void btm_rejectlist_role_change_device(const RawAddress& bd_addr, uint8_t hci_st
   const uint32_t cod = ((dev_class[0] << 16) | (dev_class[1] << 8) | dev_class[2]) & 0xffffff;
   if ((hci_status != HCI_SUCCESS) && (p->is_switch_role_switching_or_in_progress()) &&
       ((cod & cod_audio_device) == cod_audio_device) &&
-      (!interop_match_addr(INTEROP_DYNAMIC_ROLE_SWITCH, &bd_addr))) {
+      (!interop_match_addr(INTEROP_DYNAMIC_ROLE_SWITCH, bd_addr))) {
     p->switch_role_failed_attempts++;
     if (p->switch_role_failed_attempts == BTM_MAX_SW_ROLE_FAILED_ATTEMPTS) {
       log::warn(
               "Device {} rejectlisted for role switching - multiple role switch "
               "failed attempts: {}",
               bd_addr, p->switch_role_failed_attempts);
-      interop_database_add(INTEROP_DYNAMIC_ROLE_SWITCH, &bd_addr, 3);
+      interop_database_add(INTEROP_DYNAMIC_ROLE_SWITCH, bd_addr, 3);
     }
-  }
-}
-
-/*******************************************************************************
- *
- * Function         acl_cache_role
- *
- * Description      This function caches the role of the device associated
- *                  with the given address. This happens if we get a role change
- *                  before connection complete. The cached role is propagated
- *                  when ACL Link is created.
- *
- * Returns          void
- *
- ******************************************************************************/
-
-void acl_cache_role(const RawAddress& bd_addr, tHCI_ROLE new_role, bool overwrite_cache) {
-  if (overwrite_cache || delayed_role_change_ == nullptr) {
-    RoleChangeView role_change;
-    role_change.new_role = new_role;
-    role_change.bd_addr = bd_addr;
-    delayed_role_change_ = std::make_unique<RoleChangeView>(std::move(role_change));
   }
 }
 
@@ -1351,10 +1208,7 @@ void StackAclBtmAcl::btm_acl_role_changed(tHCI_STATUS hci_status, const RawAddre
                                           tHCI_ROLE new_role) {
   tACL_CONN* p_acl = internal_.btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
   if (p_acl == nullptr) {
-    // If we get a role change before connection complete, we cache the new
-    // role here and then propagate it when ACL Link is created.
-    acl_cache_role(bd_addr, new_role, /*overwrite_cache=*/true);
-    log::warn("Unable to find active acl");
+    log::error("Unable to find active acl for {}", bd_addr);
     return;
   }
 
@@ -1951,7 +1805,7 @@ bool acl_peer_supports_ble_connection_subrating_host(const RawAddress& remote_bd
  ******************************************************************************/
 void BTM_ReadConnectionAddr(const RawAddress& remote_bda, RawAddress& local_conn_addr,
                             tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  BtmDevice* p_device = btm_find_dev(remote_bda);
+  const BtmDevice* p_device = btm_find_dev(remote_bda);
   if (p_device == nullptr) {
     log::warn("No matching known device {} in record", remote_bda);
     return;
@@ -2015,7 +1869,7 @@ bool acl_is_switch_role_idle(const RawAddress& bd_addr, tBT_TRANSPORT transport)
  ******************************************************************************/
 bool BTM_ReadRemoteConnectionAddr(const RawAddress& pseudo_addr, RawAddress& conn_addr,
                                   tBLE_ADDR_TYPE* p_addr_type, bool ota_address) {
-  BtmDevice* p_device = btm_find_dev(pseudo_addr);
+  const BtmDevice* p_device = btm_find_dev(pseudo_addr);
   if (p_device == nullptr) {
     log::warn("No matching known device {} in record", pseudo_addr);
     return false;
@@ -2119,12 +1973,8 @@ void on_acl_br_edr_connected(const RawAddress& bda, uint16_t handle, uint8_t enc
   log::verbose("{}, handle:{}, role:{}, enc_mode:{}, locally_initiated:{}", bda, handle,
                hci_role_text(role), enc_mode, locally_initiated);
   power_telemetry::GetInstance().LogLinkDetails(handle, bda, true, true);
-  if (delayed_role_change_ != nullptr && delayed_role_change_->bd_addr == bda) {
-    btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode, delayed_role_change_->new_role);
-  } else {
-    btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode);
-  }
-  delayed_role_change_ = nullptr;
+
+  btm_sec_connected(bda, handle, HCI_SUCCESS, enc_mode, role);
   l2c_link_hci_conn_comp(HCI_SUCCESS, handle, bda);
   uint16_t link_supervision_timeout =
           osi_property_get_int32(PROPERTY_LINK_SUPERVISION_TIMEOUT, 8000);
@@ -2154,14 +2004,8 @@ void on_acl_br_edr_failed(const RawAddress& bda, tHCI_STATUS status, bool locall
   AclLinkSpec link_spec = {.addrt = {.type = BLE_ADDR_PUBLIC, .bda = bda},
                            .transport = BT_TRANSPORT_BR_EDR};
   log::assert_that(status != HCI_SUCCESS, "Successful connection entering failing code path");
-  if (delayed_role_change_ != nullptr && delayed_role_change_->bd_addr == bda) {
-    btm_sec_connected(bda, HCI_INVALID_HANDLE, status, false, delayed_role_change_->new_role);
-  } else {
-    btm_sec_connected(bda, HCI_INVALID_HANDLE, status, false);
-  }
-  delayed_role_change_ = nullptr;
+  btm_sec_connected(bda, HCI_INVALID_HANDLE, status, false);
   l2c_link_hci_conn_comp(status, HCI_INVALID_HANDLE, bda);
-
   acl_set_locally_initiated(locally_initiated);
   btm_acl_create_failed(link_spec, status);
 }

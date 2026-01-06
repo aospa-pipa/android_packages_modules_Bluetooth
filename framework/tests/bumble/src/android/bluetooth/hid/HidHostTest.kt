@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package android.bluetooth.hid
 
 import android.annotation.SuppressLint
@@ -33,7 +34,6 @@ import android.bluetooth.BluetoothDevice.TRANSPORT_BREDR
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidHost
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED
 import android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN
@@ -44,9 +44,10 @@ import android.bluetooth.BluetoothProfile.STATE_DISCONNECTED
 import android.bluetooth.BluetoothProfile.STATE_DISCONNECTING
 import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.PandoraDevice
-import android.bluetooth.Utils
 import android.bluetooth.VirtualOnly
+import android.bluetooth.adapter
 import android.bluetooth.cts.EnableBluetoothRule
+import android.bluetooth.toAddressBytes
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -57,7 +58,6 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
-import com.android.bluetooth.flags.Flags
 import com.android.compatibility.common.util.AdoptShellPermissionsRule
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
@@ -116,8 +116,6 @@ class HidHostTest {
     private lateinit var hfpService: BluetoothHeadset
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val adapter: BluetoothAdapter =
-        context.getSystemService(BluetoothManager::class.java).adapter
     private lateinit var hidBlockingStub: HIDGrpc.HIDBlockingStub
     private var inOrder: InOrder? = null
     private var reportData = byteArrayOf()
@@ -421,7 +419,7 @@ class HidHostTest {
         // Remove the bond on the Bumble device as well.
         // Not doing so will cause authentication failures because of the
         // incorrect link key.
-        val localAddress = ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
+        val localAddress = ByteString.copyFrom(adapter.address.toAddressBytes())
         bumble
             .securityStorageBlocking()
             .deleteBond(
@@ -660,7 +658,7 @@ class HidHostTest {
     @Test
     @Throws(Exception::class)
     fun hidSendDataTest() {
-        val mHidDataEventObserver: Iterator<ReportDataEvent> =
+        val hidDataEventObserver: Iterator<ReportDataEvent> =
             hidBlockingStub
                 .withDeadlineAfter(PROTO_MODE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
                 .onSendHostData(Empty.getDefaultInstance())
@@ -671,11 +669,10 @@ class HidHostTest {
         val Data = "010203040506070809"
         assertThat(hidService.sendData(device, Data)).isTrue()
 
-        if (mHidDataEventObserver.hasNext()) {
-            val hidDataEvent: ReportDataEvent = mHidDataEventObserver.next()
-            assertThat(hidDataEvent.getReportData()).isEqualTo(Data)
-            assertThat(hidDataEvent.getReportTypeValue())
-                .isEqualTo(BluetoothHidHost.REPORT_TYPE_OUTPUT)
+        if (hidDataEventObserver.hasNext()) {
+            val hidDataEvent: ReportDataEvent = hidDataEventObserver.next()
+            assertThat(hidDataEvent.reportData).isEqualTo(Data)
+            assertThat(hidDataEvent.reportTypeValue).isEqualTo(BluetoothHidHost.REPORT_TYPE_OUTPUT)
         }
     }
 
@@ -700,7 +697,9 @@ class HidHostTest {
      * Expectation: HID profile should connect successful after repairing.
      */
     @SuppressLint("MissingPermission")
-    @RequiresFlagsEnabled(Flags.FLAG_RESET_STATE_WHEN_REMOVING_NON_CONNECTED_HID_DEVICE)
+    @RequiresFlagsEnabled(
+        "com.android.bluetooth.flags.reset_state_when_removing_non_connected_hid_device"
+    )
     @Test
     fun hidRemoveBondWhenConnectionPendingTest(@TestParameter repair: Boolean) {
         assertThat(device.disconnect()).isEqualTo(BluetoothStatusCodes.SUCCESS)
@@ -764,7 +763,7 @@ class HidHostTest {
             verifyConnectionState(device, equalTo(TRANSPORT_BREDR), equalTo(STATE_CONNECTING))
             verifyConnectionState(device, equalTo(TRANSPORT_BREDR), equalTo(STATE_CONNECTED))
         } else {
-            assertThat(device.isConnected()).isFalse()
+            assertThat(device.isConnected).isFalse()
         }
     }
 

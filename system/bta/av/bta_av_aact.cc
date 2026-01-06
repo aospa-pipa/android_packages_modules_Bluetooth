@@ -839,8 +839,8 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   p_scb->uuid_int = p_data->api_open.uuid;
   if (p_scb->AvdtpVersion() != 0 &&
-      interop_match_addr_or_name(INTEROP_A2DP_SKIP_SDP_DURING_RECONNECTION, &p_scb->PeerAddress(),
-                                 &btif_storage_get_remote_device_property)) {
+      interop_match_addr_or_name(INTEROP_A2DP_SKIP_SDP_DURING_RECONNECTION, p_scb->PeerAddress(),
+                                 btif_storage_get_remote_device_property)) {
     log::info("Skip SDP with valid AVDTP version 0x{:04x}", p_scb->AvdtpVersion());
     bta_av_a2dp_sdp_cback(true, nullptr, p_scb->PeerAddress());
     return;
@@ -1151,7 +1151,16 @@ void bta_av_setconfig_rsp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     } else if (p_scb->uuid_int == 0) {
       p_scb->uuid_int = p_scb->open_api.uuid;
     }
-    bta_av_discover_req(p_scb, NULL);
+    if (com_android_bluetooth_flags_a2dp_skip_discover_after_set_config()) {
+      if (interop_match_addr(INTEROP_AVDTP_SKIP_DISCOVER_AFTER_CONFIG, p_scb->PeerAddress())) {
+        log::info("IOP workaround for {}: skip discover after set config", p_scb->PeerAddress());
+      } else {
+        bta_av_discover_req(p_scb, NULL);
+      }
+    } else {
+      bta_av_discover_req(p_scb, NULL);
+    }
+
     // Set timer to initiate stream opening if peer doesn't
     if (!p_scb->accept_open_timer) {
       p_scb->accept_open_timer = alarm_new("accept_open_timer");
@@ -1194,7 +1203,7 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   // Don't use AVDTP SUSPEND for restrict listed devices
   btif_storage_get_stored_remote_name(p_scb->PeerAddress(), remote_name);
   if (interop_match_name(INTEROP_DISABLE_AVDTP_SUSPEND, remote_name) ||
-      interop_match_addr(INTEROP_DISABLE_AVDTP_SUSPEND, &p_scb->PeerAddress())) {
+      interop_match_addr(INTEROP_DISABLE_AVDTP_SUSPEND, p_scb->PeerAddress())) {
     log::info("disable AVDTP SUSPEND: interop matched name {} address {}", remote_name,
               p_scb->PeerAddress());
     p_scb->suspend_sup = false;
@@ -1247,7 +1256,7 @@ void bta_av_str_opened(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
         open.edr |= BTA_AV_EDR_2MBPS;
       }
       if (HCI_EDR_ACL_3MPS_SUPPORTED(p)) {
-        if (!interop_match_addr(INTEROP_2MBPS_LINK_ONLY, &p_scb->PeerAddress())) {
+        if (!interop_match_addr(INTEROP_2MBPS_LINK_ONLY, p_scb->PeerAddress())) {
           open.edr |= BTA_AV_EDR_3MBPS;
         }
       }
@@ -2020,8 +2029,8 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   BT_HDR* p_buf;
   bool is_delay_subrate = interop_match_addr_or_name
                                     (INTEROP_A2DP_DELAY_SNIFF_SUBRATING,
-                                    &p_scb->PeerAddress(),
-                                    &btif_storage_get_remote_device_property);
+                                    p_scb->PeerAddress(),
+                                    btif_storage_get_remote_device_property);
 
   log::info("peer {} bta_handle:0x{:x} audio_open_cnt:{}, p_data {} start:{}", p_scb->PeerAddress(),
             p_scb->hndl, bta_av_cb.audio_open_cnt, std::format_ptr(p_data), start);
@@ -2458,10 +2467,9 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   /* tell role manager to check M/S role */
   bta_sys_conn_open(BTA_ID_AV, p_scb->hdi, p_scb->PeerAddress());
 
-        bta_sys_idle(BTA_ID_AV,
-                     com_android_bluetooth_flags_a2dp_pm_app_id() ? p_scb->app_id
-                                                                  : p_scb->hdi,
-                     p_scb->PeerAddress());
+  bta_sys_busy(BTA_ID_AV,
+               com_android_bluetooth_flags_a2dp_pm_app_id() ? p_scb->app_id : p_scb->hdi,
+               p_scb->PeerAddress());
 
   if (p_scb->media_type == AVDT_MEDIA_TYPE_AUDIO) {
     /* in normal logic, conns should be bta_av_cb.audio_count - 1,
@@ -2968,8 +2976,7 @@ void bta_av_rcfg_cfm(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     char remote_name[BD_NAME_LEN] = "";
     if (btif_storage_get_stored_remote_name(p_scb->PeerAddress(), remote_name)) {
       if (interop_match_name(INTEROP_DISABLE_AVDTP_RECONFIGURE, remote_name) ||
-          interop_match_addr(INTEROP_DISABLE_AVDTP_RECONFIGURE,
-                             (const RawAddress*)&p_scb->PeerAddress())) {
+          interop_match_addr(INTEROP_DISABLE_AVDTP_RECONFIGURE, p_scb->PeerAddress())) {
         log::info("disable AVDTP RECONFIGURE: interop matched name {} address {}", remote_name,
                   p_scb->PeerAddress());
         disable_avdtp_reconfigure = true;
@@ -3313,7 +3320,9 @@ void bta_av_vendor_offload_stop() {
   log::verbose("");
 
   if (bta_av_cb.offload_start_v2) {
-    tBTA_AV_SCB* p_scb = bta_av_hndl_to_scb(bta_av_cb.offload_start_pending_hndl);
+    uint16_t start_hndl = (bta_av_cb.offload_start_pending_hndl != BTA_AV_INVALID_HANDLE) ?
+        bta_av_cb.offload_start_pending_hndl : bta_av_cb.offload_started_hndl;
+    tBTA_AV_SCB* p_scb = bta_av_hndl_to_scb(start_hndl);
     if (p_scb == nullptr) {
       return;
     }

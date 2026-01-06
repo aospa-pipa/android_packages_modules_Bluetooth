@@ -516,7 +516,7 @@ protected:
     }));
     ON_CALL(*mock_alarm, AlarmFree(_)).WillByDefault(Invoke([](alarm_t* alarm) {
       if (alarm) {
-        free(alarm);
+        delete alarm;
       }
     }));
     ON_CALL(*mock_alarm, AlarmCancel(_)).WillByDefault(Invoke([](alarm_t* alarm) {
@@ -759,7 +759,9 @@ protected:
   bluetooth::groups::DeviceGroupsCallbacks* group_callbacks_ = nullptr;
 };
 
-TEST_F(VolumeControlTest, test_get_uninitialized) { ASSERT_DEATH(VolumeControl::Get(), ""); }
+class VolumeControlDeathTest : public VolumeControlTest {};
+
+TEST_F(VolumeControlDeathTest, get_while_uninitialized) { ASSERT_DEATH(VolumeControl::Get(), ""); }
 
 TEST_F(VolumeControlTest, test_initialize) {
   bool init_cb_called = false;
@@ -1532,7 +1534,7 @@ protected:
             .WillByDefault([this](uint16_t conn_id, uint16_t /*handle*/, std::vector<uint8_t> value,
                                   tGATT_WRITE_TYPE /*write_type*/, GATT_WRITE_OP_CB cb,
                                   void* cb_data) {
-              uint8_t write_rsp;
+              uint8_t write_rsp = 0;
 
               std::vector<uint8_t> ntf_value({value[0], 0, static_cast<uint8_t>(value[1] + 1)});
               switch (value[0]) {
@@ -1590,7 +1592,7 @@ protected:
     ON_CALL(gatt_queue, WriteCharacteristic(conn_id, 0x0024, _, GATT_WRITE, _, _))
             .WillByDefault([](uint16_t conn_id, uint16_t handle, std::vector<uint8_t> value,
                               tGATT_WRITE_TYPE /*write_type*/, GATT_WRITE_OP_CB cb, void* cb_data) {
-              uint8_t write_rsp;
+              uint8_t write_rsp = 0;
 
               switch (value[0]) {
                 case 0x06:  // mute
@@ -2269,7 +2271,7 @@ TEST_F(VolumeControlGroupId, autonomous_test_set_volume_and_unmute_both_forward_
   ON_CALL(gatt_queue, WriteCharacteristic(_, 0x0024, _, GATT_WRITE, _, _))
           .WillByDefault([](uint16_t conn_id, uint16_t handle, std::vector<uint8_t> value,
                             tGATT_WRITE_TYPE /*write_type*/, GATT_WRITE_OP_CB cb, void* cb_data) {
-            uint8_t write_rsp;
+            uint8_t write_rsp = 0;
 
             switch (value[0]) {
               case 0x06:  // mute
@@ -2338,7 +2340,7 @@ TEST_F(VolumeControlGroupId, autonomous_test_set_volume_and_unmute_one_forward_r
   ON_CALL(gatt_queue, WriteCharacteristic(_, 0x0024, _, GATT_WRITE, _, _))
           .WillByDefault([](uint16_t conn_id, uint16_t handle, std::vector<uint8_t> value,
                             tGATT_WRITE_TYPE /*write_type*/, GATT_WRITE_OP_CB cb, void* cb_data) {
-            uint8_t write_rsp;
+            uint8_t write_rsp = 0;
 
             switch (value[0]) {
               case 0x06:  // mute

@@ -24,10 +24,10 @@ import android.platform.test.annotations.EnableFlags
 import android.platform.test.flag.junit.SetFlagsRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
-import com.android.bluetooth.TestUtils.getRealDevice
-import com.android.bluetooth.TestUtils.mockGetBluetoothManager
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.flags.Flags
+import com.android.bluetooth.getRealDevice
+import com.android.bluetooth.mockBluetoothManager
 import com.android.tests.bluetooth.MockitoRule
 import org.junit.After
 import org.junit.Before
@@ -55,7 +55,6 @@ class PeriodicScanManagerTest {
 
     @Mock private lateinit var adapterService: AdapterService
     @Mock private lateinit var scanController: ScanController
-    @Mock private lateinit var nativeCallback: PeriodicScanNativeCallback
     @Mock private lateinit var nativeInterface: PeriodicScanNativeInterface
     @Mock private lateinit var callback: IPeriodicAdvertisingCallback
     @Mock private lateinit var binder: IBinder
@@ -72,10 +71,9 @@ class PeriodicScanManagerTest {
 
     @Before
     fun setUp() {
-        mockGetBluetoothManager(adapterService)
+        adapterService.mockBluetoothManager()
 
-        periodicScanManager =
-            PeriodicScanManager(adapterService, scanController, nativeCallback, nativeInterface)
+        periodicScanManager = PeriodicScanManager(adapterService, scanController, nativeInterface)
         scanResult = ScanResult(device, 0, 0, 0, sid, 0, 0, 0, null, 0)
 
         doReturn(binder).whenever(callback).asBinder()

@@ -862,7 +862,7 @@ impl Bluetooth {
 
         // TODO: Determine why a callback isn't invoked to do this.
         remote_device.properties.insert(property_type, property.clone());
-        self.intf.lock().unwrap().set_remote_device_property(&mut device.address.clone(), property);
+        self.intf.lock().unwrap().set_remote_device_property(device.address, property);
         Ok(())
     }
 
@@ -969,12 +969,12 @@ impl Bluetooth {
     // TODO(b/328675014): Add BtAddrType and BtTransport parameters
     pub(crate) fn get_hid_report_internal(
         &mut self,
-        mut addr: RawAddress,
+        addr: RawAddress,
         report_type: BthhReportType,
         report_id: u8,
     ) -> BtStatus {
         self.hh.as_mut().unwrap().get_report(
-            &mut addr,
+            addr,
             BtAddrType::Public,
             BtTransport::Auto,
             report_type,
@@ -986,13 +986,13 @@ impl Bluetooth {
     // TODO(b/328675014): Add BtAddrType and BtTransport parameters
     pub(crate) fn set_hid_report_internal(
         &mut self,
-        mut addr: RawAddress,
+        addr: RawAddress,
         report_type: BthhReportType,
         report: String,
     ) -> BtStatus {
         let mut rb = report.clone().into_bytes();
         self.hh.as_mut().unwrap().set_report(
-            &mut addr,
+            addr,
             BtAddrType::Public,
             BtTransport::Auto,
             report_type,
@@ -1001,14 +1001,10 @@ impl Bluetooth {
     }
 
     // TODO(b/328675014): Add BtAddrType and BtTransport parameters
-    pub(crate) fn send_hid_data_internal(
-        &mut self,
-        mut addr: RawAddress,
-        data: String,
-    ) -> BtStatus {
+    pub(crate) fn send_hid_data_internal(&mut self, addr: RawAddress, data: String) -> BtStatus {
         let mut rb = data.clone().into_bytes();
         self.hh.as_mut().unwrap().send_data(
-            &mut addr,
+            addr,
             BtAddrType::Public,
             BtTransport::Auto,
             rb.as_mut_slice(),
@@ -1016,8 +1012,8 @@ impl Bluetooth {
     }
 
     // TODO(b/328675014): Add BtAddrType and BtTransport parameters
-    pub(crate) fn send_hid_virtual_unplug_internal(&mut self, mut addr: RawAddress) -> BtStatus {
-        self.hh.as_mut().unwrap().virtual_unplug(&mut addr, BtAddrType::Public, BtTransport::Auto)
+    pub(crate) fn send_hid_virtual_unplug_internal(&mut self, addr: RawAddress) -> BtStatus {
+        self.hh.as_mut().unwrap().virtual_unplug(addr, BtAddrType::Public, BtTransport::Auto)
     }
 
     /// Returns all bonded and connected devices.
@@ -1162,7 +1158,7 @@ impl Bluetooth {
                         ));
                     }
                     props.push(BluetoothProperty::RemoteRssi(result.rssi));
-                    props.push(BluetoothProperty::RemoteAddrType((result.addr_type as u32).into()));
+                    props.push(BluetoothProperty::RemoteAddrType(result.addr_type.into()));
                     props
                 };
 
@@ -1397,7 +1393,7 @@ impl Bluetooth {
                                 // and BtTransport from
                                 // BluetoothDevice instead of default
                                 let status = self.hh.as_ref().unwrap().connect(
-                                    &mut addr.clone(),
+                                    addr.clone(),
                                     BtAddrType::Public,
                                     BtTransport::Auto,
                                 );
@@ -2485,7 +2481,7 @@ impl IBluetooth for Bluetooth {
         metrics::bond_create_attempt(address, device_type.clone());
 
         self.active_pairing_address = Some(address);
-        let status = self.intf.lock().unwrap().create_bond(&address, transport);
+        let status = self.intf.lock().unwrap().create_bond(address, transport);
 
         if status != 0 {
             metrics::bond_state_changed(
@@ -2515,7 +2511,7 @@ impl IBluetooth for Bluetooth {
             );
         }
 
-        self.intf.lock().unwrap().cancel_bond(&device.address) == 0
+        self.intf.lock().unwrap().cancel_bond(device.address) == 0
     }
 
     fn remove_bond(&mut self, device: BluetoothDevice) -> bool {
@@ -2527,7 +2523,7 @@ impl IBluetooth for Bluetooth {
             warn!("Device {} is also cancelling the bond.", DisplayAddress(&address));
         }
 
-        let status = self.intf.lock().unwrap().remove_bond(&address);
+        let status = self.intf.lock().unwrap().remove_bond(address);
 
         if status != 0 {
             return false;
@@ -2568,7 +2564,7 @@ impl IBluetooth for Bluetooth {
         let mut btpin = BtPinCode { pin: array_utils::to_sized_array(&pin_code) };
 
         self.intf.lock().unwrap().pin_reply(
-            &device.address,
+            device.address,
             accept as u8,
             pin_code.len() as u8,
             &mut btpin,
@@ -2586,7 +2582,7 @@ impl IBluetooth for Bluetooth {
         let passkey = u32::from_ne_bytes(tmp);
 
         self.intf.lock().unwrap().ssp_reply(
-            &device.address,
+            device.address,
             BtSspVariant::PasskeyEntry,
             accept as u8,
             passkey,
@@ -2595,7 +2591,7 @@ impl IBluetooth for Bluetooth {
 
     fn set_pairing_confirmation(&self, device: BluetoothDevice, accept: bool) -> bool {
         self.intf.lock().unwrap().ssp_reply(
-            &device.address,
+            device.address,
             BtSspVariant::PasskeyConfirmation,
             accept as u8,
             0,
@@ -2694,7 +2690,7 @@ impl IBluetooth for Bluetooth {
     fn get_connection_state(&self, device: BluetoothDevice) -> BtConnectionState {
         // The underlying api adds whether this is ENCRYPTED_BREDR or ENCRYPTED_LE.
         // As long as it is non-zero, it is connected.
-        self.intf.lock().unwrap().get_connection_state(&device.address)
+        self.intf.lock().unwrap().get_connection_state(device.address)
     }
 
     fn get_profile_connection_state(&self, profile: Uuid) -> ProfileConnectionState {
@@ -2739,25 +2735,20 @@ impl IBluetooth for Bluetooth {
             _ => device.acl_reported_transport,
         };
 
-        self.intf.lock().unwrap().get_remote_services(&mut device.info.address.clone(), transport)
-            == 0
+        self.intf.lock().unwrap().get_remote_services(device.info.address, transport) == 0
     }
 
-    fn sdp_search(&self, mut device: BluetoothDevice, uuid: Uuid) -> bool {
-        if let Some(sdp) = self.sdp.as_ref() {
-            return sdp.sdp_search(&mut device.address, &uuid) == BtStatus::Success;
-        }
-        false
+    fn sdp_search(&self, device: BluetoothDevice, uuid: Uuid) -> bool {
+        let Some(sdp) = self.sdp.as_ref() else { return false };
+        sdp.sdp_search(device.address, uuid) == BtStatus::Success
     }
 
     fn create_sdp_record(&mut self, sdp_record: BtSdpRecord) -> bool {
         let mut handle: i32 = -1;
-        let mut sdp_record = sdp_record;
-        match self.sdp.as_ref().unwrap().create_sdp_record(&mut sdp_record, &mut handle) {
+        match self.sdp.as_ref().unwrap().create_sdp_record(sdp_record.clone(), &mut handle) {
             BtStatus::Success => {
-                let record_clone = sdp_record.clone();
                 self.callbacks.for_all_callbacks(|callback| {
-                    callback.on_sdp_record_created(record_clone.clone(), handle);
+                    callback.on_sdp_record_created(sdp_record.clone(), handle);
                 });
                 true
             }
@@ -2815,7 +2806,7 @@ impl IBluetooth for Bluetooth {
                                 // correct reconnection behavior based
                                 // on device instead of the default
                                 self.hh.as_ref().unwrap().disconnect(
-                                    &mut addr.clone(),
+                                    addr.clone(),
                                     BtAddrType::Public,
                                     BtTransport::Auto,
                                     /*reconnect_allowed=*/ true,
@@ -3059,9 +3050,8 @@ impl BtifHHCallbacks for Bluetooth {
             );
             // TODO(b/329837967): Determine correct reconnection
             // behavior based on device instead of the default
-            let mut address = address;
             self.hh.as_ref().unwrap().disconnect(
-                &mut address,
+                address.clone(),
                 address_type,
                 transport,
                 /*reconnect_allowed=*/ true,

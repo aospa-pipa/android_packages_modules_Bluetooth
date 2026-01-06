@@ -33,6 +33,7 @@
 #include "bta/le_audio/le_audio_types.h"
 #include "bta/le_audio/mock_codec_manager.h"
 #include "btif/include/btif_common.h"
+#include "btif_status.h"
 #include "btm_iso_api_types.h"
 #include "gd/common/utils.h"
 #include "hci/controller_mock.h"
@@ -98,7 +99,7 @@ bluetooth::common::MessageLoopThread message_loop_thread(
 bluetooth::common::MessageLoopThread* get_main_thread() { return &message_loop_thread; }
 void invoke_switch_buffer_size_cb(bool /*is_low_latency_buffer_size*/) {}
 
-bt_status_t do_in_main_thread(base::OnceClosure task) {
+BtStatus do_in_main_thread(base::OnceClosure task) {
   // Wrap the task with task counter so we could later know if there are
   // any callbacks scheduled and we should wait before performing some actions
   if (!message_loop_thread.DoInThread(base::BindOnce(
@@ -108,10 +109,10 @@ bt_status_t do_in_main_thread(base::OnceClosure task) {
               },
               std::move(task), std::ref(num_async_tasks)))) {
     log::error("failed to post task to task runner!");
-    return BT_STATUS_FAIL;
+    return BtifStatus(FAIL);
   }
   num_async_tasks++;
-  return BT_STATUS_SUCCESS;
+  return BtifStatus();
 }
 
 static void init_message_loop_thread() {
@@ -394,7 +395,6 @@ protected:
     ContentControlIdKeeper::GetInstance()->Stop();
 
     bluetooth::hci::testing::mock_controller_.release();
-    delete mock_audio_source_;
     iso_active_callback = nullptr;
     delete mock_audio_source_;
     iso_manager_->Stop();
@@ -453,12 +453,14 @@ protected:
             .conn_handles = conn_handles,
     };
 
-    big_callbacks_->OnBigEvent(bluetooth::hci::iso_manager::kIsoEventBigOnCreateCmpl, &evt);
+    big_callbacks_->OnBigSourceEvent(bluetooth::hci::iso_manager::BigSourceEvent::kCreateCmpl,
+                                     &evt);
   }
 
   void InjectBigTerminateComplete(uint8_t big_handle, uint8_t reason) {
     hci::iso_manager::big_terminate_cmpl_evt evt = {.big_handle = big_handle, .reason = reason};
-    big_callbacks_->OnBigEvent(bluetooth::hci::iso_manager::kIsoEventBigOnTerminateCmpl, &evt);
+    big_callbacks_->OnBigSourceEvent(bluetooth::hci::iso_manager::BigSourceEvent::kTerminateCmpl,
+                                     &evt);
   }
 
 protected:

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "stack/l2cap/internal/l2c_api.h"
+#include "bta/ag/bta_ag_int.h"
 #include "bta/include/bta_ag_api.h"
 #include "bta/include/bta_hh_api.h"
 #include "btcore/include/module.h"
@@ -39,6 +40,9 @@ void set_hal_cbacks(bt_callbacks_t* callbacks);
 }  // namespace bluetooth::testing
 
 bool bta_ag_is_call_present(const RawAddress* peer_addr) { return true; }
+tBTA_AG_SCB* bta_ag_scb_by_idx(uint16_t idx) {return nullptr;}
+bool bta_ag_inband_enabled(tBTA_AG_SCB* p_scb) {return true;}
+
 bool L2CA_Echo(const RawAddress& p_bd_addr, BT_HDR* p_data,
                tL2CA_ECHO_DATA_CB* p_callback) { return true; }
 bool L2CA_Ping(const RawAddress& p_bd_addr,
@@ -226,11 +230,11 @@ TEST_F(BtifHhWithDevice, BTA_HH_GET_RPT_EVT) {
 
   g_bthh_callbacks_get_report_promise = std::promise<get_report_cb_t>();
   auto future = g_bthh_callbacks_get_report_promise.get_future();
-  bthh_callbacks.get_report_cb = [](RawAddress* bd_addr, tBLE_ADDR_TYPE /* addr_type */,
+  bthh_callbacks.get_report_cb = [](RawAddress bd_addr, tBLE_ADDR_TYPE /* addr_type */,
                                     tBT_TRANSPORT /* transport */, bthh_status_t hh_status,
                                     uint8_t* rpt_data, int rpt_size) {
     get_report_cb_t report = {
-            .raw_address = *bd_addr,
+            .raw_address = bd_addr,
             .status = hh_status,
             .data = std::vector<uint8_t>(),
     };
@@ -256,21 +260,20 @@ class BtifHHVirtualUnplugTest : public BtifHhAdapterReady {
 protected:
   void SetUp() override {
     BtifHhAdapterReady::SetUp();
-    bthh_callbacks.connection_state_cb = [](RawAddress* bd_addr, tBLE_ADDR_TYPE /* addr_type */,
-                                            tBT_TRANSPORT /* transport */,
-                                            bthh_connection_state_t state,
-                                            bthh_status_t /* hh_status */) {
-      connection_state_cb_t connection_state = {
-              .raw_address = *bd_addr,
-              .state = state,
-      };
-      g_bthh_connection_state_promise.set_value(connection_state);
-    };
+    bthh_callbacks.connection_state_cb =
+            [](RawAddress bd_addr, tBLE_ADDR_TYPE /* addr_type */, tBT_TRANSPORT /* transport */,
+               bthh_connection_state_t state, bthh_status_t /* hh_status */) {
+              connection_state_cb_t connection_state = {
+                      .raw_address = bd_addr,
+                      .state = state,
+              };
+              g_bthh_connection_state_promise.set_value(connection_state);
+            };
   }
 
   void TearDown() override {
     bthh_callbacks.connection_state_cb =
-            [](RawAddress* /* bd_addr */, tBLE_ADDR_TYPE /* addr_type */,
+            [](RawAddress /* bd_addr */, tBLE_ADDR_TYPE /* addr_type */,
                tBT_TRANSPORT /* transport */, bthh_connection_state_t /* state */,
                bthh_status_t /* hh_status */) {};
     BtifHhAdapterReady::TearDown();

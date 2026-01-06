@@ -36,6 +36,7 @@
 #include "stack/btm/btm_ble_sec.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
+#include "stack/btm/btm_sec_utils.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_log_history.h"
@@ -210,8 +211,7 @@ void smp_send_app_cback(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
           if (!p_cb->sc_only_mode_locally_required &&
               (!(p_cb->loc_auth_req & SMP_SC_SUPPORT_BIT) ||
                (remote_lmp_version && remote_lmp_version < HCI_PROTO_VERSION_4_2) ||
-               interop_match_addr(INTEROP_DISABLE_LE_SECURE_CONNECTIONS,
-                                  (const RawAddress*)&p_cb->pairing_bda))) {
+               interop_match_addr(INTEROP_DISABLE_LE_SECURE_CONNECTIONS, p_cb->pairing_bda))) {
             log::debug(
                     "Setting SC, H7 and LinkKey bits to false to support legacy "
                     "device with lmp version:{}",
@@ -293,7 +293,7 @@ void smp_send_pair_fail(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
  * Description  actions related to sending pairing request
  ******************************************************************************/
 void smp_send_pair_req(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
-  BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
   log::verbose("addr:{}", p_cb->pairing_bda);
 
   /* erase all keys when central sends pairing req*/
@@ -549,7 +549,7 @@ void smp_proc_pair_fail(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
  ******************************************************************************/
 void smp_proc_pair_cmd(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   uint8_t* p = p_data->p_data;
-  BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
 
   log::verbose("pairing_bda={}", p_cb->pairing_bda);
 
@@ -562,8 +562,7 @@ void smp_proc_pair_cmd(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
     if (BTM_IsBonded(p_cb->pairing_bda, BT_TRANSPORT_LE) &&
         !BTM_IsEncrypted(p_cb->pairing_bda, BT_TRANSPORT_LE)) {
       get_btm_client_interface().security.BTM_SecReportBondLoss(p_cb->pairing_bda, BT_TRANSPORT_LE);
-      if (!com::android::bluetooth::flags::enable_autonomous_repairing() ||
-          !p_device->bond_lost) {
+      if (!is_autonomous_repairing_supported() || !p_device->bond_lost) {
         // continue with pairing if it's a bond loss scenario.
         return;
       }
@@ -846,9 +845,15 @@ void smp_process_keypress_notification(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
  ******************************************************************************/
 void smp_br_process_pairing_command(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
   uint8_t* p = p_data->p_data;
-  BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
 
   log::verbose("addr:{}", p_cb->pairing_bda);
+
+  if (p_device == nullptr) {
+    log::error("Device not found for bd_addr: {}", p_cb->pairing_bda);
+    return;
+  }
+
   /* rejecting BR pairing request over non-SC BR link */
   if (!p_device->sec_rec.new_encryption_key_is_p256 && p_cb->role == HCI_ROLE_PERIPHERAL) {
     tSMP_INT_DATA smp_int_data;
@@ -1376,7 +1381,12 @@ void smp_key_distribution(tSMP_CB* p_cb, tSMP_INT_DATA* p_data) {
     /* state check to prevent re-entrant */
     if (smp_get_state() == SMP_STATE_BOND_PENDING) {
       if (p_cb->derive_lk) {
-        BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+        const BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+        if (p_device == nullptr) {
+          log::error("Device record not found for bd_addr: {}", p_cb->pairing_bda);
+          return;
+        }
+
         if (!(p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) &&
             (p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED)) {
           log::verbose("BR key is higher security than existing LE keys, don't derive LK from LTK");
@@ -1432,7 +1442,8 @@ void smp_decide_association_model(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
         int_evt = SMP_AUTH_CMPL_EVT;
       } else {
         if (!GetInterfaceToProfiles()->config->isAndroidTVDevice() &&
-            (p_cb->local_io_capability == BtIoCap::DISPLAY_YES_NO ||
+            (com_android_bluetooth_flags_prevent_jw_auto_accept() ||
+             p_cb->local_io_capability == BtIoCap::DISPLAY_YES_NO ||
              p_cb->local_io_capability == BtIoCap::KEYBOARD_DISPLAY)) {
           /* display consent dialog if this device has a display */
           log::verbose("ENCRYPTION_ONLY showing Consent Dialog");
@@ -1633,9 +1644,25 @@ void smp_pair_terminate(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
                p_cb->pairing_bda, p_cb->role, p_cb->local_i_key, p_cb->local_r_key);
 
   if (p_cb->role == HCI_ROLE_PERIPHERAL && p_cb->local_i_key != 0) {
-    log::error("Some keys are not sent by initiator addr:{}, local_i_key=0x{:02x}",
-              p_cb->pairing_bda, p_cb->local_i_key);
-    p_cb->status = SMP_PAIR_AUTH_FAIL;
+    // Check if device is already bonded to differentiate between:
+    // 1. Initial pairing failure (should remove bond)
+    // 2. Encryption failure on existing bond (should preserve bond)
+    const BtmDevice* p_dev_rec = btm_find_dev(p_cb->pairing_bda);
+    bool is_already_bonded = (p_dev_rec &&
+                             (p_dev_rec->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN));
+
+    if (is_already_bonded) {
+      // For existing bonds, treat as connection timeout, not auth failure
+      // This preserves the bond and allows retry on next connection
+      p_cb->status = SMP_CONN_TOUT;
+      log::warn("Encryption timeout on existing bond addr:{}, preserving keys, local_i_key=0x{:02x}",
+               p_cb->pairing_bda, p_cb->local_i_key);
+    } else {
+      // For initial pairing, treat as auth failure (removes bond)
+      p_cb->status = SMP_PAIR_AUTH_FAIL;
+      log::error("Initial pairing failed addr:{}, removing bond, local_i_key=0x{:02x}",
+                p_cb->pairing_bda, p_cb->local_i_key);
+    }
   } else {
     p_cb->status = SMP_CONN_TOUT;
   }
@@ -1836,7 +1863,8 @@ void smp_process_peer_nonce(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
 
       if (p_cb->selected_association_model == SMP_MODEL_SEC_CONN_JUSTWORKS) {
         if (!GetInterfaceToProfiles()->config->isAndroidTVDevice() &&
-            (p_cb->local_io_capability == BtIoCap::DISPLAY_YES_NO ||
+            (com_android_bluetooth_flags_prevent_jw_auto_accept() ||
+             p_cb->local_io_capability == BtIoCap::DISPLAY_YES_NO ||
              p_cb->local_io_capability == BtIoCap::KEYBOARD_DISPLAY)) {
           /* display consent dialog */
           log::verbose("JUST WORKS showing Consent Dialog");
@@ -2151,7 +2179,7 @@ bool smp_proc_ltk_request(const RawAddress& bda) {
   if (bda == smp_cb.pairing_bda) {
     match = true;
   } else {
-    BtmDevice* p_device = btm_find_dev(bda);
+    const BtmDevice* p_device = btm_find_dev(bda);
     if (p_device != NULL && p_device->ble.pseudo_addr == smp_cb.pairing_bda &&
         p_device->ble.pseudo_addr != RawAddress::kEmpty) {
       match = true;
@@ -2250,7 +2278,7 @@ void smp_br_process_link_key(tSMP_CB* p_cb, tSMP_INT_DATA* /* p_data */) {
     return;
   }
 
-  BtmDevice* p_device = btm_find_dev(p_cb->pairing_bda);
+  BtmDevice* p_device = btm_get_dev(p_cb->pairing_bda);
   if (p_device) {
     log::verbose("dev_type={}", p_device->device_type);
     p_device->device_type |= BT_DEVICE_TYPE_BLE;

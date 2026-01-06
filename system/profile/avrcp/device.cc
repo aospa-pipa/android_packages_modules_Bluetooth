@@ -22,6 +22,8 @@
 #include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
+#include <algorithm>
+
 #include "abstract_message_loop.h"
 #include "array_utils.h"
 #include "avrcp_common.h"
@@ -45,6 +47,7 @@
 #include "packet/avrcp/set_absolute_volume.h"
 #include "packet/avrcp/set_addressed_player.h"
 #include "packet/avrcp/set_player_application_setting_value.h"
+#include "stack/include/main_thread.h"
 #include "btif/include/btif_config.h"
 #include "storage/config_keys.h"
 
@@ -62,8 +65,7 @@ Device::Device(const RawAddress& bdaddr, bool avrcp13_compatibility,
                                             std::unique_ptr<::bluetooth::PacketBuilder> message)>
                        send_msg_cb,
                uint16_t ctrl_mtu, uint16_t browse_mtu)
-    : weak_ptr_factory_(this),
-      address_(bdaddr),
+    : address_(bdaddr),
       avrcp13_compatibility_(avrcp13_compatibility),
       send_message_cb_(send_msg_cb),
       ctrl_mtu_(ctrl_mtu),
@@ -213,7 +215,7 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
     return;
   }
 
-  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
     CommandPdu event = pkt->GetCommandPdu();
     if (event == CommandPdu::LIST_PLAYER_APPLICATION_SETTING_ATTRIBUTES ||
         event == CommandPdu::LIST_PLAYER_APPLICATION_SETTING_VALUES ||
@@ -546,7 +548,7 @@ void Device::HandleGetCapabilities(uint8_t label,
       response->AddEvent(Event::TRACK_CHANGED);
       response->AddEvent(Event::PLAYBACK_POS_CHANGED);
       if (player_settings_interface_ != nullptr) {
-        if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+        if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
           log::error("Device in BL for PLAYER_APPLICATION_SETTING, don't show in capability");
         } else {
           response->AddEvent(Event::PLAYER_APPLICATION_SETTING_CHANGED);
@@ -617,7 +619,7 @@ void Device::HandleNotification(uint8_t label,
     } break;
 
     case Event::PLAYER_APPLICATION_SETTING_CHANGED: {
-      if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+      if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
         log::error("Device in BL for Player app settings, return");
         auto response = RejectBuilder::MakeBuilder(pkt->GetCommandPdu(), Status::INVALID_COMMAND);
         send_message(label, false, std::move(response));
@@ -716,7 +718,7 @@ void Device::HandleVolumeChanged(uint8_t label,
     return;
   }
 
-  if (interop_match_addr(INTEROP_DISABLE_ABSOLUTE_VOLUME, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_ABSOLUTE_VOLUME, address_)) {
     log::info("Absolute volume disabled by IOP table");
     log::info("don't acknowledge vol change from Remote");
     return;
@@ -731,7 +733,7 @@ void Device::HandleVolumeChanged(uint8_t label,
     volume_ = VOL_REGISTRATION_FAILED;
     log::error("device rejected register Volume changed notification request.");
     log::error("Putting Device in ABSOLUTE_VOLUME rejectlist");
-    interop_database_add(INTEROP_DISABLE_ABSOLUTE_VOLUME, &address_, 3);
+    interop_database_add(INTEROP_DISABLE_ABSOLUTE_VOLUME, address_, 3);
     volume_interface_->DeviceConnected(GetAddress());
     return;
   }
@@ -1004,6 +1006,19 @@ void Device::PlaybackPosNotificationResponse(uint8_t label, bool interim, PlaySt
     log::verbose("Queue next play position update");
     play_pos_update_cb_.Reset(
             base::Bind(&Device::HandlePlayPosUpdate, weak_ptr_factory_.GetWeakPtr()));
+    if (com::android::bluetooth::flags::replace_message_loop_thread_with_gd_handler()) {
+      /**
+       * The `replace_message_loop_thread_with_gd_handler` flag converts libchrome `base::Thread`
+       * usage to `GdThread`. This makes `btbase::AbstractMessageLoop::current_task_runner()` return
+       * `NULL`, so we must post delayed tasks directly to the main thread.
+       *
+       * Considering `play_pos_interval_` is in `seconds` unit.
+       */
+      do_in_main_thread_delayed(play_pos_update_cb_.callback(),
+                                std::chrono::microseconds(play_pos_interval_ * 1000000));
+      return;
+    }
+
     btbase::AbstractMessageLoop::current_task_runner()->PostDelayedTask(
             FROM_HERE, play_pos_update_cb_.callback(),
 #if BASE_VER < 931007
@@ -2065,8 +2080,10 @@ void Device::SetBrowsedPlayerResponse(uint8_t label, std::shared_ptr<SetBrowsedP
   current_path_ = std::stack<std::string>();
   current_path_.push(current_path);
 
+  uint8_t folder_depth = std::max<uint8_t>(current_path_.size() - 1, 0);
+
   auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::NO_ERROR, 0x0000, num_items,
-                                                               0, current_path);
+                                                               folder_depth, current_path);
   send_message(label, true, std::move(response));
 }
 
@@ -2167,7 +2184,7 @@ void Device::HandleNowPlayingUpdate() {
 void Device::HandlePlayerSettingChanged(std::vector<PlayerAttribute> attributes,
                                         std::vector<uint8_t> values) {
   log::verbose("");
-  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, &address_)) {
+  if (interop_match_addr(INTEROP_DISABLE_PLAYER_APPLICATION_SETTING_CMDS, address_)) {
     log::error("Device in BL for Player app settings, return");
     return;
   }

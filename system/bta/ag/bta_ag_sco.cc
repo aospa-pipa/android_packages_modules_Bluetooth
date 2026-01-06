@@ -187,7 +187,7 @@ static void bta_ag_sco_conn_cback(uint16_t sco_idx) {
 
   if (handle != 0) {
     do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, handle, BTA_AG_SCO_OPEN_EVT,
-                                     tBTA_AG_DATA::kEmpty));
+                                     tBTA_AG_DATA::kEmpty, NO_FAILURE));
   } else {
     /* no match found; disconnect sco, init sco variables */
     bta_ag_cb.sco.p_curr_scb = nullptr;
@@ -208,7 +208,7 @@ static void bta_ag_sco_conn_cback(uint16_t sco_idx) {
  * Returns          void
  *
  ******************************************************************************/
-static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
+static void bta_ag_sco_disc_cback(uint16_t sco_idx, SCO_CONNECTION_FAILURES reason = NO_FAILURE) {
   uint16_t handle = 0;
 
   log::debug("sco_idx: 0x{:x} sco.state:{}", sco_idx, bta_ag_cb.sco.state);
@@ -299,8 +299,9 @@ static void bta_ag_sco_disc_cback(uint16_t sco_idx) {
 
     bta_ag_cb.sco.p_curr_scb->inuse_codec = tBTA_AG_UUID_CODEC::UUID_CODEC_NONE;
 
+    log::verbose("Sco connection failure: {}", static_cast<int>(reason));
     do_in_main_thread(base::BindOnce(&bta_ag_sm_execute_by_handle, handle, BTA_AG_SCO_CLOSE_EVT,
-                                     tBTA_AG_DATA::kEmpty));
+                                     tBTA_AG_DATA::kEmpty, reason));
   } else {
     /* no match found */
     log::verbose("no scb for ag_sco_disc_cback");
@@ -407,10 +408,12 @@ static void bta_ag_esco_connreq_cback(tBTM_ESCO_EVT event, tBTM_ESCO_EVT_DATA* p
  * Returns          void
  *
  ******************************************************************************/
-static void bta_ag_cback_sco(tBTA_AG_SCB* p_scb, tBTA_AG_EVT event) {
+static void bta_ag_cback_sco(tBTA_AG_SCB* p_scb, tBTA_AG_EVT event,
+                             SCO_CONNECTION_FAILURES reason = NO_FAILURE) {
   tBTA_AG_HDR sco = {};
   sco.handle = bta_ag_scb_to_idx(p_scb);
   sco.app_id = p_scb->app_id;
+  sco.reason = reason;
   /* call close cback */
   (*bta_ag_cb.p_cback)(static_cast<tBTA_AG_EVT>(event), (tBTA_AG*)&sco);
 }
@@ -435,7 +438,7 @@ void bta_ag_create_sco(tBTA_AG_SCB* p_scb, bool is_orig) {
     if (bta_ag_cb.sco.p_curr_scb != nullptr && bta_ag_cb.sco.p_curr_scb->in_use &&
         p_scb == bta_ag_cb.sco.p_curr_scb) {
       do_in_main_thread(base::BindOnce(&bta_ag_sm_execute, p_scb, BTA_AG_SCO_CLOSE_EVT,
-                                       tBTA_AG_DATA::kEmpty));
+                                       tBTA_AG_DATA::kEmpty, PRECONDITION_FAIL));
     }
     return;
   }
@@ -636,33 +639,21 @@ static void updateCodecParametersFromProviderInfo(tBTA_AG_UUID_CODEC esco_codec,
 static void bta_ag_codec_negotiation_timer_cback(void* data) {
   log::warn("Codec negotiation timeout");
   tBTA_AG_SCB* p_scb = (tBTA_AG_SCB*)data;
-  bool is_blacklisted = interop_match_addr(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr);
+  bool is_blacklisted = interop_match_addr(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr);
   /* Announce that codec negotiation failed. */
   bta_ag_sco_codec_nego(p_scb, false);
 
-  // CancelStreamingRequest before callback is sent to java layer
-  if (bta_ag_is_sco_managed_by_audio()) {
-    if (hfp_software_datapath_enabled) {
-      if (hfp_encode_interface) {
-        hfp_encode_interface->CancelStreamingRequest();
-        hfp_decode_interface->CancelStreamingRequest();
-      }
-    } else {
-      hfp_offload_interface->CancelStreamingRequest();
-    }
-  }
   // add the device to blacklisting to disable codec negotiation
   if (is_blacklisted == false) {
     log::verbose("blacklisting device {} for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
-    interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, &p_scb->peer_addr, 3);
+    interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr, 3);
   } else {
     log::verbose("dev {} is already blacklisted for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
   }
-
   /* call app callback */
-  bta_ag_cback_sco(p_scb, BTA_AG_AUDIO_CLOSE_EVT);
+  bta_ag_cback_sco(p_scb, BTA_AG_AUDIO_CLOSE_EVT, CODEC_NEGOTIATION_FAIL);
 }
 
 /*******************************************************************************
@@ -861,12 +852,18 @@ static void bta_ag_sco_event(tBTA_AG_SCB* p_scb, uint8_t event) {
                 /* If SCO disconnected during codec negotiation, just go back to listening to allow
                  * SCO reconnection */
                 p_sco->state = BTA_AG_SCO_LISTEN_ST;
-                p_sco->p_curr_scb = nullptr;
+                if (!com_android_bluetooth_flags_sco_state_machine_update_revision()) {
+                  p_sco->p_curr_scb = nullptr;
+                }
               }
             } else {
               /* just go back to listening */
               p_sco->state = BTA_AG_SCO_LISTEN_ST;
             }
+          }
+          if (com_android_bluetooth_flags_sco_state_machine_update_revision() &&
+              p_scb == p_sco->p_curr_scb) {
+            p_sco->p_curr_scb = nullptr;
           }
           break;
 
@@ -1574,14 +1571,15 @@ void bta_ag_sco_conn_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_ag_sco_conn_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
+void bta_ag_sco_conn_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */,
+                           SCO_CONNECTION_FAILURES reason) {
   /* clear current scb */
   bta_ag_cb.sco.p_curr_scb = nullptr;
   p_scb->sco_idx = BTM_INVALID_SCO_INDEX;
   const bool aptx_voice = is_hfp_aptx_voice_enabled() && p_scb->codec_fallback &&
                           (p_scb->sco_codec == BTA_AG_SCO_APTX_SWB_SETTINGS_Q0);
-  log::verbose("aptx_voice={}, codec_fallback={:#x}, sco_codec={:#x}", aptx_voice,
-               p_scb->codec_fallback, p_scb->sco_codec);
+  log::verbose("aptx_voice={}, codec_fallback={:#x}, sco_codec={:#x}, reason={}", aptx_voice,
+               p_scb->codec_fallback, p_scb->sco_codec, static_cast<int>(reason));
 
   /* codec_fallback is set when AG is initiator and connection failed for mSBC.
    * OR if codec is msbc and T2 settings failed, then retry Safe T1 settings
@@ -1615,7 +1613,7 @@ void bta_ag_sco_conn_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
     }
 
     /* call app callback */
-    bta_ag_cback_sco(p_scb, BTA_AG_AUDIO_CLOSE_EVT);
+    bta_ag_cback_sco(p_scb, BTA_AG_AUDIO_CLOSE_EVT, reason);
     p_scb->codec_cvsd_settings = BTA_AG_SCO_CVSD_SETTINGS_S4;
     p_scb->codec_msbc_settings = BTA_AG_SCO_MSBC_SETTINGS_T2;
     p_scb->codec_lc3_settings = BTA_AG_SCO_LC3_SETTINGS_T2;

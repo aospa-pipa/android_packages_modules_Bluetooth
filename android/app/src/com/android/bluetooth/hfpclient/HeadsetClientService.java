@@ -21,7 +21,6 @@ import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
-import static android.content.pm.PackageManager.FEATURE_WATCH;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElseGet;
@@ -44,7 +43,7 @@ import android.os.SystemProperties;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 
-import com.android.bluetooth.Utils;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.GuardedBy;
@@ -116,7 +115,7 @@ public class HeadsetClientService extends ConnectableProfile {
 
         // Start the HfpClientConnectionService to create connection with telecom when HFP
         // connection is available on non-wearable device.
-        if (getPackageManager() != null && !getPackageManager().hasSystemFeature(FEATURE_WATCH)) {
+        if (!Util.isWatch(getAdapterService())) {
             Intent startIntent = new Intent(this, HfpClientConnectionService.class);
             startService(startIntent);
         }
@@ -141,8 +140,7 @@ public class HeadsetClientService extends ConnectableProfile {
 
         synchronized (HeadsetClientService.class) {
             // Stop the HfpClientConnectionService for non-wearables devices.
-            if (getPackageManager() != null
-                    && !getPackageManager().hasSystemFeature(FEATURE_WATCH)) {
+            if (!Util.isWatch(getAdapterService())) {
                 Intent stopIntent = new Intent(this, HfpClientConnectionService.class);
                 getAdapterService().stopService(stopIntent);
             }
@@ -446,7 +444,7 @@ public class HeadsetClientService extends ConnectableProfile {
                         + ", allowed="
                         + allowed
                         + ", "
-                        + Utils.getUidPidString());
+                        + Util.getUidPidString());
         synchronized (mStateMachineMap) {
             HeadsetClientStateMachine sm = mStateMachineMap.get(device);
             if (sm != null) {
@@ -480,7 +478,7 @@ public class HeadsetClientService extends ConnectableProfile {
                         + ", "
                         + policies.toString()
                         + ", "
-                        + Utils.getUidPidString());
+                        + Util.getUidPidString());
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm != null) {
             sm.setAudioPolicy(policies);
@@ -502,7 +500,7 @@ public class HeadsetClientService extends ConnectableProfile {
     }
 
     boolean connectAudio(BluetoothDevice device) {
-        Log.i(TAG, "connectAudio: device=" + device + ", " + Utils.getUidPidString());
+        Log.i(TAG, "connectAudio: device=" + device + ", " + Util.getUidPidString());
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
             Log.e(TAG, "SM does not exist for device " + device);

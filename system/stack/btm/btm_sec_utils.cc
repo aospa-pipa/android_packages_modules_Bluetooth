@@ -68,14 +68,14 @@ void btm_sec_store_device_sc_support(uint16_t hci_handle, bool host_secure_conne
                             .len = sizeof(uint8_t),
                             .val = &property_val};
 
-  btif_storage_set_remote_device_property(&p_device->bd_addr, &property);
+  btif_storage_set_remote_device_property(p_device->bd_addr, &property);
 
   property_val = (uint8_t)controller_secure_connections_supported;
   property = {.type = BT_PROPERTY_REMOTE_CONTROLLER_SECURE_CONNECTIONS_SUPPORTED,
               .len = sizeof(uint8_t),
               .val = &property_val};
 
-  btif_storage_set_remote_device_property(&p_device->bd_addr, &property);
+  btif_storage_set_remote_device_property(p_device->bd_addr, &property);
 }
 
 /*******************************************************************************
@@ -107,7 +107,7 @@ bool btm_sec_is_enc_algo_downgrade(uint16_t hci_handle, bool host_secure_connect
                             .len = sizeof(uint8_t),
                             .val = &controller_val};
 
-  bt_status_t cached = btif_storage_get_remote_device_property(&p_device->bd_addr, &property);
+  bt_status_t cached = btif_storage_get_remote_device_property(p_device->bd_addr, &property);
 
   // No cached value for this device, so it's a new device and we don't need to
   // make the check.
@@ -121,7 +121,7 @@ bool btm_sec_is_enc_algo_downgrade(uint16_t hci_handle, bool host_secure_connect
               .len = sizeof(uint8_t),
               .val = &host_val};
 
-  cached = btif_storage_get_remote_device_property(&p_device->bd_addr, &property);
+  cached = btif_storage_get_remote_device_property(p_device->bd_addr, &property);
 
   // No cached value for host -- in theory we should always have both or
   // neither, but let's check this just in case.
@@ -163,7 +163,7 @@ bool btm_sec_is_session_key_size_downgrade(uint16_t hci_handle, uint8_t key_size
                             .len = sizeof(uint8_t),
                             .val = &property_val};
 
-  bt_status_t cached = btif_storage_get_remote_device_property(&p_device->bd_addr, &property);
+  bt_status_t cached = btif_storage_get_remote_device_property(p_device->bd_addr, &property);
 
   if (cached == BT_STATUS_FAIL) {
     return false;
@@ -190,7 +190,7 @@ void btm_sec_update_session_key_size(uint16_t hci_handle, uint8_t key_size) {
                             .len = sizeof(uint8_t),
                             .val = &property_val};
 
-  btif_storage_set_remote_device_property(&p_device->bd_addr, &property);
+  btif_storage_set_remote_device_property(p_device->bd_addr, &property);
 }
 
 /*******************************************************************************
@@ -264,7 +264,7 @@ bool BTM_CanReadDiscoverableCharacteristics(const RawAddress& bd_addr) {
 
 // Return DEV_CLASS (uint8_t[3]) of bda
 DEV_CLASS btm_get_dev_class(const RawAddress& bda) {
-  BtmDevice* p_device = btm_find_dev(bda);
+  const BtmDevice* p_device = btm_find_dev(bda);
 
   if (p_device == nullptr) {
     log::error("No record found for bda: {}", bda);
@@ -276,7 +276,7 @@ DEV_CLASS btm_get_dev_class(const RawAddress& bda) {
 
 void BTM_update_version_info(const RawAddress& bd_addr,
                              const remote_version_info& remote_version_info) {
-  BtmDevice* p_device = btm_find_dev(bd_addr);
+  BtmDevice* p_device = btm_get_dev(bd_addr);
   if (p_device == nullptr) {
     return;
   }
@@ -318,4 +318,16 @@ const char* btm_pair_state_descr(tBTM_PAIRING_STATE state) {
   }
 
   return "???";
+}
+
+/*******************************************************************************
+ *
+ * Function         is_autonomous_repairing_supported
+ *
+ * Description      Return true if the autonomous repairing is supported.
+ *
+ ******************************************************************************/
+bool is_autonomous_repairing_supported() {
+  // TODO (b/440298497): Change this to flag and android check once the SDK check CL is in.
+  return false;
 }

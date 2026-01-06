@@ -369,6 +369,26 @@ flag {
 }
 
 flag {
+    name: "leaudio_broadcast_treat_empty_rs_explicitly"
+    namespace: "bluetooth"
+    description: "Treat remote source removal as a final state for broadcast assistant"
+    bug: "460351363"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_extend_audio_active_state"
+    namespace: "bluetooth"
+    description: "Add Audio Active State to BASE and parser for metadata"
+    bug: "463606623"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_improve_unicast_monitor"
     namespace: "bluetooth"
     description: "Improve unicast monitor mode robustness"
@@ -463,9 +483,29 @@ flag {
 }
 
 flag {
+    name: "leaudio_bass_read_characteristics_after_encryption"
+    namespace: "bluetooth"
+    description: "Read Bass characteristics after encryption is established"
+    bug: "459915166"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_over_hdt_phy_api"
     is_exported: true
     namespace: "bluetooth"
     description: "Configure LE Audio over HDT PHY API"
     bug: "455581672"
+}
+
+flag {
+    name: "leaudio_cancel_open_with_direct_flag_when_connecting"
+    namespace: "bluetooth"
+    description: "Close gatt channel while it is connecting"
+    bug: "459264847"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }

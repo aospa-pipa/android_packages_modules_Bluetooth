@@ -22,7 +22,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
-import com.google.common.truth.Truth
 import com.google.common.truth.Truth.assertThat
 import java.io.Closeable
 import kotlin.time.Duration.Companion.seconds
@@ -45,15 +44,12 @@ private const val TAG = "PandoraHost"
 
 @SuppressLint("MissingPermission")
 @kotlinx.coroutines.ExperimentalCoroutinesApi
-public class Host(context: Context) : Closeable {
+class Host(context: Context) : Closeable {
 
+    private val scope = CoroutineScope(Dispatchers.Default.limitedParallelism(1))
     private val flow: Flow<Intent>
-    private val scope: CoroutineScope
-    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
-    private val bluetoothAdapter = bluetoothManager!!.adapter
 
     init {
-        scope = CoroutineScope(Dispatchers.Default.limitedParallelism(1))
         val intentFilter = IntentFilter()
         intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         intentFilter.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST)
@@ -68,14 +64,14 @@ public class Host(context: Context) : Closeable {
 
     fun createBondAndVerify(remoteDevice: BluetoothDevice) {
         Log.d(TAG, "createBondAndVerify: $remoteDevice")
-        if (bluetoothAdapter.bondedDevices.contains(remoteDevice)) {
+        if (adapter.bondedDevices.contains(remoteDevice)) {
             Log.d(TAG, "createBondAndVerify: already bonded")
             return
         }
 
         runBlocking(scope.coroutineContext) {
             withTimeout(TIMEOUT) {
-                Truth.assertThat(remoteDevice.createBond()).isTrue()
+                assertThat(remoteDevice.createBond()).isTrue()
                 val pairingRequestJob = launch {
                     Log.d(TAG, "Waiting for ACTION_PAIRING_REQUEST")
                     flow

@@ -94,7 +94,7 @@ const uint8_t btm_pm_md_comp_matrix[BTM_PM_NUM_SET_MODES * BTM_PM_NUM_SET_MODES]
 static void send_sniff_subrating(uint16_t handle, const RawAddress& addr, uint16_t max_lat,
                                  uint16_t min_rmt_to, uint16_t min_loc_to) {
   uint16_t new_max_lat = 0;
-  if (interop_match_addr_get_max_lat(INTEROP_UPDATE_HID_SSR_MAX_LAT, &addr, &new_max_lat)) {
+  if (interop_match_addr_get_max_lat(INTEROP_UPDATE_HID_SSR_MAX_LAT, addr, &new_max_lat)) {
     max_lat = new_max_lat;
   }
 
@@ -211,7 +211,7 @@ tBTM_STATUS BTM_SetPowerMode(uint8_t pm_id, const RawAddress& remote_bda,
     if ((mode == BTM_PM_MD_HOLD && !controller->SupportsHoldMode()) ||
         (mode == BTM_PM_MD_SNIFF && !controller->SupportsSniffMode()) ||
         (mode == BTM_PM_MD_PARK && !controller->SupportsParkMode()) ||
-        interop_match_addr(INTEROP_DISABLE_SNIFF, &remote_bda)) {
+        interop_match_addr(INTEROP_DISABLE_SNIFF, remote_bda)) {
       log::error("pm_id {} mode {} is not supported for {}", pm_id, mode, remote_bda);
       return tBTM_STATUS::BTM_MODE_UNSUPPORTED;
     }
@@ -649,7 +649,8 @@ void btm_pm_proc_cmd_status(tHCI_STATUS status) {
   }
 
   /* notify the caller is appropriate */
-  if ((pm_pend_id != BTM_PM_SET_ONLY_ID) && (pm_reg_db.mask & BTM_PM_REG_SET)) {
+  if ((pm_pend_id != BTM_PM_SET_ONLY_ID) && (pm_reg_db.mask & BTM_PM_REG_SET) &&
+      (pm_reg_db.cback != nullptr)) {
     const RawAddress bd_addr = pm_mode_db[pm_pend_link].bda_;
     log::verbose("Notifying callback that link power mode is complete peer:{}", bd_addr);
     (*pm_reg_db.cback)(bd_addr, pm_status, 0, status);
@@ -722,7 +723,7 @@ void btm_pm_proc_mode_change(tHCI_STATUS hci_status, uint16_t hci_handle, tHCI_M
   }
 
   /* notify registered parties */
-  if (pm_reg_db.mask & BTM_PM_REG_SET) {
+  if ((pm_reg_db.mask & BTM_PM_REG_SET) && (pm_reg_db.cback != nullptr)) {
     (*pm_reg_db.cback)(p_cb->bda_, mode, interval, hci_status);
   }
   /*check if sco disconnect  is waiting for the mode change */
@@ -760,7 +761,7 @@ static void process_ssr_event(tHCI_STATUS status, uint16_t handle, uint16_t /* m
   }
 
   int cnt = 0;
-  if (pm_reg_db.mask & BTM_PM_REG_SET) {
+  if ((pm_reg_db.mask & BTM_PM_REG_SET) && (pm_reg_db.cback != nullptr)) {
     (*pm_reg_db.cback)(bd_addr, BTM_PM_STS_SSR, (use_ssr) ? 1 : 0, status);
     cnt++;
   }

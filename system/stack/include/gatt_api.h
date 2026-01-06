@@ -707,7 +707,7 @@ typedef enum : uint8_t {
 } tGATT_SUBRATE_MODE;
 
 #define GATT_LINK_IDLE_TIMEOUT_WHEN_NO_APP  \
-  1 /* start a idle timer for this duration \
+  4 /* start a idle timer for this duration \
      when no application need to use the link */
 
 #define GATT_LINK_NO_IDLE_TIMEOUT 0xFFFF
@@ -1232,7 +1232,9 @@ void GATT_StartIf(tGATT_IF gatt_if);
 [[nodiscard]] bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr,
                                 tBLE_ADDR_TYPE addr_type, tBTM_BLE_CONN_TYPE connection_type,
                                 tBT_TRANSPORT transport, bool opportunistic,
-                                uint16_t preferred_transport, bool prefer_relax_mode);
+                                uint16_t preferred_transport, bool prefer_relax_mode,
+                                bool auto_mtu_enabled);
+
 [[nodiscard]] bool GATT_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr,
                                 tBTM_BLE_CONN_TYPE connection_type, tBT_TRANSPORT transport,
                                 bool opportunistic);

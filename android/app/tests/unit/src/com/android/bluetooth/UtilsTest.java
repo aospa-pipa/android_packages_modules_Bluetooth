@@ -25,15 +25,14 @@ import static org.junit.Assert.assertThrows;
 
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
-import android.location.LocationManager;
 import android.os.ParcelUuid;
-import android.os.UserHandle;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import com.android.bluetooth.util.Text;
+import com.android.tests.bluetooth.MockitoRule;
 
 import com.google.common.truth.Expect;
 
@@ -50,6 +49,8 @@ import java.util.UUID;
 @SmallTest
 @RunWith(AndroidJUnit4.class)
 public class UtilsTest {
+
+    @Rule public final MockitoRule mMockitoRule = new MockitoRule();
 
     @Rule public Expect expect = Expect.create();
 
@@ -77,61 +78,6 @@ public class UtilsTest {
         converter.putLong(16, 30);
         converter.putLong(24, 40);
         assertThat(Utils.uuidsToByteArray(uuids)).isEqualTo(converter.array());
-    }
-
-    @Test
-    public void blockedByLocationOff() throws Exception {
-        Context context = InstrumentationRegistry.getInstrumentation().getContext();
-        UserHandle userHandle = UserHandle.SYSTEM;
-        LocationManager locationManager = context.getSystemService(LocationManager.class);
-        boolean enableStatus = locationManager.isLocationEnabledForUser(userHandle);
-        assertThat(Utils.blockedByLocationOff(context, userHandle)).isEqualTo(!enableStatus);
-
-        locationManager.setLocationEnabledForUser(!enableStatus, userHandle);
-        assertThat(Utils.blockedByLocationOff(context, userHandle)).isEqualTo(enableStatus);
-
-        locationManager.setLocationEnabledForUser(enableStatus, userHandle);
-    }
-
-    @Test
-    public void checkCallerHasCoarseLocation_doesNotCrash() {
-        Context context = InstrumentationRegistry.getInstrumentation().getContext();
-        UserHandle userHandle = UserHandle.SYSTEM;
-        LocationManager locationManager = context.getSystemService(LocationManager.class);
-        boolean enabledStatus = locationManager.isLocationEnabledForUser(userHandle);
-
-        locationManager.setLocationEnabledForUser(false, userHandle);
-        assertThat(
-                        Utils.checkCallerHasCoarseLocation(
-                                context, context.getAttributionSource(), userHandle))
-                .isFalse();
-
-        locationManager.setLocationEnabledForUser(true, userHandle);
-        Utils.checkCallerHasCoarseLocation(context, context.getAttributionSource(), userHandle);
-        if (!enabledStatus) {
-            locationManager.setLocationEnabledForUser(false, userHandle);
-        }
-    }
-
-    @Test
-    public void checkCallerHasCoarseOrFineLocation_doesNotCrash() {
-        Context context = InstrumentationRegistry.getInstrumentation().getContext();
-        UserHandle userHandle = UserHandle.SYSTEM;
-        LocationManager locationManager = context.getSystemService(LocationManager.class);
-        boolean enabledStatus = locationManager.isLocationEnabledForUser(userHandle);
-
-        locationManager.setLocationEnabledForUser(false, userHandle);
-        assertThat(
-                        Utils.checkCallerHasCoarseOrFineLocation(
-                                context, context.getAttributionSource(), userHandle))
-                .isFalse();
-
-        locationManager.setLocationEnabledForUser(true, userHandle);
-        Utils.checkCallerHasCoarseOrFineLocation(
-                context, context.getAttributionSource(), userHandle);
-        if (!enabledStatus) {
-            locationManager.setLocationEnabledForUser(false, userHandle);
-        }
     }
 
     @Test

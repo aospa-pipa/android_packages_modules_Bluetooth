@@ -28,7 +28,6 @@ import android.bluetooth.BluetoothDevice.ACTION_PAIRING_REQUEST
 import android.bluetooth.BluetoothDevice.EXTRA_DEVICE
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothHidHost
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothProfile.CONNECTION_POLICY_FORBIDDEN
 import android.bluetooth.BluetoothServerSocket
@@ -36,7 +35,8 @@ import android.bluetooth.BluetoothSocket
 import android.bluetooth.BluetoothSocketSettings
 import android.bluetooth.Host
 import android.bluetooth.PandoraDevice
-import android.bluetooth.Utils
+import android.bluetooth.adapter
+import android.bluetooth.setupIntentLogger
 import android.bluetooth.test_utils.EnableBluetoothRule
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -51,7 +51,6 @@ import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.android.bluetooth.flags.Flags
 import com.android.compatibility.common.util.AdoptShellPermissionsRule
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
@@ -61,9 +60,7 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.*
-import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.hamcrest.Matcher
 import org.hamcrest.core.AllOf.allOf
 import org.junit.After
@@ -111,7 +108,6 @@ class RfcommTest {
     @Mock private lateinit var serviceListener: BluetoothProfile.ServiceListener
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
 
     private lateinit var bumbleDevice: BluetoothDevice
     private lateinit var host: Host
@@ -146,7 +142,7 @@ class RfcommTest {
                 addAction(ACTION_STATE_CHANGED)
             }
         context.registerReceiver(receiver, filter)
-        Utils.setupIntentLogger(TAG, receiver)
+        receiver.setupIntentLogger(TAG)
 
         bumbleDevice = bumble.remoteDevice
         host = Host(context)
@@ -464,8 +460,8 @@ class RfcommTest {
      * - Disconnect RFCOMM from remote device
      */
     @RequiresFlagsEnabled(
-        Flags.FLAG_TRIGGER_SEC_PROC_ON_INC_ACCESS_REQ,
-        Flags.FLAG_UPGRADE_TEMP_BONDING_ON_AUTH_REQ,
+        "com.android.bluetooth.flags.trigger_sec_proc_on_inc_access_req",
+        "com.android.bluetooth.flags.upgrade_temp_bonding_on_auth_req",
     )
     @Test
     fun serverSecureConnectThenRemoteDisconnect() {
@@ -485,8 +481,8 @@ class RfcommTest {
      * - Disconnect RFCOMM from local device
      */
     @RequiresFlagsEnabled(
-        Flags.FLAG_TRIGGER_SEC_PROC_ON_INC_ACCESS_REQ,
-        Flags.FLAG_UPGRADE_TEMP_BONDING_ON_AUTH_REQ,
+        "com.android.bluetooth.flags.trigger_sec_proc_on_inc_access_req",
+        "com.android.bluetooth.flags.upgrade_temp_bonding_on_auth_req",
     )
     @Test
     fun serverSecureConnectThenLocalDisconnect() {

@@ -23,10 +23,6 @@ import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTING;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
-import static com.android.bluetooth.flags.Flags.leaudioBroadcastImproveSourceOperations;
-import static com.android.bluetooth.flags.Flags.leaudioBroadcastSimplifySetBcastCode;
-import static com.android.bluetooth.flags.Flags.leaudioIntentBroadcastInStateMachineCleanup;
-
 import android.annotation.Nullable;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -62,6 +58,7 @@ import com.android.bluetooth.BluetoothStatsLog;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.MetricsLogger;
+import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.internal.annotations.VisibleForTesting;
@@ -117,6 +114,7 @@ class BassClientStateMachine extends StateMachine {
     static final int INITIATE_PA_SYNC_TRANSFER = 16;
     static final int UPDATE_METADATA = 17;
     static final int STOP_PENDING_PA_SYNC = 18;
+    static final int ENCRYPTION_STATE_CHANGED = 19;
 
     // Type of argument for set broadcast code operation
     static final int ARGTYPE_METADATA = 1;
@@ -160,7 +158,7 @@ class BassClientStateMachine extends StateMachine {
     @VisibleForTesting byte mPendingSourceId = -1;
     @VisibleForTesting BluetoothLeBroadcastMetadata mPendingMetadata = null;
 
-    // !leaudioBroadcastSimplifySetBcastCode()
+    // !Flags.leaudioBroadcastSimplifySetBcastCode()
     private BluetoothLeBroadcastMetadata mSetBroadcastPINMetadata = null;
     @VisibleForTesting boolean mSetBroadcastCodePending = false;
 
@@ -175,6 +173,7 @@ class BassClientStateMachine extends StateMachine {
     IPeriodicAdvertisingCallback mLocalPeriodicAdvCallback = new PACallback();
     int mMaxSingleAttributeWriteValueLen = 0;
     @VisibleForTesting BluetoothLeBroadcastMetadata mPendingSourceToSwitch = null;
+    @VisibleForTesting boolean mIsWaitingForEncryption = false;
 
     BassClientStateMachine(
             BluetoothDevice device,
@@ -313,7 +312,7 @@ class BassClientStateMachine extends StateMachine {
     public void doQuit() {
         Log.d(TAG, "doQuit for device " + mDevice);
         int currentState = getConnectionState();
-        if (leaudioIntentBroadcastInStateMachineCleanup()
+        if (Flags.leaudioIntentBroadcastInStateMachineCleanup()
                 && currentState != STATE_DISCONNECTED
                 && mLastConnectionState != -1) {
             // Broadcast CONNECTION_STATE_CHANGED when state machine is turned off while
@@ -368,6 +367,11 @@ class BassClientStateMachine extends StateMachine {
 
     Boolean hasPendingSwitchingSourceOperation() {
         return mPendingSourceToSwitch != null;
+    }
+
+    Boolean hasPendingSwitchingSourceOperation(int broadcastId) {
+        return mPendingSourceToSwitch != null
+                && mPendingSourceToSwitch.getBroadcastId() == broadcastId;
     }
 
     private void setCurrentBroadcastMetadata(
@@ -520,7 +524,7 @@ class BassClientStateMachine extends StateMachine {
                                 + advHandle
                                 + ", serviceData: "
                                 + serviceData);
-                if (leaudioBroadcastImproveSourceOperations()) {
+                if (Flags.leaudioBroadcastImproveSourceOperations()) {
                     final int sd = serviceData;
                     mScanController.doOnScanThread(
                             () ->
@@ -566,7 +570,7 @@ class BassClientStateMachine extends StateMachine {
                             + syncHandle
                             + ", serviceData: "
                             + serviceData);
-            if (leaudioBroadcastImproveSourceOperations()) {
+            if (Flags.leaudioBroadcastImproveSourceOperations()) {
                 final int sd = serviceData;
                 mScanController.doOnScanThread(
                         () -> mScanController.transferSync(mDevice, sd, syncHandle));
@@ -688,7 +692,7 @@ class BassClientStateMachine extends StateMachine {
         if (recvState.getBigEncryptionState()
                 == BluetoothLeBroadcastReceiveState.BIG_ENCRYPTION_STATE_CODE_REQUIRED) {
             Log.d(TAG, "Update the Broadcast now");
-            if (!leaudioBroadcastSimplifySetBcastCode()) {
+            if (!Flags.leaudioBroadcastSimplifySetBcastCode()) {
                 if (mSetBroadcastPINMetadata != null) {
                     setCurrentBroadcastMetadata(recvState.getSourceId(), mSetBroadcastPINMetadata);
                 }
@@ -1121,8 +1125,18 @@ class BassClientStateMachine extends StateMachine {
         @Override
         public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
             if (mMTUChangeRequested && mBluetoothGatt != null) {
-                acquireAllBassChars();
                 mMTUChangeRequested = false;
+                if (Flags.leaudioBassReadCharacteristicsAfterEncryption()) {
+                    boolean isEncrypted = mService.isEncrypted(mDevice);
+                    if (isEncrypted) {
+                        acquireAllBassChars();
+                    } else {
+                        mIsWaitingForEncryption = true;
+                        Log.d(TAG, "MTU changed, waiting for encryption");
+                    }
+                } else {
+                    acquireAllBassChars();
+                }
             } else {
                 Log.d(
                         TAG,
@@ -1248,7 +1262,7 @@ class BassClientStateMachine extends StateMachine {
         List<BluetoothGattCharacteristic> allChars = service.getCharacteristics();
         int numOfChars = allChars.size();
         mNumOfBroadcastReceiverStates = numOfChars - 1;
-        Log.d(TAG, "Total number of chars" + numOfChars);
+        Log.d(TAG, "Total number of chars: " + numOfChars);
         for (int i = 0; i < allChars.size(); i++) {
             if (allChars.get(i).getUuid().equals(BassConstants.BASS_BCAST_AUDIO_SCAN_CTRL_POINT)) {
                 int properties = allChars.get(i).getProperties();
@@ -1304,6 +1318,7 @@ class BassClientStateMachine extends StateMachine {
                             + "): "
                             + messageWhatToString(getCurrentMessage().what));
             logAllBroadcastSyncStatsAndCleanup();
+            mIsWaitingForEncryption = false;
             clearCharsCache();
             mNextSourceId = 0;
             removeDeferredMessages(DISCONNECT);
@@ -1452,6 +1467,7 @@ class BassClientStateMachine extends StateMachine {
                     resetBluetoothGatt();
                     transitionTo(mDisconnected);
                 }
+                case ENCRYPTION_STATE_CHANGED -> deferMessage(message);
                 default -> {
                     Log.d(TAG, "CONNECTING: not handled message:" + message.what);
                     return NOT_HANDLED;
@@ -1762,7 +1778,7 @@ class BassClientStateMachine extends StateMachine {
                     setPendingRemove(sourceId, /* remove */ true);
                 }
 
-                if (!leaudioBroadcastSimplifySetBcastCode()) {
+                if (!Flags.leaudioBroadcastSimplifySetBcastCode()) {
                     if (metadata != null
                             && metadata.isEncrypted()
                             && metadata.getBroadcastCode() != null) {
@@ -1913,7 +1929,7 @@ class BassClientStateMachine extends StateMachine {
                         writeBassControlPoint(addSourceInfo);
                         mPendingOperation = message.what;
                         mPendingMetadata = metaData;
-                        if (!leaudioBroadcastSimplifySetBcastCode()) {
+                        if (!Flags.leaudioBroadcastSimplifySetBcastCode()) {
                             if (metaData.isEncrypted() && (metaData.getBroadcastCode() != null)) {
                                 mSetBroadcastCodePending = true;
                             }
@@ -1954,7 +1970,7 @@ class BassClientStateMachine extends StateMachine {
                 }
                 case SET_BCAST_CODE -> {
                     BluetoothLeBroadcastReceiveState recvState = null;
-                    if (!leaudioBroadcastSimplifySetBcastCode()) {
+                    if (!Flags.leaudioBroadcastSimplifySetBcastCode()) {
                         int argType = message.arg1;
                         mSetBroadcastCodePending = false;
                         if (argType == ARGTYPE_METADATA) {
@@ -2031,6 +2047,18 @@ class BassClientStateMachine extends StateMachine {
                     setCurrentBroadcastMetadata(sourceIdForUpdateMetadata, metaData);
                     updateMetadataWithReceiveStateIfBisSyncStateChanged(
                             getBroadcastReceiveStateForSourceId(sourceIdForUpdateMetadata));
+                }
+                case ENCRYPTION_STATE_CHANGED -> {
+                    boolean isEncrypted = (message.arg1 == BassConstants.ENCRYPTED);
+                    if (isEncrypted && mIsWaitingForEncryption) {
+                        Log.d(TAG, "Encrypted, acquiring BASS chars");
+                        acquireAllBassChars();
+                        mIsWaitingForEncryption = false;
+                    } else if (!isEncrypted) {
+                        Log.e(TAG, "Encryption failed, notify BASS state setup failed");
+                        mIsWaitingForEncryption = false;
+                        mService.getCallbacks().notifyBassStateSetupFailed(mDevice);
+                    }
                 }
                 default -> {
                     Log.d(TAG, "CONNECTED: not handled message:" + message.what);
@@ -2199,6 +2227,7 @@ class BassClientStateMachine extends StateMachine {
                     int broadcastId = message.arg1;
                     cancelPendingSourceOperation(broadcastId);
                 }
+                case ENCRYPTION_STATE_CHANGED -> deferMessage(message);
                 default -> {
                     Log.d(TAG, "ConnectedProcessing: not handled message:" + message.what);
                     return NOT_HANDLED;
@@ -2282,6 +2311,7 @@ class BassClientStateMachine extends StateMachine {
             case CANCEL_PENDING_SOURCE_OPERATION -> "CANCEL_PENDING_SOURCE_OPERATION";
             case INITIATE_PA_SYNC_TRANSFER -> "INITIATE_PA_SYNC_TRANSFER";
             case UPDATE_METADATA -> "UPDATE_METADATA";
+            case ENCRYPTION_STATE_CHANGED -> "ENCRYPTION_STATE_CHANGED";
             default -> Integer.toString(what);
         };
     }

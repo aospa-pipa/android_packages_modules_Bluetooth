@@ -115,6 +115,12 @@ public:
   bool DoInThread(base::OnceClosure task);
 
   /**
+   * Suspend the current thread blocking the execution of new tasks on the thread.
+   * ShutDown must be called after this to clean up the resources.
+   */
+  void Suspend();
+
+  /**
    * Shutdown the current thread as if it is never started. IsRunning() and
    * DoInThread() will return false after this call. Blocks until the thread is
    * joined and freed. This thread can be re-started again using StartUp()
@@ -254,6 +260,8 @@ public:
       if (!IsRunningOnSameThread()) {
         // block current thread, currently its unblocked
         blocked_threads_.testAndBlock(caller_thread_id);
+        log::info("Blocked current_thread id: {}, on the target thread: {}({})", caller_thread_id,
+                  target_thread_id, thread_name_);
         DoInThread(base::BindOnce(task, std::forward<Functor>(func_ptr), std::move(promise),
                                   std::forward<Args>(args)...));
         auto result = future.wait_for(kHandlerStopTimeout);
@@ -312,13 +320,16 @@ private:
   base::PlatformThreadId thread_id_;
   // Linux specific abstractions
   pid_t linux_tid_;
-  base::WeakPtrFactory<MessageLoopThread> weak_ptr_factory_;
   bool shutting_down_;
 
   os::Thread* handler_thread_;
   os::Handler* handler_;
   os::Thread::Priority handler_thread_priority_;
   static tBlockedThreads blocked_threads_;
+  // Member variables should appear before the WeakPtrFactory, to ensure
+  // that any WeakPtrs are invalidated before its members
+  // variable's destructors are executed, rendering them invalid.
+  base::WeakPtrFactory<MessageLoopThread> weak_ptr_factory_{this};
 };
 
 inline std::ostream& operator<<(std::ostream& os, const bluetooth::common::MessageLoopThread& a) {

@@ -20,19 +20,22 @@ import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothHidHost
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.PandoraDevice
 import android.bluetooth.StreamObserverSpliterator
 import android.bluetooth.Utils
+import android.bluetooth.adapter
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertisingSetCallback
 import android.bluetooth.le.AdvertisingSetParameters
+import android.bluetooth.leAdvertiser
 import android.bluetooth.pairing.utils.IntentReceiver
 import android.bluetooth.pairing.utils.TestUtil
 import android.bluetooth.test_utils.BlockingBluetoothAdapter
 import android.bluetooth.test_utils.EnableBluetoothRule
+import android.bluetooth.toAddressBytes
+import android.bluetooth.toAddressString
 import android.content.Context
 import android.os.ParcelUuid
 import android.platform.test.annotations.RequiresFlagsEnabled
@@ -41,7 +44,6 @@ import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasExtra
-import com.android.bluetooth.flags.Flags
 import com.android.compatibility.common.util.AdoptShellPermissionsRule
 import com.google.common.truth.Truth.assertThat
 import com.google.protobuf.ByteString
@@ -67,7 +69,6 @@ import org.mockito.MockitoAnnotations
 import pandora.BumbleConfigProto.OverrideRequest
 import pandora.BumbleConfigProto.PairingConfig
 import pandora.GattProto
-import pandora.HostProto
 import pandora.HostProto.AdvertiseRequest
 import pandora.HostProto.AdvertiseResponse
 import pandora.HostProto.ConnectLERequest
@@ -101,6 +102,8 @@ class PairingTest {
     @get:Rule(order = 4) val enableBluetoothRule = EnableBluetoothRule(false, true)
 
     @Mock private lateinit var profileServiceListener: BluetoothProfile.ServiceListener
+
+    private val context = ApplicationProvider.getApplicationContext<Context>()
 
     /* Util instance for common test steps with current Context reference */
     private lateinit var util: TestUtil
@@ -144,10 +147,7 @@ class PairingTest {
         // Always read fresh address
         val readLocalAddressResponse =
             currentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance())
-        bumbleDevice =
-            adapter.getRemoteDevice(
-                Utils.addressStringFromByteString(readLocalAddressResponse.address)
-            )
+        bumbleDevice = adapter.getRemoteDevice(readLocalAddressResponse.address.toAddressString())
         Log.d(TAG, "Bumble Device: $bumbleDevice")
         Log.d(TAG, "Bumble LE Device: $remoteLeDevice")
 
@@ -243,7 +243,7 @@ class PairingTest {
      * 6. Android verifies bonded intent
      */
     @Test
-    @RequiresFlagsEnabled(Flags.FLAG_IGNORE_UNRELATED_CANCEL_BOND)
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.ignore_unrelated_cancel_bond")
     fun testBrEdrPairing_cancelBond_forUnrelatedDevice() {
         val intentReceiver =
             IntentReceiver.Builder(
@@ -940,8 +940,8 @@ class PairingTest {
                 hasExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_BREDR),
             )
         }
-        // delete keys at  bumble side
-        val address = Utils.addressBytesFromString(adapter.address)
+        // delete keys at bumble side
+        val address = adapter.address.toAddressBytes()
         currentDevice
             .securityStorageBlocking()
             .deleteBond(
@@ -952,10 +952,7 @@ class PairingTest {
         // Read fresh address
         val readLocalAddressResponse =
             currentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance())
-        bumbleDevice =
-            adapter.getRemoteDevice(
-                Utils.addressStringFromByteString(readLocalAddressResponse.address)
-            )
+        bumbleDevice = adapter.getRemoteDevice(readLocalAddressResponse.address.toAddressString())
         testStep_BondBredrFromRemote(intentReceiver)
         assertThat(adapter.bondedDevices).contains(bumbleDevice)
     }
@@ -1004,8 +1001,8 @@ class PairingTest {
                 hasExtra(BluetoothDevice.EXTRA_TRANSPORT, BluetoothDevice.TRANSPORT_BREDR),
             )
         }
-        // delete keys at  bumble side
-        val address = Utils.addressBytesFromString(adapter.address)
+        // delete keys at bumble side
+        val address = adapter.address.toAddressBytes()
         currentDevice
             .securityStorageBlocking()
             .deleteBond(
@@ -1016,10 +1013,7 @@ class PairingTest {
         // Read fresh address
         val readLocalAddressResponse =
             currentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance())
-        bumbleDevice =
-            adapter.getRemoteDevice(
-                Utils.addressStringFromByteString(readLocalAddressResponse.address)
-            )
+        bumbleDevice = adapter.getRemoteDevice(readLocalAddressResponse.address.toAddressString())
         testStep_BondBredr(intentReceiver)
         assertThat(adapter.bondedDevices).contains(bumbleDevice)
     }
@@ -1056,10 +1050,7 @@ class PairingTest {
         // Read fresh address
         val readLocalAddressResponse =
             currentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance())
-        bumbleDevice =
-            adapter.getRemoteDevice(
-                Utils.addressStringFromByteString(readLocalAddressResponse.address)
-            )
+        bumbleDevice = adapter.getRemoteDevice(readLocalAddressResponse.address.toAddressString())
         currentDevice
             .gattBlocking()
             .registerService(
@@ -1158,10 +1149,7 @@ class PairingTest {
         // Read fresh address
         val readLocalAddressResponse =
             currentDevice.hostBlocking().readLocalAddress(Empty.getDefaultInstance())
-        bumbleDevice =
-            adapter.getRemoteDevice(
-                Utils.addressStringFromByteString(readLocalAddressResponse.address)
-            )
+        bumbleDevice = adapter.getRemoteDevice(readLocalAddressResponse.address.toAddressString())
         currentDevice
             .gattBlocking()
             .registerService(
@@ -1333,9 +1321,7 @@ class PairingTest {
                 .hostBlocking()
                 .connect(
                     ConnectRequest.newBuilder()
-                        .setAddress(
-                            ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
-                        )
+                        .setAddress(ByteString.copyFrom(adapter.address.toAddressBytes()))
                         .build()
                 )
         intentReceiver.verifyReceivedOrdered(
@@ -1375,9 +1361,7 @@ class PairingTest {
                 .connectLE(
                     ConnectLERequest.newBuilder()
                         .setOwnAddressType(OwnAddressType.PUBLIC)
-                        .setPublic(
-                            ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
-                        )
+                        .setPublic(ByteString.copyFrom(adapter.address.toAddressBytes()))
                         .build()
                 )
         intentReceiver.verifyReceivedOrdered(
@@ -1848,9 +1832,7 @@ class PairingTest {
                 .hostBlocking()
                 .connect(
                     ConnectRequest.newBuilder()
-                        .setAddress(
-                            ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
-                        )
+                        .setAddress(ByteString.copyFrom(adapter.address.toAddressBytes()))
                         .build()
                 )
         // Start pairing from Bumble
@@ -1911,9 +1893,7 @@ class PairingTest {
                 .connectLE(
                     ConnectLERequest.newBuilder()
                         .setOwnAddressType(OwnAddressType.PUBLIC)
-                        .setPublic(
-                            ByteString.copyFrom(Utils.addressBytesFromString(adapter.address))
-                        )
+                        .setPublic(ByteString.copyFrom(adapter.address.toAddressBytes()))
                         .build()
                 )
         // Start pairing from Bumble
@@ -1976,7 +1956,7 @@ class PairingTest {
                 .setBonding(false)
                 .setMitm(false)
                 .setSc(false)
-                .setIdentityAddressType(HostProto.OwnAddressType.PUBLIC)
+                .setIdentityAddressType(OwnAddressType.PUBLIC)
                 .build()
         val overrideRequest = OverrideRequest.newBuilder().setPairingConfig(pairingConfig).build()
         currentDevice.bumbleConfigBlocking().override(overrideRequest)
@@ -2028,7 +2008,6 @@ class PairingTest {
             if (ownAddressType == OwnAddressType.RANDOM)
                 AdvertisingSetParameters.ADDRESS_TYPE_RANDOM
             else AdvertisingSetParameters.ADDRESS_TYPE_PUBLIC
-        val leAdvertiser = adapter.bluetoothLeAdvertiser
         val parameters =
             AdvertisingSetParameters.Builder()
                 .setOwnAddressType(addrType)
@@ -2058,8 +2037,6 @@ class PairingTest {
         private const val SERIAL_PORT_UUID = "00001101-0000-1000-8000-00805F9B34FB"
         private const val TEST_SERVER_NAME = "RFCOMM Server"
 
-        private val context = ApplicationProvider.getApplicationContext<Context>()
-        private val adapter = context.getSystemService(BluetoothManager::class.java).adapter
         private lateinit var deviceName: String
         private var toggleDevice = true
     }

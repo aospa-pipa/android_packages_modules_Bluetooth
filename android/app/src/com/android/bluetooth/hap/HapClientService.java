@@ -120,7 +120,7 @@ public class HapClientService extends ConnectableProfile {
                         nativeInterface,
                         () ->
                                 new HapClientNativeInterface(
-                                        new HapClientNativeCallback(adapterService, this)));
+                                        new HapClientNativeCallback(getAdapterService(), this)));
 
         if (Flags.hapOnMainLooper()) {
             mStateMachinesLooper = requireNonNull(looper);
@@ -304,9 +304,6 @@ public class HapClientService extends ConnectableProfile {
             return devices;
         }
         final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
-        if (bondedDevices == null) {
-            return devices;
-        }
         synchronized (mStateMachines) {
             for (BluetoothDevice device : bondedDevices) {
                 final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
