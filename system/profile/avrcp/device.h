@@ -24,6 +24,7 @@
 #include <memory>
 #include <stack>
 #include <vector>
+#include <map>
 
 #include "avrcp_internal.h"
 #include "hardware/avrcp/avrcp.h"
@@ -362,6 +363,8 @@ private:
 
   std::stack<std::string> current_path_;
 
+  std::stack<std::string> browse_path_;
+
   // Notification Trackers
   using Notification = std::pair<bool, uint8_t>;
   Notification track_changed_ = Notification(false, 0);
@@ -375,6 +378,7 @@ private:
 
   MediaIdMap vfs_ids_;
   MediaIdMap now_playing_ids_;
+  MediaIdMap folder_ids_;
   std::set<uint64_t> non_playable_vfs_uids_;
 
   uint32_t play_pos_interval_ = 0;
@@ -382,6 +386,8 @@ private:
   SongInfo last_song_info_;
   PlayStatus last_play_status_;
   PlayState last_media_player_status_ = PlayState::PAUSED;
+
+  std::map<uint64_t, std::string> vfs_uid_to_folder_name_;
 
   base::CancelableClosure play_pos_update_cb_;
 
