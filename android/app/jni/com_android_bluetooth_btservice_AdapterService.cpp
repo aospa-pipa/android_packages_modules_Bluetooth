@@ -1782,7 +1782,7 @@ static jboolean interopMatchNameNative(JNIEnv* env, jclass /* clazz */, jstring 
   return matched ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean interopMatchAddrOrNameNative(JNIEnv* env, jclass /* clazz */, jstring feature_name,
+static jboolean interopMatchDeviceNative(JNIEnv* env, jclass /* clazz */, jstring feature_name,
                                              jstring address) {
   log::verbose("");
 
@@ -2051,8 +2051,8 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) 
            reinterpret_cast<void*>(interopMatchAddrNative)},
           {"interopMatchNameNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
            reinterpret_cast<void*>(interopMatchNameNative)},
-          {"interopMatchAddrOrNameNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
-           reinterpret_cast<void*>(interopMatchAddrOrNameNative)},
+          {"interopMatchDeviceNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
+           reinterpret_cast<void*>(interopMatchDeviceNative)},
           {"interopDatabaseAddRemoveAddrNative", "(ZLjava/lang/String;Ljava/lang/String;I)V",
            reinterpret_cast<void*>(interopDatabaseAddRemoveAddrNative)},
           {"interopDatabaseAddRemoveNameNative", "(ZLjava/lang/String;Ljava/lang/String;)V",

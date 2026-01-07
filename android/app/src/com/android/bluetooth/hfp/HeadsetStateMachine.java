@@ -3208,39 +3208,39 @@ class HeadsetStateMachine extends StateMachine {
     }
 
     boolean isConnectedDeviceBlacklistedforIncomingCall() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
+        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_HFP_FAKE_INCOMING_CALL_INDICATOR,
-            mDevice.getAddress());
+            mDevice);
         return matched;
     }
 
     boolean isConnectedDeviceBlacklistedforRetrySco() {
-       boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
+       boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
            InteropUtil.InteropFeature.INTEROP_RETRY_SCO_AFTER_REMOTE_REJECT_SCO,
-           mDevice.getAddress());
+           mDevice);
        return matched;
     }
 
     boolean isDeviceBlacklistedForSendingCallIndsBackToBack() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
+        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_HFP_SEND_CALL_INDICATORS_BACK_TO_BACK,
-            mDevice.getAddress());
+            mDevice);
             return matched;
     }
 
     boolean isSCONeededImmediatelyAfterSLC() {
-        boolean matched = InteropUtil.interopMatchAddrOrName(mAdapterService,
+        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
             InteropUtil.InteropFeature.INTEROP_SETUP_SCO_WITH_NO_DELAY_AFTER_SLC_DURING_CALL,
-            mDevice.getAddress());
+            mDevice);
         return matched;
     }
 
     boolean isDeviceDenylistedForDelayingCLCCRespAfterVOIPCall() {
         boolean matched =
-                InteropUtil.interopMatchAddrOrName(
+                InteropUtil.interopMatchDevice(
                         mAdapterService,
                         InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
-                        mDevice.getAddress());
+                        mDevice);
         return matched;
     }
     @Override
