@@ -5313,7 +5313,7 @@ public class AdapterService extends Service {
      * @return {@code true} if matched, {@code false} otherwise
      */
     public boolean interopMatchDevice(InteropFeature feature, BluetoothDevice device) {
-        return mNativeInterface.interopMatch(feature.name(), device.getAddress());
+        return mNativeInterface.interopMatchDevice(feature.name(), device.getAddress());
     }
 
     public void interopDatabaseAddAddr(InteropFeature feature, String address, int length) {

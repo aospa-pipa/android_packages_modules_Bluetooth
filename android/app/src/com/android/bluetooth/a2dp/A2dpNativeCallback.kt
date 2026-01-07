@@ -74,4 +74,11 @@ class A2dpNativeCallback(adapterService: AdapterService, private val a2dpService
         Log.d(TAG, "isMandatoryCodecPreferred: optional preference \$enabled")
         return enabled == BluetoothA2dp.OPTIONAL_CODECS_PREF_DISABLED
     }
+
+    @VisibleForTesting
+    fun onMetadataUpdate(contextType: Int) {
+        Log.w(TAG, "Context Type: $contextType")
+
+        a2dpService.setMetadataContext(contextType)
+    }
 }
