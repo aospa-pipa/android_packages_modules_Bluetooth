@@ -1274,6 +1274,7 @@ public class AdapterService extends Service {
                         this,
                         mScanNativeInterface,
                         mPeriodicScanNativeInterface,
+                        mBatteryStatsManager,
                         mCompanionDeviceManager);
         mNativeInterface.enable(mLocalName);
         Instant end = Instant.now();
