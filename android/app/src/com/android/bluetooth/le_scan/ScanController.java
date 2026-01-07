@@ -58,7 +58,6 @@ import android.util.Log;
 import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.TimeProvider;
@@ -1342,7 +1341,7 @@ public class ScanController {
     }
 
     void enforceScanThread() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return;
 
         if (!mScanHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Not on scan thread");
@@ -1350,7 +1349,7 @@ public class ScanController {
     }
 
     private void enforceScanThreadIsNotUsed() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return;
 
         if (mScanHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Must NOT be on scan thread");
@@ -1358,7 +1357,7 @@ public class ScanController {
     }
 
     public boolean isOnScanThread() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return false;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return false;
         return mScanHandler.getLooper().isCurrentThread();
     }
 
@@ -1385,7 +1384,7 @@ public class ScanController {
     }
 
     public void forceRunSyncOnScanThread(Runnable r) {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) {
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) {
             r.run();
             return;
         }

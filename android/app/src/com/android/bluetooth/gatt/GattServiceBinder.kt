@@ -659,7 +659,7 @@ class GattServiceBinder(private var gattService: GattService?) :
         defaultValue: T,
         block: GattService.() -> T,
     ): T {
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode) {
             return gatt.block()
         }
 
