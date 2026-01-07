@@ -3208,39 +3208,37 @@ class HeadsetStateMachine extends StateMachine {
     }
 
     boolean isConnectedDeviceBlacklistedforIncomingCall() {
-        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
+        boolean matched = mAdapterService.interopMatchDevice(
             InteropUtil.InteropFeature.INTEROP_HFP_FAKE_INCOMING_CALL_INDICATOR,
             mDevice);
         return matched;
     }
 
     boolean isConnectedDeviceBlacklistedforRetrySco() {
-       boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
+        boolean matched = mAdapterService.interopMatchDevice(
            InteropUtil.InteropFeature.INTEROP_RETRY_SCO_AFTER_REMOTE_REJECT_SCO,
            mDevice);
        return matched;
     }
 
     boolean isDeviceBlacklistedForSendingCallIndsBackToBack() {
-        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
+        boolean matched = mAdapterService.interopMatchDevice(
             InteropUtil.InteropFeature.INTEROP_HFP_SEND_CALL_INDICATORS_BACK_TO_BACK,
             mDevice);
             return matched;
     }
 
     boolean isSCONeededImmediatelyAfterSLC() {
-        boolean matched = InteropUtil.interopMatchDevice(mAdapterService,
+        boolean matched = mAdapterService.interopMatchDevice(
             InteropUtil.InteropFeature.INTEROP_SETUP_SCO_WITH_NO_DELAY_AFTER_SLC_DURING_CALL,
             mDevice);
         return matched;
     }
 
     boolean isDeviceDenylistedForDelayingCLCCRespAfterVOIPCall() {
-        boolean matched =
-                InteropUtil.interopMatchDevice(
-                        mAdapterService,
-                        InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
-                        mDevice);
+        var feature = InteropUtil.InteropFeature.INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END;
+        var matched = mAdapterService.interopMatchDevice(feature, mDevice);
+        Log.d(TAG, "INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END: matched=" + matched);
         return matched;
     }
     @Override

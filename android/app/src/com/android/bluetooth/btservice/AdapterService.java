@@ -5301,8 +5301,18 @@ public class AdapterService extends Service {
         return mNativeInterface.interopMatchName(feature.name(), name);
     }
 
+
+    /**
+     * Check if a given device's address or remote device name matches a known interoperability
+     * workaround identified by the interop feature. remote device name will be fetched internally
+     * based on the given address at stack layer.
+     *
+     * @param feature a given interop feature defined in {@link InteropFeature}.
+     * @param device the remote device to be matched.
+     * @return {@code true} if matched, {@code false} otherwise
+     */
     public boolean interopMatchDevice(InteropFeature feature, BluetoothDevice device) {
-        return mNativeInterface.interopMatchDevice(feature.name(), device.getAddress());
+        return mNativeInterface.interopMatch(feature.name(), device.getAddress());
     }
 
     public void interopDatabaseAddAddr(InteropFeature feature, String address, int length) {
@@ -5376,7 +5386,7 @@ public class AdapterService extends Service {
     //Delaying A2DP Disconnect
     boolean isDelayA2dpDiscDevice(BluetoothDevice device) {
        if (device == null) return false;
-       boolean matched = InteropUtil.interopMatchDevice(this,
+       boolean matched = interopMatchDevice(
               InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT,
               device);
        Log.d(TAG, "isDelayA2dpDiscDevice: matched: " + matched);

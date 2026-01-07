@@ -134,7 +134,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
      private static boolean isConnectTimeoutDelayApplicable(BluetoothDevice device, AdapterService adapterService) {
         if (device == null) return false;
 
-        boolean matched = InteropUtil.interopMatchDevice(adapterService,
+        boolean matched = adapterService.interopMatchDevice(
             InteropUtil.InteropFeature.INTEROP_PHONE_POLICY_INCREASED_DELAY_CONNECT_OTHER_PROFILES,
             device);
 
@@ -144,7 +144,7 @@ public class PhonePolicy implements AdapterService.BluetoothStateCallback {
      private static boolean isConnectReducedTimeoutDelayApplicable(BluetoothDevice device, AdapterService adapterService) {
         if (device == null) return false;
 
-        boolean matched = InteropUtil.interopMatchDevice(adapterService,
+        boolean matched = adapterService.interopMatchDevice(
             InteropUtil.InteropFeature.INTEROP_PHONE_POLICY_REDUCED_DELAY_CONNECT_OTHER_PROFILES,
             device);
 

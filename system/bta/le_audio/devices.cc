@@ -1633,10 +1633,6 @@ void LeAudioDevice::StartLinkQualityReports(uint16_t cis_handle) {
 }
 
 void LeAudioDevice::StartConnSubrate() {
-  if (!com_android_bluetooth_flags_leaudio_connection_subrating()) {
-    return;
-  }
-
   log::verbose(
           " Subrate flag enabled. local conrtoller - {}, {}: remote controller - {}, remote host - "
           "{}",

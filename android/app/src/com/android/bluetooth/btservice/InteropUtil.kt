@@ -16,14 +16,11 @@
  */
 
 package com.android.bluetooth.btservice
-
-import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothUtils
 import android.util.Log
 import com.android.bluetooth.Util
 
 private const val TAG = Util.BT_PREFIX + "InteropUtil"
-
 /**
  * APIs of interoperability workaround utilities. These APIs will call stack layer's interop APIs of
  * interop.cc to do matching or entry adding/removing.
@@ -49,26 +46,6 @@ object InteropUtil {
         INTEROP_HFP_SEND_OK_FOR_CLCC_AFTER_VOIP_CALL_END,
         INTEROP_DISABLE_PROFILE_FALLBACK,
         INTEROP_DISABLE_ABSOLUTE_VOLUME;
-    }
-
-    /**
-     * Check if a given device's address or remote device name matches a known interoperability
-     * workaround identified by the interop feature. remote device name will be fetched internally
-     * based on the given address at stack layer,
-     *
-     * @param feature a given interop feature defined in [InteropFeature].
-     * @param device the remote device to be matched.
-     * @return `true` if matched, `false` otherwise
-     */
-    @JvmStatic
-    fun interopMatchDevice(
-        adapterService: AdapterService,
-        feature: InteropFeature,
-        device: BluetoothDevice,
-    ): Boolean {
-        val matched = adapterService.interopMatchDevice(feature, device)
-        Log.d(TAG, "interopMatchDevice(feature=${feature.name}, $device): matched=$matched")
-        return matched
     }
 
     /**
