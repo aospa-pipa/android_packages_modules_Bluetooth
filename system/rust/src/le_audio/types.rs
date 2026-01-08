@@ -16,6 +16,7 @@
 
 //! All LE Audio related type definition.
 
+use std::fmt;
 use thiserror::Error;
 
 // --- Error Handling ---
@@ -184,6 +185,148 @@ impl<'a> Iterator for LtvIterator<'a> {
     }
 }
 
+bitflags::bitflags! {
+    /// Audio Location Definitions (Assigned_Numbers - 6.12.1)
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    pub struct AudioLocation: u32 {
+        /// Mono Audio.
+        const MONO_AUDIO = 0x00000000;
+        /// Front Left.
+        const FRONT_LEFT = 0x00000001;
+        /// Front Right.
+        const FRONT_RIGHT = 0x00000002;
+        /// Front Center.
+        const FRONT_CENTER = 0x00000004;
+        /// Low Frequency Effects 1.
+        const LOW_FREQ_EFFECTS_1 = 0x00000008;
+        /// Back Left.
+        const BACK_LEFT = 0x00000010;
+        /// Back Right.
+        const BACK_RIGHT = 0x00000020;
+        /// Front Left of Center.
+        const FRONT_LEFT_OF_CENTER = 0x00000040;
+        /// Front Right of Center.
+        const FRONT_RIGHT_OF_CENTER = 0x00000080;
+        /// Back Center.
+        const BACK_CENTER = 0x00000100;
+        /// Low Frequency Effects 2.
+        const LOW_FREQ_EFFECTS_2 = 0x00000200;
+        /// Side Left.
+        const SIDE_LEFT = 0x00000400;
+        /// Side Right.
+        const SIDE_RIGHT = 0x00000800;
+        /// Top Front Left.
+        const TOP_FRONT_LEFT = 0x00001000;
+        /// Top Front Right.
+        const TOP_FRONT_RIGHT = 0x00002000;
+        /// Top Front Center.
+        const TOP_FRONT_CENTER = 0x00004000;
+        /// Top Center.
+        const TOP_CENTER = 0x00008000;
+        /// Top Back Left.
+        const TOP_BACK_LEFT = 0x00010000;
+        /// Top Back Right.
+        const TOP_BACK_RIGHT = 0x00020000;
+        /// Top Side Left.
+        const TOP_SIDE_LEFT = 0x00040000;
+        /// Top Side Right.
+        const TOP_SIDE_RIGHT = 0x00080000;
+        /// Top Back Center.
+        const TOP_BACK_CENTER = 0x00100000;
+        /// Bottom Front Center.
+        const BOTTOM_FRONT_CENTER = 0x00200000;
+        /// Bottom Front Left.
+        const BOTTOM_FRONT_LEFT = 0x00400000;
+        /// Bottom Front Right.
+        const BOTTOM_FRONT_RIGHT = 0x00800000;
+        /// Front Left Wide.
+        const FRONT_LEFT_WIDE = 0x01000000;
+        /// Front Right Wide.
+        const FRONT_RIGHT_WIDE = 0x02000000;
+        /// Left Surround.
+        const LEFT_SURROUND = 0x04000000;
+        /// Right Surround.
+        const RIGHT_SURROUND = 0x08000000;
+    }
+}
+
+impl fmt::Display for AudioLocation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return write!(f, "MONO_AUDIO");
+        }
+        self.iter_names().map(|(name, _)| name).enumerate().try_for_each(|(index, name)| {
+            write!(f, "{}{}", if index > 0 { " | " } else { "" }, name)
+        })
+    }
+}
+
+impl From<u32> for AudioLocation {
+    fn from(value: u32) -> Self {
+        Self::from_bits_retain(value)
+    }
+}
+
+impl From<AudioLocation> for u32 {
+    fn from(location: AudioLocation) -> Self {
+        location.bits()
+    }
+}
+
+bitflags::bitflags! {
+    /// Context Type (Assigned_Numbers - 6.12.3)
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    pub struct AudioContext: u16 {
+        /// Audio Context: Unspecified.
+        const UNSPECIFIED = 0x0001;
+        /// Audio Context: Conversational.
+        const CONVERSATIONAL = 0x0002;
+        /// Audio Context: Media.
+        const MEDIA = 0x0004;
+        /// Audio Context: Game.
+        const GAME = 0x0008;
+        /// Audio Context: Instructional.
+        const INSTRUCTIONAL = 0x0010;
+        /// Audio Context: Voice Assistants.
+        const VOICE_ASSISTANTS = 0x0020;
+        /// Audio Context: Live.
+        const LIVE = 0x0040;
+        /// Audio Context: Sound Effects.
+        const SOUND_EFFECTS = 0x0080;
+        /// Audio Context: Notifications.
+        const NOTIFICATIONS = 0x0100;
+        /// Audio Context: Ringtone.
+        const RINGTONE = 0x0200;
+        /// Audio Context: Alerts.
+        const ALERTS = 0x0400;
+        /// Audio Context: Emergency Alarm.
+        const EMERGENCY_ALARM = 0x0800;
+    }
+}
+
+impl fmt::Display for AudioContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            return write!(f, "UNINITIALIZED");
+        }
+        self.iter_names().map(|(name, _)| name).enumerate().try_for_each(|(index, name)| {
+            write!(f, "{}{}", if index > 0 { " | " } else { "" }, name)
+        })
+    }
+}
+
+impl From<u16> for AudioContext {
+    fn from(value: u16) -> Self {
+        Self::from_bits_retain(value)
+    }
+}
+
+impl From<AudioContext> for u16 {
+    fn from(context: AudioContext) -> Self {
+        context.bits()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -275,5 +418,35 @@ mod test {
         let entries = [LtvEntry { r#type: 0x01, value: &[0x42] }];
         let val = LtvIterExt::get::<TestLtv>(&entries[..]);
         expect_that!(val, some(eq(&TestLtv(0x42))));
+    }
+
+    #[googletest::test]
+    fn audio_location_display_formats_combined_flags() {
+        // Verify that the Display implementation for AudioLocation correctly formats multiple
+        // bitmask flags into a human-readable string with separators.
+        let location = AudioLocation::FRONT_LEFT | AudioLocation::FRONT_RIGHT;
+        expect_that!(format!("{}", location), eq("FRONT_LEFT | FRONT_RIGHT"));
+    }
+
+    #[googletest::test]
+    fn audio_location_display_defaults_to_mono_audio() {
+        // Verify that an AudioLocation with no bits set is correctly formatted as "MONO_AUDIO".
+        let mono = AudioLocation::empty();
+        expect_that!(format!("{}", mono), eq("MONO_AUDIO"));
+    }
+
+    #[googletest::test]
+    fn audio_context_display_formats_combined_flags() {
+        // Verify that the Display implementation for AudioContext correctly formats multiple
+        // context bitmask flags into a human-readable string with separators.
+        let ctx = AudioContext::MEDIA | AudioContext::CONVERSATIONAL;
+        expect_that!(format!("{}", ctx), eq("CONVERSATIONAL | MEDIA"));
+    }
+
+    #[googletest::test]
+    fn audio_context_display_defaults_to_uninitialized() {
+        // Verify that an AudioContext with no bits set is correctly formatted as "UNINITIALIZED".
+        let uninitialized = AudioContext::empty();
+        expect_that!(format!("{}", uninitialized), eq("UNINITIALIZED"));
     }
 }
