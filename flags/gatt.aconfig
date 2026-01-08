@@ -138,4 +138,22 @@ flag {
     }
 }
 
+flag {
+    name: "gatt_service_changed_subscription"
+    namespace: "bluetooth"
+    description: "Subscribe to the GATT service changed indications on discovering GATT database"
+    bug: "468061551"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
 
+flag {
+    name: "fix_gatt_cmd_dequeue"
+    namespace: "bluetooth"
+    description: "Fixes issues related to gatt_cmd_dequeue()"
+    bug: "468220386"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

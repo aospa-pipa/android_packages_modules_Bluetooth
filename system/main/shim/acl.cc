@@ -1021,6 +1021,8 @@ struct shim::Acl::impl {
     if (com_android_bluetooth_flags_disconnect_acl_on_gatt_timeout() ||
         !com_android_bluetooth_flags_remove_device_with_connection_manager()) {
       GetAclManagerLe()->RemoveFromBackgroundList(remote_address_with_type);
+      connection_manager::on_removed_from_accept_list(
+              ToRawAddress(remote_address_with_type.GetAddress()));
     } else {
       connection_manager::remove_unconditional(ToRawAddress(remote_address_with_type.GetAddress()));
     }
@@ -1305,8 +1307,8 @@ void shim::Acl::Flush(HciHandle handle) {
   handler_->Post(common::BindOnce(&Acl::flush, common::Unretained(this), handle));
 }
 
-void shim::Acl::CreateClassicConnection(const hci::Address& address) {
-  GetAclManagerClassic()->CreateConnection(address);
+void shim::Acl::CreateClassicConnection(const hci::Address& address, uint16_t clock_offset) {
+  GetAclManagerClassic()->CreateConnection(address, clock_offset);
   log::debug("Connection initiated for classic to remote:{}", address);
   BTM_LogHistory(kBtmLogTag, ToRawAddress(address), "Initiated connection", "classic");
 }

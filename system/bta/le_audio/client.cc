@@ -1236,8 +1236,7 @@ public:
     auto leAudioDevice = leAudioDevices_.GetByAddress(address);
 
     if (leAudioDevice) {
-      if (com_android_bluetooth_flags_start_leaudio_subrate_for_active_set_only() &&
-          group_id == active_group_id_) {
+      if (group_id == active_group_id_) {
         leAudioDevice->StopConnSubrate();
       }
 
@@ -2337,7 +2336,6 @@ public:
     LeAudioContextType default_context_type = configuration_context_type_;
     if (!group->IsAudioSetConfigurationAvailable(default_context_type)) {
       if (group->IsAudioSetConfigurationAvailable(LeAudioContextType::UNSPECIFIED)) {
-        default_context_type = LeAudioContextType::UNSPECIFIED;
         default_context_type = LeAudioContextType::UNSPECIFIED;
       } else {
         for (LeAudioContextType context_type : kLeAudioContextAllTypesArray) {
@@ -3489,10 +3487,6 @@ public:
 
       BTA_GATTC_Close(leAudioDevice->conn_id_);
       return;
-    }
-
-    if (!com_android_bluetooth_flags_start_leaudio_subrate_for_active_set_only()) {
-      leAudioDevice->StartConnSubrate();
     }
 
     if (leAudioDevice->encrypted_) {
@@ -5731,6 +5725,38 @@ public:
     return groupStateMachine_->EnableStreamingDirection(group, remote_direction);
   }
 
+  void LogStreamStarted(LeAudioDeviceGroup* group, int active_group_id,
+                                     LeAudioContextType context_type) {
+    if (!group) {
+      return;
+    }
+
+    const auto& stream_conf = group->stream_conf;
+    const auto& codec_id = stream_conf.codec_id;
+    const auto& sink_config = stream_conf.stream_params.sink.stream_config;
+    const auto& source_config = stream_conf.stream_params.source.stream_config;
+
+    bluetooth::le_audio::LeAudioMetricsCodecInfo info = {
+            .codec_format = codec_id.coding_format,
+            .vendor_company_id = codec_id.vendor_company_id,
+            .vendor_codec_id = codec_id.vendor_codec_id,
+            .is_dsa_active = group->dsa_.active,
+            .is_gmap_active =
+                (context_type == LeAudioContextType::GAME) &&
+                 group->IsGmapEnabled() &&
+                 GmapClient::IsGmapClientEnabled() && GmapServer::IsGmapServerEnabled(),
+    };
+    if (!sink_config.stream_map.empty()) {
+      info.sink_sampling_frequency_hz = sink_config.sampling_frequency_hz;
+    }
+    if (!source_config.stream_map.empty()) {
+      info.source_sampling_frequency_hz = source_config.sampling_frequency_hz;
+    }
+
+    bluetooth::le_audio::MetricsCollector::Get()->OnStreamStarted(active_group_id, context_type,
+                                                                  info);
+  }
+
   void OnLocalAudioSourceResume() {
     log::info("active group_id: {}, IN: audio_receiver_state_: {}, audio_sender_state_: {}",
               active_group_id_, ToString(audio_receiver_state_), ToString(audio_sender_state_));
@@ -5987,8 +6013,8 @@ public:
                  bluetooth::le_audio::types::kLeAudioDirectionSink)) {
               /* Stream is up just restore it */
               ConfirmLocalAudioSourceStartRequestAndUpdateConfig(group, true /* Force update */);
-              bluetooth::le_audio::MetricsCollector::Get()->OnStreamStarted(
-                      active_group_id_, upcoming_configuration_context_type);
+
+              LogStreamStarted(group, active_group_id_, upcoming_configuration_context_type);
             } else if (!reenableDirectionIfNeeded(
                                group, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
               log::error("Cannot enable directions for group_id: {}", group->group_id_);
@@ -7932,8 +7958,8 @@ public:
         }
 
         speed_stream_created(group_id);
-        bluetooth::le_audio::MetricsCollector::Get()->OnStreamStarted(active_group_id_,
-                                                                      configuration_context_type_);
+
+        LogStreamStarted(group, active_group_id_, configuration_context_type_);
 
         if (leAudioHealthStatus_) {
           leAudioHealthStatus_->AddStatisticForGroup(

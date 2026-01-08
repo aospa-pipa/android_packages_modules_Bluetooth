@@ -40,7 +40,6 @@ import android.util.Log;
 import android.view.Display;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -407,7 +406,7 @@ public class AdapterSuspend {
 
     private void disconnectProfiles() {
         for (BluetoothDevice device : mDisconnectProfileDevices) {
-            if (Flags.addLocalDisconnectReason()) {
+            if (Flags.addNewLocalDisconnectReason()) {
                 mAdapterService.disconnectAllEnabledProfiles(
                         device, BluetoothStatusCodes.ERROR_DISCONNECT_REASON_ADAPTER_SUSPEND);
             } else {
@@ -441,7 +440,7 @@ public class AdapterSuspend {
      * Called by the advertising thread to notify that it has finished the preparation for suspend.
      */
     public void advertiseSuspendReady() {
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             onSuspendTaskCompleted(SuspendTasks.ADVERTISEMENT);
             return;
         }

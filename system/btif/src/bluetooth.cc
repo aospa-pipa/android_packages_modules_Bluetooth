@@ -157,7 +157,18 @@ tBT_TRANSPORT to_bt_transport(int val) {
  *  Static variables
  ******************************************************************************/
 
-static bt_callbacks_t* bt_hal_cbacks = NULL;
+static bt_callbacks_t* bt_hal_cbacks = nullptr;
+static bt_os_callouts_t* wakelock_os_callouts_saved = nullptr;
+
+static int acquire_wake_lock_cb(const char* lock_name);
+static int release_wake_lock_cb(const char* lock_name);
+
+static bt_os_callouts_t wakelock_os_callouts_jni = {
+        sizeof(wakelock_os_callouts_jni),
+        acquire_wake_lock_cb,
+        release_wake_lock_cb,
+};
+
 static bool restricted_mode = false;
 static bool common_criteria_mode = false;
 static constexpr int CONFIG_COMPARE_ALL_PASS = 0b11;
@@ -432,17 +443,14 @@ int GetAdapterIndex() { return global_hci_adapter; }
 int GetAdapterIndex() { return 0; }  // Unsupported outside of FLOSS
 #endif  // TARGET_FLOSS
 
-static int init(bt_callbacks_t* callbacks, bool start_restricted, bool is_common_criteria_mode,
-                int config_compare_result, bool is_atv, const std::string hci_instance_name) {
+void bluetooth_init(bt_callbacks_t* callbacks, bool start_restricted, bool is_common_criteria_mode,
+                    int config_compare_result, bool is_atv, const std::string hci_instance_name,
+                    bt_os_callouts_t* callouts) {
   log::assert_that(callbacks != nullptr, "assert failed: callbacks != nullptr");
 
   log::info(
           "start_restricted={} common_criteria_mode={}, config_compare_result={} instance_name={}",
           start_restricted, is_common_criteria_mode, config_compare_result, hci_instance_name);
-
-  if (interface_ready()) {
-    return BT_STATUS_DONE;
-  }
 
   set_hal_cbacks(callbacks);
 
@@ -461,7 +469,9 @@ static int init(bt_callbacks_t* callbacks, bool start_restricted, bool is_common
   is_local_device_atv = is_atv;
 
   stack_manager_get_interface()->init_stack(CreateInterfaceToProfiles());
-  return BT_STATUS_SUCCESS;
+
+  wakelock_os_callouts_saved = callouts;
+  wakelock_set_os_callouts(&wakelock_os_callouts_jni);
 }
 
 static void start_profiles() {
@@ -1049,8 +1059,6 @@ static int le_test_mode(uint16_t opcode, uint8_t* buf, uint8_t len) {
   return BT_STATUS_SUCCESS;
 }
 
-static bt_os_callouts_t* wakelock_os_callouts_saved = nullptr;
-
 static int acquire_wake_lock_cb(const char* lock_name) {
   return do_in_jni_thread(base::BindOnce(
           base::IgnoreResult(wakelock_os_callouts_saved->acquire_wake_lock), lock_name));
@@ -1059,18 +1067,6 @@ static int acquire_wake_lock_cb(const char* lock_name) {
 static int release_wake_lock_cb(const char* lock_name) {
   return do_in_jni_thread(base::BindOnce(
           base::IgnoreResult(wakelock_os_callouts_saved->release_wake_lock), lock_name));
-}
-
-static bt_os_callouts_t wakelock_os_callouts_jni = {
-        sizeof(wakelock_os_callouts_jni),
-        acquire_wake_lock_cb,
-        release_wake_lock_cb,
-};
-
-static int set_os_callouts(bt_os_callouts_t* callouts) {
-  wakelock_os_callouts_saved = callouts;
-  wakelock_set_os_callouts(&wakelock_os_callouts_jni);
-  return BT_STATUS_SUCCESS;
 }
 
 static bluetooth::avrcp::ServiceInterface* get_avrcp_service(void) {
@@ -1190,7 +1186,6 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
 #ifdef TARGET_FLOSS
         .set_adapter_index = set_adapter_index,
 #endif
-        .init = init,
         .enable = enable,
         .disable = disable,
         .cleanup = cleanup,
@@ -1216,7 +1211,6 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
         .ssp_reply = ssp_reply,
         .get_profile_interface = get_profile_interface,
         .le_test_mode = le_test_mode,
-        .set_os_callouts = set_os_callouts,
         .read_energy_info = read_energy_info,
         .dump = dump,
         .interop_database_clear = interop_database_clear,
@@ -1338,10 +1332,10 @@ void invoke_discovery_state_changed_cb(bt_discovery_state_t state) {
 }
 
 void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod, bool min_16_digit,
-                           PairingAlgorithm pairing_algorithm) {
+                           int pairing_algorithm) {
   do_in_jni_thread(base::BindOnce(
           [](RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod, bool min_16_digit,
-             PairingAlgorithm pairing_algorithm) {
+             int pairing_algorithm) {
             HAL_CBACK(bt_hal_cbacks, pin_request_cb, bd_addr, &bd_name, cod, min_16_digit,
                       pairing_algorithm);
           },
@@ -1349,10 +1343,10 @@ void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod
 }
 
 void invoke_ssp_request_cb(RawAddress bd_addr, bt_ssp_variant_t pairing_variant, uint32_t pass_key,
-                           PairingAlgorithm pairing_algorithm) {
+                           int pairing_algorithm) {
   do_in_jni_thread(base::BindOnce(
           [](RawAddress bd_addr, bt_ssp_variant_t pairing_variant, uint32_t pass_key,
-             PairingAlgorithm pairing_algorithm) {
+             int pairing_algorithm) {
             HAL_CBACK(bt_hal_cbacks, ssp_request_cb, bd_addr, pairing_variant, pass_key,
                       pairing_algorithm);
           },

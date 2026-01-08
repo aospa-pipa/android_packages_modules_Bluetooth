@@ -1060,7 +1060,7 @@ public class AdapterService extends Service {
                 getApplicationContext()
                         .getPackageManager()
                         .hasSystemFeature(PackageManager.FEATURE_LEANBACK_ONLY);
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             Log.w(TAG, "This Bluetooth App is instrumented. ** Skip loading the native **");
         } else {
             Log.d(TAG, "Loading JNI Library");
@@ -1274,6 +1274,7 @@ public class AdapterService extends Service {
                         this,
                         mScanNativeInterface,
                         mPeriodicScanNativeInterface,
+                        mBatteryStatsManager,
                         mCompanionDeviceManager);
         mNativeInterface.enable(mLocalName);
         Instant end = Instant.now();
@@ -3942,9 +3943,8 @@ public class AdapterService extends Service {
     private boolean shouldDelayA2dpDisconnection(BluetoothDevice device) {
         Objects.requireNonNull(device, "device must not be null");
         boolean matched =
-                interopMatchAddrOrName(
-                        InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT,
-                        device.getAddress());
+                interopMatchDevice(
+                        InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT, device);
         return matched;
     }
 
@@ -5302,8 +5302,18 @@ public class AdapterService extends Service {
         return mNativeInterface.interopMatchName(feature.name(), name);
     }
 
-    public boolean interopMatchAddrOrName(InteropFeature feature, String address) {
-        return mNativeInterface.interopMatchAddrOrName(feature.name(), address);
+
+    /**
+     * Check if a given device's address or remote device name matches a known interoperability
+     * workaround identified by the interop feature. remote device name will be fetched internally
+     * based on the given address at stack layer.
+     *
+     * @param feature a given interop feature defined in {@link InteropFeature}.
+     * @param device the remote device to be matched.
+     * @return {@code true} if matched, {@code false} otherwise
+     */
+    public boolean interopMatchDevice(InteropFeature feature, BluetoothDevice device) {
+        return mNativeInterface.interopMatchDevice(feature.name(), device.getAddress());
     }
 
     public void interopDatabaseAddAddr(InteropFeature feature, String address, int length) {
@@ -5377,9 +5387,9 @@ public class AdapterService extends Service {
     //Delaying A2DP Disconnect
     boolean isDelayA2dpDiscDevice(BluetoothDevice device) {
        if (device == null) return false;
-       boolean matched = InteropUtil.interopMatchAddrOrName(this,
+       boolean matched = interopMatchDevice(
               InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT,
-              device.getAddress());
+              device);
        Log.d(TAG, "isDelayA2dpDiscDevice: matched: " + matched);
        return matched;
     }
@@ -5580,7 +5590,7 @@ public class AdapterService extends Service {
             @NonNull DiscoveringPackageInfo pkgInfo,
             @NonNull BluetoothDevice discoveredDevice,
             @NonNull Intent intent) {
-        if (pkgInfo.hasDisavowedLocation()) {
+        if (pkgInfo.getHasDisavowedLocation()) {
             if (mLocationDenylistPredicate.test(discoveredDevice)) {
                 return;
             }
@@ -5588,10 +5598,10 @@ public class AdapterService extends Service {
 
         intent.setPackage(pkgName);
         intent.setAction(BluetoothDevice.ACTION_FOUND);
-        if (pkgInfo.permission() != null) {
+        if (pkgInfo.getPermission() != null) {
             sendBroadcastMultiplePermissions(
                     intent,
-                    new String[] {BLUETOOTH_SCAN, pkgInfo.permission()},
+                    new String[] {BLUETOOTH_SCAN, pkgInfo.getPermission()},
                     Utils.getTempBroadcastOptions());
         } else {
             sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());

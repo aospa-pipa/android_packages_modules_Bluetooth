@@ -54,7 +54,6 @@ package android.bluetooth;
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.BLUETOOTH_SCAN;
-import static android.Manifest.permission.MODIFY_PHONE_STATE;
 import static android.bluetooth.BluetoothUtils.callServiceIfEnabling;
 
 import static java.util.Objects.requireNonNull;
@@ -739,7 +738,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
                 ENCRYPTION_ALGORITHM_AES,
                 ENCRYPTION_ALGORITHM_UNKNOWN
             })
-    @FlaggedApi(Flags.FLAG_LINK_STATUS_API)
     public @interface EncryptionAlgorithm {}
 
     /** Indicates that link was not encrypted using any algorithm */
@@ -752,7 +750,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     public static final int ENCRYPTION_ALGORITHM_AES = 2;
 
     /** Indicates link was encrypted using unknown algorithm */
-    @FlaggedApi(Flags.FLAG_LINK_STATUS_API)
     public static final int ENCRYPTION_ALGORITHM_UNKNOWN = 3;
 
     /**
@@ -1487,7 +1484,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @IntDef(
             prefix = {"TRANSPORT_"},
             value = {TRANSPORT_BREDR, TRANSPORT_LE})
-    @FlaggedApi(Flags.FLAG_LINK_STATUS_API)
     public @interface SupportedTransport {}
 
     /** No preference of physical transport for GATT connections to remote dual-mode devices */
@@ -2358,10 +2354,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * <p>This method requires the calling app to have the {@link
      * android.Manifest.permission#BLUETOOTH_CONNECT} permission. Additionally, an app must either
-     * have both {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} and {@link
-     * android.Manifest.permission#MODIFY_PHONE_STATE} permissions, or be associated with the
-     * Companion Device manager (see {@link android.companion.CompanionDeviceManager#associate(
-     * AssociationRequest, android.companion.CompanionDeviceManager.Callback, Handler)}).
+     * have {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} permission or be
+     * associated with the Companion Device manager (see {@link
+     * android.companion.CompanionDeviceManager#associate( AssociationRequest,
+     * android.companion.CompanionDeviceManager.Callback, Handler)}).
      *
      * @return whether the messages were successfully sent to try to connect all profiles
      * @throws IllegalArgumentException if the device address is invalid
@@ -2369,7 +2365,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @FlaggedApi(Flags.FLAG_GATT_CONN_SETTINGS)
     @RequiresBluetoothConnectPermission
     @RequiresPermission(
-            allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED, MODIFY_PHONE_STATE},
+            allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
             conditional = true)
     public @ConnectionReturnValues int connect() {
         if (DBG) log("connect()");
@@ -2557,12 +2553,13 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * #getUuids} to get UUIDs if service discovery is not to be performed. If there is an ongoing
      * bonding process, service discovery or device inquiry, the request will be queued.
      *
+     * <p>To explicitly fetch UUIDs across all transports, use {@link #fetchUuids(int)} by calling
+     * {@code fetchUuids(BluetoothDevice.TRANSPORT_AUTO)}.
+     *
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast.
-     * @deprecated Use {@link #fetchUuids(int)}.
      */
     @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
-    @Deprecated
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
@@ -2582,6 +2579,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * there is an ongoing bonding process, service discovery or device inquiry, the request will be
      * queued.
      *
+     * <p>For more explicit control over the transport type used for UUID fetching, use {@link
+     * #fetchUuids(int)}, specifying one of {@link BluetoothDevice#TRANSPORT_AUTO}, {@link
+     * BluetoothDevice#TRANSPORT_BREDR}, or {@link BluetoothDevice#TRANSPORT_LE}.
+     *
      * <p>Requires the {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} permission only when
      * {@code transport} is not {@code #TRANSPORT_AUTO}.
      *
@@ -2590,10 +2591,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @param transport - provide type of transport (e.g. LE or Classic).
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast with the specific transport.
-     * @deprecated Use {@link #fetchUuids(int)}.
      */
     @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
-    @Deprecated
     @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
@@ -3891,7 +3890,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return the encryption status of the device, null if the device is not encrypted or not
      *     connected.
      */
-    @FlaggedApi(Flags.FLAG_LINK_STATUS_API)
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public @Nullable EncryptionStatus getEncryptionStatus(@SupportedTransport int transport) {
@@ -3911,7 +3909,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @return True if there is at least one open connection to this device.
      */
-    @FlaggedApi(Flags.FLAG_LINK_STATUS_API)
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean isConnected(@SupportedTransport int transport) {
