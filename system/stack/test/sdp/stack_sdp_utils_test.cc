@@ -68,8 +68,9 @@ public:
   MOCK_METHOD(bool, InteropMatchName, (const interop_feature_t, const char*));
   MOCK_METHOD(void, InteropDatabaseAdd, (uint16_t, RawAddress, size_t));
   MOCK_METHOD(void, InteropDatabaseClear, ());
-  MOCK_METHOD(bool, InteropMatchDevice,
-              (const interop_feature_t, RawAddress, bt_status_t (*)(RawAddress, bt_property_t*)));
+  MOCK_METHOD(bool, InteropMatchAddrOrName,
+              (const interop_feature_t, RawAddress,
+               bt_status_t (*)(const RawAddress&, bt_property_t*)));
   MOCK_METHOD(bool, InteropMatchManufacturer, (const interop_feature_t, uint16_t));
   MOCK_METHOD(bool, InteropMatchVendorProductIds, (const interop_feature_t, uint16_t, uint16_t));
   MOCK_METHOD(bool, InteropDatabaseMatchVersion, (const interop_feature_t, uint16_t));
@@ -100,9 +101,9 @@ void interop_database_add(uint16_t feature, RawAddress addr, size_t length) {
 void interop_database_clear() { localIopMock->InteropDatabaseClear(); }
 
 bool interop_match_addr_or_name(const interop_feature_t feature, RawAddress addr,
-                                bt_status_t (*get_remote_device_property)(RawAddress,
+                                bt_status_t (*get_remote_device_property)(const RawAddress&,
                                                                           bt_property_t*)) {
-  return localIopMock->InteropMatchDevice(feature, addr, get_remote_device_property);
+  return localIopMock->InteropMatchAddrOrName(feature, addr, get_remote_device_property);
 }
 
 bool interop_match_manufacturer(const interop_feature_t feature, uint16_t manufacturer) {
@@ -535,10 +536,10 @@ TEST_F(StackSdpUtilsTest, check_HFP_version_change_fail) {
   set_hfp_attr(SDP_PROFILE_DESC_LENGTH, ATTR_ID_BT_PROFILE_DESC_LIST, UUID_HF_LSB);
   test::mock::osi_properties::osi_property_get_bool.body =
           [](const char* /* key */, bool /* default_value */) { return false; };
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(false));
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(false));
   ASSERT_EQ(sdp_dynamic_change_hfp_version(&hfp_attr, bdaddr), false);
@@ -547,10 +548,10 @@ TEST_F(StackSdpUtilsTest, check_HFP_version_change_fail) {
 TEST_F(StackSdpUtilsTest, check_HFP_version_change_success) {
   RawAddress bdaddr(RawAddress::kEmpty);
   set_hfp_attr(SDP_PROFILE_DESC_LENGTH, ATTR_ID_BT_PROFILE_DESC_LIST, UUID_HF_LSB);
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(true));
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(true));
   ASSERT_EQ(sdp_dynamic_change_hfp_version(&hfp_attr, bdaddr), true);
@@ -559,10 +560,10 @@ TEST_F(StackSdpUtilsTest, check_HFP_version_change_success) {
 TEST_F(StackSdpUtilsTest, check_HFP_version_fallback_success) {
   RawAddress bdaddr(RawAddress::kEmpty);
   set_hfp_attr(SDP_PROFILE_DESC_LENGTH, ATTR_ID_BT_PROFILE_DESC_LIST, UUID_HF_LSB);
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_7_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(true));
-  EXPECT_CALL(*localIopMock, InteropMatchDevice(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
+  EXPECT_CALL(*localIopMock, InteropMatchAddrOrName(INTEROP_HFP_1_9_ALLOWLIST, bdaddr,
                                                     &btif_storage_get_remote_device_property))
           .WillOnce(Return(true));
   ASSERT_TRUE(sdp_dynamic_change_hfp_version(&hfp_attr, bdaddr));
