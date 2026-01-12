@@ -411,6 +411,11 @@ typedef enum {
   // fallback in the stack for those devices.
   INTEROP_DISABLE_PROFILE_FALLBACK,
 
+  // Some remote devices initiate SMP over BR, which triggers
+  // btif_dm_ble_auth_cmpl_evt and starts GATT service discovery. This flow
+  // blocks pairing_cb reset, preventing subsequent pairings with other devices.
+  INTEROP_SKIP_GATT_DISCOVERY_OVER_LE,
+
   END_OF_INTEROP_LIST
 } interop_feature_t;
 
