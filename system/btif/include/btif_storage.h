@@ -73,7 +73,7 @@ typedef struct {
   tBLE_BD_ADDR devices[BTM_SEC_MAX_DEVICE_RECORDS];
 } btif_bonded_devices_t;
 
-bt_status_t btif_in_fetch_bonded_ble_device(const std::string& remote_bd_addr, int add,
+bt_status_t btif_in_fetch_bonded_ble_device(const std::string& addr, int add,
                                             btif_bonded_devices_t* p_bonded_devices);
 
 /*******************************************************************************
@@ -117,7 +117,7 @@ bt_status_t btif_storage_set_adapter_property(bt_property_t* property);
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_get_remote_device_property(RawAddress remote_bd_addr,
+bt_status_t btif_storage_get_remote_device_property(const RawAddress& addr,
                                                     bt_property_t* property);
 
 /*******************************************************************************
@@ -131,7 +131,7 @@ bt_status_t btif_storage_get_remote_device_property(RawAddress remote_bd_addr,
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_set_remote_device_property(RawAddress remote_bd_addr,
+bt_status_t btif_storage_set_remote_device_property(const RawAddress& addr,
                                                     bt_property_t* property);
 
 /*******************************************************************************
@@ -146,12 +146,12 @@ bt_status_t btif_storage_set_remote_device_property(RawAddress remote_bd_addr,
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_add_remote_device(RawAddress remote_bd_addr, uint32_t num_properties,
+bt_status_t btif_storage_add_remote_device(const RawAddress& addr, uint32_t num_properties,
                                            bt_property_t* properties);
 
 /*******************************************************************************
  *
- * Function         btif_storage_add_bonded_device
+ * Function         btif_storage_add_bredr_keys
  *
  * Description      BTIF storage API - Adds the newly bonded device to NVRAM
  *                  along with the link-key, Key type and Pin key length
@@ -160,8 +160,9 @@ bt_status_t btif_storage_add_remote_device(RawAddress remote_bd_addr, uint32_t n
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_add_bonded_device(RawAddress remote_bd_addr, LinkKey link_key,
-                                           uint8_t key_type, uint8_t pin_length);
+bt_status_t btif_storage_add_bredr_keys(const RawAddress& addr, const PairingType& pairing_type,
+                                        const LinkKey& link_key, uint8_t key_type,
+                                        uint8_t pin_length);
 
 /*******************************************************************************
  *
@@ -173,7 +174,7 @@ bt_status_t btif_storage_add_bonded_device(RawAddress remote_bd_addr, LinkKey li
  *                  BT_STATUS_FAIL otherwise
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_bonded_device(RawAddress remote_bd_addr);
+bt_status_t btif_storage_remove_bonded_device(const RawAddress& addr);
 
 /*******************************************************************************
  *
@@ -368,7 +369,7 @@ void btif_storage_remove_enc_key_material(const RawAddress* remote_bd_addr);
  *                  false otherwise
  *
  ******************************************************************************/
-bool btif_storage_is_restricted_device(RawAddress remote_bd_addr);
+bool btif_storage_is_restricted_device(const RawAddress& addr);
 
 /*******************************************************************************
  *
@@ -381,18 +382,26 @@ bool btif_storage_is_restricted_device(RawAddress remote_bd_addr);
  ******************************************************************************/
 void btif_storage_prune_devices();
 
-bt_status_t btif_storage_add_ble_bonding_key(RawAddress remote_bd_addr, const uint8_t* key,
-                                             uint8_t key_type, uint8_t key_length);
-bt_status_t btif_storage_get_ble_bonding_key(const RawAddress& remote_bd_addr, uint8_t key_type,
-                                             uint8_t* key_value, int key_length);
+bt_status_t btif_storage_set_remote_host_sc_support(const RawAddress& addr, bool supported);
+std::optional<bool> btif_storage_get_remote_host_sc_support(const RawAddress& addr);
+bt_status_t btif_storage_set_remote_controller_sc_support(const RawAddress& addr, bool supported);
+std::optional<bool> btif_storage_get_remote_controller_sc_support(const RawAddress& addr);
 
+bt_status_t btif_storage_add_ble_keys(const RawAddress& addr, const uint8_t* key_value,
+                                      uint8_t key_type, uint8_t key_length);
+bt_status_t btif_storage_get_ble_bonding_key(const RawAddress& addr, uint8_t key_type,
+                                             uint8_t* key_value, int key_length);
+bt_status_t btif_storage_set_ble_pairing_type(const RawAddress& addr,
+                                              const PairingType& pairing_type);
+std::optional<PairingType> btif_storage_get_ble_pairing_type(const RawAddress& bd_addr);
+std::optional<PairingType> btif_storage_get_bredr_pairing_type(const RawAddress& bd_addr);
 bt_status_t btif_storage_add_ble_local_key(const Octet16& key, uint8_t key_type);
-bt_status_t btif_storage_remove_ble_bonding_keys(RawAddress remote_bd_addr);
+bt_status_t btif_storage_remove_ble_bonding_keys(const RawAddress& addr);
 bt_status_t btif_storage_get_ble_local_key(uint8_t key_type, Octet16* key_value);
 
-bt_status_t btif_storage_get_remote_addr_type(RawAddress remote_bd_addr, tBLE_ADDR_TYPE* addr_type);
+bt_status_t btif_storage_get_remote_addr_type(const RawAddress& addr, tBLE_ADDR_TYPE* addr_type);
 
-bt_status_t btif_storage_set_remote_addr_type(RawAddress remote_bd_addr, tBLE_ADDR_TYPE addr_type);
+bt_status_t btif_storage_set_remote_addr_type(const RawAddress& addr, tBLE_ADDR_TYPE addr_type);
 
 void btif_storage_add_groups(const RawAddress& addr);
 void btif_storage_load_bonded_groups(void);

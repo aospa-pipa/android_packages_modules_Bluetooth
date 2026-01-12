@@ -45,7 +45,7 @@
  *  Constants and data types
  ****************************************************************************/
 
-#define BTA_DM_NUM_PEER_DEVICE MAX_L2CAP_LINKS
+#define BTA_DM_NUM_LINKS 16
 
 /* bond retrial interval (in milliseconds) */
 #ifndef BTA_DM_BOND_TIMER_RETRIAL_MS
@@ -96,10 +96,15 @@ struct tBTA_DM_CONNECTION_INFO {
 
 bool bta_dm_removal_pending(const RawAddress& bd_addr);
 
-struct tBTA_DM_PEER_DEVICE {
-  RawAddress peer_bdaddr;
+struct BtaDmLink {
+  RawAddress addr;
+  tBT_TRANSPORT transport;
   tBTA_PREF_ROLES pref_role;
-  bool in_use;
+  tBTA_DM_ENCRYPT_CBACK* p_encrypt_cback;
+  tBTM_PM_STATUS prev_low; /* previous low power mode used */
+  tBTA_DM_PM_ACTION pm_mode_attempted;
+  tBTA_DM_PM_ACTION pm_mode_failed;
+  bool remove_dev_pending;
 
 private:
   // Dynamic pieces of operational device information
@@ -134,26 +139,18 @@ public:
   void reset_ssr_active() { info &= ~BTA_DM_DI_USE_SSR; }
   bool is_ssr_active() const { return info & BTA_DM_DI_USE_SSR; }
 
-  bool is_connected() const {
-    // Devices getting removed should be treated as disconnected
-    return !bta_dm_removal_pending(peer_bdaddr);
+  bool is_active() const {
+    // Links of devices getting removed should be treated as deactivated
+    return !bta_dm_removal_pending(addr);
   }
-
-  tBTA_DM_ENCRYPT_CBACK* p_encrypt_cback;
-  tBTM_PM_STATUS prev_low; /* previous low power mode used */
-  tBTA_DM_PM_ACTION pm_mode_attempted;
-  tBTA_DM_PM_ACTION pm_mode_failed;
-  bool remove_dev_pending;
-  tBT_TRANSPORT transport;
 };
 
-/* structure to store list of
-  active connections */
+/* structure to store list of active connections */
 typedef struct {
-  tBTA_DM_PEER_DEVICE peer_device[BTA_DM_NUM_PEER_DEVICE];
+  std::array<BtaDmLink, BTA_DM_NUM_LINKS> links;
   uint8_t count;
   uint8_t le_count;
-} tBTA_DM_ACTIVE_LINK;
+} BtaDmLinkDb;
 
 typedef struct {
   RawAddress peer_bdaddr;
@@ -206,7 +203,7 @@ typedef struct {
 
 /* DM control block */
 typedef struct {
-  tBTA_DM_ACTIVE_LINK device_list;
+  BtaDmLinkDb link_db;
   tBTA_BLE_ENERGY_INFO_CBACK* p_energy_info_cback;
   bool disabling;
   alarm_t* disable_timer;
@@ -335,7 +332,7 @@ void bta_dm_init_pm(void);
 void bta_dm_disable_pm(void);
 
 uint8_t bta_dm_get_av_count(void);
-tBTA_DM_PEER_DEVICE* bta_dm_find_peer_device(const RawAddress& peer_addr);
+BtaDmLink* bta_dm_find_link(const RawAddress& peer_addr);
 
 void bta_dm_clear_event_filter(void);
 void bta_dm_clear_event_mask(void);
@@ -366,7 +363,7 @@ void bta_dm_process_ssr(void);
 
 namespace bluetooth::legacy::testing {
 
-tBTA_DM_PEER_DEVICE* allocate_device_for(const RawAddress& bd_addr, tBT_TRANSPORT transport);
+BtaDmLink* allocate_link_for(const RawAddress& bd_addr, tBT_TRANSPORT transport);
 void bta_dm_acl_up(const AclLinkSpec& link_spec, uint16_t acl_handle);
 void bta_dm_acl_down(const AclLinkSpec& link_spec);
 void bta_dm_init_cb();
