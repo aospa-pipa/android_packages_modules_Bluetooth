@@ -41,6 +41,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.RemoteException;
 import android.util.ArraySet;
+import android.os.SystemProperties;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
@@ -217,7 +218,6 @@ public class DistanceMeasurementManager {
                     callback, params.getDevice(), BluetoothStatusCodes.ERROR_BAD_PARAMETERS);
             return;
         }
-
         DistanceMeasurementTracker tracker =
                 new DistanceMeasurementTracker(
                         this, appUid, params, address, uuid, interval, params.getFrequency(), callback);
@@ -432,10 +432,17 @@ public class DistanceMeasurementManager {
         }
     }
 
-    /** Convert frequency into interval in ms */
     private static int getIntervalValue(int frequency, int method) {
+        int intervalProp;
         switch (method) {
             case DISTANCE_MEASUREMENT_METHOD_AUTO, DISTANCE_MEASUREMENT_METHOD_RSSI -> {
+                 intervalProp =
+                        SystemProperties.getInt(
+                                "persist.bluetooth.foreground.high_frequency_interval", 0);
+                Log.d(TAG, "Read interval from persist.bluetooth.foreground.high_frequency_interval");
+                if (intervalProp > 0) {
+                    return intervalProp;
+                }
                 return switch (frequency) {
                     case DistanceMeasurementParams.REPORT_FREQUENCY_LOW ->
                             RSSI_LOW_FREQUENCY_INTERVAL_MS;
@@ -447,6 +454,14 @@ public class DistanceMeasurementManager {
                 };
             }
             case DISTANCE_MEASUREMENT_METHOD_CHANNEL_SOUNDING -> {
+                intervalProp =
+                        SystemProperties.getInt(
+                                "persist.bluetooth.foreground.high_frequency_interval",
+                                0);
+                Log.d(TAG, "Read interval from persist.bluetooth.foreground.high_frequency_interval");
+                if (intervalProp > 0) {
+                    return intervalProp;
+                }
                 return switch (frequency) {
                     case DistanceMeasurementParams.REPORT_FREQUENCY_LOW ->
                             CS_LOW_FREQUENCY_INTERVAL_MS;
