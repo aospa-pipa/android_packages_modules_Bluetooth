@@ -503,13 +503,13 @@ static void register_server_cb(int status, int server_if,
   std::vector<btgatt_db_element_t> service1;
   // 1st service
   btgatt_db_element_t svc1 = {};
-  svc1.uuid = Uuid::FromString(IMMEDIATE_ALERT_UUID, &is_valid);
+  svc1.uuid = *Uuid::FromString(IMMEDIATE_ALERT_UUID);
   svc1.type = BTGATT_DB_PRIMARY_SERVICE;
   service1.push_back(svc1);
 
   // 1st char
   btgatt_db_element_t char1 = {};
-  char1.uuid = Uuid::FromString(ALERT_LEVEL_UUID1, &is_valid);
+  char1.uuid = *Uuid::FromString(ALERT_LEVEL_UUID1);
   char1.type = BTGATT_DB_CHARACTERISTIC;
   char1.properties = 58;
   char1.permissions = 17;
@@ -518,7 +518,7 @@ static void register_server_cb(int status, int server_if,
 
   // 1st desc
   btgatt_db_element_t desc1 = {};
-  desc1.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc1.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc1.type = BTGATT_DB_DESCRIPTOR;
   desc1.permissions = 17;
   // use shortByteValue byte array for this desc
@@ -526,7 +526,7 @@ static void register_server_cb(int status, int server_if,
 
   // 2nd char
   btgatt_db_element_t char2 = {};
-  char2.uuid = Uuid::FromString(ALERT_LEVEL_UUID2, &is_valid);
+  char2.uuid = *Uuid::FromString(ALERT_LEVEL_UUID2);
   char2.type = BTGATT_DB_CHARACTERISTIC;
   char2.properties = 58;
   char2.permissions = 34;
@@ -535,7 +535,7 @@ static void register_server_cb(int status, int server_if,
 
   // 2nd desc
   btgatt_db_element_t desc2 = {};
-  desc2.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc2.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc2.type = BTGATT_DB_DESCRIPTOR;
   desc2.permissions = 34;
   // use shortByteValue byte array for this desc
@@ -543,7 +543,7 @@ static void register_server_cb(int status, int server_if,
 
   // 3rd char
   btgatt_db_element_t char3 = {};
-  char3.uuid = Uuid::FromString(ALERT_LEVEL_UUID3, &is_valid);
+  char3.uuid = *Uuid::FromString(ALERT_LEVEL_UUID3);
   char3.type = BTGATT_DB_CHARACTERISTIC;
   char3.properties = 58;
   char3.permissions = 68;
@@ -552,7 +552,7 @@ static void register_server_cb(int status, int server_if,
 
   // 3rd desc
   btgatt_db_element_t desc3 = {};
-  desc3.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc3.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc3.type = BTGATT_DB_DESCRIPTOR;
   desc3.permissions = 68;
   // use shortByteValue byte array for this desc
@@ -560,7 +560,7 @@ static void register_server_cb(int status, int server_if,
 
   // 4th char
   btgatt_db_element_t char4 = {};
-  char4.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_UUID1, &is_valid);
+  char4.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_UUID1);
   char4.type = BTGATT_DB_CHARACTERISTIC;
   char4.properties = 58;
   char4.permissions = 34;
@@ -569,7 +569,7 @@ static void register_server_cb(int status, int server_if,
 
   // 4th desc
   btgatt_db_element_t desc4 = {};
-  desc4.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID1, &is_valid);
+  desc4.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID1);
   desc4.type = BTGATT_DB_DESCRIPTOR;
   desc4.permissions = 34;
   // use shortByteValue byte array for this desc
@@ -577,7 +577,7 @@ static void register_server_cb(int status, int server_if,
 
   // 5th char
   btgatt_db_element_t char5 = {};
-  char5.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_UUID2, &is_valid);
+  char5.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_UUID2);
   char5.type = BTGATT_DB_CHARACTERISTIC;
   char5.properties = 58;
   char5.permissions = 68;
@@ -586,7 +586,7 @@ static void register_server_cb(int status, int server_if,
 
   // 5th desc
   btgatt_db_element_t desc5 = {};
-  desc5.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID2, &is_valid);
+  desc5.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID2);
   desc5.type = BTGATT_DB_DESCRIPTOR;
   desc5.permissions = 68;
   // use shortByteValue byte array for this desc
@@ -594,7 +594,7 @@ static void register_server_cb(int status, int server_if,
 
   // 6th char
   btgatt_db_element_t char6 = {};
-  char6.uuid = Uuid::FromString(ALERT_LEVEL_UUID4, &is_valid);
+  char6.uuid = *Uuid::FromString(ALERT_LEVEL_UUID4);
   char6.type = BTGATT_DB_CHARACTERISTIC;
   char6.properties = 4;
   char6.permissions = 16;
@@ -603,7 +603,7 @@ static void register_server_cb(int status, int server_if,
 
   // 6th desc
   btgatt_db_element_t desc6 = {};
-  desc6.uuid = Uuid::FromString(DISC_LEVEL_UUID1, &is_valid);
+  desc6.uuid = *Uuid::FromString(DISC_LEVEL_UUID1);
   desc6.type = BTGATT_DB_DESCRIPTOR;
   desc6.permissions = 16;
   // use shortByteValue byte array for this desc
@@ -611,7 +611,7 @@ static void register_server_cb(int status, int server_if,
 
   // 7th char
   btgatt_db_element_t char7 = {};
-  char7.uuid = Uuid::FromString(ALERT_LEVEL_UUID5, &is_valid);
+  char7.uuid = *Uuid::FromString(ALERT_LEVEL_UUID5);
   char7.type = BTGATT_DB_CHARACTERISTIC;
   char7.properties = 114;
   char7.permissions = 129;
@@ -620,7 +620,7 @@ static void register_server_cb(int status, int server_if,
 
   // 7th desc
   btgatt_db_element_t desc7 = {};
-  desc7.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc7.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc7.type = BTGATT_DB_DESCRIPTOR;
   desc7.permissions = 129;
   // use shortByteValue byte array for this desc
@@ -628,7 +628,7 @@ static void register_server_cb(int status, int server_if,
 
   // 8th char
   btgatt_db_element_t char8 = {};
-  char8.uuid = Uuid::FromString(ALERT_LEVEL_UUID6, &is_valid);
+  char8.uuid = *Uuid::FromString(ALERT_LEVEL_UUID6);
   char8.type = BTGATT_DB_CHARACTERISTIC;
   char8.properties = 66;
   char8.permissions = 129;
@@ -637,7 +637,7 @@ static void register_server_cb(int status, int server_if,
 
   // 8th desc
   btgatt_db_element_t desc8 = {};
-  desc8.uuid = Uuid::FromString(DISC_LEVEL_UUID2, &is_valid);
+  desc8.uuid = *Uuid::FromString(DISC_LEVEL_UUID2);
   desc8.type = BTGATT_DB_DESCRIPTOR;
   desc8.permissions = 129;
   // use shortByteValue byte array for this desc
@@ -646,7 +646,7 @@ static void register_server_cb(int status, int server_if,
   // 9th char
   btgatt_db_element_t char9 = {};
   char9.uuid =
-      Uuid::FromString(ALERT_LEVEL_WRITENORESPONSEWITHREADABLE2, &is_valid);
+      *Uuid::FromString(ALERT_LEVEL_WRITENORESPONSEWITHREADABLE2);
   char9.type = BTGATT_DB_CHARACTERISTIC;
   char9.properties = 6;
   char9.permissions = 17;
@@ -655,7 +655,7 @@ static void register_server_cb(int status, int server_if,
 
   // 9th desc
   btgatt_db_element_t desc9 = {};
-  desc9.uuid = Uuid::FromString(DISC_LEVEL_UUID7, &is_valid);
+  desc9.uuid = *Uuid::FromString(DISC_LEVEL_UUID7);
   desc9.type = BTGATT_DB_DESCRIPTOR;
   desc9.permissions = 17;
   // use shortByteValue byte array for this desc
@@ -663,7 +663,7 @@ static void register_server_cb(int status, int server_if,
 
   // 10th char
   btgatt_db_element_t char10 = {};
-  char10.uuid = Uuid::FromString(ALERT_LEVEL_UUID18, &is_valid);
+  char10.uuid = *Uuid::FromString(ALERT_LEVEL_UUID18);
   char10.type = BTGATT_DB_CHARACTERISTIC;
   char10.properties = 58;
   char10.permissions = 17;
@@ -672,7 +672,7 @@ static void register_server_cb(int status, int server_if,
 
   // 10th desc
   btgatt_db_element_t desc10 = {};
-  desc10.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc10.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc10.type = BTGATT_DB_DESCRIPTOR;
   desc10.permissions = 17;
   // use shortByteValue byte array for this desc
@@ -680,7 +680,7 @@ static void register_server_cb(int status, int server_if,
 
   // 11th char
   btgatt_db_element_t char11 = {};
-  char11.uuid = Uuid::FromString(ALERT_LEVEL_UUID19, &is_valid);
+  char11.uuid = *Uuid::FromString(ALERT_LEVEL_UUID19);
   char11.type = BTGATT_DB_CHARACTERISTIC;
   char11.properties = 58;
   char11.permissions = 17;
@@ -689,7 +689,7 @@ static void register_server_cb(int status, int server_if,
 
   // 11th desc
   btgatt_db_element_t desc11 = {};
-  desc11.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc11.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc11.type = BTGATT_DB_DESCRIPTOR;
   desc11.permissions = 17;
   // use shortByteValue byte array for this desc
@@ -703,12 +703,12 @@ static void register_server_cb(int status, int server_if,
   std::vector<btgatt_db_element_t> service2;
   // 2nd service
   btgatt_db_element_t svc2 = {};
-  svc2.uuid = Uuid::FromString(IMMEDIATE_ALERT_UUID1, &is_valid);
+  svc2.uuid = *Uuid::FromString(IMMEDIATE_ALERT_UUID1);
   svc2.type = BTGATT_DB_PRIMARY_SERVICE;
   service2.push_back(svc2);
 
   // 1st char
-  char1.uuid = Uuid::FromString(ALERT_LEVEL_UUID7, &is_valid);
+  char1.uuid = *Uuid::FromString(ALERT_LEVEL_UUID7);
   char1.type = BTGATT_DB_CHARACTERISTIC;
   char1.properties = 58;
   char1.permissions = 17;
@@ -716,14 +716,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char1);
 
   // 1st desc
-  desc1.uuid = Uuid::FromString(DISC_LEVEL_UUID3, &is_valid);
+  desc1.uuid = *Uuid::FromString(DISC_LEVEL_UUID3);
   desc1.type = BTGATT_DB_DESCRIPTOR;
   desc1.permissions = 17;
   // use longByteValue byte array for this desc
   service2.push_back(desc1);
 
   // 2nd char
-  char2.uuid = Uuid::FromString(ALERT_LEVEL_UUID8, &is_valid);
+  char2.uuid = *Uuid::FromString(ALERT_LEVEL_UUID8);
   char2.type = BTGATT_DB_CHARACTERISTIC;
   char2.properties = 58;
   char2.permissions = 34;
@@ -731,14 +731,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char2);
 
   // 2nd desc
-  desc2.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc2.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc2.type = BTGATT_DB_DESCRIPTOR;
   desc2.permissions = 34;
   // use longByteValue byte array for this desc
   service2.push_back(desc2);
 
   // 3rd char
-  char3.uuid = Uuid::FromString(ALERT_LEVEL_UUID9, &is_valid);
+  char3.uuid = *Uuid::FromString(ALERT_LEVEL_UUID9);
   char3.type = BTGATT_DB_CHARACTERISTIC;
   char3.properties = 58;
   char3.permissions = 68;
@@ -746,14 +746,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char3);
 
   // 3rd desc
-  desc3.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc3.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc3.type = BTGATT_DB_DESCRIPTOR;
   desc3.permissions = 68;
   // use longByteValue byte array for this desc
   service2.push_back(desc3);
 
   // 4th char
-  char4.uuid = Uuid::FromString(ALERT_LEVEL_UUID10, &is_valid);
+  char4.uuid = *Uuid::FromString(ALERT_LEVEL_UUID10);
   char4.type = BTGATT_DB_CHARACTERISTIC;
   char4.properties = 4;
   char4.permissions = 16;
@@ -761,14 +761,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char4);
 
   // 4th desc
-  desc4.uuid = Uuid::FromString(DISC_LEVEL_UUID3, &is_valid);
+  desc4.uuid = *Uuid::FromString(DISC_LEVEL_UUID3);
   desc4.type = BTGATT_DB_DESCRIPTOR;
   desc4.permissions = 16;
   // use longByteValue byte array for this desc
   service2.push_back(desc4);
 
   // 5th char
-  char5.uuid = Uuid::FromString(ALERT_LEVEL_UUID11, &is_valid);
+  char5.uuid = *Uuid::FromString(ALERT_LEVEL_UUID11);
   char5.type = BTGATT_DB_CHARACTERISTIC;
   char5.properties = 114;
   char5.permissions = 129;
@@ -776,14 +776,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char5);
 
   // 5th desc
-  desc5.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc5.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc5.type = BTGATT_DB_DESCRIPTOR;
   desc5.permissions = 129;
   // use longByteValue byte array for this desc
   service2.push_back(desc5);
 
   // 6th char
-  char6.uuid = Uuid::FromString(ALERT_LEVEL_UUID12, &is_valid);
+  char6.uuid = *Uuid::FromString(ALERT_LEVEL_UUID12);
   char6.type = BTGATT_DB_CHARACTERISTIC;
   char6.properties = 66;
   char6.permissions = 129;
@@ -791,7 +791,7 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char6);
 
   // 6th desc
-  desc6.uuid = Uuid::FromString(DISC_LEVEL_UUID4, &is_valid);
+  desc6.uuid = *Uuid::FromString(DISC_LEVEL_UUID4);
   desc6.type = BTGATT_DB_DESCRIPTOR;
   desc6.permissions = 129;
   // use longByteValue byte array for this desc
@@ -799,7 +799,7 @@ static void register_server_cb(int status, int server_if,
 
   // 7th char
   char7.uuid =
-      Uuid::FromString(ALERT_LEVEL_WRITENORESPONSEWITHREADABLE, &is_valid);
+      *Uuid::FromString(ALERT_LEVEL_WRITENORESPONSEWITHREADABLE);
   char7.type = BTGATT_DB_CHARACTERISTIC;
   char7.properties = 6;
   char7.permissions = 17;
@@ -807,14 +807,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char7);
 
   // 7th desc
-  desc7.uuid = Uuid::FromString(DISC_LEVEL_UUID6, &is_valid);
+  desc7.uuid = *Uuid::FromString(DISC_LEVEL_UUID6);
   desc7.type = BTGATT_DB_DESCRIPTOR;
   desc7.permissions = 17;
   // use longByteValue byte array for this desc
   service2.push_back(desc7);
 
   // 8th char
-  char8.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_UUID3, &is_valid);
+  char8.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_UUID3);
   char8.type = BTGATT_DB_CHARACTERISTIC;
   char8.properties = 58;
   char8.permissions = 34;
@@ -822,14 +822,14 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char8);
 
   // 8th desc
-  desc8.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID3, &is_valid);
+  desc8.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID3);
   desc8.type = BTGATT_DB_DESCRIPTOR;
   desc8.permissions = 34;
   // use longByteValue byte array for this desc
   service2.push_back(desc8);
 
   // 9th char
-  char9.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_UUID4, &is_valid);
+  char9.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_UUID4);
   char9.type = BTGATT_DB_CHARACTERISTIC;
   char9.properties = 58;
   char9.permissions = 68;
@@ -837,7 +837,7 @@ static void register_server_cb(int status, int server_if,
   service2.push_back(char9);
 
   // 9th desc
-  desc9.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID4, &is_valid);
+  desc9.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID4);
   desc9.type = BTGATT_DB_DESCRIPTOR;
   desc9.permissions = 68;
   // use longByteValue byte array for this desc
@@ -851,12 +851,12 @@ static void register_server_cb(int status, int server_if,
   std::vector<btgatt_db_element_t> service3;
 
   btgatt_db_element_t svc3 = {};
-  svc3.uuid = Uuid::FromString(IMMEDIATE_ALERT_UUID2, &is_valid);
+  svc3.uuid = *Uuid::FromString(IMMEDIATE_ALERT_UUID2);
   svc3.type = BTGATT_DB_PRIMARY_SERVICE;
   service3.push_back(svc3);
 
   // 1st char
-  char1.uuid = Uuid::FromString(ALERT_LEVEL_UUID13, &is_valid);
+  char1.uuid = *Uuid::FromString(ALERT_LEVEL_UUID13);
   char1.type = BTGATT_DB_CHARACTERISTIC;
   char1.properties = 10;
   char1.permissions = 17;
@@ -864,7 +864,7 @@ static void register_server_cb(int status, int server_if,
   service3.push_back(char1);
 
   // 1st desc
-  desc1.uuid = Uuid::FromString(DISC_LEVEL_UUID5, &is_valid);
+  desc1.uuid = *Uuid::FromString(DISC_LEVEL_UUID5);
   desc1.type = BTGATT_DB_DESCRIPTOR;
   desc1.permissions = 17;
   // use shortByteValue byte array for this desc
@@ -872,7 +872,7 @@ static void register_server_cb(int status, int server_if,
 
   // Added this characteristic for Insufficient Encryption key size test case
   // 2nd char
-  char2.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_UUID4, &is_valid);
+  char2.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_UUID4);
   char2.type = BTGATT_DB_CHARACTERISTIC;
   char2.properties = 58;
   char2.permissions = 0x2077;
@@ -880,7 +880,7 @@ static void register_server_cb(int status, int server_if,
   service3.push_back(char2);
 
   // 2nd desc
-  desc2.uuid = Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID4, &is_valid);
+  desc2.uuid = *Uuid::FromString(AUTHENTICATION_LEVEL_DESC_UUID4);
   desc2.type = BTGATT_DB_DESCRIPTOR;
   desc2.permissions = 0x2007;
   // use shortByteValue byte array for this desc
@@ -894,12 +894,12 @@ static void register_server_cb(int status, int server_if,
   std::vector<btgatt_db_element_t> service4;
 
   btgatt_db_element_t svc4 = {};
-  svc4.uuid = Uuid::FromString(IMMEDIATE_ALERT_UUID3, &is_valid);
+  svc4.uuid = *Uuid::FromString(IMMEDIATE_ALERT_UUID3);
   svc4.type = BTGATT_DB_PRIMARY_SERVICE;
   service4.push_back(svc4);
 
   // 1st char
-  char1.uuid = Uuid::FromString(ALERT_LEVEL_UUID14, &is_valid);
+  char1.uuid = *Uuid::FromString(ALERT_LEVEL_UUID14);
   char1.type = BTGATT_DB_CHARACTERISTIC;
   char1.properties = 10;
   char1.permissions = 17;
@@ -914,89 +914,89 @@ static void register_server_cb(int status, int server_if,
   std::vector<btgatt_db_element_t> service5;
 
   btgatt_db_element_t svc5 = {};
-  svc5.uuid = Uuid::FromString(IMMEDIATE_ALERT_UUID6, &is_valid);
+  svc5.uuid = *Uuid::FromString(IMMEDIATE_ALERT_UUID6);
   svc5.type = BTGATT_DB_PRIMARY_SERVICE;
   service5.push_back(svc5);
 
   // 1st char
-  char1.uuid = Uuid::FromString(ALERT_LEVEL_UUID17, &is_valid);
+  char1.uuid = *Uuid::FromString(ALERT_LEVEL_UUID17);
   char1.type = BTGATT_DB_CHARACTERISTIC;
   char1.properties = 58;
   char1.permissions = 17;
   service5.push_back(char1);
 
   // 1st desc
-  desc1.uuid = Uuid::FromString(CharacteristicExtendedProperties, &is_valid);
+  desc1.uuid = *Uuid::FromString(CharacteristicExtendedProperties);
   desc1.type = BTGATT_DB_DESCRIPTOR;
   desc1.permissions = 17;
   // use shortByteValue byte array for this char
   service5.push_back(desc1);
 
   // 2nd desc
-  desc2.uuid = Uuid::FromString(CharacteristicUserDescription, &is_valid);
+  desc2.uuid = *Uuid::FromString(CharacteristicUserDescription);
   desc2.type = BTGATT_DB_DESCRIPTOR;
   desc2.permissions = 17;
   // use shortByteValue byte array for this desc
   service5.push_back(desc2);
 
   // 3rd desc
-  desc3.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc3.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc3.type = BTGATT_DB_DESCRIPTOR;
   desc3.permissions = 17;
   // use shortByteValue byte array for this desc
   service5.push_back(desc3);
 
   // 4th desc
-  desc4.uuid = Uuid::FromString(ServerCharacteristicConfiguration, &is_valid);
+  desc4.uuid = *Uuid::FromString(ServerCharacteristicConfiguration);
   desc4.type = BTGATT_DB_DESCRIPTOR;
   desc4.permissions = 17;
   // use shortByteValue byte array for this desc
   service5.push_back(desc4);
 
   // 5th desc
-  desc5.uuid = Uuid::FromString(CharacteristicFormat, &is_valid);
+  desc5.uuid = *Uuid::FromString(CharacteristicFormat);
   desc5.type = BTGATT_DB_DESCRIPTOR;
   desc5.permissions = 17;
   // use shortByteValue byte array for this desc
   service5.push_back(desc5);
 
   // 6th desc
-  desc6.uuid = Uuid::FromString(CharacteristicAggregateFormat, &is_valid);
+  desc6.uuid = *Uuid::FromString(CharacteristicAggregateFormat);
   desc6.type = BTGATT_DB_DESCRIPTOR;
   desc6.permissions = 17;
   // use shortByteValue byte array for this desc
   service5.push_back(desc6);
 
   // 7th desc
-  desc7.uuid = Uuid::FromString(CharacteristicExtendedProperties, &is_valid);
+  desc7.uuid = *Uuid::FromString(CharacteristicExtendedProperties);
   desc7.type = BTGATT_DB_DESCRIPTOR;
   desc7.permissions = 17;
   // use longByteValue byte array for this desc
   service5.push_back(desc7);
 
   // 8th desc
-  desc8.uuid = Uuid::FromString(CharacteristicUserDescription, &is_valid);
+  desc8.uuid = *Uuid::FromString(CharacteristicUserDescription);
   desc8.type = BTGATT_DB_DESCRIPTOR;
   desc8.permissions = 17;
   // use longByteValue byte array for this desc
   service5.push_back(desc8);
 
   // 9th desc
-  desc9.uuid = Uuid::FromString(ClientCharConfigUUID, &is_valid);
+  desc9.uuid = *Uuid::FromString(ClientCharConfigUUID);
   desc9.type = BTGATT_DB_DESCRIPTOR;
   desc9.permissions = 17;
   // use longByteValue byte array for this desc
   service5.push_back(desc9);
 
   // 10th desc
-  desc10.uuid = Uuid::FromString(ServerCharacteristicConfiguration, &is_valid);
+  desc10.uuid = *Uuid::FromString(ServerCharacteristicConfiguration);
   desc10.type = BTGATT_DB_DESCRIPTOR;
   desc10.permissions = 17;
   // use longByteValue byte array for this desc
   service5.push_back(desc10);
 
   // 11th desc
-  desc11.uuid = Uuid::FromString(CharacteristicFormat, &is_valid);
+  desc11.uuid = *Uuid::FromString(CharacteristicFormat);
   desc11.type = BTGATT_DB_DESCRIPTOR;
   desc11.permissions = 17;
   // use longByteValue byte array for this desc
@@ -1004,7 +1004,7 @@ static void register_server_cb(int status, int server_if,
 
   // 12th desc
   btgatt_db_element_t desc12 = {};
-  desc12.uuid = Uuid::FromString(CharacteristicAggregateFormat, &is_valid);
+  desc12.uuid = *Uuid::FromString(CharacteristicAggregateFormat);
   desc12.type = BTGATT_DB_DESCRIPTOR;
   desc12.permissions = 17;
   // use longByteValue byte array for this desc
@@ -2421,19 +2421,15 @@ void do_le_cl_register(int idx, bool eatt_support) {
   switch (idx) {
     case 1:
       uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       bt_uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 2:
       uuid =
-          Uuid::FromString("1122A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 1122A00C-0000-0000-0123-456789ABCDEF
-      bt_uuid = Uuid::FromString(
-          "1122A00C-0000-0000-0123-456789ABCDEF",
-          &is_valid);  // 1122A00C-0000-0000-0123-456789ABCDEF*/
+          *Uuid::FromString("1122A00C-0000-0000-0123-456789ABCDEF");
+      bt_uuid = *Uuid::FromString(
+          "1122A00C-0000-0000-0123-456789ABCDEF");
       break;
     default:
       printf("%s:: ERROR: no matching uuid \n", __FUNCTION__);
@@ -2826,7 +2822,7 @@ void do_le_client_discover(char* p) {
   }
 
   std::string uuid_str = get_uuid_str(&p, uuid_len_bytes);
-  Uuid service = Uuid::FromString(uuid_str, &is_valid);
+  Uuid service = *Uuid::FromString(uuid_str);
 
   printf("%s:: disc_type = %d is_valid = %d\n", __FUNCTION__, disc_type,
          is_valid);
@@ -2864,7 +2860,7 @@ void do_le_cl_read(uint16_t conn_id, tGATT_READ_TYPE read_type, int auth_req,
       }
 
       uuid_str = get_uuid_str(&p, uuid_len_bytes);
-      readBuf.service.uuid = Uuid::FromString(uuid_str, &is_valid);
+      readBuf.service.uuid = *Uuid::FromString(uuid_str);
       printf("%s:: read_type = %d is_valid = %d\n", __FUNCTION__, read_type,
              is_valid);
       break;
@@ -3009,60 +3005,46 @@ void do_le_sr_register(int idx, bool eatt_support) {
   switch (idx) {
     case 1:
       uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       bt_uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 2:
       uuid =
-          Uuid::FromString("1122A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 1122A00C-0000-0000-0123-456789ABCDEF
-      bt_uuid = Uuid::FromString(
-          "1122A00C-0000-0000-0123-456789ABCDEF",
-          &is_valid);  // 1122A00C-0000-0000-0123-456789ABCDEF*/
+          *Uuid::FromString("1122A00C-0000-0000-0123-456789ABCDEF");
+      bt_uuid = *Uuid::FromString(
+          "1122A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 3:
       uuid =
-          Uuid::FromString("2222A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 2222A00C-0000-0000-0123-456789ABCDEF
-      bt_uuid = Uuid::FromString(
-          "2222A00C-0000-0000-0123-456789ABCDEF",
-          &is_valid);  // 2222A00C-0000-0000-0123-456789ABCDEF*/
+          *Uuid::FromString("2222A00C-0000-0000-0123-456789ABCDEF");
+      bt_uuid = *Uuid::FromString(
+          "2222A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 4:
       uuid =
-          Uuid::FromString("3322A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 3322A00C-0000-0000-0123-456789ABCDEF
-      bt_uuid = Uuid::FromString(
-          "3322A00C-0000-0000-0123-456789ABCDEF",
-          &is_valid);  // 33322A00C-0000-0000-0123-456789ABCDEF*/
+          *Uuid::FromString("3322A00C-0000-0000-0123-456789ABCDEF");
+      bt_uuid = *Uuid::FromString(
+          "3322A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 5:
       uuid =
-          Uuid::FromString("4422A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 4422A00C-0000-0000-0123-456789ABCDEF
-      bt_uuid = Uuid::FromString(
-          "4422A00C-0000-0000-0123-456789ABCDEF",
-          &is_valid);  // 4422A00C-0000-0000-0123-456789ABCDEF*/
+          *Uuid::FromString("4422A00C-0000-0000-0123-456789ABCDEF");
+      bt_uuid = *Uuid::FromString(
+          "4422A00C-0000-0000-0123-456789ABCDEF");
       break;
     case 6:
       uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       bt_uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       sr_gaw_bi_09 = true;
       break;
     case 7:
       uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       bt_uuid =
-          Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF",
-                           &is_valid);  // 0000A00C-0000-0000-0123-456789ABCDEF
+          *Uuid::FromString("0000A00C-0000-0000-0123-456789ABCDEF");
       sr_gar_bi_13 = true;
       break;
     default:
@@ -3152,16 +3134,14 @@ void do_le_server_add_service(char* p) {
   // 1st service
   btgatt_db_element_t svc1 = {};
   svc1.uuid =
-      Uuid::FromString("00001800-0000-1000-8000-00805f9b34fb",
-                       &is_valid);  // 00001800-0000-1000-8000-00805f9b34fb
+      *Uuid::FromString("00001800-0000-1000-8000-00805f9b34fb");
   svc1.type = BTGATT_DB_PRIMARY_SERVICE;
   service.push_back(svc1);
 
   // 2nd service
   btgatt_db_element_t svc2 = {};
   svc2.uuid =
-      Uuid::FromString("00001801-0000-1000-8000-00805f9b34fb",
-                       &is_valid);  // 00001801-0000-1000-8000-00805f9b34fb
+      *Uuid::FromString("00001801-0000-1000-8000-00805f9b34fb");
   svc2.type = BTGATT_DB_PRIMARY_SERVICE;
   service.push_back(svc2);
 
@@ -3181,7 +3161,7 @@ void do_le_server_add_custom_service(char* p) {
   std::vector<btgatt_db_element_t> service;
   // 1st service
   btgatt_db_element_t svc1 = {};
-  svc1.uuid = Uuid::FromString(uuid_str, &is_valid);
+  svc1.uuid = *Uuid::FromString(uuid_str);
   svc1.type = BTGATT_DB_PRIMARY_SERVICE;
   service.push_back(svc1);
 
@@ -3390,8 +3370,7 @@ static void do_start_advertisment(char* p) {
   bool is_valid = false;
 
   // 128 bit UUID: 1122A00D-0000-0000-0123-456789ABCDEF
-  uuid = Uuid::FromString("1122A00D-0000-0000-0123-456789ABCDEF",
-                          &is_valid);  // 1122A00D-0000-0000-0123-456789ABCDEF
+  uuid = *Uuid::FromString("1122A00D-0000-0000-0123-456789ABCDEF");
 
   if ((g_le_coc_if == 0) && option)
     g_le_coc_if = sGattInterface->Register(uuid, &sGattCB, false);
