@@ -39,6 +39,8 @@ import static org.hamcrest.core.AnyOf.anyOf;
 import static org.hamcrest.core.Is.isA;
 import static org.hamcrest.core.IsNull.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -46,6 +48,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -59,13 +62,16 @@ import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSinkAudioPolicy;
+import android.bluetooth.BluetoothUuid;
 import android.bluetooth.EncryptionStatus;
+import android.bluetooth.State;
 import android.companion.CompanionDeviceManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.HandlerThread;
 import android.os.Message;
+import android.os.ParcelUuid;
 import android.os.SystemProperties;
 import android.os.TestLooperManager;
 import android.platform.test.annotations.DisableFlags;
@@ -98,6 +104,7 @@ import org.mockito.hamcrest.MockitoHamcrest;
 import platform.test.runner.parameterized.ParameterizedAndroidJunit4;
 import platform.test.runner.parameterized.Parameters;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -114,6 +121,7 @@ public class RemoteDevicesTest {
 
     @Mock private AdapterService mAdapterService;
     @Mock private PackageManager mPackageManager;
+    @Mock private AdapterNativeInterface mNativeInterface;
 
     private final BluetoothDevice mDevice = getTestDevice(43);
 
@@ -144,6 +152,7 @@ public class RemoteDevicesTest {
         doReturn(mPackageManager).when(mAdapterService).getPackageManager();
         doReturn(UNCATEGORIZED).when(mAdapterService).getRemoteClass(mDevice);
 
+        when(mAdapterService.getNative()).thenReturn(mNativeInterface);
         mRemoteDevices = new RemoteDevices(mAdapterService, mHandlerThread.getLooper());
         verify(mAdapterService).getSystemService(BluetoothManager.class);
         verify(mAdapterService, times(2)).getPackageManager();
@@ -155,22 +164,6 @@ public class RemoteDevicesTest {
     public void tearDown() {
         mTestLooperManager.release();
         mHandlerThread.quit();
-    }
-
-    @Test
-    public void testSendUuidIntent() {
-        doNothing().when(mAdapterService).sendUuidsInternal(any(), any());
-
-        // Verify that a handler message is sent by the method call
-        mRemoteDevices.updateUuids(mDevice);
-        Message msg = mTestLooperManager.next();
-        assertThat(msg).isNotNull();
-
-        // Verify that executing that message results in a direct call and broadcast intent
-        mTestLooperManager.execute(msg);
-        verify(mAdapterService).sendUuidsInternal(any(), any());
-        verify(mAdapterService).sendBroadcast(any(), anyString(), any());
-        verifyNoMoreInteractions(mAdapterService);
     }
 
     @Test
@@ -312,7 +305,7 @@ public class RemoteDevicesTest {
 
         // Verify that when device is completely disconnected, RemoteDevices reset battery level to
         // BluetoothDevice.BATTERY_LEVEL_UNKNOWN
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_ON);
+        when(mAdapterService.getState()).thenReturn(State.ON);
         mRemoteDevices.aclStateChangeCallback(
                 0,
                 Utils.getByteAddress(mDevice),
@@ -348,7 +341,7 @@ public class RemoteDevicesTest {
 
         // Verify that when device is completely disconnected, RemoteDevices reset battery level to
         // BluetoothDevice.BATTERY_LEVEL_UNKNOWN
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_ON);
+        when(mAdapterService.getState()).thenReturn(State.ON);
         mRemoteDevices.aclStateChangeCallback(
                 0,
                 Utils.getByteAddress(mDevice),
@@ -907,7 +900,7 @@ public class RemoteDevicesTest {
     @EnableFlags(Flags.FLAG_FIX_INTENT_SELECTION_FOR_ACL)
     public void aclStateChangeCallback_bleOnWithFixIntentFlag_sendsAclIntent() {
         final int transport = TRANSPORT_BREDR;
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_BLE_ON);
+        when(mAdapterService.getState()).thenReturn(State.BLE_ON);
 
         // Test ACL Connected
         mRemoteDevices.aclStateChangeCallback(
@@ -940,7 +933,7 @@ public class RemoteDevicesTest {
     @DisableFlags(Flags.FLAG_FIX_INTENT_SELECTION_FOR_ACL)
     public void aclStateChangeCallback_bleOnWithoutFixIntentFlag_sendsBleAclIntent() {
         final int transport = TRANSPORT_BREDR;
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_BLE_ON);
+        when(mAdapterService.getState()).thenReturn(State.BLE_ON);
 
         // Test ACL Connected
         mRemoteDevices.aclStateChangeCallback(
@@ -1042,7 +1035,7 @@ public class RemoteDevicesTest {
         assertThat(mRemoteDevices.getDeviceProperties(mDevice).getBondingInitiator())
                 .isEqualTo(0); // BONDING_INITIATOR_NONE
 
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_ON);
+        when(mAdapterService.getState()).thenReturn(State.ON);
 
         // Simulate ACL disconnection for this device.
         mRemoteDevices.aclStateChangeCallback(
@@ -1069,7 +1062,7 @@ public class RemoteDevicesTest {
         deviceProp.setBondingInitiatedLocally(true); // Signifies a bonding attempt was made
         assertThat(mRemoteDevices.getDeviceProperties(mDevice)).isNotNull();
 
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_ON);
+        when(mAdapterService.getState()).thenReturn(State.ON);
 
         // Simulate ACL disconnection for this device.
         mRemoteDevices.aclStateChangeCallback(
@@ -1093,7 +1086,7 @@ public class RemoteDevicesTest {
         deviceProp.setBondState(BluetoothDevice.BOND_BONDING);
         assertThat(mRemoteDevices.getDeviceProperties(mDevice)).isNotNull();
 
-        when(mAdapterService.getState()).thenReturn(BluetoothAdapter.STATE_ON);
+        when(mAdapterService.getState()).thenReturn(State.ON);
         // Mock for sendPairingCancelIntent to get the pairing UI package
         ExtendedMockito.doReturn("some.package.name")
                 .when(() -> SystemProperties.get(anyString(), anyString()));
@@ -1128,6 +1121,99 @@ public class RemoteDevicesTest {
         assertThat(deviceProp.getIdentityAddress().getAddress()).isEqualTo(mDevice.getAddress());
         assertThat(deviceProp.getIdentityAddress().getAddressType())
                 .isEqualTo(mDevice.getAddressType());
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_BROADCAST_UUIDS_FROM_MAIN_LOOPER)
+    public void testTriggerUuidNotification() {
+        // Make sure that the device is in the remote devices list
+        mRemoteDevices.addDeviceProperties(Utils.getByteAddress(mDevice), mDevice.getAddressType());
+
+        // Trigger the UUID notification
+        mRemoteDevices.triggerUuidNotification(mDevice);
+
+        // Verify that a handler message is sent by the method call
+        Message msg = mTestLooperManager.next();
+        assertThat(msg).isNotNull();
+
+        // Verify that executing that message results in a direct call to deviceUuidsUpdated
+        mTestLooperManager.execute(msg);
+        verify(mAdapterService)
+                .deviceUuidsUpdated(
+                        argThat(device -> device.equals(mDevice)),
+                        argThat(uuids -> uuids == null),
+                        eq(true));
+        verifyNoMoreInteractions(mAdapterService);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_BROADCAST_UUIDS_FROM_MAIN_LOOPER)
+    public void devicePropertyChangedCallback_withUuids_doesNotCallUuidsUpdatedTwice() {
+        final int serviceDiscoveryTimeoutMs = RemoteDevices.SERVICE_DISCOVERY_TIMEOUT_MS;
+
+        // Call fetchUuids to queue a timeout message.
+        mRemoteDevices.fetchUuids(mDevice, BluetoothDevice.TRANSPORT_AUTO);
+        verify(mNativeInterface).getRemoteServices(any(), anyInt());
+
+        // Simulate devicePropertyChangedCallback from native stack.
+        byte[] address = Utils.getByteAddress(mDevice);
+        int[] types = new int[] {AbstractionLayer.BT_PROPERTY_UUIDS};
+        ParcelUuid[] sampleUuids = new ParcelUuid[] {BluetoothUuid.A2DP_SINK};
+        byte[][] values = new byte[][] {Utils.uuidsToByteArray(sampleUuids)};
+        mRemoteDevices.devicePropertyChangedCallback(
+                address, mDevice.getAddressType(), types, values);
+
+        // Process the UUID update message.
+        Message msg = mTestLooperManager.next();
+        assertThat(msg).isNotNull();
+        mTestLooperManager.execute(msg);
+
+        // Verify deviceUuidsUpdated is called only once.
+        verify(mAdapterService, timeout(serviceDiscoveryTimeoutMs).times(1))
+                .deviceUuidsUpdated(
+                        argThat(device -> device.equals(mDevice)),
+                        argThat(uuids -> Arrays.equals(uuids, sampleUuids)),
+                        eq(true));
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_BROADCAST_UUIDS_FROM_MAIN_LOOPER)
+    public void devicePropertyChangedCallback_withoutUuids_callsUuidsUpdatedOnTimeout() {
+        final int serviceDiscoveryTimeoutMs = RemoteDevices.SERVICE_DISCOVERY_TIMEOUT_MS;
+
+        // Call fetchUuids to queue a timeout message.
+        mRemoteDevices.fetchUuids(mDevice, BluetoothDevice.TRANSPORT_AUTO);
+        verify(mNativeInterface).getRemoteServices(any(), anyInt());
+
+        // Process the UUID update message.
+        Message msg = mTestLooperManager.next();
+        assertThat(msg).isNotNull();
+        mTestLooperManager.execute(msg);
+
+        // Verify deviceUuidsUpdated is called only once.
+        verify(mAdapterService, timeout(serviceDiscoveryTimeoutMs).times(1))
+                .deviceUuidsUpdated(
+                        argThat(device -> device.equals(mDevice)),
+                        argThat(uuids -> uuids == null),
+                        eq(false));
+    }
+
+    @Test
+    public void testFetchUuids_skipsDiscoveryIfTimeoutMessageExists() {
+        // First call to fetchUuids should start discovery and queue a timeout message
+        mRemoteDevices.fetchUuids(mDevice, BluetoothDevice.TRANSPORT_AUTO);
+
+        // Verify that getRemoteServices is called
+        verify(mNativeInterface)
+                .getRemoteServices(
+                        argThat(address -> Arrays.equals(address, Utils.getByteAddress(mDevice))),
+                        eq(BluetoothDevice.TRANSPORT_AUTO));
+
+        // Second call should not start another discovery because a timeout message is pending
+        mRemoteDevices.fetchUuids(mDevice, BluetoothDevice.TRANSPORT_AUTO);
+
+        // Verify that getRemoteServices is not called a second time
+        verify(mNativeInterface, times(1)).getRemoteServices(any(byte[].class), anyInt());
     }
 
     private static Object[] getXEventArray(int batteryLevel, int numLevels) {

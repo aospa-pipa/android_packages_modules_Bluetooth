@@ -68,7 +68,7 @@ public:
 static MockIsoInterface* iso_interface = nullptr;
 static void SetMockIsoInterface(MockIsoInterface* interface) { iso_interface = interface; }
 
-static void set_data_cb(base::Callback<void(BT_HDR*)> /* send_data_cb */) {
+static void set_data_cb(base::RepeatingCallback<void(BT_HDR*)> /* send_data_cb */) {
   FAIL() << __func__ << " should never be called";
 }
 
@@ -3000,6 +3000,40 @@ TEST_F(IsoManagerTest, SendIsoDataCreditsReturnedByDisconnection) {
   EXPECT_CALL(iso_interface_, HciSend).Times(num_buffers).RetiresOnSaturation();
   for (uint8_t i = 0; i < num_buffers; i++) {
     IsoManager::GetInstance()->SendIsoData(volatile_test_cig_create_cmpl_evt_.conn_handles[1],
+                                           data_vec.data(), data_vec.size());
+  }
+}
+
+TEST_F(IsoManagerTest, SendIsoDataCreditsReturnedByBigTermination) {
+  uint8_t num_buffers = bluetooth::hci::testing::mock_controller_->GetControllerIsoBufferSize()
+                                .total_num_le_packets_;
+  std::vector<uint8_t> data_vec(108, 0);
+
+  IsoManager::GetInstance()->CreateBig(client_handle_, volatile_test_big_params_evt_.big_handle,
+                                       kDefaultBigParams);
+  IsoManager::GetInstance()->SetupIsoDataPath(volatile_test_big_params_evt_.conn_handles[0],
+                                              kDefaultIsoDataPathParams);
+
+  /* Use all the credits and symulater Controller is not sending number of completed packets */
+  EXPECT_CALL(iso_interface_, HciSend).Times(num_buffers).RetiresOnSaturation();
+  for (uint8_t i = 0; i < (num_buffers); i++) {
+    IsoManager::GetInstance()->SendIsoData(volatile_test_big_params_evt_.conn_handles[0],
+                                           data_vec.data(), data_vec.size());
+  }
+
+  /* Terminate BIG and credits should be returned  */
+  IsoManager::GetInstance()->TerminateBig(volatile_test_big_params_evt_.big_handle, 0x16);
+
+  /* Create new BIG and expect credits are available */
+  IsoManager::GetInstance()->CreateBig(client_handle_, volatile_test_big_params_evt_.big_handle,
+                                       kDefaultBigParams);
+  IsoManager::GetInstance()->SetupIsoDataPath(volatile_test_big_params_evt_.conn_handles[0],
+                                              kDefaultIsoDataPathParams);
+
+  /* Expect we can send ISO data as credits were returned after BIG Termination */
+  EXPECT_CALL(iso_interface_, HciSend).Times(num_buffers).RetiresOnSaturation();
+  for (uint8_t i = 0; i < (num_buffers); i++) {
+    IsoManager::GetInstance()->SendIsoData(volatile_test_big_params_evt_.conn_handles[0],
                                            data_vec.data(), data_vec.size());
   }
 }

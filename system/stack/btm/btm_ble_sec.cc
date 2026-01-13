@@ -48,8 +48,8 @@
 #include "stack/btm/btm_device_record.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
-#include "stack/btm/btm_sec_cb.h"
 #include "stack/btm/btm_sec_int_types.h"
+#include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/eatt/eatt.h"
 #include "stack/gatt/gatt_int.h"
@@ -201,7 +201,7 @@ void BTM_SecAddBleKey(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
  *
  ******************************************************************************/
 void BTM_BleLoadLocalKeys(uint8_t key_type, tBTM_BLE_LOCAL_KEYS* p_key) {
-  tBTM_SEC_DEVCB* p_devcb = &btm_sec_cb.devcb;
+  tBTM_SEC_DEVCB* p_devcb = &BtmSecurity::Get().devcb_;
   log::verbose("type:{}", key_type);
   if (p_key != NULL) {
     switch (key_type) {
@@ -221,13 +221,13 @@ void BTM_BleLoadLocalKeys(uint8_t key_type, tBTM_BLE_LOCAL_KEYS* p_key) {
 }
 
 /** Returns local device encryption root (ER) */
-const Octet16& BTM_GetDeviceEncRoot() { return btm_sec_cb.devcb.ble_encryption_key_value; }
+const Octet16& BTM_GetDeviceEncRoot() { return BtmSecurity::Get().devcb_.ble_encryption_key_value; }
 
 /** Returns local device identity root (IR). */
-const Octet16& BTM_GetDeviceIDRoot() { return btm_sec_cb.devcb.id_keys.irk; }
+const Octet16& BTM_GetDeviceIDRoot() { return BtmSecurity::Get().devcb_.id_keys.irk; }
 
 /** Return local device DHK. */
-const Octet16& BTM_GetDeviceDHK() { return btm_sec_cb.devcb.id_keys.dhk; }
+const Octet16& BTM_GetDeviceDHK() { return BtmSecurity::Get().devcb_.id_keys.dhk; }
 
 /*******************************************************************************
  *
@@ -477,7 +477,7 @@ static tBTM_SEC_ACTION btm_ble_determine_security_act(bool outgoing, const RawAd
 tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, bool outgoing,
                                     tBTM_SEC_CALLBACK* p_callback, void* p_ref_data) {
   /* Find the service record for the PSM */
-  tBTM_SEC_SERV_REC* p_serv_rec = btm_sec_cb.find_first_serv_rec(outgoing, psm);
+  tBTM_SEC_SERV_REC* p_serv_rec = BtmSecurity::Get().find_first_serv_rec(outgoing, psm);
 
   /* If there is no application registered with this PSM do not allow connection
    */
@@ -488,30 +488,16 @@ tBTM_STATUS btm_ble_start_sec_check(const RawAddress& bd_addr, uint16_t psm, boo
   }
 
   bool is_encrypted = BTM_IsEncrypted(bd_addr, BT_TRANSPORT_LE);
-  bool is_link_key_authed = BTM_IsLinkKeyAuthed(bd_addr, BT_TRANSPORT_LE);
-  bool is_authenticated = BTM_IsAuthenticated(bd_addr, BT_TRANSPORT_LE);
   bool is_bonded = BTM_IsBonded(bd_addr, BT_TRANSPORT_LE);
 
   if (!outgoing) {
-    if (!com_android_bluetooth_flags_donot_mandate_auth_along_with_encryption()) {
-      if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
-        log::error("BTM_NOT_ENCRYPTED. service security_flags=0x{:x}", p_serv_rec->security_flags);
-        return tBTM_STATUS::BTM_NOT_ENCRYPTED;
-      } else if ((p_serv_rec->security_flags & BTM_SEC_IN_AUTHENTICATE) &&
-                 !(is_link_key_authed || is_authenticated)) {
-        log::error("tBTM_STATUS::BTM_NOT_AUTHENTICATED. service security_flags=0x{:x}",
-                   p_serv_rec->security_flags);
-        return tBTM_STATUS::BTM_NOT_AUTHENTICATED;
-      }
-    } else {
-      if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
-        log::error("BTM_NOT_ENCRYPTED. service security_flags=0x{:x}", p_serv_rec->security_flags);
-        return tBTM_STATUS::BTM_NOT_ENCRYPTED;
-      } else if ((p_serv_rec->security_flags & BTM_SEC_IN_AUTHENTICATE) && !(is_bonded)) {
-        log::error("tBTM_STATUS::BTM_NOT_AUTHENTICATED. service security_flags=0x{:x}",
-                   p_serv_rec->security_flags);
-        return tBTM_STATUS::BTM_NOT_AUTHENTICATED;
-      }
+    if ((p_serv_rec->security_flags & BTM_SEC_IN_ENCRYPT) && !is_encrypted) {
+      log::error("BTM_NOT_ENCRYPTED. service security_flags=0x{:x}", p_serv_rec->security_flags);
+      return tBTM_STATUS::BTM_NOT_ENCRYPTED;
+    } else if ((p_serv_rec->security_flags & BTM_SEC_IN_AUTHENTICATE) && !(is_bonded)) {
+      log::error("tBTM_STATUS::BTM_NOT_AUTHENTICATED. service security_flags=0x{:x}",
+                 p_serv_rec->security_flags);
+      return tBTM_STATUS::BTM_NOT_AUTHENTICATED;
     }
     /* TODO: When security is required, then must check that the key size of our
        service is equal or smaller than the incoming connection key size. */
@@ -945,11 +931,10 @@ tBTM_STATUS btm_ble_set_encryption(const RawAddress& bd_addr, tBTM_BLE_SEC_ACT s
  *
  ******************************************************************************/
 void btm_ble_ltk_request(uint16_t handle, Octet8 rand, uint16_t ediv) {
-  tBTM_SEC_CB* p_cb = &btm_sec_cb;
   const BtmDevice* p_device = btm_find_dev_by_handle(handle);
 
-  p_cb->ediv = ediv;
-  p_cb->enc_rand = rand;
+  BtmSecurity::Get().ediv_ = ediv;
+  BtmSecurity::Get().enc_rand_ = rand;
 
   if (p_device == NULL) {
     log::warn("No device found for handle 0x{:x}", handle);
@@ -967,7 +952,6 @@ void btm_ble_ltk_request(uint16_t handle, Octet8 rand, uint16_t ediv) {
  * Returns tBTM_STATUS::BTM_SUCCESS if encryption was started successfully
  */
 tBTM_STATUS btm_ble_start_encrypt(const RawAddress& bda, bool use_stk, Octet16* p_stk) {
-  tBTM_SEC_CB* p_cb = &btm_sec_cb;
   BtmDevice* p_device = btm_get_dev(bda);
   Octet8 dummy_rand = {0};
 
@@ -991,8 +975,9 @@ tBTM_STATUS btm_ble_start_encrypt(const RawAddress& bda, bool use_stk, Octet16* 
     return tBTM_STATUS::BTM_BUSY;
   }
 
-  p_cb->enc_handle = p_device->ble_hci_handle;
+  BtmSecurity::Get().enc_handle_ = p_device->ble_hci_handle;
   bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+
   if (use_stk) {
     if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
                             bluetooth::hci::OpCode::LE_START_ENCRYPTION_V2)) {
@@ -1107,8 +1092,8 @@ void btm_ble_link_encrypted(const RawAddress& bd_addr, uint8_t encr_enable) {
   or if IOP matched, delay notifying until SMP_CMPLT_EVT */
   if (BTM_GetRemoteDeviceName(p_device->ble.pseudo_addr, remote_name) &&
       interop_match_name(INTEROP_SUSPEND_ATT_TRAFFIC_DURING_PAIRING, (const char*)remote_name) &&
-      (btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE) &&
-      btm_sec_cb.link_spec.addrt.bda == p_device->ble.pseudo_addr) {
+      (BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE) &&
+      BtmSecurity::Get().link_spec_.addrt.bda == p_device->ble.pseudo_addr) {
     log::info(
             "INTEROP_DELAY_ATT_TRAFFIC_DURING_PAIRING: Waiting for bonding to "
             "complete to notify enc complete");
@@ -1144,7 +1129,6 @@ void btm_ble_link_encrypted(const RawAddress& bd_addr, uint8_t encr_enable) {
  ******************************************************************************/
 void btm_ble_ltk_request_reply(const RawAddress& bda, bool use_stk, const Octet16& stk) {
   const BtmDevice* p_device = btm_find_dev(bda);
-  tBTM_SEC_CB* p_cb = &btm_sec_cb;
 
   log::debug("bd_addr:{},use_stk:{}", bda, use_stk);
 
@@ -1153,23 +1137,23 @@ void btm_ble_ltk_request_reply(const RawAddress& bda, bool use_stk, const Octet1
     return;
   }
 
-  p_cb->enc_handle = p_device->ble_hci_handle;
-  p_cb->key_size = p_device->sec_rec.ble_keys.key_size;
+  BtmSecurity::Get().enc_handle_ = p_device->ble_hci_handle;
+  BtmSecurity::Get().key_size_ = p_device->sec_rec.ble_keys.key_size;
 
   log::error("key size={}", p_device->sec_rec.ble_keys.key_size);
   if (use_stk) {
-    btsnd_hcic_ble_ltk_req_reply(btm_sec_cb.enc_handle, stk);
+    btsnd_hcic_ble_ltk_req_reply(BtmSecurity::Get().enc_handle_, stk);
     return;
   }
   /* calculate LTK using peer device  */
   if (p_device->sec_rec.ble_keys.key_type & BTM_LE_KEY_LENC) {
-    btsnd_hcic_ble_ltk_req_reply(btm_sec_cb.enc_handle, p_device->sec_rec.ble_keys.lltk);
+    btsnd_hcic_ble_ltk_req_reply(BtmSecurity::Get().enc_handle_, p_device->sec_rec.ble_keys.lltk);
     return;
   }
 
   p_device = btm_find_dev_with_lenc(bda);
   if (!p_device) {
-    btsnd_hcic_ble_ltk_req_neg_reply(btm_sec_cb.enc_handle);
+    btsnd_hcic_ble_ltk_req_neg_reply(BtmSecurity::Get().enc_handle_);
     return;
   }
 
@@ -1182,16 +1166,16 @@ void btm_ble_ltk_request_reply(const RawAddress& bda, bool use_stk, const Octet1
 
   log::assert_that(p_device->sec_rec.ble_keys.key_type & BTM_LE_KEY_LENC,
                    "local encryption key not present");
-  p_cb->key_size = p_device->sec_rec.ble_keys.key_size;
-  btsnd_hcic_ble_ltk_req_reply(btm_sec_cb.enc_handle, p_device->sec_rec.ble_keys.lltk);
+  BtmSecurity::Get().key_size_ = p_device->sec_rec.ble_keys.key_size;
+  btsnd_hcic_ble_ltk_req_reply(BtmSecurity::Get().enc_handle_, p_device->sec_rec.ble_keys.lltk);
 }
 
 static void btm_ble_get_auth_req(const BtmDevice* p_device, tBTM_LE_AUTH_REQ* p_auth_req) {
   // If the device is bonded and we are trying to encrypt the link with it as a
   // peripheral, then we need to ensure that the authentication requirements
   // match what was agreed upon during bonding.
-  if (btm_sec_cb.link_spec.addrt.bda != p_device->bd_addr &&
-      btm_sec_cb.link_spec.addrt.bda != p_device->ble.pseudo_addr) {  // Not pairing
+  if (BtmSecurity::Get().link_spec_.addrt.bda != p_device->bd_addr &&
+      BtmSecurity::Get().link_spec_.addrt.bda != p_device->ble.pseudo_addr) {  // Not pairing
     if (!p_device->role_central && p_device->sec_rec.is_le_link_key_known() &&
         p_device->sec_rec.ble_keys.key_type != BTM_LE_KEY_NONE &&
         p_device->sec_rec.le_link == tSECURITY_STATE::AUTHENTICATING) {
@@ -1233,9 +1217,9 @@ static void btm_ble_get_auth_req(const BtmDevice* p_device, tBTM_LE_AUTH_REQ* p_
  ******************************************************************************/
 static tBTM_STATUS btm_ble_io_capabilities_req(BtmDevice* p_device, tBTM_LE_IO_REQ* p_data) {
   log::verbose("p_device->bd_addr:{}", p_device->bd_addr);
-  if (btm_sec_cb.api.p_le_callback) {
-    tBTM_STATUS status = (*btm_sec_cb.api.p_le_callback)(BTM_LE_IO_REQ_EVT, p_device->bd_addr,
-                                                         (tBTM_LE_EVT_DATA*)p_data);
+  if (BtmSecurity::Get().api_.p_le_callback) {
+    tBTM_STATUS status = (*BtmSecurity::Get().api_.p_le_callback)(
+            BTM_LE_IO_REQ_EVT, p_device->bd_addr, (tBTM_LE_EVT_DATA*)p_data);
     if (status != tBTM_STATUS::BTM_SUCCESS) {
       log::warn("Security callback failed {} for {}", btm_status_text(status), p_device->bd_addr);
       return status;
@@ -1338,7 +1322,7 @@ void btm_ble_connected(const RawAddress& bda, uint16_t handle, uint8_t /* enc_mo
                      btm_ble_conn_proc_timer_timeout, NULL);
 
   // TODO() Why is timestamp a counter ?
-  p_device->timestamp = btm_sec_cb.dev_rec_count++;
+  p_device->timestamp = BtmSecurity::Get().dev_rec_count_++;
 
   if (is_ble_addr_type_known(addr_type)) {
     p_device->ble.SetAddressType(addr_type);
@@ -1411,8 +1395,9 @@ static bool btm_ble_complete_evt_ignore(const BtmDevice* p_device, const tBTM_LE
   // 2) Link may get disconnected after the SMP security request was sent.
   //
   // Central role: SMP may generate a SMP_COMPLT_EVT if encryption refresh fails.
-  if (p_data->complt.reason != SMP_SUCCESS && btm_sec_cb.link_spec.addrt.bda != p_device->bd_addr &&
-      btm_sec_cb.link_spec.addrt.bda != p_device->ble.pseudo_addr &&
+  if (p_data->complt.reason != SMP_SUCCESS &&
+      BtmSecurity::Get().link_spec_.addrt.bda != p_device->bd_addr &&
+      BtmSecurity::Get().link_spec_.addrt.bda != p_device->ble.pseudo_addr &&
       p_device->sec_rec.is_le_link_key_known() &&
       p_device->sec_rec.ble_keys.key_type != BTM_LE_KEY_NONE) {
     if (p_device->sec_rec.is_le_device_encrypted()) {
@@ -1438,44 +1423,44 @@ static bool btm_ble_complete_evt_ignore(const BtmDevice* p_device, const tBTM_LE
 static void btm_ble_user_confirmation_req(const RawAddress& bd_addr, BtmDevice* p_device,
                                           tBTM_LE_EVT event, tBTM_LE_EVT_DATA* p_data) {
   if (com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing() &&
-      btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE &&
-      (bd_addr != btm_sec_cb.link_spec.addrt.bda ||
-       BT_TRANSPORT_LE != btm_sec_cb.link_spec.transport)) {
+      BtmSecurity::Get().pairing_state_ != BTM_PAIR_STATE_IDLE &&
+      (bd_addr != BtmSecurity::Get().link_spec_.addrt.bda ||
+       BT_TRANSPORT_LE != BtmSecurity::Get().link_spec_.transport)) {
     log::warn("Already in pairing state, ignoring user confirmation request from {}", bd_addr);
     return;
   }
   p_device->sec_rec.sec_flags |= BTM_SEC_LE_AUTHENTICATED;
   p_device->sec_rec.le_link = tSECURITY_STATE::AUTHENTICATING;
-  btm_sec_cb.link_spec.addrt.bda = bd_addr;
-  btm_sec_cb.link_spec.transport = BT_TRANSPORT_LE;
-  btm_sec_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
+  BtmSecurity::Get().link_spec_.addrt.bda = bd_addr;
+  BtmSecurity::Get().link_spec_.transport = BT_TRANSPORT_LE;
+  BtmSecurity::Get().pairing_flags_ |= BTM_PAIR_FLAGS_LE_ACTIVE;
   BTM_BLE_SEC_CALLBACK(event, bd_addr, p_data);
 }
 
 static void btm_ble_sec_req(const RawAddress& bd_addr, BtmDevice* p_device,
                             tBTM_LE_EVT_DATA* p_data) {
-  if (btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE) {
+  if (BtmSecurity::Get().pairing_state_ != BTM_PAIR_STATE_IDLE) {
     log::warn("Already in pairing state, ignoring pairing request from {}", bd_addr);
     return;
   }
-  btm_sec_cb.link_spec.addrt.bda = bd_addr;
-  btm_sec_cb.link_spec.transport = BT_TRANSPORT_LE;
+  BtmSecurity::Get().link_spec_.addrt.bda = bd_addr;
+  BtmSecurity::Get().link_spec_.transport = BT_TRANSPORT_LE;
   p_device->sec_rec.le_link = tSECURITY_STATE::AUTHENTICATING;
-  btm_sec_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
+  BtmSecurity::Get().pairing_flags_ |= BTM_PAIR_FLAGS_LE_ACTIVE;
   BTM_BLE_SEC_CALLBACK(BTM_LE_SEC_REQUEST_EVT, bd_addr, p_data);
 }
 
 static void btm_ble_consent_req(const RawAddress& bd_addr, tBTM_LE_EVT_DATA* p_data) {
   if (com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing() &&
-      btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE &&
-      (bd_addr != btm_sec_cb.link_spec.addrt.bda ||
-       BT_TRANSPORT_LE != btm_sec_cb.link_spec.transport)) {
+      BtmSecurity::Get().pairing_state_ != BTM_PAIR_STATE_IDLE &&
+      (bd_addr != BtmSecurity::Get().link_spec_.addrt.bda ||
+       BT_TRANSPORT_LE != BtmSecurity::Get().link_spec_.transport)) {
     log::warn("Already in pairing state, ignoring pairing request from {}", bd_addr);
     return;
   }
-  btm_sec_cb.link_spec.addrt.bda = bd_addr;
-  btm_sec_cb.link_spec.transport = BT_TRANSPORT_LE;
-  btm_sec_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;
+  BtmSecurity::Get().link_spec_.addrt.bda = bd_addr;
+  BtmSecurity::Get().link_spec_.transport = BT_TRANSPORT_LE;
+  BtmSecurity::Get().pairing_flags_ |= BTM_PAIR_FLAGS_LE_ACTIVE;
   BTM_BLE_SEC_CALLBACK(BTM_LE_CONSENT_REQ_EVT, bd_addr, p_data);
 }
 
@@ -1489,11 +1474,11 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
 
   /* Reset BTM state if the callback address matches pairing address */
   if (com_android_bluetooth_flags_btm_le_pairing_state_reset() &&
-      bd_addr == btm_sec_cb.link_spec.addrt.bda) {
-    btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
-    btm_sec_cb.link_spec = {};
-    btm_sec_cb.link_spec.addrt.bda = RawAddress::kAny;
-    btm_sec_cb.pairing_flags = 0;
+      bd_addr == BtmSecurity::Get().link_spec_.addrt.bda) {
+    BtmSecurity::Get().change_pairing_state(BTM_PAIR_STATE_IDLE);
+    BtmSecurity::Get().link_spec_ = {};
+    BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
+    BtmSecurity::Get().pairing_flags_ = 0;
   }
 
   p_device = btm_get_dev(bd_addr);  // BTM_LE_COMPLT_EVT event may have removed the device
@@ -1505,10 +1490,13 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
   if (com_android_bluetooth_flags_role_switch_after_encryption() &&
       p_device->role_switch_pending == BtmDevice::RoleSwitchPending::kAfterCtkd &&
       p_data->complt.smp_over_br) {
-    auto role = get_btm_client_interface().link_policy.BTM_GetRole(bd_addr, BT_TRANSPORT_BR_EDR);
-    if (!role) {
+    tHCI_ROLE role = HCI_ROLE_UNKNOWN;
+    if (get_btm_client_interface().link_policy.BTM_GetRole(bd_addr, BT_TRANSPORT_BR_EDR, &role) !=
+        tBTM_STATUS::BTM_SUCCESS) {
       log::warn("Unable to get link policy role peer:{}", bd_addr);
-    } else if (role.value() == HCI_ROLE_PERIPHERAL) {
+    }
+
+    if (role == HCI_ROLE_PERIPHERAL) {
       if (get_btm_client_interface().link_policy.BTM_SwitchRoleToCentral(
                   p_device->RemoteAddress()) == tBTM_STATUS::BTM_CMD_STARTED) {
         log::info("Trying to switch role to central peer: {}", bd_addr);
@@ -1528,9 +1516,9 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
   log::verbose("after update result={} sec_level=0x{:x} sec_flags=0x{:x}", res,
                p_data->complt.sec_level, p_device->sec_rec.sec_flags);
 
-  if (p_data->complt.is_pair_cancel && btm_sec_cb.api.p_bond_cancel_cmpl_callback) {
+  if (p_data->complt.is_pair_cancel && BtmSecurity::Get().api_.p_bond_cancel_cmpl_callback) {
     log::verbose("Pairing Cancel completed");
-    (*btm_sec_cb.api.p_bond_cancel_cmpl_callback)(tBTM_STATUS::BTM_SUCCESS);
+    (*BtmSecurity::Get().api_.p_bond_cancel_cmpl_callback)(tBTM_STATUS::BTM_SUCCESS);
   }
 
   if (res != tBTM_STATUS::BTM_SUCCESS && p_data->complt.reason != SMP_CONN_TOUT) {
@@ -1544,16 +1532,16 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
     l2cu_start_post_bond_timer(p_device->ble_hci_handle);
   }
 
-  log::verbose("btm_sec_cb.pairing_state={:x} pairing_flags={:x} ", btm_sec_cb.pairing_state,
-               btm_sec_cb.pairing_flags);
+  log::verbose("BtmSecurity::Get().pairing_state_={:x} pairing_flags={:x} ",
+               BtmSecurity::Get().pairing_state_, BtmSecurity::Get().pairing_flags_);
 
   /* Reset btm state only if the callback address matches pairing address */
   if (!com_android_bluetooth_flags_btm_le_pairing_state_reset() &&
-      bd_addr == btm_sec_cb.link_spec.addrt.bda) {
-    btm_sec_cb.link_spec = {};
-    btm_sec_cb.link_spec.addrt.bda = RawAddress::kAny;
-    btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
-    btm_sec_cb.pairing_flags = 0;
+      bd_addr == BtmSecurity::Get().link_spec_.addrt.bda) {
+    BtmSecurity::Get().link_spec_ = {};
+    BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
+    BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
+    BtmSecurity::Get().pairing_flags_ = 0;
   }
 
   if (res == tBTM_STATUS::BTM_SUCCESS) {
@@ -1584,7 +1572,7 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
 }
 
 static tBTM_STATUS btm_ble_sirk_verification_req(const RawAddress& bd_addr) {
-  tBTM_STATUS res = (*btm_sec_cb.api.p_sirk_verification_callback)(bd_addr);
+  tBTM_STATUS res = (*BtmSecurity::Get().api_.p_sirk_verification_callback)(bd_addr);
   if (res == tBTM_STATUS::BTM_CMD_STARTED) {
     res = tBTM_STATUS::BTM_SUCCESS;
   } else {
@@ -1612,15 +1600,15 @@ tBTM_STATUS btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr, tSMP_E
   if (p_device == nullptr) {
     log::warn("Unexpected event '{}' for unknown device.", smp_evt_to_text(event));
     if (com_android_bluetooth_flags_clear_pairing_state_when_no_devrec() &&
-        bd_addr == btm_sec_cb.link_spec.addrt.bda && event == SMP_COMPLT_EVT) {
+        bd_addr == BtmSecurity::Get().link_spec_.addrt.bda && event == SMP_COMPLT_EVT) {
       if (com_android_bluetooth_flags_btm_le_pairing_state_reset()) {
-        btm_sec_cb.change_pairing_state(BTM_PAIR_STATE_IDLE);
+        BtmSecurity::Get().change_pairing_state(BTM_PAIR_STATE_IDLE);
       } else {
-        btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+        BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
       }
-      btm_sec_cb.link_spec = {};
-      btm_sec_cb.link_spec.addrt.bda = RawAddress::kAny;
-      btm_sec_cb.pairing_flags = 0;
+      BtmSecurity::Get().link_spec_ = {};
+      BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
+      BtmSecurity::Get().pairing_flags_ = 0;
     }
     return tBTM_STATUS::BTM_UNKNOWN_ADDR;
   }
@@ -1802,16 +1790,16 @@ static void btm_notify_new_key(uint8_t key_type) {
 
   log::verbose("key_type={}", key_type);
 
-  if (btm_sec_cb.api.p_le_key_callback) {
+  if (BtmSecurity::Get().api_.p_le_key_callback) {
     switch (key_type) {
       case BTM_BLE_KEY_TYPE_ID:
         log::verbose("BTM_BLE_KEY_TYPE_ID");
-        p_local_keys = (tBTM_BLE_LOCAL_KEYS*)&btm_sec_cb.devcb.id_keys;
+        p_local_keys = (tBTM_BLE_LOCAL_KEYS*)&BtmSecurity::Get().devcb_.id_keys;
         break;
 
       case BTM_BLE_KEY_TYPE_ER:
         log::verbose("BTM_BLE_KEY_TYPE_ER");
-        p_local_keys = (tBTM_BLE_LOCAL_KEYS*)&btm_sec_cb.devcb.ble_encryption_key_value;
+        p_local_keys = (tBTM_BLE_LOCAL_KEYS*)&BtmSecurity::Get().devcb_.ble_encryption_key_value;
         break;
 
       default:
@@ -1819,7 +1807,7 @@ static void btm_notify_new_key(uint8_t key_type) {
         break;
     }
     if (p_local_keys != NULL) {
-      (*btm_sec_cb.api.p_le_key_callback)(key_type, p_local_keys);
+      (*BtmSecurity::Get().api_.p_le_key_callback)(key_type, p_local_keys);
     }
   }
 }
@@ -1827,24 +1815,24 @@ static void btm_notify_new_key(uint8_t key_type) {
 /** implementation of btm_ble_reset_id */
 static void btm_ble_reset_id_impl(const Octet16& rand1, const Octet16& rand2) {
   /* Regenerate Identity Root */
-  btm_sec_cb.devcb.id_keys.ir = rand1;
+  BtmSecurity::Get().devcb_.id_keys.ir = rand1;
   Octet16 btm_ble_dhk_pt{};
   btm_ble_dhk_pt[0] = 0x03;
 
   /* generate DHK= Eir({0x03, 0x00, 0x00 ...}) */
-  btm_sec_cb.devcb.id_keys.dhk =
-          crypto_toolbox::aes_128(btm_sec_cb.devcb.id_keys.ir, btm_ble_dhk_pt);
+  BtmSecurity::Get().devcb_.id_keys.dhk =
+          crypto_toolbox::aes_128(BtmSecurity::Get().devcb_.id_keys.ir, btm_ble_dhk_pt);
 
   Octet16 btm_ble_irk_pt{};
   btm_ble_irk_pt[0] = 0x01;
   /* IRK = D1(IR, 1) */
-  btm_sec_cb.devcb.id_keys.irk =
-          crypto_toolbox::aes_128(btm_sec_cb.devcb.id_keys.ir, btm_ble_irk_pt);
+  BtmSecurity::Get().devcb_.id_keys.irk =
+          crypto_toolbox::aes_128(BtmSecurity::Get().devcb_.id_keys.ir, btm_ble_irk_pt);
 
   btm_notify_new_key(BTM_BLE_KEY_TYPE_ID);
 
   /* proceed generate ER */
-  btm_sec_cb.devcb.ble_encryption_key_value = rand2;
+  BtmSecurity::Get().devcb_.ble_encryption_key_value = rand2;
   btm_notify_new_key(BTM_BLE_KEY_TYPE_ER);
 
   /* if privacy is enabled, update the irk and RPA in the LE address manager */

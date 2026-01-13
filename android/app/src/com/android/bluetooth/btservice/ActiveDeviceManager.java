@@ -31,6 +31,7 @@ import android.bluetooth.BluetoothSinkAudioPolicy;
 import android.bluetooth.BluetoothUuid;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
+import android.bluetooth.State;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -432,7 +433,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
     private void handleAdapterStateChanged(int currentState) {
         Log.d(TAG, "handleAdapterStateChanged: currentState=" + currentState);
-        if (currentState == BluetoothAdapter.STATE_ON) {
+        if (currentState == State.ON) {
             resetState();
         }
     }

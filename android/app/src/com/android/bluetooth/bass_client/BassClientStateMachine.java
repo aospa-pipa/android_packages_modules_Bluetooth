@@ -55,6 +55,7 @@ import android.provider.DeviceConfig;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.MetricsLogger;
@@ -2205,7 +2206,7 @@ class BassClientStateMachine extends StateMachine {
                 .sendBroadcastMultiplePermissions(
                         intent,
                         new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
-                        Utils.getTempBroadcastOptions());
+                        Util.getTempBroadcastOptions());
     }
 
     int getConnectionState() {

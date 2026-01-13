@@ -234,8 +234,6 @@ typedef struct {
   bool avoid_scatter;    /* true to avoid scatternet when av is streaming(be the central) */
 } tBTA_DM_CFG;
 
-extern const uint32_t bta_service_id_to_btm_srv_id_lkup_tbl[];
-
 typedef struct {
   uint8_t id;
   uint8_t app_id;
@@ -283,8 +281,6 @@ typedef struct {
   tBT_DEVICE_TYPE device_type;
   tBT_TRANSPORT transport;
 } tBTA_DM_API_BOND;
-
-extern const uint16_t bta_service_id_to_uuid_lkup_tbl[];
 
 /* For Insight, PM cfg lookup tables are runtime configurable (to allow tweaking
  * of params for power consumption measurements) */

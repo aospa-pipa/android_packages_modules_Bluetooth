@@ -241,22 +241,14 @@ void PORT_StartCnf(tRFC_MCB* p_mcb, uint16_t result) {
     }
   }
 
-  if (com_android_bluetooth_flags_fix_socket_connection_failed_no_callback()) {
-    /* There can be a situation when after starting connection, user closes the */
-    /* port, we can catch it here to close multiplexor channel */
-    if (no_ports_up) {
-      rfc_check_mcb_active(p_mcb);
-    } else if (result != RFCOMM_SUCCESS || release_mcb) {
-      /* If we failed to start rfcomm socket connection, */
-      /* we should release multiplexor channel with p_mcb */
-      rfc_release_multiplexer_channel(p_mcb);
-    }
-  } else {
-    /* There can be a situation when after starting connection, user closes the */
-    /* port, we can catch it here to close multiplexor channel */
-    if (no_ports_up) {
-      rfc_check_mcb_active(p_mcb);
-    }
+  /* There can be a situation when after starting connection, user closes the */
+  /* port, we can catch it here to close multiplexor channel */
+  if (no_ports_up) {
+    rfc_check_mcb_active(p_mcb);
+  } else if (result != RFCOMM_SUCCESS || release_mcb) {
+    /* If we failed to start rfcomm socket connection, */
+    /* we should release multiplexor channel with p_mcb */
+    rfc_release_multiplexer_channel(p_mcb);
   }
 }
 

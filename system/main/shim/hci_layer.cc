@@ -56,7 +56,7 @@ constexpr size_t kBtHdrSize = sizeof(BT_HDR);
 constexpr size_t kCommandLengthSize = sizeof(uint8_t);
 constexpr size_t kCommandOpcodeSize = sizeof(uint16_t);
 
-static base::Callback<void(BT_HDR*)> send_data_upwards;
+static base::RepeatingCallback<void(BT_HDR*)> send_data_upwards;
 static const packet_fragmenter_t* packet_fragmenter;
 extern void btm_vendor_vse_cback(uint8_t vse_subopcode, uint8_t evt_len, uint8_t* p);
 
@@ -352,7 +352,7 @@ static void on_shutting_down() {
 
 }  // namespace cpp
 
-static void set_data_cb(base::Callback<void(BT_HDR*)> send_data_cb) {
+static void set_data_cb(base::RepeatingCallback<void(BT_HDR*)> send_data_cb) {
   send_data_upwards = std::move(send_data_cb);
 }
 

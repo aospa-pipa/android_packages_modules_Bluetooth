@@ -67,6 +67,7 @@ import android.bluetooth.IBluetoothQualityReportReadyCallback;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IncomingRfcommSocketInfo;
 import android.bluetooth.OobData;
+import android.bluetooth.State;
 import android.content.AttributionSource;
 import android.os.Binder;
 import android.os.Bundle;
@@ -257,7 +258,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 .post(
                         () ->
                                 future.complete(
-                                        service.getState() == BluetoothAdapter.STATE_ON
+                                        service.getState() == State.ON
                                                 && service.setScanMode(mode, logCaller)));
         return future.join() ? BluetoothStatusCodes.SUCCESS : BluetoothStatusCodes.ERROR_UNKNOWN;
     }

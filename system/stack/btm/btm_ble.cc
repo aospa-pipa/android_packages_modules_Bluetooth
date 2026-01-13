@@ -389,8 +389,7 @@ tBTM_STATUS BTM_SetBleDataLength(const RawAddress& bd_addr, uint16_t tx_pdu_leng
     }
   }
 
-  if (com_android_bluetooth_flags_set_max_data_length_for_lecoc() &&
-      p_lcb->is_datalen_set_by_privileged_client() && !is_privileged_client) {
+  if (p_lcb->is_datalen_set_by_privileged_client() && !is_privileged_client) {
     log::info(
             "Data length set by prev client can't be overridden by non-privileged clienit, "
             "currently set to {}",

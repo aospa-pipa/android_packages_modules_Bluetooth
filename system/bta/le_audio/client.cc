@@ -162,9 +162,8 @@ using bluetooth::le_audio::types::kLeAudioContextAllTypesArray;
 using bluetooth::le_audio::types::LeAudioContextType;
 using bluetooth::le_audio::types::PublishedAudioCapabilities;
 using bluetooth::le_audio::utils::AudioDeviceActiveSpeedTracker;
-using bluetooth::le_audio::utils::GetAudioContextsFromSinkMetadata;
-using bluetooth::le_audio::utils::GetAudioContextsFromSourceMetadata;
 using bluetooth::le_audio::utils::StreamSpeedTracker;
+using bluetooth::le_audio::utils::GetAudioContextsFromSourceMetadata;
 
 using namespace bluetooth;
 
@@ -431,9 +430,6 @@ public:
 
     audioContextTypeManager_ = bluetooth::le_audio::AudioContextTypeManager::Get();
 
-    log::info("Reconnection mode: TARGETED_ANNOUNCEMENTS");
-    reconnection_mode_ = BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS;
-
     log::info("Loading health status module");
     leAudioHealthStatus_ = LeAudioHealthStatus::Get();
     leAudioHealthStatus_->RegisterCallback(base::BindRepeating(le_audio_health_status_callback));
@@ -527,33 +523,31 @@ public:
 
     auto group = aseGroups_.FindById(active_group_id_);
 
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* Workaround warning.
-       * When Audio HAL is not capable to clear metadata when audio track is closed,
-       * stack needs to handle it by its own.
-       * We reuse voice back channel timeout to conclude that Local Sink direction will
-       * not be used.
-       */
+    /* Workaround warning.
+     * When Audio HAL is not capable to clear metadata when audio track is closed,
+     * stack needs to handle it by its own.
+     * We reuse voice back channel timeout to conclude that Local Sink direction will
+     * not be used.
+     */
 
-      if (audio_hal_check_in_progress) {
-        /* This is done only once in the very first sink metadata update.
-         * If the timeout fired, it means that Audio HAL did not start the stream and also
-         * did not clear metadata */
-        audio_hal_is_capable_to_send_empty_metadata_ = false;
-      }
+    if (audio_hal_check_in_progress) {
+      /* This is done only once in the very first sink metadata update.
+       * If the timeout fired, it means that Audio HAL did not start the stream and also
+       * did not clear metadata */
+      audio_hal_is_capable_to_send_empty_metadata_ = false;
+    }
 
       if (audio_hal_is_capable_to_send_empty_metadata_) {
         std::vector<record_track_metadata_v7> empty_tracks = {};
         audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
 
-        if (group) {
-          log::debug("Reconfigure after VBC close, group_id: {}", active_group_id_);
-          auto [_, remote_metadata] = audioContextTypeManager_->GetAudioContextsForTheGroup(
-                  group, get_remote_directions_for_context_type_manager(
-                                 bluetooth::le_audio::types::kLeAudioDirectionSink));
-          // Note in the config we are having remote directions, this is why it is oposite.
-          UpdateSinkLocalMetadataContextTypes(remote_metadata.source);
-        }
+      if (group) {
+        log::debug("Reconfigure after VBC close, group_id: {}", active_group_id_);
+        auto [_, remote_metadata] = audioContextTypeManager_->GetAudioContextsForTheGroup(
+                group, get_remote_directions_for_context_type_manager(
+                               bluetooth::le_audio::types::kLeAudioDirectionSink));
+        // Note in the config we are having remote directions, this is why it is oposite.
+        UpdateSinkLocalMetadataContextTypes(remote_metadata.source);
       }
     }
 
@@ -569,19 +563,6 @@ public:
     /* Reconfiguration to non requiring source scenario */
     notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
 
-    if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* For sonification events we don't really need to reconfigure to HQ
-       * configuration, but if the previous configuration was for HQ Media,
-       * we might want to go back to that scenario.
-       */
-
-      if ((configuration_context_type_ != LeAudioContextType::MEDIA) &&
-          (configuration_context_type_ != LeAudioContextType::GAME)) {
-        log::info("Keeping the old configuration as no HQ Media playback is needed right now.");
-        return;
-      }
-    }
-
     /* Test the existing metadata against the recent availability */
     local_metadata_context_types_.source &=
             group->GetAvailableContexts(bluetooth::le_audio::types::kLeAudioDirectionSink);
@@ -595,15 +576,10 @@ public:
             ChooseConfigurationContextType(local_metadata_context_types_.source);
 
     BidirectionalPair<AudioContexts> remote_metadata;
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      std::tie(new_configuration_context, remote_metadata) =
-              audioContextTypeManager_->GetAudioContextsForTheGroup(
-                      group, get_remote_directions_for_context_type_manager(
-                                     bluetooth::le_audio::types::kLeAudioDirectionSink));
-    } else {
-      remote_metadata = {.sink = local_metadata_context_types_.source,
-                         .source = local_metadata_context_types_.sink};
-    }
+    std::tie(new_configuration_context, remote_metadata) =
+            audioContextTypeManager_->GetAudioContextsForTheGroup(
+                    group, get_remote_directions_for_context_type_manager(
+                                   bluetooth::le_audio::types::kLeAudioDirectionSink));
 
     if (isDynamicDirectionsEnabled(group)) {
       /* Check if current configuration actually  */
@@ -1707,10 +1683,8 @@ public:
                    local_metadata_context_types_.source.to_string());
         in_call_metadata_context_types_.sink.clear();
         in_call_metadata_context_types_.source.clear();
-        if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-          // Force reconfig
-          audioContextTypeManager_->OverrideContextTypes(local_metadata_context_types_);
-        }
+        // Force reconfig
+        audioContextTypeManager_->OverrideContextTypes(local_metadata_context_types_);
         reconfigure = true;
       }
     }
@@ -1735,10 +1709,7 @@ public:
 
   bool IsInCall() override {
     log::debug("in_call_: {}", in_call_);
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      return audioContextTypeManager_->IsInCall();
-    }
-    return in_call_;
+    return audioContextTypeManager_->IsInCall();
   }
 
   void SetInVoipCall(bool in_call) override {
@@ -1748,10 +1719,7 @@ public:
 
   bool IsInVoipCall() override {
     log::debug("in_voip_call_: {}", in_voip_call_);
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      return audioContextTypeManager_->IsInVoip();
-    }
-    return in_voip_call_;
+    return audioContextTypeManager_->IsInVoip();
   }
 
   bool IsInIdle() override {
@@ -2150,12 +2118,6 @@ public:
     ReconfigureOrUpdateRemote(group, remote_direction);
 
     if (configuration_context_type_ != LeAudioContextType::CONVERSATIONAL) {
-      if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        log::error("Something went wrong {} != {} ", ToString(configuration_context_type_),
-                   ToString(LeAudioContextType::CONVERSATIONAL));
-        return false;
-      }
-
       if ((configuration_context_type_ == LeAudioContextType::GAME) && group->IsGmapEnabled()) {
         log::debug("New group is being configured for bidirectional GMAP");
       } else {
@@ -2451,7 +2413,7 @@ public:
     }
 
     if (enabled) {
-      group->Enable(gatt_if_, reconnection_mode_);
+      group->Enable(gatt_if_);
     } else {
       group->Disable(gatt_if_);
     }
@@ -2690,8 +2652,7 @@ public:
     /* When adding from storage, make sure that autoconnect is used
      * by all the devices in the group.
      */
-    leAudioDevices_.SetInitialGroupAutoconnectState(group_id, gatt_if_, reconnection_mode_,
-                                                    autoconnect);
+    leAudioDevices_.SetInitialGroupAutoconnectState(group_id, gatt_if_, autoconnect);
   }
 
   bool GetHandlesForStorage(const RawAddress& addr, std::vector<uint8_t>& out) {
@@ -2757,19 +2718,6 @@ public:
         /* User is disconnecting the device, we shall remove the autoconnect
          * flag for this device and all others if not TA is used
          */
-        /* If target announcement is used, do not remove autoconnect
-         */
-        bool remove_from_autoconnect =
-                (reconnection_mode_ != BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS);
-
-        if (leAudioDevice->autoconnect_flag_ && remove_from_autoconnect) {
-          log::info("Removing autoconnect flag for group_id {}", leAudioDevice->group_id_);
-
-          /* Removes device from background connect */
-          BTA_GATTC_CancelOpen(gatt_if_, address, false);
-          btif_storage_set_leaudio_autoconnect(address, false);
-          leAudioDevice->autoconnect_flag_ = false;
-        }
 
         /* Make sure ACL is disconnected to avoid reconnecting immediately
          * when autoconnect with TA reconnection mechanism is used.
@@ -2778,17 +2726,6 @@ public:
 
         auto group = aseGroups_.FindById(leAudioDevice->group_id_);
         if (group) {
-          /* Remove devices from auto connect mode */
-          for (auto dev = group->GetFirstDevice(); dev; dev = group->GetNextDevice(dev)) {
-            if (remove_from_autoconnect &&
-                (dev->GetConnectionState() == DeviceConnectState::CONNECTING_AUTOCONNECT)) {
-              btif_storage_set_leaudio_autoconnect(dev->address_, false);
-              dev->autoconnect_flag_ = false;
-              BTA_GATTC_CancelOpen(gatt_if_, dev->address_, false);
-              dev->SetConnectionState(DeviceConnectState::DISCONNECTED);
-            }
-          }
-
           /* If group is Streaming or is in transition for Streaming - lets stop it
            * and mark device to disconnect when stream is closed
            */
@@ -3167,9 +3104,8 @@ public:
                 address);
       BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_ALLOW_LIST, false);
     } else {
-      log::info("Adding {} to background connect (default reconnection_mode (0x{:02x}))", address,
-                reconnection_mode_);
-      BTA_GATTC_Open(gatt_if_, address, reconnection_mode_, false);
+      log::info("Adding {} to background connect", address);
+      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
     }
   }
 
@@ -3287,9 +3223,11 @@ public:
     }
 
     /* To be a Unicast Source device, this device shall be a Central device. */
-    auto role = BTM_GetRole(address, BT_TRANSPORT_LE);
-    if (!role || role.value() != HCI_ROLE_CENTRAL) {
-      log::warn("Unicast client is not available as {} is not in central role", address);
+    tHCI_ROLE role;
+    auto role_status = BTM_GetRole(address, BT_TRANSPORT_LE, &role);
+    if (role_status != tBTM_STATUS::BTM_SUCCESS || role != HCI_ROLE_CENTRAL) {
+      log::warn("Unicast client is not available for this connection. {}, status: {}, AclRole: {}",
+                address, btm_status_text(role_status), hci_role_text(role));
       BTA_GATTC_Close(conn_id);
       return;
     }
@@ -3312,12 +3250,12 @@ public:
     BtaGattQueue::Clean(conn_id);
 
     /* Remove device from the background connect (it might be either Allow list
-     * or TA) and add it again with reconnection_mode_. In case it is TA, we are
-     * sure that device will not be in the allow list for other applications
-     * which are using background connect.
+     * or TA) and add it again with BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS.
+     * In case it is TA, we are sure that device will not be in the allow list
+     * for other applications which are using background connect.
      */
     BTA_GATTC_CancelOpen(gatt_if_, address, false);
-    BTA_GATTC_Open(gatt_if_, address, reconnection_mode_, false);
+    BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
 
     bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
     if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
@@ -3550,8 +3488,8 @@ public:
 
     if (!group->IsAnyDeviceConnected()) {
       log::info("Group {} is not connected", group_id);
-      /* Make sure all devices are in the default reconnection mode */
-      group->ApplyReconnectionMode(gatt_if_, reconnection_mode_);
+      /* Make sure all devices are in the default BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS */
+      group->ApplyReconnectionMode(gatt_if_);
       return;
     }
 
@@ -3755,7 +3693,7 @@ public:
          */
         scheduleGroupConnectedCheck(leAudioDevice->group_id_);
       } else {
-        group->ApplyReconnectionMode(gatt_if_, reconnection_mode_);
+        group->ApplyReconnectionMode(gatt_if_);
       }
     }
   }
@@ -4611,12 +4549,10 @@ public:
 
     AttachToStreamingGroupIfNeeded(leAudioDevice);
 
-    if (reconnection_mode_ == BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS) {
-      /* Add other devices to allow list if there are any not yet connected
-       * from the group
-       */
-      group->AddToAllowListNotConnectedGroupMembers(gatt_if_);
-    }
+    /* Add other devices to allow list if there are any not yet connected
+     * from the group
+     */
+    group->AddToAllowListNotConnectedGroupMembers(gatt_if_);
   }
 
   bool IsAseAcceptingAudioData(struct ase* ase) {
@@ -5299,10 +5235,7 @@ public:
     stream << "  TBS state: " << (in_call_ ? " In call" : "No calls") << "\n";
     stream << "  Game mode: " << (audioContextTypeManager_->IsInGame() ? "Enabled" : "Disabled")
            << "\n";
-    stream << "  Reconnection mode: "
-           << (reconnection_mode_ == BTM_BLE_BKG_CONNECT_ALLOW_LIST ? "Allow List"
-                                                                    : "Targeted Announcements")
-           << "\n";
+    stream << "  Reconnection mode: Targeted Announcements \n";
     stream << "  Current scenario: " << bluetooth::common::ToString(configuration_context_type_)
            << " (" << loghex(static_cast<uint16_t>(configuration_context_type_)) << ")\n";
     stream << "  Playback metadata context type mask: "
@@ -5502,9 +5435,9 @@ public:
     log::debug("remote_direction= {}",
                (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSource ? "Source"
                                                                                         : "Sink"));
-    auto config = DirectionalRealignMetadataAudioContexts(group, remote_direction);
+    auto config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(remote_direction));
     auto remote_contexts = config.second;
-
     if (configuration_context_type_ == LeAudioContextType::LIVE &&
         remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink) {
       const auto is_sink_config_supported_curr_context = group->HasCodecConfigurationForDirection(
@@ -5512,17 +5445,18 @@ public:
       log::debug("is_sink_config_supported_curr_context= {}.",
                  ToString(is_sink_config_supported_curr_context));
       if (is_sink_config_supported_curr_context) {
-        auto local_config = DirectionalRealignMetadataAudioContexts(group, local_direction);
+        auto local_config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(local_direction));
         remote_contexts = local_config.second;
       }
     } else if (( is_local_sink_metadata_available_ == false) &&
                (configuration_context_type_ == LeAudioContextType::GAME) &&
                (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSource)) {
       log::debug("Ensuring to saty in VBC path.");
-      auto local_config = DirectionalRealignMetadataAudioContexts(group, local_direction); 
+      auto local_config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(local_direction));
       remote_contexts = local_config.second;
     }
-    ApplyRemoteMetadataAudioContextPolicy(group, remote_contexts, remote_direction);
 
     if (!remote_contexts.sink.any() && !remote_contexts.source.any()) {
       handleInvalidContextTypeResumeRequest(group);
@@ -5534,9 +5468,7 @@ public:
     }
 
     auto configuration_context = configuration_context_type_;
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      configuration_context = config.first;
-    }
+    configuration_context = config.first;
     return GroupStream(group, configuration_context, remote_contexts);
   }
 
@@ -5782,13 +5714,11 @@ public:
 
     group->ClearReconfigStartPendingDirs(bluetooth::le_audio::types::kLeAudioDirectionSink);
 
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* Get configuration context type from the audioContextTypeManager only when it is unknown */
-      auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
-              group, get_remote_directions_for_context_type_manager(
-                             bluetooth::le_audio::types::kLeAudioDirectionSink));
-      upcoming_configuration_context_type = new_context_type;
-    }
+    /* Get configuration context type from the audioContextTypeManager only when it is unknown */
+    auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(
+                           bluetooth::le_audio::types::kLeAudioDirectionSink));
+    upcoming_configuration_context_type = new_context_type;
 
     log::info("Group state: {}, targetState: {},  upcoming_configuration_context_type_: {}",
               ToString(group->GetState()), ToString(group->GetTargetState()),
@@ -5838,15 +5768,13 @@ public:
                 bluetooth::le_audio::types::kLeAudioDirectionSink)) {
       log::error("invalid resume request for context type: {}",
                  ToString(upcoming_configuration_context_type));
-      if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        /* If lack of context type is an internal issue, let's don't report it as a remote issue
-         */
-        if (audioContextTypeManager_->IsAnyMetadataSet(
-                    bluetooth::le_audio::types::kLeAudioDirectionSource)) {
-          handleInvalidContextTypeResumeRequest(group);
-        } else {
-          log::warn("Audio HAL did not set metadata for local source");
-        }
+      /* If lack of context type is an internal issue, let's don't report it as a remote issue
+       */
+      if (audioContextTypeManager_->IsAnyMetadataSet(
+                  bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+        handleInvalidContextTypeResumeRequest(group);
+      } else {
+        log::warn("Audio HAL did not set metadata for local source");
       }
       CancelLocalAudioSourceStreamingRequest();
       return;
@@ -6238,15 +6166,13 @@ public:
                 configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
       log::error("invalid resume request for context type: {}",
                  ToString(configuration_context_type_));
-      if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        /* If lack of context type is an internal issue, let's don't report it as a remote issue
-         */
-        if (audioContextTypeManager_->IsAnyMetadataSet(
-                    bluetooth::le_audio::types::kLeAudioDirectionSink)) {
-          handleInvalidContextTypeResumeRequest(group);
-        } else {
-          log::warn("Audio HAL did not set metadata for local sink");
-        }
+      /* If lack of context type is an internal issue, let's don't report it as a remote issue
+       */
+      if (audioContextTypeManager_->IsAnyMetadataSet(
+                  bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+        handleInvalidContextTypeResumeRequest(group);
+      } else {
+        log::warn("Audio HAL did not set metadata for local sink");
       }
       CancelLocalAudioSinkStreamingRequest();
       return;
@@ -6479,14 +6405,6 @@ public:
     auto previous_context_type = configuration_context_type_;
 
     auto reconfig_result = UpdateConfigAndCheckIfReconfigurationIsNeeded(group, new_context_type);
-    /* Even though the reconfiguration may not be needed, this has
-     * to be set here as it might be the initial configuration.
-     */
-
-    if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      setConfigurationContextType(new_context_type);
-    }
-
     log::info("group_id {}, previous_context {} context type {} ({}), {}", group->group_id_,
               ToString(previous_context_type), ToString(new_context_type),
               ToString(new_context_type), ToString(reconfig_result));
@@ -6604,20 +6522,11 @@ public:
 
     if (IsReconfigurationTimeoutRunning(group->group_id_)) {
       log::info("Skip it as group is reconfiguring");
-      if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
-                group, get_remote_directions_for_context_type_manager(
-                               bluetooth::le_audio::types::kLeAudioDirectionSink));
-        group->InvalidateCachedConfigurations(new_context_type);
-      }
+      auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
+              group, get_remote_directions_for_context_type_manager(
+                             bluetooth::le_audio::types::kLeAudioDirectionSink));
+      group->InvalidateCachedConfigurations(new_context_type);
       return;
-    }
-
-    if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* Stop the VBC close timeout timer, since we will reconfigure anyway if the
-       * VBC was suspended.
-       */
-      StopVbcCloseTimeout();
     }
 
     group->dsa_.mode = dsa_mode;
@@ -6636,135 +6545,7 @@ public:
     }
   }
 
-  /* Applies some predefined policy on the audio context metadata, including
-   * special handling of UNSPECIFIED context, which also involves checking
-   * context support and availability.
-   */
-  void ApplyRemoteMetadataAudioContextPolicy(LeAudioDeviceGroup* group,
-                                             BidirectionalPair<AudioContexts>& contexts_pair,
-                                             int remote_dir) {
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      log::info("not run due to flag leaudio_use_context_type_manager");
-      return;
-    }
-    // We expect at least some context when this direction gets enabled
-    if (contexts_pair.get(remote_dir).none()) {
-      log::warn("invalid/unknown {} context metadata, using 'UNSPECIFIED' instead",
-                (remote_dir == bluetooth::le_audio::types::kLeAudioDirectionSink) ? "sink"
-                                                                                  : "source");
-      contexts_pair.get(remote_dir) = AudioContexts(LeAudioContextType::UNSPECIFIED);
-    }
-
-    std::tuple<int, int, AudioState*> remote_directions[] = {
-            {bluetooth::le_audio::types::kLeAudioDirectionSink,
-             bluetooth::le_audio::types::kLeAudioDirectionSource, &audio_sender_state_},
-            {bluetooth::le_audio::types::kLeAudioDirectionSource,
-             bluetooth::le_audio::types::kLeAudioDirectionSink, &audio_receiver_state_},
-    };
-
-    /* Align with the context availability */
-    for (auto entry : remote_directions) {
-      int dir, other_dir;
-      AudioState* local_hal_state;
-      std::tie(dir, other_dir, local_hal_state) = entry;
-
-      /* When a certain context became unavailable while it was already in
-       * an active stream, it means that it is unavailable to other clients
-       * but we can keep using it.
-       */
-      auto group_available_contexts = group->GetAvailableContexts(dir);
-      if ((*local_hal_state == AudioState::STARTED) ||
-          (*local_hal_state == AudioState::READY_TO_START)) {
-        group_available_contexts |= group->GetMetadataContexts().get(dir);
-      }
-
-      log::debug("Checking contexts: {}, against the available contexts: {}",
-                 ToString(contexts_pair.get(dir)), ToString(group_available_contexts));
-      auto unavail_contexts = contexts_pair.get(dir) & ~group_available_contexts;
-      if (unavail_contexts.none()) {
-        continue;
-      }
-
-      // Use only available contexts
-      contexts_pair.get(dir) &= group_available_contexts;
-
-      // Check we we should add UNSPECIFIED as well in case not available context is also not
-      // supported
-      auto unavail_but_supported = (unavail_contexts & group->GetSupportedContexts(dir));
-      if (unavail_but_supported.none() &&
-          group_available_contexts.test(LeAudioContextType::UNSPECIFIED)) {
-        contexts_pair.get(dir).set(LeAudioContextType::UNSPECIFIED);
-
-        log::debug("Replaced the unsupported contexts: {} with UNSPECIFIED -> {}",
-                   ToString(unavail_contexts), ToString(contexts_pair.get(dir)));
-      } else {
-        log::debug("Some contexts are supported but currently unavailable: {}!",
-                   ToString(unavail_but_supported));
-        /* Some of the streamed contexts are support but not available and they
-         * were erased from the metadata.
-         * TODO: Either filter out these contexts from the stream or do not
-         * stream at all if the unavail_but_supported contexts are the only
-         * streamed contexts.
-         */
-      }
-    }
-
-    /* Don't mix UNSPECIFIED with any other context
-     * Note: This has to be in a separate loop - do not merge it with the above.
-     */
-    for (auto entry : remote_directions) {
-      int dir, other_dir;
-      AudioState* local_hal_state;
-      std::tie(dir, other_dir, local_hal_state) = entry;
-
-      if (contexts_pair.get(dir).test(LeAudioContextType::UNSPECIFIED)) {
-        /* If this directions is streaming just UNSPECIFIED and if other direction is streaming some
-         * meaningfull context type,  try to use the meaningful context type
-         */
-        if (contexts_pair.get(dir) == AudioContexts(LeAudioContextType::UNSPECIFIED)) {
-          auto is_other_direction_streaming = (*local_hal_state == AudioState::STARTED) ||
-                                              (*local_hal_state == AudioState::READY_TO_START);
-          if (is_other_direction_streaming) {
-            auto supported_contexts = group->GetAllSupportedSingleDirectionOnlyContextTypes(dir);
-            auto common_part = supported_contexts & contexts_pair.get(other_dir);
-
-            log::info(
-                    "Other direction is streaming. Possible aligning other direction "
-                    "metadata to match the remote {} direction context: {}. Remote {} supported "
-                    "contexts: {} ",
-                    other_dir == bluetooth::le_audio::types::kLeAudioDirectionSink ? " Sink"
-                                                                                   : " Source",
-                    ToString(contexts_pair.get(other_dir)),
-                    dir == bluetooth::le_audio::types::kLeAudioDirectionSink ? " Sink" : " Source",
-                    ToString(supported_contexts));
-
-            if (common_part.value() != 0) {
-              contexts_pair.get(dir) = common_part;
-            }
-          }
-        } else {
-          log::debug("Removing UNSPECIFIED from the remote {} context: {}",
-                     dir == bluetooth::le_audio::types::kLeAudioDirectionSink ? " Sink" : " Source",
-                     ToString(contexts_pair.get(other_dir)));
-          contexts_pair.get(dir).unset(LeAudioContextType::UNSPECIFIED);
-        }
-      }
-    }
-
-    log::debug("Aligned remote metadata audio context: sink={}, source={}",
-               ToString(contexts_pair.sink), ToString(contexts_pair.source));
-  }
-
   void OnLocalAudioSinkMetadataUpdate(const std::vector<record_track_metadata_v7>& sink_metadata) {
-    /* Set remote source metadata context from the recording tracks metadata */
-    local_metadata_context_types_.sink = GetAudioContextsFromSinkMetadata(sink_metadata);
-
-    log::debug("local_metadata_context_types_.source= {}",
-               ToString(local_metadata_context_types_.source));
-    log::debug("local_metadata_context_types_.sink= {}",
-               ToString(local_metadata_context_types_.sink));
-    log::debug("defer_notify_inactive_until_stop_: {}", defer_notify_inactive_until_stop_);
-
     if (active_group_id_ == bluetooth::groups::kGroupUnknown) {
       log::warn(", cannot start streaming if no active group set");
       return;
@@ -6779,9 +6560,22 @@ public:
       return;
     }
 
-     is_local_sink_metadata_available_ = true;
+    is_local_sink_metadata_available_ = true;
 
     audioContextTypeManager_->SetDecodingSessionMetadata(sink_metadata);
+
+    /* Set remote source metadata context from the recording tracks metadata */
+    auto config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(
+                           bluetooth::le_audio::types::kLeAudioDirectionSource));
+    // Note in the config we are having remote directions, this is why it is oposite.
+    local_metadata_context_types_.sink = config.second.source;
+
+    log::debug("local_metadata_context_types_.source= {}",
+               ToString(local_metadata_context_types_.source));
+    log::debug("local_metadata_context_types_.sink= {}",
+               ToString(local_metadata_context_types_.sink));
+    log::debug("defer_notify_inactive_until_stop_: {}", defer_notify_inactive_until_stop_);
 
     log::info(
             "group_id {} state={}, target_state={}, audio_receiver_state_: {}, "
@@ -6800,301 +6594,23 @@ public:
     if (audio_receiver_state_ == AudioState::STARTED) {
       ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSource);
     } else if (audio_receiver_state_ == AudioState::IDLE) {
-      if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        /* Workaround warning.
-         * For Audio HAL which is not sending empty metadata when tracks are closed.
-         *
-         * Note: It has been observed that sinkMetadata update arrives with no associated
-         * Resume/Suspend call. This along with voice back channel timeout is used to detect if
-         * the Audio HAL can send empty metadata or not.
-         * Test is to see if after setting metadata there is a Resume call within 2 sec.
-         *
-         * Later, for Audio HAL  which is not supporting empty metadata update, the voice back
-         * channel timeout is used to clear the voice back channel metadata.
-         */
 
-        if (sink_metadata.empty()) {
-          audio_hal_check_completed_ = true;
-          audio_hal_is_capable_to_send_empty_metadata_ = true;
-          return;
-        }
+      if (sink_metadata.empty()) {
+        audio_hal_check_completed_ = true;
+        audio_hal_is_capable_to_send_empty_metadata_ = true;
+        return;
+      }
 
-        if (!audio_hal_check_completed_) {
-          log::info("Commented StartVbcCloseTimeout");
-          //StartVbcCloseTimeout(true);
-          audio_hal_check_completed_ = true;
-          return;
-        }
+      if (!audio_hal_check_completed_) {
+        StartVbcCloseTimeout(true);
+        audio_hal_check_completed_ = true;
+        return;
+      }
 
-        if (!audio_hal_is_capable_to_send_empty_metadata_) {
-          StartVbcCloseTimeout();
-        }
+      if (!audio_hal_is_capable_to_send_empty_metadata_) {
+        StartVbcCloseTimeout();
       }
     }
-  }
-
-  BidirectionalPair<AudioContexts> DirectionalRealignMetadataAudioContexts_(
-          LeAudioDeviceGroup* group, int remote_direction) {
-    uint8_t remote_other_direction;
-    std::string remote_direction_str;
-    std::string remote_other_direction_str;
-    AudioState other_direction_hal;
-
-    if (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink) {
-      remote_other_direction = bluetooth::le_audio::types::kLeAudioDirectionSource;
-      remote_direction_str = "Sink";
-      remote_other_direction_str = "Source";
-      other_direction_hal = audio_receiver_state_;
-    } else {
-      remote_other_direction = bluetooth::le_audio::types::kLeAudioDirectionSink;
-      remote_direction_str = "Source";
-      remote_other_direction_str = "Sink";
-      other_direction_hal = audio_sender_state_;
-    }
-
-    auto is_streaming_other_direction = (other_direction_hal == AudioState::STARTED) ||
-                                        (other_direction_hal == AudioState::READY_TO_START);
-
-    auto local_direction = bluetooth::le_audio::types::kLeAudioDirectionBoth & ~remote_direction;
-    auto local_other_direction =
-            bluetooth::le_audio::types::kLeAudioDirectionBoth & ~remote_other_direction;
-
-    auto is_releasing_for_reconfiguration =
-            (((audio_receiver_state_ == AudioState::RELEASING) ||
-              (audio_sender_state_ == AudioState::RELEASING)) &&
-             group->IsPendingConfiguration() &&
-             group->IsDirectionAvailableForConfiguration(configuration_context_type_,
-                                                         remote_other_direction)) ||
-            IsReconfigurationTimeoutRunning(active_group_id_, local_direction);
-
-    auto is_releasing_for_reconfiguration_other_direction =
-            is_releasing_for_reconfiguration &
-            IsReconfigurationTimeoutRunning(active_group_id_, local_other_direction);
-
-    // Inject conversational when ringtone is played - this is required for all
-    // the VoIP applications which are not using the telecom API.
-    constexpr AudioContexts possible_voip_contexts =
-            LeAudioContextType::RINGTONE | LeAudioContextType::CONVERSATIONAL;
-    if (local_metadata_context_types_.source.test_any(possible_voip_contexts) &&
-        ((remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSink) ||
-         (remote_direction == bluetooth::le_audio::types::kLeAudioDirectionSource &&
-          is_streaming_other_direction))) {
-      /* Simulate, we are already in the call. Sending RINGTONE when there is
-       * no incoming call to accept or reject on TBS could confuse the remote
-       * device and interrupt the stream establish procedure.
-       */
-      log::debug("Set VoIP call if no call exist");
-      if (!IsInCall() && !IsInVoipCall()) {
-        SetInVoipCall(true);
-      }
-    } else if (IsInVoipCall()) {
-      /* When determining whether the VoIP has ended or not make sure
-       * we check the just updated direction metadata for CONVERSATIONAL
-       */
-      auto const local_direction_contexts = local_metadata_context_types_.get(local_direction);
-      if (!local_direction_contexts.test_any(possible_voip_contexts)) {
-        SetInVoipCall(false);
-      }
-    }
-
-    auto all_bidirectional_contexts = group->GetAllSupportedBidirectionalContextTypes();
-    log::debug("all_bidirectional_contexts {}", ToString(all_bidirectional_contexts));
-
-    /* Make sure we have CONVERSATIONAL when in a call and it is not mixed
-     * with any other bidirectional context
-     */
-    if (IsInCall() || IsInVoipCall()) {
-      log::debug("In Call preference used: {}, voip call: {}", IsInCall(), IsInVoipCall());
-      local_metadata_context_types_.sink.unset_all(all_bidirectional_contexts);
-      local_metadata_context_types_.source.unset_all(all_bidirectional_contexts);
-      local_metadata_context_types_.sink.set(LeAudioContextType::CONVERSATIONAL);
-      local_metadata_context_types_.source.set(LeAudioContextType::CONVERSATIONAL);
-    }
-
-    BidirectionalPair<AudioContexts> remote_metadata = {
-            .sink = local_metadata_context_types_.source,
-            .source = local_metadata_context_types_.sink};
-
-    /*
-     * Detect the gaming scenario and mirror the context to the other direction.
-     * Thanks to this, we will be able to configure even Microphone only devices, for the GAME
-     * audio context detected on the local audio source, which never gets resumed for such devices.
-     */
-    if (remote_metadata.sink.test(LeAudioContextType::GAME)) {
-      auto ctxs = group->GetSupportedContexts(bluetooth::le_audio::types::kLeAudioDirectionSource) &
-                  AudioContexts(LeAudioContextType::GAME) &
-                  bluetooth::le_audio::types::kLeAudioContextAllBidir;
-      if (ctxs.any()) {
-        log::debug(
-                "Gaming scenario detected. Use this audio context for the other direction if "
-                "supported");
-        remote_metadata.source.clear();
-        remote_metadata.source.set_all(ctxs);
-
-        log::debug("Align local metadata contexts also to game when vbc starts");
-        local_metadata_context_types_.sink.clear();
-        local_metadata_context_types_.source.clear();
-        local_metadata_context_types_.sink.set(LeAudioContextType::GAME);
-        local_metadata_context_types_.source.set(LeAudioContextType::GAME);
-      }
-    }
-
-    if (IsInVoipCall()) {
-      log::debug("Unsetting RINGTONE from remote sink");
-      remote_metadata.sink.unset(LeAudioContextType::RINGTONE);
-    }
-
-    auto is_ongoing_call_on_other_direction =
-            is_streaming_other_direction && (IsInVoipCall() || IsInCall());
-
-    log::debug("local_metadata_context_types_.source= {}",
-               ToString(local_metadata_context_types_.source));
-    log::debug("local_metadata_context_types_.sink= {}",
-               ToString(local_metadata_context_types_.sink));
-    log::debug("remote_metadata.source= {}", ToString(remote_metadata.source));
-    log::debug("remote_metadata.sink= {}", ToString(remote_metadata.sink));
-    log::debug("remote_direction= {}", remote_direction_str);
-    log::debug("is_streaming_other_direction= {}", is_streaming_other_direction ? "True" : "False");
-    log::debug("is_releasing_for_reconfiguration= {}",
-               is_releasing_for_reconfiguration ? "True" : "False");
-    log::debug("is_releasing_for_reconfiguration_other_direction= {}",
-               is_releasing_for_reconfiguration_other_direction ? "True" : "False");
-    log::debug("is_ongoing_call_on_other_direction={}",
-               is_ongoing_call_on_other_direction ? "True" : "False");
-    log::debug("configuration_context_type_= {}.", ToString(configuration_context_type_));
-
-    /* If the other direction is a bidir scenario we might want to take it into the account, but
-     * not always. Look below for details.
-     */
-    auto is_other_direction_bidir =
-            remote_metadata.get(remote_other_direction).test_any(all_bidirectional_contexts);
-
-    /* If the not-resumed direction is local source, we might need to take it's metadata,
-     * (this way we detect GAME scenario), but local sink metadata is unreliable.
-     */
-    bool take_unresumed_local_source_metadata_for_mic_only_devices =
-            (group->audio_locations_.sink == std::nullopt) &&
-            (local_other_direction == bluetooth::le_audio::types::kLeAudioDirectionSource);
-
-    log::debug("take_unresumed_local_source_metadata_for_mic_only_devices= {}.",
-                                 take_unresumed_local_source_metadata_for_mic_only_devices);
-
-    log::debug("is_other_direction_bidir= {}", is_other_direction_bidir ? "True" : "False");
-
-    if (is_other_direction_bidir) {
-      if (!(is_streaming_other_direction || is_releasing_for_reconfiguration_other_direction) &&
-          !take_unresumed_local_source_metadata_for_mic_only_devices) {
-        log::debug(
-                "The other direction is not streaming bidirectional or is not a reliable source of "
-                "metadata, ignore that context.");
-        remote_metadata.get(remote_other_direction).clear();
-      }
-    }
-
-    auto single_direction_only_context_types =
-            group->GetAllSupportedSingleDirectionOnlyContextTypes(remote_direction);
-    auto single_other_direction_only_context_types =
-            group->GetAllSupportedSingleDirectionOnlyContextTypes(remote_other_direction);
-    log::debug(
-            "single direction only contexts : {} for direction {}, single direction contexts {} "
-            "for {}",
-            ToString(single_direction_only_context_types), remote_direction_str,
-            ToString(single_other_direction_only_context_types), remote_other_direction_str);
-
-    /* Mixed contexts in the voiceback channel scenarios can confuse the remote
-     * on how to configure each channel. We should align the other direction
-     * metadata for the remote device.
-     */
-    if (remote_metadata.get(remote_direction).test_any(all_bidirectional_contexts)) {
-      log::debug("Aligning the other direction remote metadata to add this direction context");
-
-      if (is_ongoing_call_on_other_direction) {
-        /* Other direction is streaming and is in call */
-        remote_metadata.get(remote_direction).unset_all(all_bidirectional_contexts);
-        remote_metadata.get(remote_direction).set(LeAudioContextType::CONVERSATIONAL);
-      } else {
-        if (!(is_streaming_other_direction || is_releasing_for_reconfiguration_other_direction) &&
-            !take_unresumed_local_source_metadata_for_mic_only_devices) {
-          // Do not take the obsolete metadata
-          remote_metadata.get(remote_other_direction).clear();
-        } else {
-          // The other direction was opened when already in a bidirectional scenario that was not a
-          // VoIP or a regular Call. We need to figure out which direction metadata is the leading
-          // one.
-          // Note: We usually remove any bidirectional or the previous direction specific context
-          //       from the previous direction metadata and replace it with the just-resumed
-          //       direction (but still bidirectional) context. However when recording is started
-          //       in a GAME scenario, we don't want to reconfigure to or mix the context with LIVE.
-          auto remote_game_uplink_available =
-                  group->GetAvailableContexts(le_audio::types::kLeAudioDirectionSource)
-                          .test(LeAudioContextType::GAME);
-          auto local_game_uplink_active =
-                  (audio_sender_state_ == AudioState::STARTED) &&
-                  remote_metadata.sink.test(LeAudioContextType::GAME) &&
-                  remote_metadata.source.test_any(LeAudioContextType::LIVE |
-                                                  LeAudioContextType::CONVERSATIONAL);
-          log::debug(
-                  "Remote {} metadata change ({}) while having remote {} context ({}) in a "
-                  "bidirectional scenario of {}, local_game_uplink_active: {}, "
-                  "remote_game_uplink_available: {}",
-                  remote_direction_str, ToString(remote_metadata.get(remote_direction)),
-                  remote_other_direction_str, ToString(remote_metadata.get(remote_other_direction)),
-                  ToString(configuration_context_type_), local_game_uplink_active,
-                  remote_game_uplink_available);
-          if (local_game_uplink_active && remote_game_uplink_available) {
-            remote_metadata.source.clear();
-            remote_metadata.source.set(LeAudioContextType::GAME);
-          } else {
-            remote_metadata.get(remote_other_direction).unset_all(all_bidirectional_contexts);
-            remote_metadata.get(remote_other_direction)
-                    .unset_all(single_direction_only_context_types);
-          }
-        }
-
-        remote_metadata.get(remote_other_direction)
-                .set_all(remote_metadata.get(remote_direction) &
-                         ~single_other_direction_only_context_types);
-      }
-    }
-    log::debug("remote_metadata.source= {}", ToString(remote_metadata.source));
-    log::debug("remote_metadata.sink= {}", ToString(remote_metadata.sink));
-
-    if (is_releasing_for_reconfiguration || is_streaming_other_direction) {
-      log::debug("Other direction is streaming or there is reconfiguration. Taking its contexts {}",
-                 ToString(remote_metadata.get(remote_other_direction)));
-      /* If current direction has no valid context or the other direction is
-       * bidirectional scenario, take the other direction context as well
-       */
-      if ((remote_metadata.get(remote_direction).none() &&
-           remote_metadata.get(remote_other_direction).any()) ||
-          remote_metadata.get(remote_other_direction).test_any(all_bidirectional_contexts)) {
-        log::debug("Aligning this direction remote metadata to add the other direction context");
-        /* Turn off bidirectional contexts on this direction to avoid mixing
-         * with the other direction bidirectional context
-         */
-        remote_metadata.get(remote_direction).unset_all(all_bidirectional_contexts);
-        remote_metadata.get(remote_direction).set_all(remote_metadata.get(remote_other_direction));
-      }
-    }
-
-    /* Make sure that after alignment no sink only context leaks into the other
-     * direction. */
-    remote_metadata.source.unset_all(group->GetAllSupportedSingleDirectionOnlyContextTypes(
-            bluetooth::le_audio::types::kLeAudioDirectionSink));
-
-    log::debug("final remote_metadata.source= {}", ToString(remote_metadata.source));
-    log::debug("final remote_metadata.sink= {}", ToString(remote_metadata.sink));
-    return remote_metadata;
-  }
-
-  std::pair<LeAudioContextType, BidirectionalPair<AudioContexts>>
-  DirectionalRealignMetadataAudioContexts(LeAudioDeviceGroup* group, int remote_direction) {
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      return audioContextTypeManager_->GetAudioContextsForTheGroup(
-              group, get_remote_directions_for_context_type_manager(remote_direction));
-    }
-    return std::make_pair(LeAudioContextType::UNINITIALIZED,
-                          DirectionalRealignMetadataAudioContexts_(group, remote_direction));
   }
 
   bool ReconfigureOrUpdateRemoteForPTS(LeAudioDeviceGroup* group, int /*remote_direction*/) {
@@ -7131,7 +6647,8 @@ public:
      * especially when bidirectional scenarios can be triggered be either sink
      * or source metadata update event.
      */
-    auto config = DirectionalRealignMetadataAudioContexts(group, remote_direction);
+    auto config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(remote_direction));
     LeAudioContextType new_config_context = config.first;
     BidirectionalPair<AudioContexts> remote_metadata = config.second;
     if (!remote_metadata.sink.any() && !remote_metadata.source.any()) {
@@ -7148,14 +6665,6 @@ public:
     }
 
     auto config_context_candids = get_bidirectional(remote_metadata);
-
-    if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* Choose the right configuration context */
-      new_config_context = ChooseConfigurationContextType(config_context_candids);
-      log::debug("config_context_candids= {}, new_config_context= {}",
-                 ToString(config_context_candids), ToString(new_config_context));
-      log::debug("configuration_context_type_ = {}", ToString(configuration_context_type_));
-    }
 
     /* For the following contexts we don't actually need HQ audio:
      * LeAudioContextType::NOTIFICATIONS
@@ -7183,9 +6692,7 @@ public:
               ToString(new_config_context), ToString(configuration_context_type_));
       new_config_context = configuration_context_type_;
 
-      if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-        return UpdateMetadata(group, remote_metadata);
-      }
+      return UpdateMetadata(group, remote_metadata);
     }
 
     /* Do not configure the Voiceback channel if it is already configured.
@@ -7208,7 +6715,6 @@ public:
         new_config_context = configuration_context_type_;
       }
     }
-
     if (LeAudioBroadcaster::IsLeAudioBroadcasterRunning() &&
         LeAudioBroadcaster::Get()->IsLeAudioBroadcastActive() &&
         group->IsStreaming() && !group->IsReleasingOrIdle() &&
@@ -7219,13 +6725,6 @@ public:
               ToString(configuration_context_type_), ToString(new_config_context));
       new_config_context = configuration_context_type_;
     }
-
-    /* Note that the remote device metadata was so far unfiltered when it comes
-     * to group context availability, or multiple contexts support flag, so that
-     * we could choose the correct configuration for the use case. Now we can
-     * align it to meet the metadata usage.
-     */
-    ApplyRemoteMetadataAudioContextPolicy(group, remote_metadata, remote_direction);
     return ReconfigureOrUpdateMetadata(group, new_config_context, remote_metadata);
   }
 
@@ -7256,8 +6755,7 @@ public:
     auto unspecified = AudioContexts(LeAudioContextType::UNSPECIFIED);
     auto uninitialized = AudioContexts();
     auto bidirectional_contexts = get_bidirectional(remote_contexts);
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager() &&
-        (bidirectional_contexts == unspecified || bidirectional_contexts == uninitialized) &&
+    if ((bidirectional_contexts == unspecified || bidirectional_contexts == uninitialized) &&
         !audioContextTypeManager_->IsAnyMetadataSet()) {
       log::info("group_id: {} Skip updating the metadata to sink={}, source={}", group->group_id_,
                 ToString(remote_contexts.sink), ToString(remote_contexts.source));
@@ -7281,34 +6779,32 @@ public:
                                    BidirectionalPair<AudioContexts> remote_contexts) {
     bool is_dsa_reconfig_needed = DsaReconfigureNeeded(group, new_configuration_context);
     bool is_configuration_changed = (new_configuration_context != configuration_context_type_);
-    if (com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-      /* Check if directional configuration has changed. E.g. for GAME we might switch from uni
-       * direction to bidirection */
-      bool const has_sink_ase_config = group->IsDirectionAvailableForConfiguration(
-              new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSink);
-      bool const has_source_ase_config = group->IsDirectionAvailableForConfiguration(
-              new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSource);
+    /* Check if directional configuration has changed. E.g. for GAME we might switch from uni
+     * direction to bidirection */
+    bool const has_sink_ase_config = group->IsDirectionAvailableForConfiguration(
+            new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    bool const has_source_ase_config = group->IsDirectionAvailableForConfiguration(
+            new_configuration_context, bluetooth::le_audio::types::kLeAudioDirectionSource);
 
-      /* Check if for any direction, the configuration list mismatches the latest metadata on that
-       * direction */
-      auto const is_missing_sink_ase_config = remote_contexts.sink.any() && !has_sink_ase_config;
-      auto const is_missing_source_ase_config =
-              remote_contexts.source.any() && !has_source_ase_config;
+    /* Check if for any direction, the configuration list mismatches the latest metadata on that
+     * direction */
+    auto const is_missing_sink_ase_config = remote_contexts.sink.any() && !has_sink_ase_config;
+    auto const is_missing_source_ase_config =
+            remote_contexts.source.any() && !has_source_ase_config;
 
-      auto const is_missing_sink_ase_context = remote_contexts.sink.none() && has_sink_ase_config;
-      auto const is_missing_source_ase_context =
-              remote_contexts.source.none() && has_source_ase_config;
+    auto const is_missing_sink_ase_context = remote_contexts.sink.none() && has_sink_ase_config;
+    auto const is_missing_source_ase_context =
+            remote_contexts.source.none() && has_source_ase_config;
 
-      is_configuration_changed = is_configuration_changed || is_missing_sink_ase_config ||
-                                 is_missing_source_ase_config || is_missing_sink_ase_context ||
-                                 is_missing_source_ase_context;
+    is_configuration_changed = is_configuration_changed || is_missing_sink_ase_config ||
+                               is_missing_source_ase_config || is_missing_sink_ase_context ||
+                               is_missing_source_ase_context;
 
-      // Clear DSA configuration cache when DSA mode has changed
-      auto clear_dsa_config_cache =
-              com_android_bluetooth_flags_dsa_use_codec_extensibility() && is_dsa_reconfig_needed;
-      if (is_configuration_changed || clear_dsa_config_cache) {
-        group->InvalidateCachedConfigurations(new_configuration_context);
-      }
+    // Clear DSA configuration cache when DSA mode has changed
+    auto clear_dsa_config_cache =
+            com_android_bluetooth_flags_dsa_use_codec_extensibility() && is_dsa_reconfig_needed;
+    if (is_configuration_changed || clear_dsa_config_cache) {
+      group->InvalidateCachedConfigurations(new_configuration_context);
     }
 
     log::info("group_id: {}, is_configuration_changed: {}, is_dsa_reconfig_needed: {}",
@@ -8119,9 +7615,9 @@ public:
                                 ? bluetooth::le_audio::types::kLeAudioDirectionSource
                                 : bluetooth::le_audio::types::kLeAudioDirectionSink;
                 auto config_ =
-                        DirectionalRealignMetadataAudioContexts(group, remote_direction);
+                        audioContextTypeManager_->GetAudioContextsForTheGroup(
+            group, get_remote_directions_for_context_type_manager(remote_direction));
                 auto remote_contexts = config_.second;
-                ApplyRemoteMetadataAudioContextPolicy(group, remote_contexts, remote_direction);
 
                 GroupStream(group, configuration_context_type_, remote_contexts);
               }
@@ -8239,9 +7735,9 @@ public:
                 }
               }
 
-              auto config = DirectionalRealignMetadataAudioContexts(group, remote_direction);
+              auto config = audioContextTypeManager_->GetAudioContextsForTheGroup(
+                      group, get_remote_directions_for_context_type_manager(remote_direction));
               auto remote_contexts = config.second;
-              ApplyRemoteMetadataAudioContextPolicy(group, remote_contexts, remote_direction);
               log::verbose(
                       "Pending configuration 2 pre_configuration_context_type_ : {} -> "
                       "configuration_context_type_ {}",
@@ -8413,9 +7909,6 @@ private:
   uint8_t track_in_call_update_;
   /*To track reconfig competle update sent to BT HAL*/
   bool defer_reconfig_complete_update_;
-
-  /* Reconnection mode */
-  tBTM_BLE_CONN_TYPE reconnection_mode_;
   static constexpr uint64_t kGroupConnectedWatchDelayMs = 3000;
   static constexpr uint64_t kRecoveryReconnectDelayMs = 2000;
   static constexpr uint64_t kAutoConnectAfterOwnDisconnectDelayMs = 1000;

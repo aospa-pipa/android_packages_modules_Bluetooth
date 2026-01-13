@@ -936,21 +936,6 @@ uint16_t LeAudioDeviceGroup::GetRemoteDelay(uint8_t direction) const {
 
 BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
         types::LeAudioContextType ctx_type) const {
-  if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-    BidirectionalPair<bool> remote_directions = {true, true};
-    // Remove the Source support if Sink only scenario is used
-    // Note: With the RINGTONE we should already prepare for a call.
-    if ((types::kLeAudioContextAllRemoteSinkOnly.test(ctx_type) &&
-         (ctx_type != types::LeAudioContextType::RINGTONE)) ||
-        ctx_type == types::LeAudioContextType::UNSPECIFIED) {
-      log::debug("Remote source not supported for {}", common::ToString(ctx_type));
-      remote_directions.source = false;
-    }
-    log::info("Returning remote's source: {}, sink: {}",
-              remote_directions.source, remote_directions.sink);
-    return remote_directions;
-  }
-
   auto audio_context_type_manager = AudioContextTypeManager::Get();
   if (audio_context_type_manager == nullptr) {
     log::warn("audio_context_type_manager is nullptr");
@@ -997,8 +982,6 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
   bool remote_has_gmap = false;
   BidirectionalPair<bool> has_direction = GetDirectionSupport(ctx_type);
 
-  log::debug("leaudio_use_context_type_manager: {}",
-              com_android_bluetooth_flags_leaudio_use_context_type_manager());
   // Define a requirement for each location. Knowing codec specific
   // capabilities (i.e. multiplexing capability) the config provider can
   // determine the number of ASEs to activate.
@@ -1046,7 +1029,7 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         continue;
       }
 
-      if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
+      if (false) {
         if (ctx_type == types::LeAudioContextType::VOICEASSISTANTS ||
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
@@ -1212,8 +1195,7 @@ bool LeAudioDeviceGroup::UpdateAudioSetConfigurationCache(LeAudioContextType ctx
                                                           bool use_preference) const {
   log::info("ctx_type: {}", ToHexString(ctx_type));
   auto requirements = GetAudioSetConfigurationRequirements(ctx_type);
-  if (com_android_bluetooth_flags_leaudio_use_context_type_manager() && !requirements.sink_pacs &&
-      !requirements.source_pacs) {
+  if (!requirements.sink_pacs && !requirements.source_pacs) {
     log::debug("No requirements for context type: {}", common::ToString(ctx_type));
     return false;
   }
@@ -2855,7 +2837,7 @@ void LeAudioDeviceGroup::Disable(int gatt_if) {
   }
 }
 
-void LeAudioDeviceGroup::Enable(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode) {
+void LeAudioDeviceGroup::Enable(int gatt_if) {
   is_enabled_ = true;
   for (auto& device_iter : leAudioDevices_) {
     auto dev = device_iter.lock();
@@ -2876,7 +2858,7 @@ void LeAudioDeviceGroup::Enable(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mod
               bluetooth::common::ToString(GetState()), address);
 
     if (connection_state == DeviceConnectState::DISCONNECTED) {
-      BTA_GATTC_Open(gatt_if, address, reconnection_mode, false);
+      BTA_GATTC_Open(gatt_if, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
       dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
     }
   }
@@ -2914,14 +2896,15 @@ void LeAudioDeviceGroup::AddToAllowListNotConnectedGroupMembers(int gatt_if) {
   }
 }
 
-void LeAudioDeviceGroup::ApplyReconnectionMode(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode) {
+void LeAudioDeviceGroup::ApplyReconnectionMode(int gatt_if) {
   for (const auto& device_iter : leAudioDevices_) {
     auto dev = device_iter.lock();
     if (!dev) {
       continue;
     }
     BTA_GATTC_CancelOpen(gatt_if, dev->address_, false);
-    BTA_GATTC_Open(gatt_if, dev->address_, reconnection_mode, false);
+    BTA_GATTC_Open(gatt_if, dev->address_,
+                   BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
     log::info("Group {} in state {}. Adding {} to default reconnection mode", group_id_,
               bluetooth::common::ToString(GetState()), dev->address_);
     dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
