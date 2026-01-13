@@ -179,6 +179,13 @@ static bt_status_t status;
 const bt_interface_t* sBtInterface = NULL;
 const btvendor_interface_t* btvendorInterface = NULL;
 
+typedef void (*bluetooth_init_t)(bt_callbacks_t* callbacks, bool guest_mode,
+                                 bool is_common_criteria_mode,
+                                 int config_compare_result, bool is_atv,
+                                 const std::string hci_instance_name,
+                                 bt_os_callouts_t* callouts);
+bluetooth_init_t bluetooth_init_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -478,6 +485,13 @@ int load_bt_lib(const bt_interface_t** interface) {
     goto error;
   }
 
+  // Get the address of bluetooth_init
+  bluetooth_init_func = (bluetooth_init_t)dlsym(handle, "bluetooth_init");
+  if (!bluetooth_init_func) {
+    printf("failed to load symbol bluetooth_init from Bluetooth library\n");
+    goto error;
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -578,7 +592,7 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
 #endif
 static void ssp_request_cb(RawAddress remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key, PairingAlgorithm pairing_algo) {
+                           uint32_t pass_key, int pairing_algo) {
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
@@ -634,8 +648,15 @@ static bt_os_callouts_t callouts = {
 
 void bdt_init(void) {
   printf("INIT BT \n");
-  status = (bt_status_t)sBtInterface->init(&bt_callbacks, false, false, 0,
-                                           false, "default");
+  if (bluetooth_init_func) {
+      bluetooth_init_func(&bt_callbacks, false, false, 0, false, "default", &callouts);
+      status = BT_STATUS_SUCCESS;
+  } else {
+      printf("Error: bluetooth_init function not found\n");
+      status = BT_STATUS_FAIL;
+      exit(0);
+  }
+  
   if (status == BT_STATUS_SUCCESS) {
     // Get Vendor Interface
     btvendorInterface =
@@ -645,7 +666,6 @@ void bdt_init(void) {
       printf("Error in loading vendor interface \n");
       exit(0);
     }
-    status = (bt_status_t)sBtInterface->set_os_callouts(&callouts);
   }
   check_return_status(status);
 }
