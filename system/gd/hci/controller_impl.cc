@@ -49,8 +49,8 @@ constexpr bool kDefaultRpaOffload = false;
 constexpr int kHdtPhy = 5;
 
 constexpr uint8_t kDefaultPreferredMicLength = 0x01;
-constexpr uint8_t kDefaultPreferredPacketFormat = 0x01;
-constexpr uint8_t kDefaultPreferredAclRates = 0x00;
+constexpr uint8_t kDefaultPreferredPacketFormat = 0x00;
+constexpr uint16_t kDefaultPreferredAclRates = 0x00;
 
 constexpr uint8_t kHdtPhys = 0x01;
 

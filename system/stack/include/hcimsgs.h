@@ -402,7 +402,7 @@ void btsnd_hci_ble_set_default_phy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx
 
 void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
                                               uint8_t preferred_packet_format,
-                                              uint8_t preferred_acl_rates);
+                                              uint16_t preferred_acl_rates);
 
 void btsnd_hcic_ble_start_enc_v2(uint16_t handle, Octet8 rand, uint16_t ediv,
                               const Octet16& ltk, uint8_t hdt_mic_length, uint8_t enc_type);
