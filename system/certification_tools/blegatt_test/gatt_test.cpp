@@ -178,6 +178,13 @@ static tL2CAP_LE_CFG_INFO local_coc_cfg;
 /* Main API */
 const bt_interface_t* sBtInterface = NULL;
 
+typedef void (*bluetooth_init_t)(bt_callbacks_t* callbacks, bool guest_mode,
+                                 bool is_common_criteria_mode,
+                                 int config_compare_result, bool is_atv,
+                                 const std::string hci_instance_name,
+                                 bt_os_callouts_t* callouts);
+bluetooth_init_t bluetooth_init_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -1928,6 +1935,13 @@ int load_bt_lib(const bt_interface_t** interface) {
     goto error;
   }
 
+  // Get the address of bluetooth_init
+  bluetooth_init_func = (bluetooth_init_t)dlsym(handle, "bluetooth_init");
+  if (!bluetooth_init_func) {
+    printf("failed to load symbol bluetooth_init from Bluetooth library\n");
+    goto error;
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -2036,7 +2050,7 @@ static void discovery_state_changed(bt_discovery_state_t state) {
 }
 
 static void pin_request_cb(RawAddress remote_bd_addr, bt_bdname_t* bd_name,
-                           uint32_t cod, bool min_16_digit, PairingAlgorithm pairing_algo) {
+                           uint32_t cod, bool min_16_digit, int pairing_algo) {
   remote_bd_address = remote_bd_addr;
   printf(
       "Enter the pin key displayed in the remote device and terminate the key "
@@ -2045,7 +2059,7 @@ static void pin_request_cb(RawAddress remote_bd_addr, bt_bdname_t* bd_name,
 }
 static void ssp_request_cb(RawAddress remote_bd_addr,
                            bt_ssp_variant_t pairing_variant,
-                           uint32_t pass_key, PairingAlgorithm pairing_alg) {
+                           uint32_t pass_key, int pairing_alg) {
   printf("ssp_request_cb : variant=%d passkey=%u\n", pairing_variant, pass_key);
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
@@ -2314,25 +2328,31 @@ static btgatt_callbacks_t sGatt_cb = {
 void bdt_init(void) {
   bdt_log("INIT BT ");
   handle_value_map.clear(); // Clear handle_value_map during BT initialization
-  status =
-      sBtInterface->init(&bt_callbacks, false, false, 0, false, "default");
-  if (status == BT_STATUS_SUCCESS) {
-    // Get Vendor Interface
-    btvendorInterface =
-        (btvendor_interface_t*)sBtInterface->get_profile_interface(
-            BT_PROFILE_VENDOR_ID);
-    if (!btvendorInterface) {
-      bdt_log("Error in loading vendor interface ");
+  
+  // Call the global bluetooth_init function instead of sBtInterface->init
+  if (bluetooth_init_func) {
+      bluetooth_init_func(&bt_callbacks, false, false, 0, false, "default", &bt_os_callbacks);
+  } else {
+      bdt_log("Error: bluetooth_init function not found");
       exit(0);
-    }
-    bdt_log("Get GATT IF");
-    sGattIfaceScan = (btgatt_interface_t*)sBtInterface->get_profile_interface(
-        BT_PROFILE_GATT_ID);
-
-    sGattIfaceScan->init(&sGatt_cb);
-    bdt_log("Get GATT init Done");
-    status = sBtInterface->set_os_callouts(&bt_os_callbacks);
   }
+  
+  // Get Vendor Interface
+  btvendorInterface =
+      (btvendor_interface_t*)sBtInterface->get_profile_interface(
+          BT_PROFILE_VENDOR_ID);
+  if (!btvendorInterface) {
+    bdt_log("Error in loading vendor interface ");
+    exit(0);
+  }
+  bdt_log("Get GATT IF");
+  sGattIfaceScan = (btgatt_interface_t*)sBtInterface->get_profile_interface(
+      BT_PROFILE_GATT_ID);
+
+  sGattIfaceScan->init(&sGatt_cb);
+  bdt_log("Get GATT init Done");
+  
+  status = BT_STATUS_SUCCESS;
   check_return_status(status);
 }
 
