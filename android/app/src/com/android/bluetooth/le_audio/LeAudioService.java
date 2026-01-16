@@ -2638,11 +2638,26 @@ public class LeAudioService extends ConnectableProfile {
 
     /* Notifications of audio device connection/disconnection events. */
     private class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
+        private static boolean isWiredAudioHeadset(AudioDeviceInfo deviceInfo) {
+            return switch (deviceInfo.getType()) {
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                     AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                     AudioDeviceInfo.TYPE_USB_HEADSET -> true;
+                default -> false;
+            };
+        }
+
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
             if (!isAvailable()) {
                 Log.e(TAG, "Callback called when LeAudioService is stopped");
                 return;
+            }
+
+            if (isBroadcastActive() && Arrays.stream(addedDevices)
+                    .anyMatch(AudioManagerAudioDeviceCallback::isWiredAudioHeadset)) {
+                Log.i(TAG, "Stop Broadcast while wired audio device is connected");
+                setInactiveForBroadcast();
             }
 
             for (AudioDeviceInfo deviceInfo : addedDevices) {
@@ -5102,6 +5117,10 @@ public class LeAudioService extends ConnectableProfile {
         Optional<Integer> broadcastId = getFirstNotStoppedBroadcastId();
         LeAudioBroadcastDescriptor descriptor = mBroadcastDescriptors.get(broadcastId.get());
         if (!broadcastId.isEmpty() && (descriptor != null)) {
+            if (descriptor.mState.equals(LeAudioStackEvent.BROADCAST_STATE_STOPPING)) {
+                Log.d(TAG, "Broadcast is stopping");
+                return;
+            }
             Log.d(TAG, "setInactiveForBroadcast: stop broadcast now");
             updateFallbackUnicastGroupIdForBroadcast(LE_AUDIO_GROUP_ID_INVALID);
             stopBroadcast(broadcastId.get());
