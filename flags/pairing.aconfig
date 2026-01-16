@@ -2,16 +2,6 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "clear_pairing_state_when_no_devrec"
-    namespace: "bluetooth"
-    description: "Clear pairing state on early bond failure due to connection timeout and devrec is not created"
-    bug: "364321751"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "trigger_sec_proc_on_inc_access_req"
     namespace: "bluetooth"
     description: "Trigger security procedure as acceptor as needed"
@@ -22,30 +12,10 @@ flag {
 }
 
 flag {
-    name: "ignore_auth_req_when_collision_timer_active"
-    namespace: "bluetooth"
-    description: "Ignore authentication request when collision timer is still active"
-    bug: "380328715"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "smp_connection_status_handling_when_no_acl"
     namespace: "bluetooth"
     description: "Fix SMP connection status sent from L2CAP when LE ACL is not connected"
     bug: "401073843"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "ignore_le_smp_conn_when_sm_over_br_progress"
-    namespace: "bluetooth"
-    description: "Ignore LE SMP connection when smp over br is still in progress"
-    bug: "405996470"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -270,12 +240,21 @@ flag {
     }
 }
 
-
 flag {
     name: "force_encryption_post_successful_pairing"
     namespace: "bluetooth"
     description: "Force encryption after successful pairing"
     bug: "472946151"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "update_cod_on_incoming_connection"
+    namespace: "bluetooth"
+    description: "Update class of device from incoming connection request"
+    bug: "474364095"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

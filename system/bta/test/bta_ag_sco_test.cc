@@ -47,7 +47,7 @@ bool LeAudioClient::IsLeAudioClientInStreaming() { return false; }
 bool LeAudioClient::IsLeAudioClientRunning() { return false; }
 bool LeAudioClient::IsLeAudioClientInIdle(void) { return false; }
 
-const RawAddress kRawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+const RawAddress kRawAddress("11:22:33:44:55:66");
 
 class BtaAgScoParameterSelectionTest
     : public TestWithParam<std::tuple<tBTA_AG_FEAT, tBTA_AG_PEER_FEAT, bool>> {
