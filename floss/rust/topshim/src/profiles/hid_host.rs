@@ -1,7 +1,7 @@
 use crate::bindings::root as bindings;
 use crate::btif::{
-    BluetoothInterface, BtAddrType, BtStatus, BtTransport, CxxBluetoothInterface, CxxBtAddrType,
-    CxxBtTransport, RawAddress, ToggleableProfile,
+    BluetoothInterface, BtAddrType, BtStatus, BtTransport, CxxBtAddrType, CxxBtTransport,
+    RawAddress, ToggleableProfile,
 };
 use crate::topstack::get_dispatchers;
 
@@ -47,7 +47,7 @@ impl From<bindings::bthh_connection_state_t> for BthhConnectionState {
             bindings::bthh_connection_state_t_BTHH_CONN_STATE_UNKNOWN => {
                 BthhConnectionState::Unknown
             }
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_connection_state_t {}", item),
         }
     }
 }
@@ -95,7 +95,7 @@ impl From<CxxBthhStatus> for BthhStatus {
             bindings::bthh_status_t_BTHH_ERR_HDL => BthhStatus::ErrHdl,
             bindings::bthh_status_t_BTHH_ERR_SEC => BthhStatus::ErrSec,
             bindings::bthh_status_t_BTHH_ERR_SERVICE_CHANGED => BthhStatus::ErrServiceChanged,
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_status_t {}", item.0),
         }
     }
 }
@@ -146,7 +146,7 @@ impl From<CxxBthhProtocolMode> for BthhProtocolMode {
             bindings::bthh_protocol_mode_t_BTHH_UNSUPPORTED_MODE => {
                 BthhProtocolMode::UnsupportedMode
             }
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_protocol_mode_t {}", item.0),
         }
     }
 }
@@ -181,7 +181,7 @@ impl From<CxxBthhReportType> for BthhReportType {
             bindings::bthh_report_type_t_BTHH_INPUT_REPORT => BthhReportType::InputReport,
             bindings::bthh_report_type_t_BTHH_OUTPUT_REPORT => BthhReportType::OutputReport,
             bindings::bthh_report_type_t_BTHH_FEATURE_REPORT => BthhReportType::FeatureReport,
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_report_type_t {}", item.0),
         }
     }
 }
@@ -274,10 +274,6 @@ mod ffi {
         type BtTransport = super::CxxBtTransport;
 
         #[namespace = ""]
-        #[cxx_name = "bt_interface_t"]
-        type BluetoothInterface = super::CxxBluetoothInterface;
-
-        #[namespace = ""]
         #[cxx_name = "bthh_hid_info_t"]
         type BthhHidInfo = super::BthhHidInfo;
 
@@ -288,9 +284,11 @@ mod ffi {
         #[namespace = ""]
         type RawAddress = crate::btif::RawAddress;
 
+        type BtIntf = crate::btif::ffi::BtIntf;
+
         type HhIntf;
 
-        fn GetHhProfile(btif: &BluetoothInterface) -> UniquePtr<HhIntf>;
+        fn GetHhProfile(btif: &BtIntf) -> UniquePtr<HhIntf>;
 
         fn init(self: &HhIntf) -> u32;
         fn connect(
@@ -476,7 +474,7 @@ impl ToggleableProfile for HidHost {
 impl HidHost {
     #[log_args]
     pub fn new(intf: &BluetoothInterface) -> HidHost {
-        let hh_intf: cxx::UniquePtr<ffi::HhIntf> = ffi::GetHhProfile(intf.as_raw_btif());
+        let hh_intf: cxx::UniquePtr<ffi::HhIntf> = ffi::GetHhProfile(intf.as_btif());
 
         HidHost {
             internal: hh_intf,

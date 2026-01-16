@@ -328,14 +328,8 @@ impl From<CxxBtSdpRecord> for BtSdpRecord {
     }
 }
 
-impl From<BtSdpRecord> for CxxBtSdpRecord {
-    fn from(item: BtSdpRecord) -> Self {
-        let i = item.clone().get_unsafe_record();
-        CxxBtSdpRecord(i)
-    }
-}
-
 impl BtSdpRecord {
+    // TODO(b/446827362): Do not directly returns structures containing pointers, which is unsafe.
     fn convert_header<'a>(hdr: &'a mut BtSdpHeaderOverlay) -> bindings::bluetooth_sdp_hdr_overlay {
         let srv_name_ptr = LTCheckedPtrMut::from(&mut hdr.service_name);
         let user1_ptr = LTCheckedPtr::from(&hdr.user1_data);
@@ -356,6 +350,7 @@ impl BtSdpRecord {
     }
 
     // Get sdp record with lifetime tied to self
+    // TODO(b/446827362): Do not directly returns structures containing pointers, which is unsafe.
     fn get_unsafe_record<'a>(&'a mut self) -> bindings::bluetooth_sdp_record {
         match self {
             BtSdpRecord::HeaderOverlay(ref mut hdr) => {
@@ -454,10 +449,6 @@ mod ffi {
         include!("topshim/sdp/sdp_shim.h");
 
         #[namespace = ""]
-        #[cxx_name = "bt_interface_t"]
-        type BluetoothInterface = crate::btif::CxxBluetoothInterface;
-
-        #[namespace = ""]
         #[cxx_name = "bluetooth_sdp_record"]
         type BtSdpRecord = super::CxxBtSdpRecord;
 
@@ -467,9 +458,11 @@ mod ffi {
         #[namespace = "bluetooth"]
         type Uuid = crate::btif::Uuid;
 
+        type BtIntf = crate::btif::ffi::BtIntf;
+
         type SdpIntf;
 
-        fn GetSdpProfile(btif: &BluetoothInterface) -> UniquePtr<SdpIntf>;
+        fn GetSdpProfile(btif: &BtIntf) -> UniquePtr<SdpIntf>;
 
         fn init(self: &SdpIntf) -> u32;
         #[allow(dead_code)]
@@ -503,7 +496,7 @@ unsafe impl Send for Sdp {}
 impl Sdp {
     #[log_args]
     pub fn new(intf: &BluetoothInterface) -> Sdp {
-        let sdp_intf: cxx::UniquePtr<ffi::SdpIntf> = ffi::GetSdpProfile(intf.as_raw_btif());
+        let sdp_intf: cxx::UniquePtr<ffi::SdpIntf> = ffi::GetSdpProfile(intf.as_btif());
 
         Sdp { internal: sdp_intf, is_init: false }
     }
@@ -530,8 +523,8 @@ impl Sdp {
     }
 
     #[log_args]
-    pub fn create_sdp_record(&self, record: BtSdpRecord, handle: &mut i32) -> BtStatus {
-        self.internal.create_sdp_record(record.into(), handle).into()
+    pub fn create_sdp_record(&self, mut record: BtSdpRecord, handle: &mut i32) -> BtStatus {
+        self.internal.create_sdp_record(CxxBtSdpRecord(record.get_unsafe_record()), handle).into()
     }
 
     #[log_args]

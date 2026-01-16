@@ -1690,7 +1690,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @throws IllegalArgumentException address or addressType is invalid
      */
     @Hide
-    BluetoothDevice(BluetoothAdapter adapter, String address, int addressType) {
+    public BluetoothDevice(BluetoothAdapter adapter, String address, int addressType) {
         if (!BluetoothAdapter.checkBluetoothAddress(address)) {
             throw new IllegalArgumentException(address + " is not a valid Bluetooth address");
         }
@@ -1714,12 +1714,9 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     }
 
     /** see {@link #BluetoothDevice(BluetoothAdapter, String, int)} */
-    @Hide
-    public BluetoothDevice(String address, int addressType) {
-        this(
-                Flags.removeAdapterDependency() ? null : BluetoothAdapter.getDefaultAdapter(),
-                address,
-                addressType);
+    @SuppressWarnings("unused") // Used by android/app/jni/com_android_bluetooth_le_audio.cpp
+    private BluetoothDevice(String address, int addressType) {
+        this(BluetoothAdapter.getDefaultAdapter(), address, addressType);
     }
 
     /**
@@ -2558,7 +2555,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast.
      */
-    @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
@@ -2591,7 +2587,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast with the specific transport.
      */
-    @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
     @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission

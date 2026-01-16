@@ -163,8 +163,7 @@ void l2c_link_hci_conn_comp(tHCI_STATUS status, uint16_t handle, const RawAddres
     } else /* there are any CCBs remaining */
     {
       if ((ci.hci_status == HCI_ERR_CONNECTION_EXISTS) ||
-          (com_android_bluetooth_flags_flag_handle_hci_error_controller_busy() &&
-           ci.hci_status == HCI_ERR_CONTROLLER_BUSY)) {
+           ci.hci_status == HCI_ERR_CONTROLLER_BUSY) {
         /* we are in collision situation, wait for connecttion request from
          * controller */
         p_lcb->link_state = LST_CONNECTING;
@@ -362,9 +361,7 @@ bool l2c_link_hci_disc_comp(uint16_t handle, tHCI_REASON reason) {
                                                    p_lcb->DisconnectReason(), p_lcb->transport);
         }
       }
-      if (com_android_bluetooth_flags_invalidate_hci_handle_on_acl_removal()) {
-        p_lcb->InvalidateHandle();
-      }
+      p_lcb->InvalidateHandle();
     } else {
       /* If we are going to re-use the LCB without dropping it, release all
       fixed channels

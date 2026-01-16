@@ -52,11 +52,6 @@ public:
   virtual void UpdateMetadata(uint32_t broadcast_id, const std::string& broadcast_name,
                               const std::vector<uint8_t>& public_metadata,
                               const std::vector<std::vector<uint8_t>>& subgroup_metadata) = 0;
-  virtual void IsValidBroadcast(
-          uint32_t broadcast_id, uint8_t addr_type, RawAddress addr,
-          base::Callback<void(uint8_t /* broadcast_id */, uint8_t /* addr_type */,
-                              RawAddress /* addr */, bool /* is_valid */)>
-                  cb) = 0;
   virtual bool IsLeAudioBroadcastActive(void) = 0;
 
   virtual void SetStreamingPhy(uint8_t phy) = 0;

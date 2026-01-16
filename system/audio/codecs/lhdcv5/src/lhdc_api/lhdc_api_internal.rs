@@ -110,7 +110,7 @@ pub struct Parameters {
     pub enc_in_buf: Box<[i32]>,
     pub enc_out_buf: Box<[i32]>,
     // TODO(b/454096420) privatize through API
-    pub bitrate_table: &'static [i32],
+    pub bitrate_table: &'static [u32],
 }
 
 impl Parameters {
@@ -222,36 +222,31 @@ fn lhdcv5_encoder_cal_frame_size_and_frames_in_packet(handle: &mut Parameters) -
         handle.last_bitrate, handle.actual_bitrate,
     );
     let bytes_per_second: u32 = handle.sample_rate.wrapping_mul(bytes_per_sample);
-    let compress_rate: libc::c_float =
-        target_bytes_per_second as libc::c_float / bytes_per_second as libc::c_float;
-    let max_output_bytes_per_frame: libc::c_float =
-        bytes_per_frame as libc::c_float * compress_rate;
+    let compress_rate: f32 = target_bytes_per_second as f32 / bytes_per_second as f32;
+    let max_output_bytes_per_frame: f32 = bytes_per_frame as f32 * compress_rate;
     let bytes_per_tick: u32 = handle
         .sample_rate
         .wrapping_mul(bytes_per_sample)
         .wrapping_mul(handle.encode_interval)
         .wrapping_div(1000);
-    let frames_per_tick: u32 =
-        (bytes_per_tick as libc::c_float / bytes_per_frame as libc::c_float + 0.5f32) as u32;
+    let frames_per_tick: u32 = (bytes_per_tick as f32 / bytes_per_frame as f32 + 0.5f32) as u32;
     debug!(
         "pcm_frames_per_tick({}) encode_interval_ms({}) frame_duration({})",
         frames_per_tick, handle.encode_interval, handle.frame_duration,
     );
     let max_output_bytes_per_tick: u32 =
-        (max_output_bytes_per_frame * frames_per_tick as libc::c_float) as u32;
+        (max_output_bytes_per_frame * frames_per_tick as f32) as u32;
     let mut packet_per_tick: u32 = max_output_bytes_per_tick.wrapping_div(handle.host_mtu_size);
     packet_per_tick = if packet_per_tick <= 0 { 1 } else { packet_per_tick };
     handle.frame_per_packet = frames_per_tick.wrapping_div(packet_per_tick);
     handle.max_frame_per_packet = handle.frame_per_packet;
     let max_mtu_limit: u32 = handle.host_mtu_size;
     loop {
-        if max_output_bytes_per_frame * handle.frame_per_packet as libc::c_float
-            > max_mtu_limit as libc::c_float
-        {
+        if max_output_bytes_per_frame * handle.frame_per_packet as f32 > max_mtu_limit as f32 {
             handle.frame_per_packet = handle.frame_per_packet.wrapping_sub(1);
         } else {
-            if (max_output_bytes_per_frame * handle.frame_per_packet as libc::c_float)
-                < handle.host_mtu_size as libc::c_float
+            if (max_output_bytes_per_frame * handle.frame_per_packet as f32)
+                < handle.host_mtu_size as f32
             {
                 handle.target_mtu_size = max_output_bytes_per_frame as u32;
             } else {
@@ -451,8 +446,7 @@ impl Parameters {
             .wrapping_mul(LHDC_ENC_IN_FRAME_1S)
             .wrapping_div(self.frame_duration);
         if self.sample_rate == LHDC_ENC_IN_SR_44100HZ {
-            self.actual_bitrate =
-                (self.actual_bitrate as libc::c_float * 0.91875f64 as libc::c_float) as u32;
+            self.actual_bitrate = (self.actual_bitrate as f32 * 0.91875f64 as f32) as u32;
         }
         self.update_frame_info = false;
         lhdcv5_encoder_cal_frame_size_and_frames_in_packet(self);
@@ -474,27 +468,27 @@ impl Parameters {
 pub fn lhdcv5_encoder_get_bitrate(
     bitrate_inx: u32,
     bitrate: &mut u32,
-    bitrate_table: &[i32],
+    bitrate_table: &[u32],
 ) -> i32 {
     if bitrate_inx >= bitrate_table.len() as _ {
         error!("Input bit rate (index) is out of range ({})!", bitrate_inx);
         return LHDC_ENC_IN_FRET_INVALID_INPUT_PARAM;
     }
-    *bitrate = bitrate_table[bitrate_inx as usize] as u32;
+    *bitrate = bitrate_table[bitrate_inx as usize];
     LHDC_ENC_IN_FRET_SUCCESS
 }
 
 pub fn lhdcv5_encoder_get_bitrate_inx(
     bitrate: u32,
     bitrate_inx: &mut u32,
-    bitrate_table: &[i32],
+    bitrate_table: &[u32],
 ) -> i32 {
     let mut index: u32 = 0;
-    if bitrate > bitrate_table[bitrate_table.len() - 1] as u32 {
+    if bitrate > bitrate_table[bitrate_table.len() - 1] {
         return LHDC_ENC_IN_FRET_INVALID_INPUT_PARAM;
     }
     while index < bitrate_table.len() as _ {
-        if bitrate_table[index as usize] as u32 >= bitrate {
+        if bitrate_table[index as usize] >= bitrate {
             break;
         }
         index = index.wrapping_add(1);
@@ -736,8 +730,7 @@ pub fn lhdcv5_encoder_encode(
                 .wrapping_mul(LHDC_ENC_IN_FRAME_1S)
                 .wrapping_div(lhdc.frame_duration);
             if lhdc.sample_rate == LHDC_ENC_IN_SR_44100HZ {
-                lhdc.actual_bitrate =
-                    (lhdc.actual_bitrate as libc::c_float * 0.91875f64 as libc::c_float) as u32;
+                lhdc.actual_bitrate = (lhdc.actual_bitrate as f32 * 0.91875f64 as f32) as u32;
             }
             lhdcv5_encoder_cal_frame_size_and_frames_in_packet(&mut *lhdc);
             cbuf = &mut lhdc.input_cbuf;
