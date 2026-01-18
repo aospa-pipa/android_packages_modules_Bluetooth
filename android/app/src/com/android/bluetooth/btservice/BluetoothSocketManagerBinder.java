@@ -56,7 +56,6 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             int port,
             int flag,
             AttributionSource source) {
-        String leDeviceAddr = null;
         enforceActiveUser();
 
         if (!Util.enforceConnectPermissionForPreflight(mService, source)) {
@@ -64,6 +63,15 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
         }
 
         String brEdrAddress = mService.getBrEdrAddress(device);
+        String leDeviceAddr = device.getAddress();
+        if (Flags.addAddressMappingForLecoc()) {
+            if (type == BluetoothSocket.TYPE_LE) {
+                leDeviceAddr = mService.getIdentityAddress(device.getAddress());
+                if (leDeviceAddr == null) {
+                    leDeviceAddr = device.getAddress();
+                }
+            }
+        }
 
         if (type == BluetoothSocket.TYPE_LE) {
           leDeviceAddr = mService.getIdentityAddress(device.getAddress());

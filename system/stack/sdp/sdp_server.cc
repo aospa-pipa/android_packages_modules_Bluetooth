@@ -405,6 +405,186 @@ static bool is_device_in_allowlist_for_pbap(RawAddress remote_address,
   return false;
 }
 
+
+/*******************************************************************************
+ *
+ * Function         sdp_delete_attribute_from_record_for_server
+ *
+ * Description      This function is called to delete an attribute from a
+ *                  record. This would be through the SDP database maintenance
+ *                  API.
+ *
+ * Returns          true if deleted OK, else false if not found
+ *
+ ******************************************************************************/
+static bool sdp_delete_attribute_from_record_for_server(tSDP_RECORD* p_rec, uint16_t attr_id) {
+  tSDP_ATTRIBUTE* p_attr = &p_rec->attribute[0];
+  uint8_t* pad_ptr;
+  uint32_t len; /* Number of bytes in the entry */
+
+  /* Found it. Now, find the attribute */
+  for (uint16_t attribute_index = 0; attribute_index < p_rec->num_attributes;
+       attribute_index++, p_attr++) {
+    if (p_attr->id == attr_id) {
+      pad_ptr = p_attr->value_ptr;
+      len = p_attr->len;
+
+      if (len) {
+        for (uint16_t zz = 0; zz < p_rec->num_attributes; zz++) {
+          if (p_rec->attribute[zz].value_ptr > pad_ptr) {
+            p_rec->attribute[zz].value_ptr -= len;
+          }
+        }
+      }
+
+      /* Found it. Shift everything up one */
+      p_rec->num_attributes--;
+
+      for (uint16_t zz = attribute_index; zz < p_rec->num_attributes; zz++, p_attr++) {
+        *p_attr = *(p_attr + 1);
+      }
+
+      /* adjust attribute values if needed */
+      if (len) {
+        uint16_t last_attribute_to_adjust =
+                (p_rec->free_pad_ptr - ((pad_ptr + len) - &p_rec->attr_pad[0]));
+        for (uint16_t zz = 0; zz < last_attribute_to_adjust; zz++, pad_ptr++) {
+          *pad_ptr = *(pad_ptr + len);
+        }
+        p_rec->free_pad_ptr -= len;
+      }
+      return true;
+    }
+  }
+  /* If here, not found */
+  return false;
+}
+
+/*******************************************************************************
+ *
+ * Function         sdp_add_attribute_to_record_for_server
+ *
+ * Description      This function is called to add an attribute to a record.
+ *                  This would be through the SDP database maintenance API.
+ *                  If the attribute already exists in the record, it is
+ *                  replaced with the new value.
+ *
+ * NOTE             Attribute values must be passed as a Big Endian stream.
+ *
+ * Returns          true if added OK, else false
+ *
+ ******************************************************************************/
+static bool sdp_add_attribute_to_record_for_server(tSDP_RECORD* p_rec, uint16_t attr_id, uint8_t attr_type,
+                                        uint32_t attr_len, uint8_t* p_val) {
+  uint16_t xx, yy;
+  tSDP_ATTRIBUTE* p_attr = &p_rec->attribute[0];
+
+  /* Found the record. Now, see if the attribute already exists */
+  for (xx = 0; xx < p_rec->num_attributes; xx++, p_attr++) {
+    /* The attribute exists. replace it */
+    if (p_attr->id == attr_id) {
+      sdp_delete_attribute_from_record_for_server(p_rec, attr_id);
+      break;
+    }
+    if (p_attr->id > attr_id) {
+      break;
+    }
+  }
+
+  if (p_rec->num_attributes >= SDP_MAX_REC_ATTR) {
+    return false;
+  }
+
+  /* If not found, see if we can allocate a new entry */
+  if (xx == p_rec->num_attributes) {
+    p_attr = &p_rec->attribute[p_rec->num_attributes];
+  } else {
+    /* Since the attributes are kept in sorted order, insert ours here */
+    for (yy = p_rec->num_attributes; yy > xx; yy--) {
+      p_rec->attribute[yy] = p_rec->attribute[yy - 1];
+    }
+  }
+
+  p_attr->id = attr_id;
+  p_attr->type = attr_type;
+  p_attr->len = attr_len;
+
+  if (p_rec->free_pad_ptr + attr_len >= SDP_MAX_PAD_LEN) {
+    if (p_rec->free_pad_ptr >= SDP_MAX_PAD_LEN) {
+      log::error(
+              "sdp_add_attribute_to_record_for_server failed: free pad {} equals or exceeds max "
+              "padding length {}",
+              p_rec->free_pad_ptr, SDP_MAX_PAD_LEN);
+      return false;
+    }
+
+    /* do truncate only for text string type descriptor */
+    if (attr_type == TEXT_STR_DESC_TYPE) {
+      log::warn("sdp_add_attribute_to_record_for_server: attr_len:{} too long. truncate to ({})", attr_len,
+                SDP_MAX_PAD_LEN - p_rec->free_pad_ptr);
+
+      attr_len = SDP_MAX_PAD_LEN - p_rec->free_pad_ptr;
+      p_val[SDP_MAX_PAD_LEN - p_rec->free_pad_ptr - 1] = '\0';
+    } else {
+      attr_len = 0;
+    }
+  }
+
+  if (attr_len > 0) {
+    p_attr->len = attr_len;
+    memcpy(&p_rec->attr_pad[p_rec->free_pad_ptr], p_val, (size_t)attr_len);
+    p_attr->value_ptr = &p_rec->attr_pad[p_rec->free_pad_ptr];
+    p_rec->free_pad_ptr += attr_len;
+  } else if (attr_len == 0 && p_attr->len != 0) {
+    /* if truncate to 0 length, simply don\'t add */
+    log::error("sdp_add_attribute_to_record_for_server fail, length exceed maximum: ID {}: attr_len:{}",
+               attr_id, attr_len);
+    p_attr->id = p_attr->type = p_attr->len = 0;
+    return false;
+  }
+  p_rec->num_attributes++;
+  return true;
+}
+
+/*******************************************************************************
+ *
+ * Function         sdp_add_profile_descriptor_list_to_record_for_server
+ *
+ * Description      This function is called to add a profile descriptor list to
+ *                  a record. This would be through the SDP database maintenance
+ *                  API. If the version already exists in the record, it is
+ *                  replaced with the new one.
+ *
+ * Returns          true if added OK, else false
+ *
+ ******************************************************************************/
+static bool sdp_add_profile_descriptor_list_to_record_for_server(tSDP_RECORD* prec, uint16_t profile_uuid,
+                                          uint16_t version) {
+  uint8_t* p;
+  bool result;
+  uint8_t* p_buff = (uint8_t*)osi_malloc(sizeof(uint8_t) * SDP_MAX_ATTR_LEN);
+
+  p = p_buff + 2;
+
+  /* First, build the profile descriptor list. This consists of a data element
+   * sequence. */
+  /* The sequence consists of profile\'s UUID and version number  */
+  UINT8_TO_BE_STREAM(p, (UUID_DESC_TYPE << 3) | SIZE_TWO_BYTES);
+  UINT16_TO_BE_STREAM(p, profile_uuid);
+
+  UINT8_TO_BE_STREAM(p, (UINT_DESC_TYPE << 3) | SIZE_TWO_BYTES);
+  UINT16_TO_BE_STREAM(p, version);
+
+  /* Add in type and length fields */
+  *p_buff = (uint8_t)((DATA_ELE_SEQ_DESC_TYPE << 3) | SIZE_IN_NEXT_BYTE);
+  *(p_buff + 1) = (uint8_t)(p - (p_buff + 2));
+
+  result = sdp_add_attribute_to_record_for_server(prec, ATTR_ID_BT_PROFILE_DESC_LIST, DATA_ELE_SEQ_DESC_TYPE,
+                                    (uint32_t)(p - p_buff), p_buff);
+  osi_free(p_buff);
+  return result;
+}
+
 /*************************************************************************************
 **
 ** Function        sdp_upgrade_pbap_pse_record
@@ -453,30 +633,30 @@ static const tSDP_RECORD* sdp_upgrade_pse_record(const tSDP_RECORD* p_rec,
 
   /* Copying contents of the PBAP 1.1 PSE record to a new 1.2 record */
   for (j = 0; j < p_rec->num_attributes; j++, p_attr++) {
-    SDP_AddAttributeToRecord(&pbap_102_sdp_rec, p_attr->id, p_attr->type,
-                             p_attr->len, p_attr->value_ptr);
+    sdp_add_attribute_to_record_for_server(&pbap_102_sdp_rec, p_attr->id, p_attr->type,
+                                           p_attr->len, p_attr->value_ptr);
   }
 
   /* Add supported repositories 1 byte */
-  status &= SDP_AddAttributeToRecord(
+  status &= sdp_add_attribute_to_record_for_server(
       &pbap_102_sdp_rec, ATTR_ID_SUPPORTED_REPOSITORIES, UINT_DESC_TYPE,
       (uint32_t)1, (uint8_t*)&sdpPseLocalRecord.supported_repositories);
 
   /* Add in the Bluetooth Profile Descriptor List */
-  status &= SDP_AddProfileDescriptorListToRecord(
+  status &= sdp_add_profile_descriptor_list_to_record_for_server(
       &pbap_102_sdp_rec, UUID_SERVCLASS_PHONE_ACCESS,
       sdpPseLocalRecord.profile_version);
 
   /* Add PBAP 1.2 supported features 4 */
   UINT32_TO_BE_STREAM(p_temp, sdpPseLocalRecord.supported_features);
-  status &= SDP_AddAttributeToRecord(&pbap_102_sdp_rec,
+  status &= sdp_add_attribute_to_record_for_server(&pbap_102_sdp_rec,
                                      ATTR_ID_PBAP_SUPPORTED_FEATURES,
                                      UINT_DESC_TYPE, (uint32_t)4, temp);
 
   /* Add the L2CAP PSM */
   p_temp = temp;  // The macro modifies p_temp, hence rewind.
   UINT16_TO_BE_STREAM(p_temp, sdpPseLocalRecord.l2cap_psm);
-  status &= SDP_AddAttributeToRecord(&pbap_102_sdp_rec, ATTR_ID_GOEP_L2CAP_PSM,
+  status &= sdp_add_attribute_to_record_for_server(&pbap_102_sdp_rec, ATTR_ID_GOEP_L2CAP_PSM,
                                      UINT_DESC_TYPE, (uint32_t)2, temp);
 
   if (!status) {

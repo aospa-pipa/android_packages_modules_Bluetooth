@@ -63,7 +63,6 @@
 #include "main/shim/entry.h"
 #include "main/shim/helpers.h"
 #include "main/shim/shim.h"
-#include "osi/include/allocator.h"
 #include "stack/include/bt_uuid16.h"
 #include "storage/config_keys.h"
 

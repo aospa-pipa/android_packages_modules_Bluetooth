@@ -2185,7 +2185,6 @@ class HeadsetStateMachine extends StateMachine {
             mSpeakerVolume = volume;
             boolean showVolume = android.os.SystemProperties.getBoolean(HFP_VOLUME_CONTROL_ENABLED, true);
             int flag = showVolume && (mCurrentState == mAudioOn) ? AudioManager.FLAG_SHOW_UI : 0;
-            flag |= AudioManager.FLAG_BLUETOOTH_ABS_VOLUME;
             int volStream =
                     android.media.audio.Flags.deprecateStreamBtSco()
                             ? AudioManager.STREAM_VOICE_CALL

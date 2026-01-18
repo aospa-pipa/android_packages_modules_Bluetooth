@@ -36,9 +36,6 @@
 #include "os/system_properties.h"
 #include "osi/include/properties.h"
 #include "stack/include/hcidefs.h"
-#if TARGET_FLOSS
-#include "sysprops/sysprops_module.h"
-#endif
 
 namespace bluetooth {
 namespace hci {

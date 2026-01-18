@@ -56,7 +56,6 @@
 #include "bt_dev_class.h"
 #include "bt_name.h"
 #include "bta/dm/bta_dm_device_search.h"
-#include "bta/dm/bta_dm_disc.h"
 #include "bta/gatt/bta_gattc_int.h"
 #include "bta/include/bta_api.h"
 #include "bta/include/bta_hh_api.h"
@@ -2568,7 +2567,6 @@ void BTIF_dm_disable() {
   }
   bluetooth::bqr::DisableBtQualityReport();
   log::info("Stack device manager shutdown finished");
-  future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
 }
 
 /*******************************************************************************
@@ -3152,10 +3150,15 @@ void btif_dm_cancel_bond(const RawAddress bd_addr) {
 void btif_dm_remove_bond(const RawAddress bd_addr) {
   log::verbose("bd_addr={}", bd_addr);
 
-  if (com::android::bluetooth::flags::cancel_pairing_while_remove_bond() && is_bonding_or_sdp() &&
-      pairing_cb.bd_addr == bd_addr) {
-    log::warn("Ongoing pairing/sdp detected, cancelling it first before removing bond.");
-    btif_dm_cancel_bond(bd_addr);
+  if (com::android::bluetooth::flags::cancel_pairing_while_remove_bond()) {
+    if (is_bonding_or_sdp() && pairing_cb.bd_addr == bd_addr) {
+      log::warn("Ongoing pairing/sdp detected, cancelling it first before removing bond.");
+      btif_dm_cancel_bond(bd_addr);
+    }
+    if (!BTM_IsBonded(bd_addr, BT_TRANSPORT_AUTO)) {
+      log::warn("Device is not bonded on any transport, skipping remove bond!!");
+      return;
+    }
   }
 
   BTM_LogHistory(kBtmLogTag, bd_addr, "Remove bond");

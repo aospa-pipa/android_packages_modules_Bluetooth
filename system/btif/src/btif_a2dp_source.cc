@@ -35,7 +35,6 @@
 #include <cstdint>
 #include <cstring>
 #include <future>
-#include <iomanip>
 #include <string>
 #include <utility>
 #include <vector>
@@ -63,11 +62,8 @@
 #include "stack/include/a2dp_sbc_constants.h"
 #include "stack/include/a2dp_vendor_ldac_constants.h"
 #include "stack/include/acl_api.h"
-#include "stack/include/acl_api_types.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/btm_ble_api.h"
-#include "stack/include/btm_client_interface.h"
-#include "stack/include/btm_status.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
 
