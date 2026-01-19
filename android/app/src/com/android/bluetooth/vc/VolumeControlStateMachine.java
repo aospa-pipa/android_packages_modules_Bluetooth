@@ -304,7 +304,22 @@ class VolumeControlStateMachine extends StateMachine {
     }
 
     int getConnectionState() {
-        return switch (mCurrentState.getName()) {
+        // Check for null. mCurrentState can be null during state machine
+        // initialization, cleanup, or state transitions
+        if (mCurrentState == null) {
+            Log.w(TAG, "getConnectionState(" + mDevice + "): mCurrentState is null, "
+                    + "returning DISCONNECTED");
+            return STATE_DISCONNECTED;
+        }
+
+        String stateName = mCurrentState.getName();
+        if (stateName == null) {
+            Log.w(TAG, "getConnectionState(" + mDevice + "): state name is null, "
+                    + "returning DISCONNECTED");
+            return STATE_DISCONNECTED;
+        }
+
+        return switch (stateName) {
             case "Disconnected" -> STATE_DISCONNECTED;
             case "Connecting" -> STATE_CONNECTING;
             case "Connected" -> STATE_CONNECTED;
