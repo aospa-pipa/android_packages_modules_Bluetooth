@@ -186,6 +186,12 @@ typedef void (*bluetooth_init_t)(bt_callbacks_t* callbacks, bool guest_mode,
                                  bt_os_callouts_t* callouts);
 bluetooth_init_t bluetooth_init_func = NULL;
 
+typedef void (*bluetooth_enable_t)(const std::string local_name);
+bluetooth_enable_t bluetooth_enable_func = NULL;
+
+typedef void (*bluetooth_disable_t)(void);
+bluetooth_disable_t bluetooth_disable_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -492,6 +498,16 @@ int load_bt_lib(const bt_interface_t** interface) {
     goto error;
   }
 
+  bluetooth_enable_func = (bluetooth_enable_t)dlsym(handle, "bluetooth_enable");
+  if (!bluetooth_enable_func) {
+    printf("failed to load symbol bluetooth_enable from Bluetooth library\n");
+  }
+
+  bluetooth_disable_func = (bluetooth_disable_t)dlsym(handle, "bluetooth_disable");
+  if (!bluetooth_disable_func) {
+    printf("failed to load symbol bluetooth_disable from Bluetooth library\n");
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -591,7 +607,7 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
 }
 #endif
 static void ssp_request_cb(RawAddress remote_bd_addr,
-                           bt_ssp_variant_t pairing_variant,
+                           PairingVariant pairing_variant,
                            uint32_t pass_key, int pairing_algo) {
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
@@ -676,8 +692,14 @@ void bdt_enable(void) {
     printf("Bluetooth is already enabled\n");
     return;
   }
-  std::string toolName = "l2cap_tool";
-  status = (bt_status_t)sBtInterface->enable(std::move(toolName));
+  if (bluetooth_enable_func) {
+    std::string toolName = "l2cap_tool";
+    bluetooth_enable_func(std::move(toolName));
+    status = BT_STATUS_SUCCESS;
+  } else {
+    printf("Error: bluetooth_enable function not found\n");
+    status = BT_STATUS_FAIL;
+  }
   return;
 }
 
@@ -685,7 +707,13 @@ void bdt_disable(void) {
   if (BT_STATE_ON != g_AdapterState) {
     return;
   }
-  status = (bt_status_t)sBtInterface->disable();
+  if (bluetooth_disable_func) {
+    bluetooth_disable_func();
+    status = BT_STATUS_SUCCESS;
+  } else {
+    printf("Error: bluetooth_disable function not found\n");
+    status = BT_STATUS_FAIL;
+  }
   check_return_status(status);
   return;
 }
