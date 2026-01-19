@@ -785,6 +785,7 @@ provider::get_a2dp_configuration(
             a2dp_configuration.codec_parameters.codec_specific_3 |=
                 (int64_t)APTX_ADAPTIVE_R2_2_SUPPORT_AVAILABLE;
           } else {
+            log::debug("aptX Adaptive R2.2 not supported by remote");
             a2dp_configuration.codec_parameters.codec_specific_3 &=
                   ~((int64_t)APTX_ADAPTIVE_R2_2_SUPPORT_MASK);
             a2dp_configuration.codec_parameters.codec_specific_3 |=
@@ -793,6 +794,8 @@ provider::get_a2dp_configuration(
         }
       }
     }
+  } else {
+    log::debug("Lossless is not supported by remote");
   }
   return a2dp_configuration;
 }
