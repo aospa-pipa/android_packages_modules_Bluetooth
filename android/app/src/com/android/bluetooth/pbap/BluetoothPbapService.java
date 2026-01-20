@@ -679,6 +679,7 @@ public class BluetoothPbapService extends ConnectableProfile implements IObexCon
             mPbapStateMachineMap.clear();
         }
         unregisterReceiver(mUserChangeReceiver);
+        BluetoothPbapUtils.clearContactsCache();
     }
 
     @Override
