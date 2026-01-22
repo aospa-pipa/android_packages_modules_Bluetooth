@@ -4844,7 +4844,7 @@ static bool btm_sec_start_get_name(BtmDevice* p_device) {
  *
  ******************************************************************************/
 static void btm_sec_wait_and_start_authentication(BtmDevice* p_device) {
-  int32_t delay_auth = osi_property_get_int32("bluetooth.btm.sec.delay_auth_ms.value", 0);
+  int32_t delay_auth = osi_property_get_int32("bluetooth.btm.sec.delay_auth_ms.value", 200);
 
   /* Overwrite the system-wide authentication delay if device-specific
    * interoperability delay is needed. */
