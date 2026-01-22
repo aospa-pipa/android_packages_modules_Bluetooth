@@ -2144,7 +2144,7 @@ public class BluetoothManagerService {
         return bOptions.toBundle();
     }
 
-    void setBtHciSnoopLogMode(int mode) {
+    private static void setBtHciSnoopLogMode(int mode) {
         final BluetoothProperties.snoop_log_mode_values snoopMode =
                 switch (mode) {
                     case BT_SNOOP_LOG_MODE_DISABLED ->
@@ -2159,15 +2159,6 @@ public class BluetoothManagerService {
         } catch (RuntimeException e) {
             Log.e(TAG, "setBtHciSnoopLogMode: Failed to set mode to " + mode + ": " + e);
         }
-    }
-
-    int getBtHciSnoopLogMode() {
-        return switch (BluetoothProperties.snoop_log_mode()
-                .orElse(BluetoothProperties.snoop_log_mode_values.DISABLED)) {
-            case BluetoothProperties.snoop_log_mode_values.FILTERED -> BT_SNOOP_LOG_MODE_FILTERED;
-            case BluetoothProperties.snoop_log_mode_values.FULL -> BT_SNOOP_LOG_MODE_FULL;
-            default -> BT_SNOOP_LOG_MODE_DISABLED;
-        };
     }
 
     private final boolean mConfigAllowAutoOn;

@@ -29,7 +29,7 @@
 #include "macros.h"
 #include "stack/btm/neighbor_inquiry.h"
 #include "stack/include/sdp_status.h"
-#include "stack/sdp/sdp_discovery_db.h"
+#include "stack/include/sdp_discovery_db.h"
 
 #define BTA_SERVICE_ID_TO_SERVICE_MASK(id) (1 << (id))
 

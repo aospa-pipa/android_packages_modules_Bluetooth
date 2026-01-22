@@ -345,6 +345,19 @@ public:
   MOCK_METHOD((void), UpdateRemoteDelay, (uint16_t delay), (override));
   MOCK_METHOD((void), UpdateAudioConfigToHal, (const ::bluetooth::le_audio::stream_config&),
               (override));
+  MOCK_METHOD((std::optional<broadcaster::BroadcastConfiguration>), GetBroadcastConfig,
+              ((const std::vector<std::pair<types::LeAudioContextType, uint8_t>>&),
+               (const std::optional<std::vector<::bluetooth::le_audio::types::acs_ac_record>>&)),
+              (const override));
+  MOCK_METHOD((std::optional<::bluetooth::le_audio::types::AudioSetConfiguration>),
+              GetUnicastConfig, (const CodecManager::UnicastConfigurationRequirements&),
+              (const override));
+  MOCK_METHOD((::bluetooth::le_audio::types::VendorDataPathConfiguration),
+              GetVendorConfigureDataPathPayload,
+              ((std::vector<uint16_t>), (::bluetooth::le_audio::types::LeAudioContextType),
+              (bool), (bool)), (override));
+  MOCK_METHOD((void), UpdateBroadcastAudioConfigToHal,
+              (const ::bluetooth::le_audio::broadcast_offload_config&), (override));
   MOCK_METHOD((void), SuspendedForReconfiguration, (), (override));
   MOCK_METHOD((void), ReconfigurationComplete, (), (override));
 
@@ -1263,7 +1276,7 @@ protected:
                   group->cig.GenerateCisIds(context_type);
 
                   std::vector<uint16_t> conn_handles;
-                  for (uint8_t i = 0; i < (uint8_t)(group->cig.cises.size()); i++) {
+                  for (uint8_t i = 0; i < (uint8_t)(group->cig.GetCises().size()); i++) {
                     conn_handles.push_back(iso_con_counter_++);
                   }
                   group->cig.AssignCisConnHandles(conn_handles);
@@ -1660,16 +1673,9 @@ protected:
   void SetUp() override {
     __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
     com::android::bluetooth::flags::provider_->reset_flags();
-    com::android::bluetooth::flags::provider_->leaudio_fix_stop_reconfiguration_timeout(true);
-    com::android::bluetooth::flags::provider_->leaudio_use_aggressive_params(true);
-    com::android::bluetooth::flags::provider_->le_audio_update_config_preference_to_hal(true);
-    com::android::bluetooth::flags::provider_->leaudio_add_opus_hi_res_codec_type(true);
-    com::android::bluetooth::flags::provider_->leaudio_dynamic_data_path_change(true);
-    com::android::bluetooth::flags::provider_->leaudio_dynamic_direction_opening(true);
     com::android::bluetooth::flags::provider_
             ->leaudio_use_game_sonification_as_regular_sonification(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_switching_le_audio_devices(true);
-    com::android::bluetooth::flags::provider_->dsa_use_codec_extensibility(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_unicast_monitor(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_state_machine_invalid_status(true);
     com::android::bluetooth::flags::provider_->leaudio_fix_allocation_in_codec_config(true);
@@ -3409,12 +3415,10 @@ protected:
   void SetUp() override {
     UnicastTest::SetUp();
     group_ = new LeAudioDeviceGroup(group_id_);
-    com::android::bluetooth::flags::provider_->leaudio_use_aggressive_params(true);
   }
 
   void TearDown() override {
     delete group_;
-    com::android::bluetooth::flags::provider_->leaudio_use_aggressive_params(false);
     UnicastTest::TearDown();
   }
 
@@ -13760,7 +13764,7 @@ TEST_F(UnicastTest, SpeakerStreamingTimeout) {
 
   /* No assigned cises should remain when transition remains in IDLE state */
   ASSERT_NE(0lu, streaming_groups.count(group_id));
-  ASSERT_EQ(0, static_cast<int>(group->cig.cises.size()));
+  ASSERT_EQ(0, static_cast<int>(group->cig.GetCises().size()));
   ASSERT_TRUE(device != nullptr);
   ASSERT_EQ(device->GetConnectionState(), DeviceConnectState::CONNECTING_AUTOCONNECT);
   Mock::VerifyAndClearExpectations(&mock_btm_interface_);
@@ -15623,7 +15627,6 @@ protected:
   void SetUp() override {
     UnicastTest::SetUp();
     com::android::bluetooth::flags::provider_->reset_flags();
-    com::android::bluetooth::flags::provider_->leaudio_dynamic_direction_opening(true);
     com::android::bluetooth::flags::provider_->leaudio_game_detector(true);
     GmapClient::UpdateGmapOffloaderSupport(true);
     GmapServer::UpdateGmapOffloaderSupport(true);
@@ -15641,7 +15644,6 @@ protected:
   void SetUp() override {
     UnicastTestCsis::SetUp();
     com::android::bluetooth::flags::provider_->reset_flags();
-    com::android::bluetooth::flags::provider_->leaudio_dynamic_direction_opening(true);
     com::android::bluetooth::flags::provider_->leaudio_game_detector(true);
     GmapClient::UpdateGmapOffloaderSupport(true);
     GmapServer::UpdateGmapOffloaderSupport(true);

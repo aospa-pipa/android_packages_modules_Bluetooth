@@ -72,7 +72,8 @@ BluetoothAudioClientInterface* software_hal_interface = nullptr;
 BluetoothAudioClientInterface* offloading_hal_interface = nullptr;
 BluetoothAudioClientInterface* decoder_offloading_hal_interface = nullptr;
 BluetoothAudioClientInterface* active_hal_interface = nullptr;
-
+static StreamCallbacks null_stream_callbacks_;
+static StreamCallbacks const* stream_callbacks_ = &null_stream_callbacks_;
 // ProviderInfo for A2DP hardware offload encoding and decoding data paths,
 // if supported by the HAL and enabled. nullptr if not supported
 // or disabled.
@@ -172,7 +173,8 @@ bool init(bluetooth::common::MessageLoopThread* /*message_loop*/,
       return false;
     }
   }
-
+  log::info("Save stream_callbacks");
+  stream_callbacks_ = stream_callbacks;
   active_hal_interface =
           (offloading_hal_interface != nullptr ? offloading_hal_interface : software_hal_interface);
 
@@ -548,7 +550,16 @@ provider::get_a2dp_configuration(
   using ::aidl::android::hardware::bluetooth::audio::CodecId;
 
   BluetoothAudioClientInterface* hal_interface_to_use = nullptr;
-
+  if (offloading_hal_interface == nullptr) {
+     log::error("try to reopen offloading HAL interface ");
+     auto a2dp_transport_offload = new A2dpTransport(
+             SessionType::A2DP_HARDWARE_OFFLOAD_ENCODING_DATAPATH, stream_callbacks_);
+     offloading_hal_interface = new_hal_interface(a2dp_transport_offload);
+     if (offloading_hal_interface == nullptr) {
+       log::error("the offloading HAL interface cannot be opened");
+       return std::nullopt;
+     }
+  }
   if (com::android::bluetooth::flags::a2dp_sink_offload()) {
     if (is_source) {
       hal_interface_to_use = offloading_hal_interface;
