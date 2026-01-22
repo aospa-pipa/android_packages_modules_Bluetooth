@@ -57,17 +57,16 @@
 #define HFP_PROFILE_MINOR_VERSION_6 0x06
 #define HFP_PROFILE_MINOR_VERSION_7 0x07
 #define HFP_PROFILE_MINOR_VERSION_9 0x09
+
 #define PBAP_GOEP_L2CAP_PSM_LEN 0x06
 #define PBAP_SUPP_FEA_LEN 0x08
 
-#ifndef PTS_TEST_MODE_PROPERTY
-#define PTS_TEST_MODE_PROPERTY "persist.bluetooth.pts"
+#ifndef SDP_ENABLE_PTS_PBAP
+#define SDP_ENABLE_PTS_PBAP "bluetooth.pts.pbap"
 #endif
 
 #define PBAP_1_2 0x0102
 #define PBAP_1_2_BL_LEN 14
-
-using namespace bluetooth;
 
 /* Used to set PBAP local SDP device record for PBAP 1.2 upgrade */
 struct tSDP_PSE_LOCAL_RECORD {
@@ -79,6 +78,12 @@ struct tSDP_PSE_LOCAL_RECORD {
 };
 
 static tSDP_PSE_LOCAL_RECORD sdpPseLocalRecord;
+
+#ifndef PTS_TEST_MODE_PROPERTY
+#define PTS_TEST_MODE_PROPERTY "persist.bluetooth.pts"
+#endif
+
+using namespace bluetooth;
 
 /******************************************************************************/
 /*                E R R O R   T E X T   S T R I N G S                         */
@@ -1529,7 +1534,7 @@ bool is_sdp_pbap_pce_disabled(RawAddress remote_address) {
 
 /*************************************************************************************
 **
-** Function        sdp_save_local_pse_record_attributes_val
+** Function        sdp_save_local_pse_record_attributes
 **
 ** Description     Save pbap 1.2 sdp record attributes values, which would be
 *used for dynamic version upgrade.

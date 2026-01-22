@@ -755,7 +755,6 @@ TEST_F(LeImplTest, aggressive_connection_mode_selected_when_no_ongoing_le_connec
     GTEST_SKIP() << "Skipping test because the threshold is zero";
   }
 
-  com::android::bluetooth::flags::provider_->initial_conn_params_p1(true);
   set_random_device_address_policy();
   controller_->AddSupported(OpCode::LE_EXTENDED_CREATE_CONNECTION);
 
@@ -773,7 +772,6 @@ TEST_F(LeImplTest, aggressive_connection_mode_selected_when_few_le_connections_e
     GTEST_SKIP() << "Skipping test because the threshold is zero";
   }
 
-  com::android::bluetooth::flags::provider_->initial_conn_params_p1(true);
   set_random_device_address_policy();
   controller_->AddSupported(OpCode::LE_EXTENDED_CREATE_CONNECTION);
 
@@ -800,9 +798,6 @@ TEST_F(LeImplTest,
     GTEST_SKIP() << "Skipping test because the threshold is zero";
   }
 
-  com::android::bluetooth::flags::provider_->initial_conn_params_p1(true);
-  com::android::bluetooth::flags::provider_->leaudio_use_aggressive_params(true);
-
   std::vector<AddressWithType> accept_list;
   Address test_non_le_audio_device_address = Address::FromString("00:11:22:33:44:55").value();
   accept_list.push_back(
@@ -821,7 +816,6 @@ TEST_F(LeImplTest,
 }
 
 TEST_F(LeImplTest, relaxed_connection_mode_selected_when_enough_le_connections_exist) {
-  com::android::bluetooth::flags::provider_->initial_conn_params_p1(true);
   set_random_device_address_policy();
   controller_->AddSupported(OpCode::LE_EXTENDED_CREATE_CONNECTION);
 

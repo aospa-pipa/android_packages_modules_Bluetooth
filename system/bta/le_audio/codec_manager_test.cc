@@ -168,6 +168,8 @@ public:
   MOCK_METHOD((void), SetCodecPriority,
               (const ::bluetooth::le_audio::types::LeAudioCodecId& codecId, int32_t priority),
               (override));
+  MOCK_METHOD((void), UpdateBroadcastAudioConfigToHal,
+              (const ::bluetooth::le_audio::broadcast_offload_config&), (override));
   MOCK_METHOD((void), SuspendedForReconfiguration, (), (override));
   MOCK_METHOD((void), ReconfigurationComplete, (), (override));
 
@@ -177,14 +179,17 @@ public:
               (const override));
 
   MOCK_METHOD((std::optional<::bluetooth::le_audio::types::AudioSetConfiguration>),
-              GetUnicastConfig,
-              (types::LeAudioContextType,
-               std::optional<const ::bluetooth::le_audio::types::PublishedAudioCapabilities*>,
-               std::optional<const ::bluetooth::le_audio::types::PublishedAudioCapabilities*>),
+              GetUnicastConfig, (const CodecManager::UnicastConfigurationRequirements&),
               (const override));
+
+  MOCK_METHOD((::bluetooth::le_audio::types::VendorDataPathConfiguration),
+              GetVendorConfigureDataPathPayload,
+              ((std::vector<uint16_t>), (::bluetooth::le_audio::types::LeAudioContextType),
+              (bool), (bool)), (override));
 
   MOCK_METHOD((void), UpdateMetadataChanged, (::bluetooth::le_audio::types::AseState& state,
                int cig_id, int cis_id, const std::vector<uint8_t>& data), (override));
+
 
   MOCK_METHOD((void), OnDestroyed, ());
   virtual ~MockLeAudioSinkHalClient() override { OnDestroyed(); }
