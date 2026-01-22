@@ -469,11 +469,6 @@ public:
   }
 
   bool isDynamicDirectionsEnabled(LeAudioDeviceGroup* group) {
-    if (!com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-      log::debug("leaudio_dynamic_direction_opening is not enabled");
-      return false;
-    }
-
     if (group == nullptr) {
       log::debug("Not valid group");
       return false;
@@ -1480,13 +1475,6 @@ public:
   void UpdateCodecConfigPreferenceToHal(
           const bluetooth::le_audio::btle_audio_codec_config_t* input_codec_config,
           const bluetooth::le_audio::btle_audio_codec_config_t* output_codec_config) {
-    if (false/*!com_android_bluetooth_flags_le_audio_update_config_preference_to_hal()*/) {
-      log::warn(
-              "SetCodecPriority skipped due to flag not set: "
-              "le_audio_update_config_preference_to_hal");
-      return;
-    }
-
     if (le_audio_sink_hal_client_ && input_codec_config) {
       log::info("input codec type: {}, input codec priority: {}",
                    input_codec_config->codec_type, input_codec_config->codec_priority);
@@ -3283,9 +3271,7 @@ public:
       leAudioDevice->SetConnectionState(DeviceConnectState::CONNECTED_BY_USER_GETTING_READY);
     }
 
-    if (com_android_bluetooth_flags_leaudio_use_aggressive_params()) {
-      lockConnParamsForStreaming(leAudioDevice);
-    }
+    lockConnParamsForStreaming(leAudioDevice);
 
     /* Check if the device is in allow list and update the flag */
     leAudioDevice->UpdateDeviceAllowlistFlag();
@@ -4520,11 +4506,6 @@ public:
     log::debug("{},  {}", leAudioDevice->address_,
                bluetooth::common::ToString(leAudioDevice->GetConnectionState()));
 
-    if (!com_android_bluetooth_flags_leaudio_use_aggressive_params()) {
-      stack::l2cap::get_interface().L2CA_LockBleConnParamsForProfileConnection(
-              leAudioDevice->address_, false);
-    }
-
     if (leAudioDevice->GetConnectionState() ==
                 DeviceConnectState::CONNECTED_BY_USER_GETTING_READY &&
         (leAudioDevice->autoconnect_flag_ == false)) {
@@ -5121,7 +5102,7 @@ public:
 
         UINT8_TO_STREAM(p, 0x24); //sub-opcode
         UINT8_TO_STREAM(p, group_id);
-        UINT8_TO_STREAM(p, group->cig.cises[0].id);
+        UINT8_TO_STREAM(p, group->cig.GetCises()[0].id);
         UINT8_TO_STREAM(p, 1); //numlimits
 
         UINT8_TO_STREAM(p, 0x3);
@@ -5133,7 +5114,7 @@ public:
       }
 
       if (device->GetFirstActiveAse()->is_vsmetadata_available) {
-        for (struct bluetooth::le_audio::types::cis& cis : group->cig.cises) {
+        for (const struct bluetooth::le_audio::types::cis& cis : group->cig.GetCises()) {
           UpdateEncoderParams(group_id, cis.id,
               device->GetFirstActiveAse()->vs_metadata);
           device->GetFirstActiveAse()->is_vsmetadata_available = false;
@@ -5370,7 +5351,7 @@ public:
 
     log::info("Session reconfiguration needed group: {} for context type: {}", group->group_id_,
               ToString(context_type));
-    if (com_android_bluetooth_flags_dsa_use_codec_extensibility() && dsa_reconfigure_needed) {
+    if (dsa_reconfigure_needed) {
       log::debug("Invalidate current {} configuration for DSA mode change",
                  common::ToString(context_type));
       group->InvalidateCachedConfigurations(context_type);
@@ -5422,11 +5403,7 @@ public:
       return;
     }
 
-    /* Without the flag, this shall be called when group is not streaming */
-    bool group_is_streaming = com_android_bluetooth_flags_leaudio_dynamic_direction_opening()
-                                      ? group->IsStreaming()
-                                      : false;
-    if (leAudioHealthStatus_ && !group_is_streaming) {
+    if (leAudioHealthStatus_ && !group->IsStreaming()) {
       leAudioHealthStatus_->AddStatisticForGroup(
               group, LeAudioHealthGroupStatType::STREAM_CONTEXT_NOT_AVAILABLE);
     }
@@ -5803,23 +5780,13 @@ public:
       case AudioState::IDLE: {
         switch (audio_receiver_state_) {
           case AudioState::IDLE:
-            if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-              /* Let's set it before the OnAudioResume() as it is important in case group is already
-               * in QoS Configured state so the state machine can get enabled directions correctly.
-               */
-              audio_sender_state_ = AudioState::READY_TO_START;
-            }
+            /* Let's set it before the OnAudioResume() as it is important in case group is already
+             * in QoS Configured state so the state machine can get enabled directions correctly.
+             */
+            audio_sender_state_ = AudioState::READY_TO_START;
+
             /* Stream is not started. Try to do it.*/
-            if (OnAudioResume(group, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
-              if (!com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-                audio_sender_state_ = AudioState::READY_TO_START;
-              }
-              if (!com_android_bluetooth_flags_leaudio_fix_stop_reconfiguration_timeout() &&
-                  IsReconfigurationTimeoutRunning(active_group_id_)) {
-                StopReconfigurationTimeout(active_group_id_,
-                                           bluetooth::le_audio::types::kLeAudioDirectionSource);
-              }
-            } else {
+            if (!OnAudioResume(group, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
               CancelLocalAudioSourceStreamingRequest();
             }
             break;
@@ -5912,8 +5879,7 @@ public:
             }
             break;
         }
-        if (com_android_bluetooth_flags_leaudio_fix_stop_reconfiguration_timeout() &&
-            IsReconfigurationTimeoutRunning(active_group_id_)) {
+        if (IsReconfigurationTimeoutRunning(active_group_id_)) {
           StopReconfigurationTimeout(active_group_id_,
                                      bluetooth::le_audio::types::kLeAudioDirectionSource);
         }
@@ -6204,22 +6170,11 @@ public:
       case AudioState::IDLE: {
         switch (audio_sender_state_) {
           case AudioState::IDLE:
-            if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-              /* Let's set it before the OnAudioResume() as it is important in case group is already
-               * in QoS Configured state so the state machine can get enabled directions correctly.
-               */
-              audio_receiver_state_ = AudioState::READY_TO_START;
-            }
-            if (OnAudioResume(group, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
-              if (!com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-                audio_receiver_state_ = AudioState::READY_TO_START;
-              }
-              if (!com_android_bluetooth_flags_leaudio_fix_stop_reconfiguration_timeout() &&
-                  IsReconfigurationTimeoutRunning(active_group_id_)) {
-                StopReconfigurationTimeout(active_group_id_,
-                                           bluetooth::le_audio::types::kLeAudioDirectionSink);
-              }
-            } else {
+            /* Let's set it before the OnAudioResume() as it is important in case group is already
+             * in QoS Configured state so the state machine can get enabled directions correctly.
+             */
+            audio_receiver_state_ = AudioState::READY_TO_START;
+            if (!OnAudioResume(group, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
               CancelLocalAudioSinkStreamingRequest();
             }
             break;
@@ -6308,8 +6263,7 @@ public:
             }
             break;
         }
-        if (com_android_bluetooth_flags_leaudio_fix_stop_reconfiguration_timeout() &&
-            IsReconfigurationTimeoutRunning(active_group_id_)) {
+        if (IsReconfigurationTimeoutRunning(active_group_id_)) {
           StopReconfigurationTimeout(active_group_id_,
                                      bluetooth::le_audio::types::kLeAudioDirectionSink);
         }
@@ -6811,9 +6765,7 @@ public:
                                is_missing_source_ase_context;
 
     // Clear DSA configuration cache when DSA mode has changed
-    auto clear_dsa_config_cache =
-            com_android_bluetooth_flags_dsa_use_codec_extensibility() && is_dsa_reconfig_needed;
-    if (is_configuration_changed || clear_dsa_config_cache) {
+    if (is_configuration_changed || is_dsa_reconfig_needed) {
       group->InvalidateCachedConfigurations(new_configuration_context);
     }
 
@@ -7349,7 +7301,7 @@ public:
 
     auto group = aseGroups_.FindById(group_id);
     if (!isDynamicDirectionsEnabled(group)) {
-      log::debug("leaudio_dynamic_direction_opening is not enabled.");
+      log::debug("Dynamic Directions mode is not enabled.");
       if (group && group->GetTargetState() == AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED) {
         log::info("group_id: {} is suspending.", group_id);
         return 0;
@@ -7452,9 +7404,7 @@ public:
 
     switch (status) {
       case GroupStreamStatus::STREAMING: {
-        if (com_android_bluetooth_flags_leaudio_use_aggressive_params()) {
-          unlockConnParamsForStreaming(group);
-        }
+        unlockConnParamsForStreaming(group);
         if (!is_active_group_operation) {
           log::error("Streaming group {} is no longer active. Stop the group.", group_id);
           GroupStop(group_id);

@@ -68,7 +68,9 @@ import com.android.bluetooth.BluetoothEventLogger;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.le_audio.LeAudioConstants;
 import com.android.bluetooth.le_audio.LeAudioStackEvent;
+import com.android.bluetooth.le_audio.LeAudioUtils;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.GuardedBy;
@@ -302,14 +304,16 @@ public class BassClientService extends ConnectableProfile {
                     mBaasUuidFilters.addAll(filters);
                 }
 
-                if (!BassUtils.containUuid(mBaasUuidFilters, BassConstants.BAAS_UUID)) {
+                if (!BassUtils.containUuid(mBaasUuidFilters, LeAudioConstants.BAAS_UUID)) {
                     byte[] serviceData = {0x00, 0x00, 0x00}; // Broadcast_ID
                     byte[] serviceDataMask = {0x00, 0x00, 0x00};
 
                     mBaasUuidFilters.add(
                             new ScanFilter.Builder()
                                     .setServiceData(
-                                            BassConstants.BAAS_UUID, serviceData, serviceDataMask)
+                                            LeAudioConstants.BAAS_UUID,
+                                            serviceData,
+                                            serviceDataMask)
                                     .build());
                 }
 
@@ -408,8 +412,8 @@ public class BassClientService extends ConnectableProfile {
                 }
             }
 
-            Integer broadcastId = BassUtils.getBroadcastId(result);
-            if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            Integer broadcastId = LeAudioUtils.getBroadcastId(result);
+            if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 Log.d(TAG, "onScanResult: Broadcast ID is invalid");
                 return;
             }
@@ -740,7 +744,7 @@ public class BassClientService extends ConnectableProfile {
         Map<Integer, PeriodicAdvertisementResult> paResMap =
                 mPeriodicAdvertisementResultMap.get(device);
         if (paResMap == null
-                || (bId != BassConstants.INVALID_BROADCAST_ID && !paResMap.containsKey(bId))) {
+                || (bId != LeAudioConstants.INVALID_BROADCAST_ID && !paResMap.containsKey(bId))) {
             Log.d(TAG, "PAResmap: add >>>");
             mSyncHandleToDeviceMap.put(syncHandle, device);
             updateSyncHandleForBroadcastId(syncHandle, bId);
@@ -761,17 +765,18 @@ public class BassClientService extends ConnectableProfile {
             }
         } else {
             Log.d(TAG, "PAResmap: update >>>");
-            if (bId == BassConstants.INVALID_BROADCAST_ID) {
+            if (bId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 // Update when onSyncEstablished, try to retrieve valid broadcast id
                 bId = getBroadcastIdForSyncHandle(BassConstants.PENDING_SYNC_HANDLE);
 
-                if (bId == BassConstants.INVALID_BROADCAST_ID || !paResMap.containsKey(bId)) {
+                if (bId == LeAudioConstants.INVALID_BROADCAST_ID || !paResMap.containsKey(bId)) {
                     Log.e(TAG, "PAResmap: error! no valid broadcast id found>>>");
                     return;
                 }
 
                 int oldBroadcastId = getBroadcastIdForSyncHandle(syncHandle);
-                if (oldBroadcastId != BassConstants.INVALID_BROADCAST_ID && oldBroadcastId != bId) {
+                if (oldBroadcastId != LeAudioConstants.INVALID_BROADCAST_ID
+                        && oldBroadcastId != bId) {
                     Log.d(
                             TAG,
                             "updatePeriodicAdvertisementResultMap: SyncEstablished on the same"
@@ -800,7 +805,7 @@ public class BassClientService extends ConnectableProfile {
                 }
                 mSyncHandleToDeviceMap.put(syncHandle, device);
                 paRes.updateSyncHandle(syncHandle);
-                if (paRes.getBroadcastId() != BassConstants.INVALID_BROADCAST_ID) {
+                if (paRes.getBroadcastId() != LeAudioConstants.INVALID_BROADCAST_ID) {
                     // broadcast successfully synced
                     // update the sync handle for the broadcast source
                     updateSyncHandleForBroadcastId(syncHandle, paRes.getBroadcastId());
@@ -809,7 +814,7 @@ public class BassClientService extends ConnectableProfile {
             if (advInterval != BassConstants.INVALID_ADV_INTERVAL) {
                 paRes.updateAdvInterval(advInterval);
             }
-            if (bId != BassConstants.INVALID_BROADCAST_ID) {
+            if (bId != LeAudioConstants.INVALID_BROADCAST_ID) {
                 paRes.updateBroadcastId(bId);
             }
             if (rssi != BluetoothLeBroadcastMetadata.RSSI_UNKNOWN) {
@@ -829,7 +834,7 @@ public class BassClientService extends ConnectableProfile {
 
     PeriodicAdvertisementResult getPeriodicAdvertisementResult(
             BluetoothDevice device, int broadcastId) {
-        if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+        if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
             Log.e(TAG, "getPeriodicAdvertisementResult: invalid broadcast id");
             return null;
         }
@@ -1011,7 +1016,7 @@ public class BassClientService extends ConnectableProfile {
         if (mSyncHandleToBroadcastIdMap.containsKey(syncHandle)) {
             return mSyncHandleToBroadcastIdMap.get(syncHandle);
         }
-        return BassConstants.INVALID_BROADCAST_ID;
+        return LeAudioConstants.INVALID_BROADCAST_ID;
     }
 
     void updateSyncHandleForBroadcastId(int syncHandle, int broadcastId) {
@@ -2549,7 +2554,8 @@ public class BassClientService extends ConnectableProfile {
                     if (Flags.leaudioBroadcastImproveSourceOperations()) {
                         queuedBroadcastId = sourceSyncRequest.paResult.getBroadcastId();
                     } else {
-                        queuedBroadcastId = BassUtils.getBroadcastId(sourceSyncRequest.scanResult);
+                        queuedBroadcastId =
+                                LeAudioUtils.getBroadcastId(sourceSyncRequest.scanResult);
                     }
                     if (!broadcastsToKeepSynced.contains(queuedBroadcastId)) {
                         iterator.remove();
@@ -2692,7 +2698,7 @@ public class BassClientService extends ConnectableProfile {
                             + ", timeout: "
                             + timeout);
 
-            if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 Log.w(TAG, "onSyncEstablished unexpected call, no pending synchronization");
                 handleSelectSourceRequest();
                 return;
@@ -2761,7 +2767,7 @@ public class BassClientService extends ConnectableProfile {
                         syncHandle,
                         advertisingSid,
                         BassConstants.INVALID_ADV_INTERVAL,
-                        BassConstants.INVALID_BROADCAST_ID,
+                        LeAudioConstants.INVALID_BROADCAST_ID,
                         BluetoothLeBroadcastMetadata.RSSI_UNKNOWN,
                         null,
                         null);
@@ -2934,7 +2940,7 @@ public class BassClientService extends ConnectableProfile {
             int broadcastId = getBroadcastIdForSyncHandle(syncHandle);
             Log.d(TAG, "OnSyncLost: syncHandle=" + syncHandle + ", broadcastID=" + broadcastId);
             clearAllDataForSyncHandle(syncHandle);
-            if (broadcastId != BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId != LeAudioConstants.INVALID_BROADCAST_ID) {
                 synchronized (mSourceSyncRequestsQueue) {
                     int failsCounter = mSyncFailureCounter.getOrDefault(broadcastId, 0) + 1;
                     mSyncFailureCounter.put(broadcastId, failsCounter);
@@ -3026,7 +3032,7 @@ public class BassClientService extends ConnectableProfile {
                             + ", timeout: "
                             + timeout);
 
-            if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 Log.w(TAG, "onSyncEstablished unexpected call, no pending synchronization");
                 handleSelectSourceRequest();
                 return;
@@ -3101,7 +3107,7 @@ public class BassClientService extends ConnectableProfile {
                         syncHandle,
                         advertisingSid,
                         BassConstants.INVALID_ADV_INTERVAL,
-                        BassConstants.INVALID_BROADCAST_ID,
+                        LeAudioConstants.INVALID_BROADCAST_ID,
                         BluetoothLeBroadcastMetadata.RSSI_UNKNOWN,
                         null,
                         null);
@@ -3274,7 +3280,7 @@ public class BassClientService extends ConnectableProfile {
             int broadcastId = getBroadcastIdForSyncHandle(syncHandle);
             Log.d(TAG, "OnSyncLost: syncHandle=" + syncHandle + ", broadcastID=" + broadcastId);
             clearAllDataForSyncHandle(syncHandle);
-            if (broadcastId != BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId != LeAudioConstants.INVALID_BROADCAST_ID) {
                 synchronized (mSourceSyncRequestsQueue) {
                     int failsCounter = mSyncFailureCounter.getOrDefault(broadcastId, 0) + 1;
                     mSyncFailureCounter.put(broadcastId, failsCounter);
@@ -3716,7 +3722,7 @@ public class BassClientService extends ConnectableProfile {
         ScanResult scanRes = null;
         ScanRecord scanRecord = null;
         PeriodicAdvertisementResult paResultTemp = null;
-        int broadcastId = BassConstants.INVALID_BROADCAST_ID;
+        int broadcastId = LeAudioConstants.INVALID_BROADCAST_ID;
 
         synchronized (mSourceSyncRequestsQueue) {
             if (mSourceSyncRequestsQueue.isEmpty()) {
@@ -3740,13 +3746,13 @@ public class BassClientService extends ConnectableProfile {
                 }
                 scanRes = mSourceSyncRequestsQueue.poll().scanResult;
                 scanRecord = scanRes.getScanRecord();
-                broadcastId = BassUtils.getBroadcastId(scanRecord);
+                broadcastId = LeAudioUtils.getBroadcastId(scanRecord);
             }
             final PeriodicAdvertisementResult paResult = paResultTemp;
 
             sEventLogger.logd(TAG, "Select Broadcast Source, broadcastId: " + broadcastId);
 
-            if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 Log.e(TAG, "Invalid broadcast ID");
                 handleSelectSourceRequest();
                 return;
@@ -3799,7 +3805,7 @@ public class BassClientService extends ConnectableProfile {
             if (activeSyncedSrc.size() >= MAX_ACTIVE_SYNCED_SOURCES_NUM) {
                 Log.d(TAG, "handleSelectSourceRequest: reached max allowed active source");
                 Boolean canceledActiveSync = false;
-                int broadcastIdToLostMonitoring = BassConstants.INVALID_BROADCAST_ID;
+                int broadcastIdToLostMonitoring = LeAudioConstants.INVALID_BROADCAST_ID;
                 for (int syncHandle : activeSyncedSrc) {
                     if (!isAnyReceiverSyncedToBroadcast(getBroadcastIdForSyncHandle(syncHandle))) {
                         canceledActiveSync = true;
@@ -3864,7 +3870,7 @@ public class BassClientService extends ConnectableProfile {
     private void storeSinkMetadata(
             BluetoothDevice device, int broadcastId, BluetoothLeBroadcastMetadata metadata) {
         if (device == null
-                || broadcastId == BassConstants.INVALID_BROADCAST_ID
+                || broadcastId == LeAudioConstants.INVALID_BROADCAST_ID
                 || metadata == null) {
             Log.e(
                     TAG,
@@ -3920,7 +3926,7 @@ public class BassClientService extends ConnectableProfile {
     }
 
     private void removeSinkMetadata(BluetoothDevice device, int broadcastId) {
-        if (device == null || broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+        if (device == null || broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
             Log.e(
                     TAG,
                     "Failed to remove Sink Metadata, invalid parameters (device: "
@@ -3959,7 +3965,7 @@ public class BassClientService extends ConnectableProfile {
      */
     private void removeSinkMetadataFromGroupIfWholeUnsynced(
             BluetoothDevice device, int broadcastId) {
-        if (device == null || broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+        if (device == null || broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
             Log.e(
                     TAG,
                     "Failed to remove Sink Metadata, invalid parameters (device: "
@@ -4090,7 +4096,7 @@ public class BassClientService extends ConnectableProfile {
                         return !priorityImportant || sourceSyncRequest.hasPriority;
                     }
                 } else {
-                    if (BassUtils.getBroadcastId(sourceSyncRequest.scanResult) == broadcastId) {
+                    if (LeAudioUtils.getBroadcastId(sourceSyncRequest.scanResult) == broadcastId) {
                         return !priorityImportant || sourceSyncRequest.hasPriority;
                     }
                 }
@@ -4124,7 +4130,7 @@ public class BassClientService extends ConnectableProfile {
 
         int broadcastId = sourceMetadata.getBroadcastId();
         if (Flags.leaudioBroadcastImproveSourceOperations()) {
-            if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+            if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                 Log.d(TAG, "addSource: Error bad parameter: invalid broadcastId");
                 mCallbacks.notifySourceAddFailed(
                         sink, sourceMetadata, BluetoothStatusCodes.ERROR_BAD_PARAMETERS);
@@ -4164,7 +4170,7 @@ public class BassClientService extends ConnectableProfile {
                             .contains(getSyncHandleForBroadcastId(broadcastId)))) {
                 Log.i(TAG, "Adding inactive broadcast: " + broadcastId);
                 if (!Flags.leaudioBroadcastImproveSourceOperations()) {
-                    if (broadcastId == BassConstants.INVALID_BROADCAST_ID) {
+                    if (broadcastId == LeAudioConstants.INVALID_BROADCAST_ID) {
                         Log.w(TAG, "AddSource: invalid broadcastId");
                         mCallbacks.notifySourceAddFailed(
                                 sink, sourceMetadata, BluetoothStatusCodes.ERROR_BAD_PARAMETERS);
@@ -4577,7 +4583,7 @@ public class BassClientService extends ConnectableProfile {
                 /* Check if local/last broadcast is the synced one. Invalid broadcast ID means
                  * that all receivers should be considered.
                  */
-                if ((broadcastId != BassConstants.INVALID_BROADCAST_ID)
+                if ((broadcastId != LeAudioConstants.INVALID_BROADCAST_ID)
                         && (receiveState.getBroadcastId() != broadcastId)) {
                     continue;
                 }
@@ -4619,7 +4625,7 @@ public class BassClientService extends ConnectableProfile {
             removeSource(pair.second, pair.first.getSourceId(), true);
         }
 
-        if (broadcastId != BassConstants.INVALID_BROADCAST_ID) {
+        if (broadcastId != LeAudioConstants.INVALID_BROADCAST_ID) {
             /* There may be some pending add/modify source operations */
             cancelPendingSourceOperations(broadcastId);
         }
@@ -5291,7 +5297,7 @@ public class BassClientService extends ConnectableProfile {
                         + (", broadcastId: "
                                 + (metadata != null
                                         ? metadata.getBroadcastId()
-                                        : BassConstants.INVALID_BROADCAST_ID))
+                                        : LeAudioConstants.INVALID_BROADCAST_ID))
                         + (", broadcastName: "
                                 + (metadata != null ? metadata.getBroadcastName() : "")));
 
@@ -5475,7 +5481,7 @@ public class BassClientService extends ConnectableProfile {
 
         if (status == LeAudioStackEvent.STATUS_LOCAL_STREAM_REQUESTED) {
             if (isPrimaryDeviceSyncedToExternalBroadcast()) {
-                cacheSuspendingSources(BassConstants.INVALID_BROADCAST_ID);
+                cacheSuspendingSources(LeAudioConstants.INVALID_BROADCAST_ID);
             }
         } else if (status == LeAudioStackEvent.STATUS_LOCAL_STREAM_SUSPENDED) {
             /* Resume paused receivers if there are some */
