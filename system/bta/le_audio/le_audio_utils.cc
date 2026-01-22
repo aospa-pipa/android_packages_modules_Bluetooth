@@ -73,7 +73,7 @@ LeAudioContextType AudioContentToLeAudioContext(audio_content_type_t content_typ
       return LeAudioContextType::MEDIA;
     case AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY:
     case AUDIO_USAGE_ASSISTANT:
-    /*  return LeAudioContextType::VOICEASSISTANTS;*/
+      return LeAudioContextType::VOICEASSISTANTS;
     case AUDIO_USAGE_VOICE_COMMUNICATION:
     case AUDIO_USAGE_CALL_ASSISTANT:
       return LeAudioContextType::CONVERSATIONAL;

@@ -1758,7 +1758,8 @@ void LeAudioDeviceGroup::CigConfiguration::GetCisCount(LeAudioContextType contex
                  out_cis_count_unidir_sink = expected_device_cnt;
               }
             }
-          } else if (context_type == LeAudioContextType::LIVE) {
+          } else if (context_type == LeAudioContextType::LIVE ||
+                     context_type == LeAudioContextType::VOICEASSISTANTS) {
             out_cis_count_bidir = 2 * expected_device_cnt;
           } else if (context_type == LeAudioContextType::GAME) {
             out_cis_count_bidir = expected_device_cnt;
