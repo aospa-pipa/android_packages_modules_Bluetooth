@@ -209,6 +209,7 @@ const btvendor_interface_t* btvendorInterface = NULL;
 
 int Btif_gatt_layer = TRUE;
 RawAddress remote_bd_address;
+auto start = std::chrono::steady_clock::now();
 
 static uint16_t g_SecLevel = 0;
 static bool g_ConnType = TRUE;  // DUT is initiating connection
@@ -2241,6 +2242,16 @@ static void l2test_l2c_data_ind_cb(uint16_t lcid, BT_HDR* p_buf) {
       "offset=%u, layer_specific=%u\n",
       rcv_itration, p_buf->event, p_buf->len, p_buf->offset,
       p_buf->layer_specific);
+  if (rcv_itration == 1) {
+    start = std::chrono::steady_clock::now();
+  }
+  auto end = std::chrono::steady_clock::now();
+  auto elapsed_seconds = std::chrono::duration<double>(end - start).count();
+  int file_size = (rcv_itration - 1) * p_buf->len;
+  double throughput = ((file_size * 8.0) / elapsed_seconds) / (1024.0 * 1024.0);
+  printf("Throughput = %f" , throughput);
+  
+
   sL2capInterface->LeFreeBuf(p_buf);
   printf(
       "l2test_l2c_data_ind_cb:: event=%u, len=%u, offset=%u, "
@@ -2253,6 +2264,7 @@ static void l2test_l2c_congestion_ind_cb(uint16_t lcid, bool is_congested) {
 }
 
 static void l2test_l2c_tx_complete_cb(uint16_t lcid, uint16_t NoOfSDU) {
+  
   printf("l2test_l2c_tx_complete_cb, cid=0x%x, SDUs=%u\n", lcid, NoOfSDU);
 }
 
@@ -4018,7 +4030,7 @@ void do_send_start_enc_v2(char* p) {
 void do_send_le_set_hdt_default_parameters(char* p) {
   uint8_t preferred_mic_length = get_hex_byte(&p, 0);
   uint8_t preferred_packet_format = get_hex_byte(&p, 0);
-  uint8_t preferred_acl_rates = get_hex_byte(&p, 0);
+  uint16_t preferred_acl_rates = get_hex_byte(&p, -1);
 
   if (sHciInterface) {
     sHciInterface->le_set_hdt_default_parameters(preferred_mic_length, preferred_packet_format,

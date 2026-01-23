@@ -85,7 +85,7 @@ typedef struct {
                            uint8_t enc_type);
   void (*le_set_hdt_default_parameters)(uint8_t preferred_mic_length,
                                         uint8_t preferred_packet_format,
-                                        uint8_t preferred_acl_rates);
+                                        uint16_t preferred_acl_rates);
   void (*le_read_maximum_data_length_v2)(uint8_t phy);
   void (*ble_set_phy)(RawAddress address ,uint16_t handle, uint8_t all_phys, uint8_t tx_phys,
                       uint8_t rx_phys, uint16_t phy_options);
