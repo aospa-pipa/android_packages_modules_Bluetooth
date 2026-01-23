@@ -387,7 +387,14 @@ public class VolumeControlService extends ConnectableProfile {
             if (sm == null) {
                 return STATE_DISCONNECTED;
             }
-            return sm.getConnectionState();
+            try {
+                return sm.getConnectionState();
+            } catch (NullPointerException e) {
+                // State machine may be in transitional state with null current state
+                Log.e(TAG, "getConnectionState: NPE getting state for device " + device
+                        + ", returning DISCONNECTED", e);
+                return STATE_DISCONNECTED;
+            }
         }
     }
 
