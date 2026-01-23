@@ -54,12 +54,6 @@ public:
               (hci::ErrorCode hci_status, uint16_t subrate_factor, uint16_t peripheral_latency,
                uint16_t continuation_number, uint16_t supervision_timeout),
               (override));
-  MOCK_METHOD(void, OnEncryptionChangeV3, 
-              (hci::ErrorCode hci_status,  uint8_t encr_enable, uint8_t key_size, uint8_t mic_length,
-              uint8_t key_sched_enabled, uint8_t key_sched_debug_flag), (override));
-  MOCK_METHOD(void, OnEncryptionKeyRefreshCompleteV2, 
-              (hci::ErrorCode hci_status, uint8_t mic_length,
-               uint8_t key_sched_enabled, uint8_t key_sched_debug_flag), (override));
 };
 
 }  // namespace acl_manager

@@ -586,7 +586,7 @@ constexpr uint8_t HCI_LE_STATES_INIT_CENTRAL_PERIPHERAL_BIT = 41;
 #define HCI_ENCRYPTION_CHANGE_EVT_V2 0x59
 /*Below events are currently handled in gd module, 
 where they are handled will be finalized once event codes are finalized*/
-#define HCI_ENCRYPTION_CHANGE_EVT_V3 0x60
+#define HCI_ENCRYPTION_CHANGE_EVT_V3 0xFC
 #define HCI_ENCRYPTION_KEY_REFRESH_COMP_EVT_V2 0xFB 
 
 /* ULP HCI Event */
@@ -625,10 +625,7 @@ where they are handled will be finalized once event codes are finalized*/
 #define HCI_LE_BIGINFO_ADVERTISING_REPORT_EVT 0x22
 #define HCI_LE_SUBRATE_CHANGE_EVT 0x23
 
-/*HDT Events*/
-#define HCI_HDT_EVENT 0xfe
-
-/*HDT subevents*/
+// Iso HDT events
 #define HCI_BLE_CIS_EST_EVT_V4 0xF5
 #define HCI_BLE_CREATE_BIG_CPL_EVT_V2 0xF9
 

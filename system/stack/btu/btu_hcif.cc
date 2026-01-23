@@ -350,31 +350,14 @@ static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_
         case HCI_BLE_CIS_REQ_EVT:
         case HCI_BLE_BIG_SYNC_EST_EVT:
         case HCI_BLE_BIG_SYNC_LOST_EVT:
+        case HCI_BLE_CIS_EST_EVT_V4:
+        case HCI_BLE_CREATE_BIG_CPL_EVT_V2:
           IsoManager::GetInstance()->HandleHciEvent(ble_sub_code, p, ble_evt_len);
           break;
 
         default:
           log::error(
                   "Unexpectedly received LE sub_event_code:0x{:02x} that should "
-                  "not be handled here",
-                  ble_sub_code);
-          break;
-      }
-    } break;
-
-    case HCI_HDT_EVENT: {
-      STREAM_TO_UINT8(ble_hdt_sub_code, p);
-
-      uint8_t ble_hdt_evt_len = hci_evt_len - 1;
-      switch (ble_hdt_sub_code) {
-        case HCI_BLE_CIS_EST_EVT_V4:
-        case HCI_BLE_CREATE_BIG_CPL_EVT_V2:
-          IsoManager::GetInstance()->HandleHciHdtEvent(ble_hdt_sub_code, p, ble_hdt_evt_len);
-          break;
-
-        default:
-          log::error(
-                  "Unexpectedly received HDT sub_event_code:0x{:02x} that should "
                   "not be handled here",
                   ble_sub_code);
           break;

@@ -645,9 +645,13 @@ static void bta_ag_codec_negotiation_timer_cback(void* data) {
 
   // add the device to blacklisting to disable codec negotiation
   if (is_blacklisted == false) {
-    log::verbose("blacklisting device {} for codec negotiation",
+    if (p_scb->is_aptx_swb_codec == true) {
+      log::info("Don't blacklist SWB device for codec negotiation");
+    } else {
+      log::verbose("blacklisting device {} for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());
-    interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr, 3);
+      interop_database_add(INTEROP_DISABLE_CODEC_NEGOTIATION, p_scb->peer_addr, 3);
+    }
   } else {
     log::verbose("dev {} is already blacklisted for codec negotiation",
                  p_scb->peer_addr.ToString().c_str());

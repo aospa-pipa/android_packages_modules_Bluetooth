@@ -465,14 +465,14 @@ struct btsnd_hci_ble_set_default_phy {
 extern struct btsnd_hci_ble_set_default_phy btsnd_hci_ble_set_default_phy;
 
 // Name: btsnd_hcic_le_set_hdt_default_parameters
-// Params: uint8_t preferred_mic_length, uint8_t preferred_packet_format, uint8_t preferred_acl_rates
+// Params: uint8_t preferred_mic_length, uint8_t preferred_packet_format, uint16_t preferred_acl_rates
 // Return: void
 struct btsnd_hcic_le_set_hdt_default_parameters {
-  std::function<void(uint8_t, uint8_t, uint8_t)> body{
+  std::function<void(uint8_t, uint8_t, uint16_t)> body{
           [](uint8_t /* preferred_mic_length */, uint8_t /* preferred_packet_format */,
-             uint8_t /* preferred_acl_rates */) {}};
+             uint16_t /* preferred_acl_rates */) {}};
   void operator()(uint8_t preferred_mic_length, uint8_t preferred_packet_format,
-                  uint8_t preferred_acl_rates) {
+                  uint16_t preferred_acl_rates) {
     body(preferred_mic_length, preferred_packet_format, preferred_acl_rates);
   }
 };

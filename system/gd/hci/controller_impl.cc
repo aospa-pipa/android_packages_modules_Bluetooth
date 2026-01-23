@@ -49,8 +49,10 @@ constexpr bool kDefaultRpaOffload = false;
 constexpr int kHdtPhy = 5;
 
 constexpr uint8_t kDefaultPreferredMicLength = 0x01;
-constexpr uint8_t kDefaultPreferredPacketFormat = 0x01;
-constexpr uint8_t kDefaultPreferredAclRates = 0x00;
+constexpr uint8_t kDefaultPreferredPacketFormat = 0x00;
+constexpr uint16_t kDefaultPreferredAclRates = 0x00;
+
+constexpr uint8_t kHdtPhys = 0x01;
 
 static const std::string kPropertyVendorCapabilitiesEnabled =
         "bluetooth.core.le.vendor_capabilities.enabled";
@@ -71,9 +73,13 @@ struct ControllerImpl::impl {
             handler_->BindOn(this, &ControllerImpl::impl::NumberOfCompletedPackets));
 
     set_event_mask(kDefaultEventMask);
-
+    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+    uint64_t event_mask_page_2 = kDefaultEventMaskPage2;
+    if (hdt_enabled) {
+      event_mask_page_2 |= kHdtEventMaskPage2;
+    }
     if (!com::android::bluetooth::flags::check_set_event_mask_p2_support_before_writing()) {
-      set_event_mask_page_2(kDefaultEventMaskPage2);
+      set_event_mask_page_2(event_mask_page_2);
     }
 
     write_le_host_support(Enable::ENABLED, Enable::DISABLED);
@@ -110,7 +116,6 @@ struct ControllerImpl::impl {
     if (module_.SupportsBleChannelSounding()) {
       le_event_mask |= kLeCSEventMask;
     }
-    bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
     if (hdt_enabled && module_.SupportsBleHDTPhy()) {
       le_event_mask |= kLeHDTEventMask;
     }
@@ -216,7 +221,14 @@ struct ControllerImpl::impl {
                                    &ControllerImpl::impl::
                                            write_secure_connections_host_support_complete_handler));
     }
-    if (is_supported(OpCode::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH) &&
+    if (hdt_enabled && is_supported(OpCode::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2) &&
+        module_.SupportsBleDataPacketLengthExtension()) {
+      hci_->EnqueueCommand(
+              LeReadSuggestedDefaultDataLengthV2Builder::Create(kHdtPhys),
+              handler_->BindOnceOn(
+                      this, &ControllerImpl::impl::le_read_suggested_default_data_length_v2_handler));
+
+    } else if (is_supported(OpCode::LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH) &&
         module_.SupportsBleDataPacketLengthExtension()) {
       hci_->EnqueueCommand(
               LeReadSuggestedDefaultDataLengthBuilder::Create(),
@@ -623,6 +635,14 @@ struct ControllerImpl::impl {
   void le_read_suggested_default_data_length_handler(CommandCompleteView view) {
     auto complete_view = LeReadSuggestedDefaultDataLengthCompleteView::Create(view);
     log::assert_that(complete_view.IsValid(), "Complete view is invalid");
+    ErrorCode status = complete_view.GetStatus();
+    log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
+    le_suggested_default_data_length_ = complete_view.GetTxOctets();
+  }
+
+  void le_read_suggested_default_data_length_v2_handler(CommandCompleteView view) {
+    auto complete_view = LeReadSuggestedDefaultDataLengthV2CompleteView::Create(view);
+    ASSERT(complete_view.IsValid());
     ErrorCode status = complete_view.GetStatus();
     log::assert_that(status == ErrorCode::SUCCESS, "Status {}", ErrorCodeText(status));
     le_suggested_default_data_length_ = complete_view.GetTxOctets();
@@ -1249,7 +1269,9 @@ struct ControllerImpl::impl {
       OP_CODE_MAPPING(LE_SUBRATE_REQUEST)
       OP_CODE_MAPPING(LE_START_ENCRYPTION_V2)
       OP_CODE_MAPPING(LE_SET_HDT_DEFAULT_PARAMETERS)
-      OP_CODE_MAPPING(LE_SET_DATA_LENGTH_V2);
+      OP_CODE_MAPPING(LE_SET_DATA_LENGTH_V2)
+      OP_CODE_MAPPING(LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_V2)
+      OP_CODE_MAPPING(LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_V2)
 
       // deprecated
       case OpCode::ADD_SCO_CONNECTION:

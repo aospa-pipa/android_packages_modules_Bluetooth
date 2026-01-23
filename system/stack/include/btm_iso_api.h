@@ -248,7 +248,6 @@ public:
 
   virtual void HandleVSCodecSettingsEvent(uint8_t mode, uint16_t delay,
                                            uint64_t bdAddr);
-  virtual void HandleHciHdtEvent(uint8_t sub_code, uint8_t* params, uint16_t length);
 
   /**
    * Return the current number of ISO channels
