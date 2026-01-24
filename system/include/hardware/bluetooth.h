@@ -58,7 +58,7 @@
 #define BT_PROFILE_SDP_CLIENT_ID "sdp"
 #define BT_PROFILE_SOCKETS_ID "socket"
 #define BT_PROFILE_VAPS_SERVER_ID "vaps_server"
-#define BT_PROFILE_VC_ID "volume_control"
+#define BT_PROFILE_VCP_CONTROLLER_ID "volume_control"
 
 /** Bluetooth Device Name */
 typedef struct {
@@ -259,6 +259,7 @@ typedef struct {
   bool le_channel_sounding_supported;
   bool le_high_data_rate_throughput_supported;
   bool le_hdt_phy_supported;
+  bool le_connected_isochronous_stream_peripheral_supported;
 } __attribute__((packed)) bt_local_le_features_t;
 
 typedef struct {
@@ -670,7 +671,7 @@ typedef void (*discovery_state_changed_callback)(bt_discovery_state_t state);
 
 /** Bluetooth Legacy PinKey Request callback */
 typedef void (*pin_request_callback)(RawAddress remote_bd_addr, bt_bdname_t* bd_name, uint32_t cod,
-                                     bool min_16_digit, PairingAlgorithm pairing_algorithm);
+                                     bool min_16_digit, int pairing_algorithm);
 
 /** Bluetooth SSP Request callback - Just Works & Numeric Comparison*/
 /** pass_key - Shall be 0 for BT_SSP_PAIRING_VARIANT_CONSENT &
@@ -678,7 +679,7 @@ typedef void (*pin_request_callback)(RawAddress remote_bd_addr, bt_bdname_t* bd_
 /* TODO: Passkey request callback shall not be needed for devices with display
  * capability. We still need support this in the stack for completeness */
 typedef void (*ssp_request_callback)(RawAddress remote_bd_addr, bt_ssp_variant_t pairing_variant,
-                                     uint32_t pass_key, PairingAlgorithm pairing_algorithm);
+                                     uint32_t pass_key, int pairing_algorithm);
 
 /** Bluetooth Bond state changed callback */
 /* Invoked in response to create_bond, cancel_bond or remove_bond */
@@ -817,6 +818,21 @@ typedef struct {
  *   The reverse shall occur whenever the profile 'cleanup' APIs are invoked
  */
 
+/**
+ * Opens the interface and provides the callback routines to the implementation of this interface.
+ * The |start_restricted| flag inits the adapter in restricted mode. In restricted mode, bonds that
+ * are created are marked as restricted in the config file. These devices are deleted upon leaving
+ * restricted mode.
+ * The |is_common_criteria_mode| flag inits the adapter in common criteria mode.
+ * The |config_compare_result| flag show the config checksum check result if is in common criteria
+ * mode.
+ * The |is_atv| flag indicates whether the local device is an Android TV.
+ * The |callouts| sets the OS callbacks functions that the stack needs for alarms and wake locks.
+ */
+void bluetooth_init(bt_callbacks_t* callbacks, bool guest_mode, bool is_common_criteria_mode,
+                    int config_compare_result, bool is_atv, const std::string hci_instance_name,
+                    bt_os_callouts_t* callouts);
+
 /** Represents the standard Bluetooth DM interface. */
 typedef struct {
   /** set to sizeof(bt_interface_t) */
@@ -825,20 +841,6 @@ typedef struct {
   /** set index of the adapter to use */
   void (*set_adapter_index)(int adapter_index);
 #endif
-
-  /**
-   * Opens the interface and provides the callback routines
-   * to the implementation of this interface.
-   * The |start_restricted| flag inits the adapter in restricted mode. In
-   * restricted mode, bonds that are created are marked as restricted in the
-   * config file. These devices are deleted upon leaving restricted mode.
-   * The |is_common_criteria_mode| flag inits the adapter in common criteria
-   * mode. The |config_compare_result| flag show the config checksum check
-   * result if is in common criteria mode. The |is_atv| flag indicates whether
-   * the local device is an Android TV
-   */
-  int (*init)(bt_callbacks_t* callbacks, bool guest_mode, bool is_common_criteria_mode,
-              int config_compare_result, bool is_atv, const char* hci_instance_name);
 
   /** Enable Bluetooth. */
   int (*enable)(const std::string local_name);
@@ -927,11 +929,6 @@ typedef struct {
   /* opcode MUST be one of: LE_Receiver_Test, LE_Transmitter_Test, LE_Test_End
    */
   int (*le_test_mode)(uint16_t opcode, uint8_t* buf, uint8_t len);
-
-  /** Sets the OS call-out functions that bluedroid needs for alarms and wake
-   * locks. This should be called immediately after a successful |init|.
-   */
-  int (*set_os_callouts)(bt_os_callouts_t* callouts);
 
   /** Read Energy info details - return value indicates BT_STATUS_SUCCESS or
    * BT_STATUS_NOT_READY Success indicates that the VSC command was sent to

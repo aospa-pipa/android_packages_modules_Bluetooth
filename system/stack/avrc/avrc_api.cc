@@ -1198,10 +1198,6 @@ uint16_t AVRC_MsgReq(uint8_t handle, uint8_t label, uint8_t ctype, BT_HDR* p_pkt
   }
 
   log::verbose("handle = {} label = {} ctype = {} len = {}", handle, label, ctype, p_pkt->len);
-  /* Handle for AVRCP fragment */
-  if (btif_av_src_sink_coexist_enabled()) {
-    is_new_avrcp = osi_property_get_bool("bluetooth.profile.avrcp.target.enabled", false);
-  }
   if (ctype >= AVRC_RSP_NOT_IMPL) {
     cr = AVCT_RSP;
   }
@@ -1461,11 +1457,11 @@ void AVRC_SaveControllerVersion(const RawAddress& bdaddr, uint16_t new_version) 
   }
 }
 
-void AVRC_UpdateCcb(RawAddress* addr, uint32_t company_id) {
+void AVRC_UpdateCcb(RawAddress addr, uint32_t company_id) {
   for (uint8_t i = 0; i < AVCT_NUM_CONN; i++) {
     log::info("handle:{}, update cback:0x{:0x}", i, company_id);
     if (avrc_cb.ccb[i].company_id == company_id) {
-      avrc_cb.ccb[i].ctrl_cback.Run(i, AVRC_CLOSE_IND_EVT, 0, addr);
+      avrc_cb.ccb[i].ctrl_cback.Run(i, AVRC_CLOSE_IND_EVT, 0, &addr);
     }
   }
 }

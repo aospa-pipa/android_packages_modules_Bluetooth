@@ -38,10 +38,10 @@ import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringConsumer;
 import static android.bluetooth.BluetoothUtils.logRemoteException;
 import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 
+import static com.android.bluetooth.Util.isPackageNameAccurate;
 import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.Utils.getBytesFromAddress;
 import static com.android.bluetooth.Utils.isDualModeAudioEnabled;
-import static com.android.bluetooth.Utils.isPackageNameAccurate;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
@@ -157,6 +157,7 @@ import com.android.bluetooth.hfpclient.HeadsetClientService;
 import com.android.bluetooth.hid.HidDeviceService;
 import com.android.bluetooth.hid.HidHostService;
 import com.android.bluetooth.le_audio.LeAudioBroadcast;
+import com.android.bluetooth.le_audio.LeAudioPeripheralService;
 import com.android.bluetooth.le_audio.LeAudioService;
 import com.android.bluetooth.le_scan.PeriodicScanNativeInterface;
 import com.android.bluetooth.le_scan.ScanController;
@@ -395,6 +396,8 @@ public class AdapterService extends Service {
     private String mScanModeChangedDuringSuspendFrom;
     private int mScanModeAfterSuspend;
 
+    private final Map<BluetoothDevice, Integer> mDisconnectReasons = new ConcurrentHashMap<>();
+
     // Report ID definition
     public enum BqrQualityReportId {
         QUALITY_REPORT_ID_MONITOR_MODE(0x01),
@@ -554,21 +557,21 @@ public class AdapterService extends Service {
 
     private static synchronized void setAdapterService(AdapterService instance) {
         if (instance == null) {
-            Log.e(TAG, "setAdapterService() - instance is null");
+            Log.e(TAG, "setAdapterService(): Instance is null");
             return;
         }
-        Log.d(TAG, "setAdapterService() - set service to " + instance);
+        Log.d(TAG, "setAdapterService(): Set service to " + instance);
         sAdapterService = instance;
     }
 
     private static synchronized void clearAdapterService(AdapterService instance) {
         if (sAdapterService == instance) {
-            Log.d(TAG, "clearAdapterService() - This adapter was cleared " + instance);
+            Log.d(TAG, "clearAdapterService(): This adapter was cleared " + instance);
             sAdapterService = null;
         } else {
             Log.d(
                     TAG,
-                    "clearAdapterService() - incorrect cleared adapter."
+                    "clearAdapterService(): Incorrect cleared adapter."
                             + (" Instance=" + instance)
                             + (" vs sAdapterService=" + sAdapterService));
         }
@@ -962,6 +965,13 @@ public class AdapterService extends Service {
         return getStartedProfile(BluetoothProfile.VAPS_SERVER, VapsServerService.class);
     }
 
+    public Optional<LeAudioPeripheralService> getLeAudioPeripheralService() {
+        return Flags.leaudioPeripheralFeature()
+                ? getStartedProfile(
+                        BluetoothProfile.LE_AUDIO_PERIPHERAL, LeAudioPeripheralService.class)
+                : Optional.empty();
+    }
+
     public Optional<ConnectableProfile> getStartedConnectableProfile(int id) {
         return getStartedProfile(id, ConnectableProfile.class);
     }
@@ -1050,7 +1060,7 @@ public class AdapterService extends Service {
                 getApplicationContext()
                         .getPackageManager()
                         .hasSystemFeature(PackageManager.FEATURE_LEANBACK_ONLY);
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             Log.w(TAG, "This Bluetooth App is instrumented. ** Skip loading the native **");
         } else {
             Log.d(TAG, "Loading JNI Library");
@@ -1085,10 +1095,7 @@ public class AdapterService extends Service {
             mDatabaseManager.start(MetadataDatabase.createDatabase(this)); // Migrating
         }
 
-        boolean isAutomotiveDevice =
-                getApplicationContext()
-                        .getPackageManager()
-                        .hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE);
+        var isAutomotiveDevice = Util.isAutomotive(getApplicationContext());
 
         /*
          * Phone policy is specific to phone implementations and hence if a device wants to exclude
@@ -1230,10 +1237,7 @@ public class AdapterService extends Service {
         mAdapterProperties.init();
 
         Log.d(TAG, "bleOnProcessStart(): Make Bond State Machine");
-        mBondStateMachine =
-                Flags.bondStateMachineLooper()
-                        ? new BondStateMachine(this, mLooper, mAdapterProperties, mRemoteDevices)
-                        : new BondStateMachine(this, mAdapterProperties, mRemoteDevices);
+        mBondStateMachine = new BondStateMachine(this, mLooper, mAdapterProperties, mRemoteDevices);
 
         mNativeInterface.getCallbacks().init(mBondStateMachine, mRemoteDevices);
 
@@ -1270,6 +1274,7 @@ public class AdapterService extends Service {
                         this,
                         mScanNativeInterface,
                         mPeriodicScanNativeInterface,
+                        mBatteryStatsManager,
                         mCompanionDeviceManager);
         mNativeInterface.enable(mLocalName);
         Instant end = Instant.now();
@@ -1390,6 +1395,12 @@ public class AdapterService extends Service {
             case BluetoothProfile.SAP -> new SapService(this);
             case BluetoothProfile.VAPS_SERVER -> new VapsServerService(this);
             case BluetoothProfile.VOLUME_CONTROL -> new VolumeControlService(this);
+            case BluetoothProfile.LE_AUDIO_PERIPHERAL -> {
+                if (!Flags.leaudioPeripheralFeature()) {
+                    throw new IllegalArgumentException(getProfileName(id));
+                }
+                yield new LeAudioPeripheralService(this);
+            }
             default -> throw new IllegalArgumentException(getProfileName(id));
         };
     }
@@ -1760,6 +1771,12 @@ public class AdapterService extends Service {
 
         if (!isLeConnectedIsochronousStreamCentralSupported()) {
             for (int profileId : Config.getLeAudioUnicastProfiles()) {
+                nonSupportedProfiles.add(profileId);
+            }
+        }
+
+        if (!isLeConnectedIsochronousStreamPeripheralSupported()) {
+            for (int profileId : Config.getLeAudioUnicastPeripheralProfiles()) {
                 nonSupportedProfiles.add(profileId);
             }
         }
@@ -2793,7 +2810,7 @@ public class AdapterService extends Service {
         int n = mPreferredAudioProfilesCallbacks.beginBroadcast();
         Log.d(
                 TAG,
-                "sendPreferredAudioProfilesCallbackToApps() - Broadcasting audio profile "
+                "sendPreferredAudioProfilesCallbackToApps(): Broadcasting audio profile "
                         + ("change callback to device: " + device)
                         + (" and status=" + status)
                         + (" to " + n + " receivers."));
@@ -2805,11 +2822,8 @@ public class AdapterService extends Service {
             } catch (RemoteException e) {
                 Log.d(
                         TAG,
-                        "sendPreferredAudioProfilesCallbackToApps() - Callback #"
-                                + i
-                                + " failed ("
-                                + e
-                                + ")");
+                        ("sendPreferredAudioProfilesCallbackToApps(): Callback #" + i)
+                                + (" failed (" + e + ")"));
             }
         }
         mPreferredAudioProfilesCallbacks.finishBroadcast();
@@ -3071,9 +3085,46 @@ public class AdapterService extends Service {
             OobData remoteP256Data,
             String callingPackage) {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
-        if (deviceProp != null && deviceProp.getBondState() != BluetoothDevice.BOND_NONE) {
-            // true for BONDING, false for BONDED
-            return deviceProp.getBondState() == BluetoothDevice.BOND_BONDING;
+        int bondState = deviceProp != null ? deviceProp.getBondState() : BluetoothDevice.BOND_NONE;
+
+        if (!Flags.nonCtkdDualModePairing() && bondState != BluetoothDevice.BOND_NONE) {
+            return bondState == BluetoothDevice.BOND_BONDING; // true for BONDING, false for BONDED
+        }
+
+        if (bondState == BluetoothDevice.BOND_BONDING) {
+            Log.e(TAG, "Already bonding " + device);
+            return true;
+        }
+
+        if (bondState == BluetoothDevice.BOND_BONDED
+                && deviceProp.getDeviceType() == BluetoothDevice.DEVICE_TYPE_DUAL) {
+            boolean leBonded = deviceProp.getBondStatus(BluetoothDevice.TRANSPORT_LE) != null;
+            boolean bredrBonded = deviceProp.getBondStatus(BluetoothDevice.TRANSPORT_BREDR) != null;
+
+            if (bredrBonded && leBonded) {
+                Log.e(TAG, "Already bonded over both BR/EDR and LE " + device);
+                return false;
+            }
+
+            if (transport == BluetoothDevice.TRANSPORT_BREDR && bredrBonded) {
+                Log.e(TAG, "Already bonded over BR/EDR " + device);
+                return false;
+            }
+
+            if (transport == BluetoothDevice.TRANSPORT_LE && leBonded) {
+                Log.e(TAG, "Already bonded over LE " + device);
+                return false;
+            }
+
+            if (!bredrBonded) {
+                Log.d(TAG, "Bonding over BR/EDR " + device);
+                // Make sure to bond over BR/EDR transport in case app didn't specify transport
+                transport = BluetoothDevice.TRANSPORT_BREDR;
+            } else if (!leBonded) {
+                Log.d(TAG, "Bonding over LE " + device);
+                // Make sure to bond over LE transport in case app didn't specify transport
+                transport = BluetoothDevice.TRANSPORT_LE;
+            }
         }
 
         if (!isEnabled()) {
@@ -3245,12 +3296,12 @@ public class AdapterService extends Service {
     }
 
     public boolean isQuietModeEnabled() {
-        Log.d(TAG, "isQuietModeEnabled() - Enabled = " + mQuietMode);
+        Log.d(TAG, "isQuietModeEnabled(): Enabled = " + mQuietMode);
         return mQuietMode;
     }
 
     public void updateUuids() {
-        Log.d(TAG, "updateUuids() - Updating UUIDs for bonded devices");
+        Log.d(TAG, "updateUuids(): Updating UUIDs for bonded devices");
         BluetoothDevice[] bondedDevices = getBondedDevices();
         for (BluetoothDevice device : bondedDevices) {
             mRemoteDevices.updateUuids(device);
@@ -3283,6 +3334,22 @@ public class AdapterService extends Service {
 
     public boolean isConnected(BluetoothDevice device) {
         return getConnectionState(device) != BluetoothDevice.CONNECTION_STATE_DISCONNECTED;
+    }
+
+    void setDeviceDisconnectReason(BluetoothDevice device, int reason) {
+        mDisconnectReasons.put(device, reason);
+    }
+
+    /**
+     * Get and clear the disconnect reason for a remote device
+     *
+     * @param device Remote device
+     * @return disconnect reason for the device, or {@link
+     *     BluetoothStatusCodes#ERROR_DISCONNECT_REASON_LOCAL_REQUEST} if not found
+     */
+    int popDeviceDisconnectReason(BluetoothDevice device) {
+        var reason = mDisconnectReasons.remove(device);
+        return reason != null ? reason : BluetoothStatusCodes.ERROR_DISCONNECT_REASON_LOCAL_REQUEST;
     }
 
     private void addGattClientToControlAutoActiveMode(
@@ -3675,9 +3742,7 @@ public class AdapterService extends Service {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
         }
 
-        if (Flags.identityToPseudoAddr()) {
-            device = requireNonNullElse(mRemoteDevices.getDevice(device.getAddress()), device);
-        }
+        device = requireNonNullElse(mRemoteDevices.getDevice(device.getAddress()), device);
 
         // Checks if any profiles are enabled or disabled and if so, only connect enabled profiles
         if (!isAllProfilesUnknown(device)) {
@@ -3757,7 +3822,11 @@ public class AdapterService extends Service {
      * @param device is the remote device with which to disconnect these profiles
      * @return true if all profiles successfully disconnected, false if an error occurred
      */
-    public int disconnectAllEnabledProfiles(BluetoothDevice device) {
+    public int disconnectAllEnabledProfiles(BluetoothDevice device, int reason) {
+        if (reason != BluetoothStatusCodes.SUCCESS) {
+            setDeviceDisconnectReason(device, reason);
+        }
+
         if (!profileServicesRunning()) {
             Log.e(TAG, "disconnectAllEnabledProfiles: Not all profile services bound");
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
@@ -3874,9 +3943,8 @@ public class AdapterService extends Service {
     private boolean shouldDelayA2dpDisconnection(BluetoothDevice device) {
         Objects.requireNonNull(device, "device must not be null");
         boolean matched =
-                interopMatchAddrOrName(
-                        InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT,
-                        device.getAddress());
+                interopMatchDevice(
+                        InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT, device);
         return matched;
     }
 
@@ -3907,7 +3975,7 @@ public class AdapterService extends Service {
     void aclStateChangeBroadcastCallback(
             RemoteExceptionIgnoringConsumer<IBluetoothConnectionCallback> cb) {
         int n = mBluetoothConnectionCallbacks.beginBroadcast();
-        Log.d(TAG, "aclStateChangeBroadcastCallback() - Broadcasting to " + n + " receivers.");
+        Log.d(TAG, "aclStateChangeBroadcastCallback(): Broadcasting to " + n + " receivers");
         for (int i = 0; i < n; i++) {
             cb.accept(mBluetoothConnectionCallbacks.getBroadcastItem(i));
         }
@@ -4081,6 +4149,15 @@ public class AdapterService extends Service {
      */
     public boolean isLeConnectedIsochronousStreamCentralSupported() {
         return mAdapterProperties.isLeConnectedIsochronousStreamCentralSupported();
+    }
+
+    /**
+     * Check if the LE audio CIS peripheral feature is supported.
+     *
+     * @return true, if the LE audio CIS peripheral is supported
+     */
+    public boolean isLeConnectedIsochronousStreamPeripheralSupported() {
+        return mAdapterProperties.isLeConnectedIsochronousStreamPeripheralSupported();
     }
 
     public int getLeMaximumAdvertisingDataLength() {
@@ -4499,8 +4576,7 @@ public class AdapterService extends Service {
             mDatabaseManager.handleBondStateChanged(device, fromState, toState); // Migrating
         }
 
-        if (toState == BOND_NONE
-                || (Flags.rebokePermissionOnUnbond() && fromState == BOND_BONDED)) {
+        if (toState == BOND_NONE || fromState == BOND_BONDED) {
             // Remove the permissions for unbonded devices
             setMessageAccessPermission(device, BluetoothDevice.ACCESS_UNKNOWN);
             setPhonebookAccessPermission(device, BluetoothDevice.ACCESS_UNKNOWN);
@@ -4533,14 +4609,12 @@ public class AdapterService extends Service {
         synchronized (this) {
             if (mWakeLock == null) {
                 mWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, lockName);
-                if (Flags.refCountedNativeWakelock() && Flags.adapterSuspendMgmt()) {
+                if (Flags.adapterSuspendMgmt()) {
                     mWakeLock.setStateListener(mHandler::post, mWakeLockListener);
                 }
             }
 
-            if (!mWakeLock.isHeld() || Flags.refCountedNativeWakelock()) {
-                mWakeLock.acquire();
-            }
+            mWakeLock.acquire();
         }
         return true;
     }
@@ -4556,9 +4630,7 @@ public class AdapterService extends Service {
                 return false;
             }
 
-            if (mWakeLock.isHeld() || Flags.refCountedNativeWakelock()) {
-                mWakeLock.release();
-            }
+            mWakeLock.release();
         }
         return true;
     }
@@ -5230,8 +5302,18 @@ public class AdapterService extends Service {
         return mNativeInterface.interopMatchName(feature.name(), name);
     }
 
-    public boolean interopMatchAddrOrName(InteropFeature feature, String address) {
-        return mNativeInterface.interopMatchAddrOrName(feature.name(), address);
+
+    /**
+     * Check if a given device's address or remote device name matches a known interoperability
+     * workaround identified by the interop feature. remote device name will be fetched internally
+     * based on the given address at stack layer.
+     *
+     * @param feature a given interop feature defined in {@link InteropFeature}.
+     * @param device the remote device to be matched.
+     * @return {@code true} if matched, {@code false} otherwise
+     */
+    public boolean interopMatchDevice(InteropFeature feature, BluetoothDevice device) {
+        return mNativeInterface.interopMatchDevice(feature.name(), device.getAddress());
     }
 
     public void interopDatabaseAddAddr(InteropFeature feature, String address, int length) {
@@ -5305,9 +5387,9 @@ public class AdapterService extends Service {
     //Delaying A2DP Disconnect
     boolean isDelayA2dpDiscDevice(BluetoothDevice device) {
        if (device == null) return false;
-       boolean matched = InteropUtil.interopMatchAddrOrName(this,
+       boolean matched = interopMatchDevice(
               InteropUtil.InteropFeature.INTEROP_A2DP_DELAY_DISCONNECT,
-              device.getAddress());
+              device);
        Log.d(TAG, "isDelayA2dpDiscDevice: matched: " + matched);
        return matched;
     }
@@ -5508,7 +5590,7 @@ public class AdapterService extends Service {
             @NonNull DiscoveringPackageInfo pkgInfo,
             @NonNull BluetoothDevice discoveredDevice,
             @NonNull Intent intent) {
-        if (pkgInfo.hasDisavowedLocation()) {
+        if (pkgInfo.getHasDisavowedLocation()) {
             if (mLocationDenylistPredicate.test(discoveredDevice)) {
                 return;
             }
@@ -5516,10 +5598,10 @@ public class AdapterService extends Service {
 
         intent.setPackage(pkgName);
         intent.setAction(BluetoothDevice.ACTION_FOUND);
-        if (pkgInfo.permission() != null) {
+        if (pkgInfo.getPermission() != null) {
             sendBroadcastMultiplePermissions(
                     intent,
-                    new String[] {BLUETOOTH_SCAN, pkgInfo.permission()},
+                    new String[] {BLUETOOTH_SCAN, pkgInfo.getPermission()},
                     Utils.getTempBroadcastOptions());
         } else {
             sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());

@@ -967,11 +967,14 @@ void GATTS_StopService(uint16_t service_handle);
  *                  elements_count  : number of elements in the array.
  *                  endpoint_id     : ID of the hub end point.
  *                  hub_id          : ID of the hub to which the end point belongs.
+ *                  uid             : UID of the app.
+ *                  attribution_tag : attribution tag of the app.
  *                  promise         : object used to signal the completion status.
  *
  ******************************************************************************/
 void GATTS_OffloadCharacteristics(tCONN_ID conn_id, btgatt_db_element_t* service,
                                   size_t elements_count, uint64_t endpoint_id, uint64_t hub_id,
+                                  int uid, std::string attribution_tag,
                                   std::promise<btgatt_offload_result_t> promise);
 
 /*******************************************************************************
@@ -1332,11 +1335,14 @@ void GATT_ConfigServiceChangeCCC(const RawAddress& remote_bda, bool enable,
  *                  elements_count  : number of elements in the array.
  *                  endpoint_id     : ID of the hub end point.
  *                  hub_id          : ID of the hub to which the end point belongs.
+ *                  uid             : UID of the app.
+ *                  attribution_tag : attribution tag of the app.
  *                  promise         : object used to signal the completion status.
  *
  ******************************************************************************/
 void GATTC_OffloadCharacteristics(tCONN_ID conn_id, btgatt_db_element_t* service,
                                   size_t elements_count, uint64_t endpoint_id, uint64_t hub_id,
+                                  int uid, std::string attribution_tag,
                                   std::promise<btgatt_offload_result_t> promise);
 
 /*******************************************************************************
@@ -1403,6 +1409,17 @@ bool GATT_SubrateRequest(tGATT_IF client_if, const RawAddress& bd_addr,
 void GATT_UpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode,
                               uint16_t subrate_max, uint16_t subrate_min,
                               uint16_t cont_num);
+
+/*******************************************************************************
+ * Function         GATTC_SetDefaultMtu
+ *
+ * Description      Set the default MTU for ATT bearer associated with remote device.
+ *
+ * Parameter        remote_bda    : peer device address. (input)
+ *
+ ******************************************************************************/
+void GATTC_SetDefaultMtu(const RawAddress& remote_bda);
+
 // Enables the GATT profile on the device.
 // It clears out the control blocks, and registers with L2CAP.
 void gatt_init(void);

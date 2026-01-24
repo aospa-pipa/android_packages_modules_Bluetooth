@@ -187,18 +187,17 @@ void btif_enable_bluetooth_evt() {
                           DI_VENDOR_ID_SOURCE_BTSIG)),
           .product = uint16_t(
                   android::sysprop::bluetooth::DeviceIDProperties::product_id().value_or(0)),
+          .version = uint16_t(
+                  android::sysprop::bluetooth::DeviceIDProperties::version().value_or(0)),
           .primary_record = true,
   };
 
-  uint32_t record_handle;
-  tBTA_STATUS status = BTA_DmSetLocalDiRecord(&record, &record_handle);
-  if (status != BTA_SUCCESS) {
-    log::error("unable to set device ID record error {}.", bta_status_text(status));
+  if (!BTA_DmSetLocalDiRecord(&record)) {
+    log::error("unable to set device ID record");
   }
 
   btif_dm_load_local_oob();
 
-  future_ready(stack_manager_get_hack_future(), FUTURE_SUCCESS);
   log::info("Bluetooth enable event completed");
 }
 
@@ -433,6 +432,8 @@ void btif_get_adapter_property(bt_property_type_t type) {
     local_le_features.le_channel_sounding_supported = controller->SupportsBleChannelSounding();
     local_le_features.le_high_data_rate_throughput_supported =
             controller->SupportsBleHighDataThroughputPhy();
+    local_le_features.le_connected_isochronous_stream_peripheral_supported =
+            controller->SupportsBleConnectedIsochronousStreamPeripheral();
 
     memcpy(prop.val, &local_le_features, prop.len);
   } else if (prop.type == BT_PROPERTY_DYNAMIC_AUDIO_BUFFER) {

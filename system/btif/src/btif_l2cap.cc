@@ -48,6 +48,8 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/l2cap/l2c_int.h"
 #include <cutils/properties.h>
+#include "stack/include/main_thread.h"
+#include "osi/include/properties.h"
 
 using namespace bluetooth;
 
@@ -462,8 +464,12 @@ static uint8_t L2cap_DataWrite(uint16_t cid, char* p_data, uint32_t len) {
   log::debug("L2cap_DataWrite:: Invoked");
   BT_HDR* p_msg = NULL;
   uint8_t *ptr, *p_start;
-
-  p_msg = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled) {
+    p_msg = (BT_HDR*)osi_malloc(OBX_LRG_DATA_BUF_SIZE);
+  } else {
+    p_msg = (BT_HDR*)osi_malloc(BT_DEFAULT_BUFFER_SIZE);
+  }
   log::debug("osi_malloc");
   if (!p_msg) {
     log::debug("No resource to allocate");
@@ -474,7 +480,11 @@ static uint8_t L2cap_DataWrite(uint16_t cid, char* p_data, uint32_t len) {
   p_msg->len =
       len;  // Sends len bytes, irrespective of what you copy to the buffer
   memcpy(ptr, p_data, len);
-  return (uint8_t)L2CA_DataWrite(cid, p_msg);
+  return static_cast<uint8_t>(static_cast<uint32_t>(
+    do_in_main_thread(base::BindOnce([](uint16_t cid, BT_HDR* p_msg){
+      L2CA_DataWrite(cid, p_msg);
+    },
+    cid, p_msg))));
 }
 
 static bool L2cap_Ping(RawAddress p_bd_addr, tL2CA_ECHO_RSP_CB* p_cb) {

@@ -42,6 +42,7 @@
 
 #include "bta/dm/bta_dm_act.h"
 #include "bta/dm/bta_dm_sec_int.h"
+#include "btif/include/btif_config.h"
 #include "btif/include/btif_dm.h"
 #include "btif/include/btif_storage.h"
 #include "btm_sec_utils.h"
@@ -891,28 +892,23 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
                               tBTM_BLE_SEC_ACT sec_act) {
   BtmDevice* p_device = btm_get_dev(bd_addr);
   if (p_device == nullptr) {
-    log::error("Unable to set encryption for unknown device");
+    log::error("Unknown device {}", bd_addr);
     return tBTM_STATUS::BTM_WRONG_MODE;
   }
 
   switch (transport) {
     case BT_TRANSPORT_BR_EDR:
       if (p_device->hci_handle == HCI_INVALID_HANDLE) {
-        log::warn(
-                "Security Manager: BTM_SetEncryption not connected peer:{} "
-                "transport:{}",
-                bd_addr, bt_transport_text(transport));
+        log::warn("Not connected over BR/EDR addr:{}", bd_addr);
         if (p_callback) {
           do_in_main_thread(base::BindOnce(p_callback, bd_addr, transport, p_ref_data,
                                            tBTM_STATUS::BTM_WRONG_MODE));
         }
         return tBTM_STATUS::BTM_WRONG_MODE;
       }
+
       if (p_device->sec_rec.sec_flags & BTM_SEC_ENCRYPTED) {
-        log::debug(
-                "Security Manager: BTM_SetEncryption already encrypted peer:{} "
-                "transport:{}",
-                bd_addr, bt_transport_text(transport));
+        log::debug("Already encrypted over BR/EDR addr:{}", bd_addr);
         if (p_callback) {
           do_in_main_thread(base::BindOnce(p_callback, bd_addr, transport, p_ref_data,
                                            tBTM_STATUS::BTM_SUCCESS));
@@ -923,21 +919,16 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
 
     case BT_TRANSPORT_LE:
       if (p_device->ble_hci_handle == HCI_INVALID_HANDLE) {
-        log::warn(
-                "Security Manager: BTM_SetEncryption not connected peer:{} "
-                "transport:{}",
-                bd_addr, bt_transport_text(transport));
+        log::warn("Not connected over LE addr:{}", bd_addr);
         if (p_callback) {
           do_in_main_thread(base::BindOnce(p_callback, bd_addr, transport, p_ref_data,
                                            tBTM_STATUS::BTM_WRONG_MODE));
         }
         return tBTM_STATUS::BTM_WRONG_MODE;
       }
+
       if (p_device->sec_rec.sec_flags & BTM_SEC_LE_ENCRYPTED) {
-        log::debug(
-                "Security Manager: BTM_SetEncryption already encrypted peer:{} "
-                "transport:{}",
-                bd_addr, bt_transport_text(transport));
+        log::debug("Already encrypted over LE addr:{}", bd_addr);
         if (p_callback) {
           do_in_main_thread(base::BindOnce(p_callback, bd_addr, transport, p_ref_data,
                                            tBTM_STATUS::BTM_SUCCESS));
@@ -956,7 +947,7 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
 
   /* Enqueue security request if security is active */
   if (p_device->sec_rec.p_callback || state != tSECURITY_STATE::IDLE) {
-    log::warn("Security Manager: BTM_SetEncryption busy, enqueue request");
+    log::warn("Request enqueued, state: {}", security_state_text(state));
     btm_sec_queue_encrypt_request(bd_addr, transport, sec_act, p_callback, p_ref_data);
     return tBTM_STATUS::BTM_CMD_STARTED;
   }
@@ -967,9 +958,8 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
   p_device->outgoing = false;
 
   log::debug(
-          "Security Manager: BTM_SetEncryption classic_handle:0x{:04x} "
-          "ble_handle:0x{:04x} le_link:{} classic_link:{} flags:0x{:x} required:0x{:x} "
-          "p_callback={:c}",
+          "classic_handle:0x{:04x} ble_handle:0x{:04x} le_link:{} classic_link:{} flags:0x{:x} "
+          "required:0x{:x} p_callback={:c}",
           p_device->hci_handle, p_device->ble_hci_handle, p_device->sec_rec.le_link,
           p_device->sec_rec.classic_link, p_device->sec_rec.sec_flags,
           p_device->sec_rec.security_required, (p_callback) ? 'T' : 'F');
@@ -982,7 +972,7 @@ tBTM_STATUS BTM_SetEncryption(const RawAddress& bd_addr, tBT_TRANSPORT transport
                                     stack::l2cap::get_interface().L2CA_GetBleConnRole(bd_addr));
       } else {
         rc = tBTM_STATUS::BTM_WRONG_MODE;
-        log::warn("cannot call btm_ble_set_encryption, p is NULL");
+        log::warn("Not connected over LE, addr:{}", bd_addr);
       }
       break;
 
@@ -1304,7 +1294,7 @@ static bool security_upgrade_possible(const BtmDevice* p_device, bool outgoing) 
   uint16_t bond_check = outgoing ? BTM_SEC_OUT_AUTHENTICATE : BTM_SEC_IN_AUTHENTICATE;
   bool bonding_required = sec_rec.security_required & bond_check;
 
-  if (com_android_bluetooth_flags_upgrade_temp_bonding_on_auth_req() && bonding_required &&
+  if (bonding_required &&
       !sec_rec.is_bond_type_persistent()) {
     log::debug("Not bonded, upgrade is possible sec_flags: 0x{:x}", sec_rec.sec_flags);
     return true;
@@ -1822,7 +1812,7 @@ void btm_sec_conn_req(const RawAddress& bda, const DEV_CLASS dc) {
   p_device->sm4 |= BTM_SM4_CONN_PEND;
 
   // CoD may be missing for devices bonded without BR/EDR device discovery
-  if (com_android_bluetooth_flags_update_cod_if_missing() && p_device->sec_rec.is_bonded() &&
+  if (p_device->sec_rec.is_bonded() &&
       (p_device->dev_class == kDevClassEmpty || p_device->dev_class == kDevClassUnclassified)) {
     log::debug("Updating CoD for bonded device {} to [0x{:x}, 0x{:x}, 0x{:x}]", bda, dc[0], dc[1],
                dc[2]);
@@ -2636,10 +2626,6 @@ void btm_io_capabilities_rsp(const tBTM_SP_IO_RSP evt_data) {
   if (p_device->sec_rec.is_bonded(BT_TRANSPORT_BR_EDR) &&
       !p_device->sec_rec.is_device_encrypted()) {
     log::warn("Incoming bond request, but {} is already bonded (notifying user)", evt_data.bd_addr);
-    if (!com_android_bluetooth_flags_gen_key_missing_evt_only_from_iocapreq()) {
-      btm_sec_report_bond_loss(p_device, BT_TRANSPORT_BR_EDR,
-                               BTM_KEY_MISSING_BREDR_INCOMING_PAIRING);
-    }
     return;
   }
 
@@ -3210,42 +3196,6 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
  *
  *****************************************************************************/
 static bool btm_sec_perform_ctkd(BtmDevice* p_device) {
-  if (!com_android_bluetooth_flags_avoid_ctkd_for_temp_pairing()) {
-    /* if BR key is temporary no need for LE LTK derivation */
-    bool derive_ltk = true;
-    if (p_device->sec_rec.rmt_auth_req == BTM_AUTH_SP_NO &&
-        btm_sec_cb.devcb.loc_auth_req == BTM_AUTH_SP_NO) {
-      derive_ltk = false;
-      log::verbose("BR key is temporary, skip derivation of LE LTK");
-    }
-
-    tHCI_ROLE role = HCI_ROLE_UNKNOWN;
-    if (get_btm_client_interface().link_policy.BTM_GetRole(p_device->bd_addr, BT_TRANSPORT_BR_EDR,
-                                                           &role) != tBTM_STATUS::BTM_SUCCESS) {
-      log::warn("Unable to get link policy role peer:{}", p_device->bd_addr);
-    }
-
-    if (p_device->sec_rec.new_encryption_key_is_p256) {
-      if (btm_sec_use_smp_br_chnl(p_device) && role == HCI_ROLE_CENTRAL &&
-          /* if LE key is not known, do deriving */
-          (!(p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_KNOWN) ||
-           /* or BR key is higher security than existing LE keys */
-           (!(p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) &&
-            (p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED))) &&
-          derive_ltk) {
-        /* BR/EDR is encrypted with LK that can be used to derive LE LTK */
-        p_device->sec_rec.new_encryption_key_is_p256 = false;
-
-        if (!interop_match_addr(INTEROP_DISABLE_OUTGOING_BR_SMP, p_device->bd_addr)) {
-          log::verbose("start SM over BR/EDR");
-          SMP_BR_PairWith(p_device->bd_addr);
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   /* Must be bonded over BR/EDR */
   if (!p_device->sec_rec.is_bonded(BT_TRANSPORT_BR_EDR)) {
     return false;
@@ -3581,7 +3531,8 @@ static void read_encryption_key_size_complete_after_encryption_change(uint8_t en
  *
  ******************************************************************************/
 void btm_sec_encryption_change_evt(uint16_t handle, tHCI_STATUS status, uint8_t encr_enable,
-                                   uint8_t key_size) {
+                                   uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                   uint8_t key_sched_debug_flag) {
   if (status == HCI_SUCCESS && encr_enable != 0 && !BTM_IsBleConnection(handle)) {
     if (key_size != 0) {
       read_encryption_key_size_complete_after_encryption_change(encr_enable, status, handle,
@@ -4158,7 +4109,10 @@ static void read_encryption_key_size_complete_after_key_refresh(uint8_t encr_ena
   btm_sec_encrypt_change(handle, static_cast<tHCI_STATUS>(status), encr_enable, key_size);
 }
 
-void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status) {
+void btm_sec_encryption_key_refresh_complete(uint16_t handle, tHCI_STATUS status,
+                                             uint8_t mic_length, uint8_t key_sched_enabled,
+                                             uint8_t key_sched_debug_flag) {
+
   if (status != HCI_SUCCESS || BTM_IsBleConnection(handle) ||
       // Skip encryption key size check when using set_min_encryption_key_size
       bluetooth::shim::GetController()->IsSupported(
@@ -4262,7 +4216,10 @@ void btm_sec_link_key_notification(const RawAddress& p_bda, const Octet16& link_
      * resolution */
     if (we_are_bonding) {
       bluetooth::shim::ACL_RemoteNameRequest(p_bda, HCI_PAGE_SCAN_REP_MODE_R1,
-                                             HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+                                             HCI_MANDATARY_PAGE_SCAN_MODE,
+                                             com_android_bluetooth_flags_use_cached_clock_offset()
+                                                     ? BTM_GetCachedClockOffset(p_bda)
+                                                     : 0);
     }
 
     log::verbose("rmt_io_caps:{}, sec_flags:x{:x}, dev_class[1]:x{:02x}",
@@ -4590,7 +4547,10 @@ void btm_sec_pin_code_request(const RawAddress p_bda) {
       /* it is not user friendly just to ask for the PIN without name */
       /* try to get name at first */
       bluetooth::shim::ACL_RemoteNameRequest(p_device->bd_addr, HCI_PAGE_SCAN_REP_MODE_R1,
-                                             HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+                                             HCI_MANDATARY_PAGE_SCAN_MODE,
+                                             com_android_bluetooth_flags_use_cached_clock_offset()
+                                                     ? BTM_GetCachedClockOffset(p_device->bd_addr)
+                                                     : 0);
     }
   }
 
@@ -4607,21 +4567,20 @@ void btm_sec_pin_code_request(const RawAddress p_bda) {
  *
  ******************************************************************************/
 void btm_sec_update_clock_offset(uint16_t handle, uint16_t clock_offset) {
-  BtmDevice* p_device;
-  tBTM_INQ_INFO* p_inq_info;
-
-  p_device = btm_get_dev_by_handle(handle);
+  BtmDevice* p_device = btm_get_dev_by_handle(handle);
   if (p_device == nullptr) {
     return;
   }
-
   p_device->clock_offset = clock_offset | BTM_CLOCK_OFFSET_VALID;
 
-  p_inq_info = BTM_InqDbRead(p_device->bd_addr);
-  if (p_inq_info == NULL) {
-    return;
+  if (com_android_bluetooth_flags_use_cached_clock_offset()) {
+    btif_set_device_clockoffset(p_device->bd_addr, clock_offset);
   }
 
+  tBTM_INQ_INFO* p_inq_info = BTM_InqDbRead(p_device->bd_addr);
+  if (p_inq_info == nullptr) {
+    return;
+  }
   p_inq_info->results.clock_offset = clock_offset | BTM_CLOCK_OFFSET_VALID;
 }
 
@@ -4798,7 +4757,10 @@ static bool btm_sec_start_get_name(BtmDevice* p_device) {
   /* 0 and NULL are as timeout and callback params because they are not used in
    * security get name case */
   bluetooth::shim::ACL_RemoteNameRequest(p_device->bd_addr, HCI_PAGE_SCAN_REP_MODE_R1,
-                                         HCI_MANDATARY_PAGE_SCAN_MODE, 0);
+                                         HCI_MANDATARY_PAGE_SCAN_MODE,
+                                         com_android_bluetooth_flags_use_cached_clock_offset()
+                                                 ? BTM_GetCachedClockOffset(p_device->bd_addr)
+                                                 : 0);
   return true;
 }
 

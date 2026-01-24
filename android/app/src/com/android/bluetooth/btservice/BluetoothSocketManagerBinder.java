@@ -56,7 +56,6 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             int port,
             int flag,
             AttributionSource source) {
-
         String leDeviceAddr = null;
         enforceActiveUser();
 
@@ -122,7 +121,6 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             long endpointId,
             int maximumPacketSize,
             AttributionSource source) {
-
         enforceActiveUser();
 
         if (!Util.enforceConnectPermissionForPreflight(mService, source)) {
@@ -177,7 +175,6 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             int port,
             int flag,
             AttributionSource source) {
-
         enforceActiveUser();
 
         if (!Util.enforceConnectPermissionForPreflight(mService, source)) {
@@ -233,7 +230,6 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
             long endpointId,
             int maximumPacketSize,
             AttributionSource source) {
-
         enforceActiveUser();
 
         if (!Util.enforceConnectPermissionForPreflight(mService, source)) {
@@ -297,7 +293,7 @@ class BluetoothSocketManagerBinder extends IBluetoothSocketManager.Stub {
     }
 
     private void enforceActiveUser() {
-        if (!Utils.checkCallerIsSystemOrActiveOrManagedUser(mService, TAG)) {
+        if (!Util.checkCallerIsSystemOrActiveOrManagedUser(mService, TAG)) {
             throw new SecurityException("Not allowed for non-active user");
         }
     }

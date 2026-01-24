@@ -28,6 +28,7 @@ import static java.util.Objects.requireNonNull;
 import android.annotation.NonNull;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothStatusCodes;
 import android.hardware.devicestate.DeviceState;
 import android.hardware.devicestate.DeviceStateManager;
 import android.hardware.display.DisplayManager;
@@ -39,7 +40,6 @@ import android.util.Log;
 import android.view.Display;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -406,7 +406,12 @@ public class AdapterSuspend {
 
     private void disconnectProfiles() {
         for (BluetoothDevice device : mDisconnectProfileDevices) {
-            mAdapterService.disconnectAllEnabledProfiles(device);
+            if (Flags.addNewLocalDisconnectReason()) {
+                mAdapterService.disconnectAllEnabledProfiles(
+                        device, BluetoothStatusCodes.ERROR_DISCONNECT_REASON_ADAPTER_SUSPEND);
+            } else {
+                mAdapterService.disconnectAllEnabledProfiles(device, BluetoothStatusCodes.SUCCESS);
+            }
         }
     }
 
@@ -435,7 +440,7 @@ public class AdapterSuspend {
      * Called by the advertising thread to notify that it has finished the preparation for suspend.
      */
     public void advertiseSuspendReady() {
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             onSuspendTaskCompleted(SuspendTasks.ADVERTISEMENT);
             return;
         }

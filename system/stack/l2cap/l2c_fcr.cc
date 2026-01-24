@@ -28,7 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #include "internal_include/bt_target.h"
 #include "osi/include/allocator.h"
 #include "stack/include/bt_hdr.h"
@@ -689,12 +688,10 @@ void l2c_lcc_proc_pdu(tL2C_CCB * p_ccb, BT_HDR * p_buf) {
   BT_HDR* p_data = NULL;
 
   uint16_t local_mps = p_ccb->local_conn_cfg.mps;
-  if (com_android_bluetooth_flags_fix_buf_len_check_for_first_k_frame()) {
-    if (p_ccb->is_first_seg) {
-      // for the first k-frame, donot consider sdu_length
-      // as part of the information payload
-      local_mps = p_ccb->local_conn_cfg.mps + sizeof(sdu_length);
-    }
+  if (p_ccb->is_first_seg) {
+    // for the first k-frame, donot consider sdu_length
+    // as part of the information payload
+    local_mps = p_ccb->local_conn_cfg.mps + sizeof(sdu_length);
   }
 
   /* Buffer length should not exceed local mps */
@@ -1600,7 +1597,14 @@ uint8_t l2c_fcr_chk_chan_modes(tL2C_CCB* p_ccb) {
       p_ccb->p_rcb->ertm_info.preferred_mode == L2CAP_FCR_ERTM_MODE) {
     log::warn("L2CAP - Peer does not support our desired channel types");
     p_ccb->p_rcb->ertm_info.preferred_mode = 0;
-    return false;
+    // TODO: This interop fix is temporary. Need to remove If there is a better
+    // way to handle this
+    if (l2c_should_skip_ertm(p_ccb->p_lcb->remote_bd_addr)) {
+      log::info("candidate device for skip ertm");
+      return true;
+    } else {
+      return false;
+    }
   }
   return true;
 }

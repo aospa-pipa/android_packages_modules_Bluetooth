@@ -193,6 +193,7 @@ cc_defaults {
         "server_configurable_flags",
     ],
     static_libs: [
+        "android.bluetooth.platform.flags-aconfig-cc",
         "android.hardware.audio.common@5.0",
         "android.hardware.bluetooth.audio@2.0",
         "android.hardware.bluetooth.audio@2.1",
@@ -202,11 +203,11 @@ cc_defaults {
         "android.hardware.common.fmq-V1-ndk",
         "libFraunhoferAAC",
         "libbase",
-        "libbluetooth_core_rs",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
+        "libbluetooth_private_gatt_rs",
         "libbluetooth_types",
         "libbt-common", // needed for MessageLoopThread
         "libbt-jni-thread",

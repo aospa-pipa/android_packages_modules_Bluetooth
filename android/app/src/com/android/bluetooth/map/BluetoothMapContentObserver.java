@@ -55,7 +55,6 @@ import android.util.Xml;
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
-import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.map.BluetoothMapContract.MessageColumns;
 import com.android.bluetooth.map.BluetoothMapUtils.TYPE;
 import com.android.bluetooth.map.BluetoothMapbMessageMime.MimePart;
@@ -1027,7 +1026,6 @@ public class BluetoothMapContentObserver {
         }
 
         if (mAccount != null) {
-
             mProviderClient = mResolver.acquireUnstableContentProviderClient(mAuthority);
             if (mProviderClient == null) {
                 throw new RemoteException("Failed to acquire provider for " + mAuthority);
@@ -1069,7 +1067,6 @@ public class BluetoothMapContentObserver {
             mResolver.registerContentObserver(uri, true, mObserver);
 
             if (mAccount.getType() == TYPE.IM) {
-
                 uri =
                         Uri.parse(
                                 mAccount.mBase_uri_no_account
@@ -2609,12 +2606,10 @@ public class BluetoothMapContentObserver {
                         .contentResolverQuery(mResolver, uri, null, null, null, null);
         try {
             if (c != null && c.moveToFirst()) {
-                if (Flags.notDeleteLockedMessage()) {
-                    int lockedColIndex = c.getColumnIndex(Sms.LOCKED);
-                    if (lockedColIndex >= 0 && c.getInt(lockedColIndex) == 1) {
-                        Log.w(TAG, "Can't delete locked MMS");
-                        return false;
-                    }
+                int lockedColIndex = c.getColumnIndex(Mms.LOCKED);
+                if (lockedColIndex >= 0 && c.getInt(lockedColIndex) == 1) {
+                    Log.w(TAG, "Can't delete locked MMS");
+                    return false;
                 }
                 /* Move to deleted folder, or delete if already in deleted folder */
                 int threadId = c.getInt(c.getColumnIndex(Mms.THREAD_ID));
@@ -2718,12 +2713,10 @@ public class BluetoothMapContentObserver {
                         .contentResolverQuery(mResolver, uri, null, null, null, null);
         try {
             if (c != null && c.moveToFirst()) {
-                if (Flags.notDeleteLockedMessage()) {
-                    int lockedColIndex = c.getColumnIndex(Sms.LOCKED);
-                    if (lockedColIndex >= 0 && c.getInt(lockedColIndex) == 1) {
-                        Log.w(TAG, "Can't delete locked SMS");
-                        return false;
-                    }
+                int lockedColIndex = c.getColumnIndex(Sms.LOCKED);
+                if (lockedColIndex >= 0 && c.getInt(lockedColIndex) == 1) {
+                    Log.w(TAG, "Can't delete locked SMS");
+                    return false;
                 }
                 /* Move to deleted folder, or delete if already in deleted folder */
                 int threadId = c.getInt(c.getColumnIndex(Sms.THREAD_ID));

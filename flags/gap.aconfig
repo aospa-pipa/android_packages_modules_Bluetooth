@@ -43,16 +43,6 @@ flag {
 }
 
 flag {
-    name: "distance_measurement_thread"
-    namespace: "bluetooth"
-    description: "Makes distance measurement operations run on one thread."
-    bug: "397809459"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "scan_controller_thread"
     namespace: "bluetooth"
     description: "Makes scan controller operations run on one thread."
@@ -156,26 +146,6 @@ flag {
 }
 
 flag {
-    name: "resolve_address_for_adv_report"
-    namespace: "bluetooth"
-    description: "Change address resolve timing to match between adv data and scan response."
-    bug: "424062882"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "gatt_failure_callback_on_cancel"
-    namespace: "bluetooth"
-    description: "Invoke failure callback on cancelling connection right after connected."
-    bug: "425563544"
-    metadata {
-            purpose: PURPOSE_BUGFIX
-        }
-}
-
-flag {
     name: "original_address_filter_match"
     namespace: "bluetooth"
     description: "Match other filters along with device address when we use original address."
@@ -196,40 +166,10 @@ flag {
 }
 
 flag {
-    name: "prevent_adding_both_pseudo_and_identity_addr"
-    namespace: "bluetooth"
-    description: "Prevent adding both pseudo and identity address to the accept list."
-    bug: "428800297"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "remove_address_cache_from_ble_scanner"
-    namespace: "bluetooth"
-    description: "Fix the case where device name is not updated when pairing failed."
-    bug: "432614634"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "broadcast_transport_type_on_reset"
     namespace: "bluetooth"
     description: "Broadcast the transport type on BT reset as part of ACL_DISCONNECTED."
     bug: "433990971"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "update_cod_if_missing"
-    namespace: "bluetooth"
-    description: "Update CoD on incoming connection for the bonded devices if it is missing."
-    bug: "435690191"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -345,6 +285,26 @@ flag {
     namespace: "bluetooth"
     description: "Rotate address whenever a BLE connection is made"
     bug: "462281358"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "unify_device_type_verification_logic"
+    namespace: "bluetooth"
+    description: "Unify device type verification logic in GD and BTM"
+    bug: "471319424"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "use_address_type_from_batch_scan_result"
+    namespace: "bluetooth"
+    description: "Use the address type from batch scan result"
+    bug: "469914545"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

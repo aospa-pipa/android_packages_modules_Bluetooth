@@ -59,30 +59,10 @@ flag {
 }
 
 flag {
-    name: "ref_counted_native_wakelock"
-    namespace: "bluetooth"
-    description: "Make native wakelock reference counted"
-    bug: "409059723"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "get_profile_oneway"
     namespace: "bluetooth"
     description: "do not block calling thread when fetching profiles"
     bug: "438829357"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "shutdown_main_thread_before_cleanup"
-    namespace: "bluetooth"
-    description: "Shutdown the legacy main thread before module cleanup"
-    bug: "420748721"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

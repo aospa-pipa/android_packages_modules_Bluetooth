@@ -29,10 +29,10 @@ import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
 import static com.android.bluetooth.ChangeIds.BONDING_APIS_REQUIRE_PRIVILEGED_PERMISSION;
 import static com.android.bluetooth.ChangeIds.ENFORCE_CONNECT;
+import static com.android.bluetooth.Util.callerIsSystem;
+import static com.android.bluetooth.Util.callerIsSystemOrActiveOrManagedUser;
 import static com.android.bluetooth.Util.enforceConnectPermissionForDataDelivery;
 import static com.android.bluetooth.Util.getUidPidString;
-import static com.android.bluetooth.Utils.callerIsSystem;
-import static com.android.bluetooth.Utils.callerIsSystemOrActiveOrManagedUser;
 import static com.android.bluetooth.Utils.getBytesFromAddress;
 
 import static java.util.Objects.requireNonNull;
@@ -476,7 +476,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
         DeviceProperties deviceProp = service.getRemoteDevices().getDeviceProperties(device);
 
-        if (!Flags.apairing26q2PermissionImprovements() || !bondingInitiator(deviceProp, source)) {
+        if (!Utils.isBluetoothPairingHardeningSupported() || !bondingInitiator(deviceProp, source)) {
             service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         }
 
@@ -498,7 +498,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return false;
         }
 
-        if (Flags.apairing26q2PermissionImprovements()) {
+        if (Utils.isBluetoothPairingHardeningSupported()) {
             boolean checkPrivileged = false;
             final int callingUid = Binder.getCallingUid();
             final long token = Binder.clearCallingIdentity();
@@ -672,12 +672,15 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
+    //TODO: remove SuppressWarnings as part of gattConnSettings flag removal
+    @SuppressWarnings("MissingOrMismatchedRequiresPermissionAnnotation")
     public int connectAllEnabledProfiles(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
         AdapterService service = getService();
         if (service == null || !service.isEnabled()) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
         }
+
         if (!callerIsSystemOrActiveOrManagedUser(service, TAG, "connectAllEnabledProfiles")) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED;
         }
@@ -686,8 +689,13 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION;
         }
 
-        service.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        if (!Flags.gattConnSettings()) {
+            service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+            service.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
+        } else {
+            Utils.enforceCdmAssociationIfNotBluetoothPrivileged(
+                    service, service.getCompanionDeviceManager(), source, device);
+        }
 
         Log.i(TAG, "connectAllEnabledProfiles: device=" + device + ", from " + getUidPidString());
         MetricsLogger.getInstance()
@@ -728,19 +736,33 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION;
         }
 
-        service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        if (!Flags.gattConnSettings()) {
+            service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        } else {
+            Utils.enforceCdmAssociationIfNotBluetoothPrivileged(
+                    service, service.getCompanionDeviceManager(), source, device);
+        }
 
         Log.i(
                 TAG,
-                "disconnectAllEnabledProfiles: device=" + device + ", from " + getUidPidString());
+                "disconnectAllEnabledProfiles: device="
+                        + device
+                        + ", from "
+                        + getUidPidString()
+                        + " packageName:"
+                        + source.getPackageName());
 
         if (Flags.hapOnMainLooper()) {
             return service.syncPost(
-                    () -> service.disconnectAllEnabledProfiles(device),
+                    () ->
+                            service.disconnectAllEnabledProfiles(
+                                    device,
+                                    BluetoothStatusCodes.ERROR_DISCONNECT_REASON_USER_REQUEST),
                     BluetoothStatusCodes.ERROR_TIMEOUT);
         }
         try {
-            return service.disconnectAllEnabledProfiles(device);
+            return service.disconnectAllEnabledProfiles(
+                    device, BluetoothStatusCodes.ERROR_DISCONNECT_REASON_USER_REQUEST);
         } catch (Exception e) {
             Log.v(TAG, "disconnectAllEnabledProfiles() failed", e);
             SneakyThrow.sneakyThrow(e);
@@ -906,7 +928,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return false;
         }
 
-        if (Flags.apairing26q2PermissionImprovements()) {
+        if (Utils.isBluetoothPairingHardeningSupported()) {
             boolean checkPrivileged = false;
             final int callingUid = Binder.getCallingUid();
             final long token = Binder.clearCallingIdentity();

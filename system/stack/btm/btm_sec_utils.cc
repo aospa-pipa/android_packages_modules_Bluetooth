@@ -18,6 +18,10 @@
 
 #include "btm_sec_utils.h"
 
+#ifndef TARGET_FLOSS
+#include <android_bluetooth_platform_flags.h>
+#endif
+
 #include <bluetooth/log.h>
 #include <com_android_bluetooth_flags.h>
 
@@ -329,5 +333,9 @@ const char* btm_pair_state_descr(tBTM_PAIRING_STATE state) {
  ******************************************************************************/
 bool is_autonomous_repairing_supported() {
   // TODO (b/440298497): Change this to flag and android check once the SDK check CL is in.
-  return false;
+  bool supported = com::android::bluetooth::flags::autonomous_repairing_initiation();
+#ifndef TARGET_FLOSS
+  supported = supported && android::bluetooth::platform::flags::autonomous_repairing_initiation();
+#endif
+  return supported;
 }

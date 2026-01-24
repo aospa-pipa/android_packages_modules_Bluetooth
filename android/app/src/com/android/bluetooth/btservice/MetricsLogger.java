@@ -142,7 +142,7 @@ public class MetricsLogger {
      */
     @VisibleForTesting
     public static void setInstanceForTesting(MetricsLogger instance) {
-        Utils.enforceInstrumentationTestMode();
+        Util.enforceInstrumentationTestMode();
         synchronized (sLock) {
             Log.d(TAG, "setInstanceForTesting(), set to " + instance);
             sInstance = instance;
@@ -686,7 +686,6 @@ public class MetricsLogger {
     }
 
     public void logBluetoothEvent(BluetoothDevice device, int eventType, int state, int uid) {
-
         if (!mInitialized || mAdapterService.getMetricId(device) == 0) {
             return;
         }
@@ -761,7 +760,6 @@ public class MetricsLogger {
 
     public void logProfileConnectionStateChange(
             BluetoothDevice device, int profileId, int state, int prevState) {
-
         switch (state) {
             case BluetoothAdapter.STATE_CONNECTED -> {
                 logBluetoothEvent(

@@ -28,7 +28,6 @@ import android.content.AttributionSource;
 import android.util.Log;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 
 import java.util.Arrays;
@@ -55,7 +54,7 @@ class PbapClientServiceBinder extends IBluetoothPbapClient.Stub implements IProf
         // Cache mService because it can change while getService is called
         PbapClientService service = mService;
 
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             return service;
         }
 
@@ -64,7 +63,7 @@ class PbapClientServiceBinder extends IBluetoothPbapClient.Stub implements IProf
             return null;
         }
 
-        if (!Utils.checkCallerIsSystemOrActiveOrManagedUser(service, TAG)
+        if (!Util.checkCallerIsSystemOrActiveOrManagedUser(service, TAG)
                 || !Util.enforceConnectPermissionForDataDelivery(service, source, TAG)) {
             Log.w(TAG, "getService() failed, rejected due to permissions");
             return null;

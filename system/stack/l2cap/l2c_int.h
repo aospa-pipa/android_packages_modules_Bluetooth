@@ -535,6 +535,10 @@ public:
     return false;
   }
 
+  bool rate_control_enabled = false;
+  bool is_rate_control_enabled() { return rate_control_enabled; }
+  void set_rate_control_enabled(bool enabled) { rate_control_enabled = enabled; }
+
   tL2C_CCB* p_fixed_ccbs[L2CAP_NUM_FIXED_CHNLS];
   std::vector<uint16_t> suspended;  // List of fixed channel CIDs which are suspended but not
                                     //  removed
@@ -746,6 +750,7 @@ tL2C_LCB* l2cu_find_lcb_by_handle(uint16_t handle);
 bool l2cu_set_acl_priority(const RawAddress& bd_addr, tL2CAP_PRIORITY priority,
                            bool reset_after_rs);
 bool l2cu_set_acl_latency(const RawAddress& bd_addr, tL2CAP_LATENCY latency);
+bool l2cu_set_rate_control_enabled(const RawAddress& bd_addr, bool enabled);
 
 void l2cu_enqueue_ccb(tL2C_CCB* p_ccb);
 void l2cu_dequeue_ccb(tL2C_CCB* p_ccb);
@@ -809,6 +814,7 @@ bool l2cu_is_ccb_active(tL2C_CCB* p_ccb);
 void l2cu_set_lcb_handle(tL2C_LCB& p_lcb, uint16_t handle);
 tL2CAP_CONN le_result_to_l2c_conn(tL2CAP_LE_RESULT_CODE result);
 void l2cu_update_outstanding_packets_lcb(tL2C_LCB* p_lcb, uint16_t num_sent);
+bool l2c_should_skip_ertm(const RawAddress& bd_addr);
 
 /* Functions provided for Broadcom Aware
  ***************************************

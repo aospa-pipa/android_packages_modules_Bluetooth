@@ -16,6 +16,7 @@
 
 #include "hci/acl_manager/le_acl_connection.h"
 
+#include <base/functional/callback.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/os_metrics.h>
 #include <com_android_bluetooth_flags.h>
@@ -34,7 +35,11 @@ public:
       : le_acl_connection_interface_(le_acl_connection_interface),
         connection_handle_(connection_handle) {}
   ~LeAclConnectionTracker() {
-    log::assert_that(queued_callbacks_.empty(), "assert failed: queued_callbacks_.empty()");
+    if (!queued_callbacks_.empty()) {
+      log::warn("LeAclConnectionTracker destroyed with {} queued callbacks for handle {}",
+                queued_callbacks_.size(), connection_handle_);
+      queued_callbacks_.clear();
+    }
   }
   void RegisterCallbacks(LeConnectionManagementCallbacks* callbacks, os::Handler* handler) {
     client_handler_ = handler;
@@ -70,8 +75,8 @@ public:
   }
 
   void OnDataLengthChange(uint16_t tx_octets, uint16_t tx_time, uint16_t rx_octets,
-                          uint16_t rx_time) override {
-    SAVE_OR_CALL(OnDataLengthChange, tx_octets, tx_time, rx_octets, rx_time)
+                          uint16_t rx_time, uint8_t phys) override {
+    SAVE_OR_CALL(OnDataLengthChange, tx_octets, tx_time, rx_octets, rx_time, phys)
   }
 
   void OnReadRemoteVersionInformationComplete(hci::ErrorCode hci_status, uint8_t lmp_version,
@@ -97,13 +102,27 @@ public:
                  continuation_number, supervision_timeout);
   }
 
+  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
+                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                                    uint8_t key_sched_debug_flag) override {
+    SAVE_OR_CALL(OnEncryptionChangeV3, hci_status, encr_enable, key_size, mic_length,
+                 key_sched_enabled, key_sched_debug_flag);
+  }
+
+  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
+                                        uint8_t key_sched_enabled,
+                                        uint8_t key_sched_debug_flag) override {
+    SAVE_OR_CALL(OnEncryptionKeyRefreshCompleteV2, hci_status, mic_length, key_sched_enabled,
+                key_sched_debug_flag);
+  }
+
   void OnDisconnection(ErrorCode reason) override { SAVE_OR_CALL(OnDisconnection, reason); }
 #undef SAVE_OR_CALL
 
   LeAclConnectionInterface* le_acl_connection_interface_;
   os::Handler* client_handler_ = nullptr;
   LeConnectionManagementCallbacks* client_callbacks_ = nullptr;
-  std::list<common::OnceClosure> queued_callbacks_;
+  std::list<base::OnceClosure> queued_callbacks_;
   const uint16_t connection_handle_;
 };
 
@@ -191,11 +210,9 @@ void LeAclConnection::RegisterCallbacks(LeConnectionManagementCallbacks* callbac
 }
 
 void LeAclConnection::Disconnect(DisconnectReason reason) {
-  if (com_android_bluetooth_flags_dont_send_hci_disconnect_repeatedly()) {
-    if (is_disconnecting_) {
-      log::info("Already disconnecting {}", remote_address_);
-      return;
-    }
+  if (is_disconnecting_) {
+    log::info("Already disconnecting {}", remote_address_);
+    return;
   }
 
   is_disconnecting_ = true;

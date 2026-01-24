@@ -851,7 +851,9 @@ void GATT_ConfigServiceChangeCCC(const RawAddress& remote_bda, bool /* enable */
   }
 
   /* hold the link here */
-  if (!GATT_Connect(gatt_cb.gatt_if, remote_bda, BTM_BLE_DIRECT_CONNECTION, transport, true)) {
+  if (!GATT_Connect(gatt_cb.gatt_if, remote_bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION,
+                    transport, true, 0, false,
+                    com::android::bluetooth::flags::gatt_conn_settings())) {
     log::warn(
             "Unable to connect GATT client gatt_if:{} peer:{} transport:{} "
             "connection_tyoe:{} opporunistic:{}",
@@ -1099,7 +1101,13 @@ bool gatt_profile_get_eatt_support_by_conn_id(tCONN_ID conn_id) {
  * Returns          true if enabled in gd flag, otherwise false
  *
  ******************************************************************************/
-static bool gatt_sr_is_robust_caching_enabled() { return false; }
+static bool gatt_sr_is_robust_caching_enabled() {
+  if (stack_config_get_interface()->get_pts_DB_out_of_sync()){
+    return true;
+  } else {
+      return false;
+  }
+}
 
 /*******************************************************************************
  *

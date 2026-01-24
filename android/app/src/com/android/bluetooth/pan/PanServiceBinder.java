@@ -29,7 +29,6 @@ import android.content.AttributionSource;
 import android.util.Log;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 
 import java.util.Collections;
@@ -52,11 +51,11 @@ class PanServiceBinder extends IBluetoothPan.Stub implements IProfileServiceBind
 
     @RequiresPermission(BLUETOOTH_CONNECT)
     private PanService getService(AttributionSource source) {
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             return mService;
         }
         if (!Util.checkProfileAvailable(mService, TAG)
-                || !Utils.checkCallerIsSystemOrActiveOrManagedUser(mService, TAG)
+                || !Util.checkCallerIsSystemOrActiveOrManagedUser(mService, TAG)
                 || !Util.enforceConnectPermissionForDataDelivery(mService, source, TAG)) {
             return null;
         }

@@ -39,6 +39,7 @@ import android.util.Log;
 
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.SignedLongLong;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.map.BluetoothMapContract.ConversationColumns;
@@ -777,7 +778,6 @@ public class BluetoothMapContent {
 
     @VisibleForTesting
     String getRecipientNameEmail(Cursor c, FilterInfo fi) {
-
         String toAddress, ccAddress, bccAddress;
         toAddress = c.getString(fi.mMessageColToAddress);
         ccAddress = c.getString(fi.mMessageColCcAddress);
@@ -1250,7 +1250,7 @@ public class BluetoothMapContent {
 
         // Fix Subject Display issue with HONDA Carkit - Ignore subject Mask.
         boolean isHondaCarkit;
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             isHondaCarkit = false;
         } else {
             isHondaCarkit =
@@ -1356,7 +1356,6 @@ public class BluetoothMapContent {
 
     /** Get SMS RecipientAddresses for DRAFT folder based on threadId */
     public static String getCanonicalAddressSms(ContentResolver r, int threadId) {
-
         /*
          1. Get Recipient Ids from Threads.CONTENT_URI
          2. Get Recipient Address for corresponding Id from canonical-addresses table.
@@ -1955,9 +1954,7 @@ public class BluetoothMapContent {
     @VisibleForTesting
     void setConvoWhereFilterSmsMms(
             StringBuilder selection, FilterInfo fi, BluetoothMapAppParams ap) {
-
         if (smsSelected(fi, ap) || mmsSelected(ap)) {
-
             // Filter Read Status
             if (ap.getFilterReadStatus() != BluetoothMapAppParams.INVALID_VALUE_PARAMETER) {
                 if ((ap.getFilterReadStatus() & FILTER_READ_STATUS_UNREAD_ONLY) != 0) {
@@ -3501,7 +3498,6 @@ public class BluetoothMapContent {
      * @return the folder name.
      */
     private static String getFolderName(int type, int threadId) {
-
         if (threadId == -1) {
             return BluetoothMapContract.FOLDER_NAME_DELETED;
         }

@@ -3361,6 +3361,12 @@ public final class BluetoothAdapter {
         BiFunction<Context, BluetoothAdapter, BluetoothProfile> constructor =
                 PROFILE_CONSTRUCTORS.get(profile);
 
+        if (Flags.leaudioPeripheralFeature()) {
+            if (profile == BluetoothProfile.LE_AUDIO_PERIPHERAL && constructor == null) {
+                constructor = (c, a) -> new BluetoothLeAudioPeripheral(c, a);
+            }
+        }
+
         if (constructor == null) {
             Log.e(TAG, "getProfileProxy(): Unknown profile " + profile);
             return false;
@@ -4719,13 +4725,25 @@ public final class BluetoothAdapter {
                     BluetoothStatusCodes.ERROR_DISCONNECT_REASON_SYSTEM_POLICY,
                     BluetoothStatusCodes.ERROR_DISCONNECT_REASON_RESOURCE_LIMIT_REACHED,
                     BluetoothStatusCodes.ERROR_DISCONNECT_REASON_CONNECTION_ALREADY_EXISTS,
-                    BluetoothStatusCodes.ERROR_DISCONNECT_REASON_BAD_PARAMETERS
+                    BluetoothStatusCodes.ERROR_DISCONNECT_REASON_BAD_PARAMETERS,
+                    BluetoothStatusCodes.ERROR_DISCONNECT_REASON_ADAPTER_SUSPEND,
+                    BluetoothStatusCodes.ERROR_DISCONNECT_REASON_USER_REQUEST
                 })
         public @interface DisconnectReason {}
 
         /** Returns human-readable strings corresponding to {@link DisconnectReason}. */
         @NonNull
+        // TODO(b/468010549): Remove once addNewLocalDisconnectReason is stable
+        @SuppressLint("FlaggedApi")
         public static String disconnectReasonToString(@DisconnectReason int reason) {
+            if (Flags.addNewLocalDisconnectReason()) {
+                if (BluetoothStatusCodes.ERROR_DISCONNECT_REASON_ADAPTER_SUSPEND == reason) {
+                    return "Adapter suspend";
+                } else if (BluetoothStatusCodes.ERROR_DISCONNECT_REASON_USER_REQUEST == reason) {
+                    return "User request";
+                }
+            }
+
             return switch (reason) {
                 case BluetoothStatusCodes.ERROR_UNKNOWN -> "Reason unknown";
                 case BluetoothStatusCodes.ERROR_DISCONNECT_REASON_LOCAL_REQUEST -> "Local request";

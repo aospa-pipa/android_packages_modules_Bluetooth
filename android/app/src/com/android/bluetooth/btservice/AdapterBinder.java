@@ -19,7 +19,7 @@ package com.android.bluetooth.btservice;
 import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.DUMP;
 
-import static com.android.bluetooth.Utils.callerIsSystemOrActiveOrManagedUser;
+import static com.android.bluetooth.Util.callerIsSystemOrActiveOrManagedUser;
 
 import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
@@ -90,7 +90,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void offToBleOn(boolean quietMode, String hciInstanceName) {
-        Log.v(TAG, "offToBleOn(" + quietMode + ", " + hciInstanceName + " )");
+        Log.v(TAG, "offToBleOn(" + quietMode + ", " + hciInstanceName + ")");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "offToBleOn")) {
             return;
@@ -100,7 +100,7 @@ class AdapterBinder extends IAdapter.Stub {
 
     @Override
     public void onToBleOn() {
-        Log.v(TAG, "onToBleOn");
+        Log.v(TAG, "onToBleOn()");
         AdapterService service = getServiceAndEnforcePrivileged();
         if (service == null || !callerIsSystemOrActiveOrManagedUser(service, TAG, "onToBleOn")) {
             return;

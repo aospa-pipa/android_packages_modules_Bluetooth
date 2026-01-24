@@ -27,15 +27,14 @@ import static java.util.Objects.requireNonNull;
 import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothHeadset;
+import android.bluetooth.BluetoothProtoEnums;
 import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.IBluetoothHeadset;
 import android.content.AttributionSource;
 import android.util.Log;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 
@@ -64,12 +63,12 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
         }
         HeadsetService service = mService;
 
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode()) {
             return service;
         }
 
         if (!Util.checkProfileAvailable(service, TAG)
-                || !Utils.checkCallerIsSystemOrActiveOrManagedUser(service, TAG)
+                || !Util.checkCallerIsSystemOrActiveOrManagedUser(service, TAG)
                 || !Util.enforceConnectPermissionForDataDelivery(service, source, TAG)) {
             return null;
         }

@@ -170,10 +170,8 @@ void bta_ag_deregister(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /*data*/) {
   /* remove rfcomm servers */
   bta_ag_close_servers(p_scb, p_scb->reg_services);
 
-  if (com_android_bluetooth_flags_hfp_sco_state_reset_when_profile_restart()) {
     /* reset sco state */
-    bta_ag_sco_reset(p_scb);
-  }
+  bta_ag_sco_reset(p_scb);
   /* dealloc */
   bta_ag_scb_dealloc(p_scb);
 }
@@ -366,17 +364,16 @@ void bta_ag_rfc_fail(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
   log::info("reset p_scb with index={}", bta_ag_scb_to_idx(p_scb));
   RawAddress peer_addr = p_scb->peer_addr;
 
-  if (com_android_bluetooth_flags_release_port_in_bta_ag_rfc_fail_before_reset_context()) {
-    for (uint8_t i = 0; i < BTA_AG_NUM_IDX; i++) {
-      if (p_scb->serv_handle[i] != 0) {
-        log::info("SCB idx {}: Removing server on serv_handle[{}] = {}",
-                  bta_ag_scb_to_idx(p_scb), i, p_scb->serv_handle[i]);
-        if (RFCOMM_RemoveServer(p_scb->serv_handle[i]) != PORT_SUCCESS) {
-          log::warn("RFCOMM_RemoveServer failed for handle {}",
-                    p_scb->serv_handle[i]);
-        }
-        p_scb->serv_handle[i] = 0;
+
+  for (uint8_t i = 0; i < BTA_AG_NUM_IDX; i++) {
+    if (p_scb->serv_handle[i] != 0) {
+      log::info("SCB idx {}: Removing server on serv_handle[{}] = {}",
+                bta_ag_scb_to_idx(p_scb), i, p_scb->serv_handle[i]);
+      if (RFCOMM_RemoveServer(p_scb->serv_handle[i]) != PORT_SUCCESS) {
+        log::warn("RFCOMM_RemoveServer failed for handle {}",
+                  p_scb->serv_handle[i]);
       }
+      p_scb->serv_handle[i] = 0;
     }
   }
 
@@ -505,10 +502,8 @@ void bta_ag_rfc_close(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& /* data */) {
       log::warn("Unable to remove RFCOMM server peer:{} handle:{}", p_scb->peer_addr,
                 p_scb->conn_handle);
     }
-    if (com_android_bluetooth_flags_hfp_sco_state_reset_when_profile_restart()) {
       /* reset sco state */
-      bta_ag_sco_reset(p_scb);
-    }
+    bta_ag_sco_reset(p_scb);
     bta_ag_scb_dealloc(p_scb);
   }
 }

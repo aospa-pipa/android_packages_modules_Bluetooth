@@ -83,15 +83,15 @@ public final class BluetoothLeAdvertiser {
     private final Map<Integer, AdvertisingSet> mAdvertisingSets =
             Collections.synchronizedMap(new HashMap<>());
 
-    private final BluetoothAdapter mBluetoothAdapter;
+    private final BluetoothAdapter mAdapter;
     private final AttributionSource mAttributionSource;
     private final Handler mHandler;
 
     /** Use BluetoothAdapter.getLeAdvertiser() instead. */
     @Hide
     public BluetoothLeAdvertiser(BluetoothAdapter bluetoothAdapter) {
-        mBluetoothAdapter = requireNonNull(bluetoothAdapter);
-        mAttributionSource = mBluetoothAdapter.getAttributionSource();
+        mAdapter = requireNonNull(bluetoothAdapter);
+        mAttributionSource = mAdapter.getAttributionSource();
         mHandler = new Handler(Looper.getMainLooper());
     }
 
@@ -152,8 +152,8 @@ public final class BluetoothLeAdvertiser {
             if (callback == null) {
                 throw new IllegalArgumentException("callback cannot be null");
             }
-            if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-                Log.w(TAG, "BLE is not available");
+            if (!BluetoothLeUtils.checkAdapterStateOn(mAdapter)) {
+                Log.w(TAG, "startAdvertising(): BLE is not available");
                 postStartFailure(callback, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
                 return;
             }
@@ -563,8 +563,8 @@ public final class BluetoothLeAdvertiser {
         if (callback == null) {
             throw new IllegalArgumentException("callback cannot be null");
         }
-        if (!BluetoothLeUtils.checkAdapterStateOn(mBluetoothAdapter)) {
-            Log.w(TAG, "BLE is not available");
+        if (!BluetoothLeUtils.checkAdapterStateOn(mAdapter)) {
+            Log.w(TAG, "startAdvertisingSet(): BLE is not available");
             postStartSetFailure(
                     handler, callback, AdvertiseCallback.ADVERTISE_FAILED_INTERNAL_ERROR);
             return;
@@ -582,8 +582,8 @@ public final class BluetoothLeAdvertiser {
                 throw new IllegalArgumentException("Legacy scan response data too big");
             }
         } else {
-            boolean supportCodedPhy = mBluetoothAdapter.isLeCodedPhySupported();
-            boolean support2MPhy = mBluetoothAdapter.isLe2MPhySupported();
+            boolean supportCodedPhy = mAdapter.isLeCodedPhySupported();
+            boolean support2MPhy = mAdapter.isLe2MPhySupported();
             int pphy = parameters.getPrimaryPhy();
             int sphy = parameters.getSecondaryPhy();
             if (pphy == BluetoothDevice.PHY_LE_CODED && !supportCodedPhy) {
@@ -595,7 +595,7 @@ public final class BluetoothLeAdvertiser {
                 throw new IllegalArgumentException("Unsupported secondary PHY selected");
             }
 
-            int maxData = mBluetoothAdapter.getLeMaximumAdvertisingDataLength();
+            int maxData = mAdapter.getLeMaximumAdvertisingDataLength();
             if (totalBytes(advertiseData, hasFlags) > maxData) {
                 throw new IllegalArgumentException("Advertising data too big");
             }
@@ -608,7 +608,7 @@ public final class BluetoothLeAdvertiser {
                 throw new IllegalArgumentException("Periodic advertising data too big");
             }
 
-            boolean supportPeriodic = mBluetoothAdapter.isLePeriodicAdvertisingSupported();
+            boolean supportPeriodic = mAdapter.isLePeriodicAdvertisingSupported();
             if (periodicParameters != null && !supportPeriodic) {
                 throw new IllegalArgumentException(
                         "Controller does not support LE Periodic Advertising");
@@ -620,8 +620,7 @@ public final class BluetoothLeAdvertiser {
                     "maxExtendedAdvertisingEvents out of range: " + maxExtendedAdvertisingEvents);
         }
 
-        if (maxExtendedAdvertisingEvents != 0
-                && !mBluetoothAdapter.isLeExtendedAdvertisingSupported()) {
+        if (maxExtendedAdvertisingEvents != 0 && !mAdapter.isLeExtendedAdvertisingSupported()) {
             throw new IllegalArgumentException(
                     "Can't use maxExtendedAdvertisingEvents with controller that doesn't support "
                             + "LE Extended Advertising");
@@ -631,7 +630,7 @@ public final class BluetoothLeAdvertiser {
             throw new IllegalArgumentException("duration out of range: " + duration);
         }
 
-        IBluetoothAdvertise advertise = mBluetoothAdapter.getBluetoothAdvertise();
+        IBluetoothAdvertise advertise = mAdapter.getBluetoothAdvertise();
         if (advertise == null) {
             Log.e(TAG, "Bluetooth Advertise is null");
             postStartSetFailure(
@@ -682,10 +681,11 @@ public final class BluetoothLeAdvertiser {
 
         IAdvertisingSetCallback wrapped = mCallbackWrappers.remove(callback);
         if (wrapped == null) {
+            Log.e(TAG, "Callback not registered or already removed");
             return;
         }
 
-        IBluetoothAdvertise advertise = mBluetoothAdapter.getBluetoothAdvertise();
+        IBluetoothAdvertise advertise = mAdapter.getBluetoothAdvertise();
         if (advertise == null) {
             Log.e(TAG, "Bluetooth Advertise is null");
             return;
@@ -755,7 +755,7 @@ public final class BluetoothLeAdvertiser {
             encryptionBytesAdded |= data.getTxPowerLevelEnc();
         }
         if (data.getIncludeDeviceName()) {
-            final int length = mBluetoothAdapter.getNameLengthForAdvertise();
+            final int length = mAdapter.getNameLengthForAdvertise();
             if (length >= 0) {
                 size += OVERHEAD_BYTES_PER_FIELD + length;
             }
@@ -817,11 +817,7 @@ public final class BluetoothLeAdvertiser {
                             }
 
                             AdvertisingSet advertisingSet =
-                                    new AdvertisingSet(
-                                            advertise,
-                                            advertiserId,
-                                            mBluetoothAdapter,
-                                            mAttributionSource);
+                                    new AdvertisingSet(advertise, advertiserId, mAttributionSource);
                             mAdvertisingSets.put(advertiserId, advertisingSet);
                             callback.onAdvertisingSetStarted(advertisingSet, txPower, status);
                         });

@@ -244,8 +244,8 @@ public class AdapterNativeInterface {
         return interopMatchNameNative(featureName, name);
     }
 
-    boolean interopMatchAddrOrName(String featureName, String address) {
-        return interopMatchAddrOrNameNative(featureName, address);
+    boolean interopMatchDevice(String featureName, String address) {
+        return interopMatchDeviceNative(featureName, address);
     }
 
     void interopDatabaseAddRemoveAddr(
@@ -399,7 +399,7 @@ public class AdapterNativeInterface {
 
     private native boolean interopMatchNameNative(String featureName, String name);
 
-    private native boolean interopMatchAddrOrNameNative(String featureName, String address);
+    private native boolean interopMatchDeviceNative(String featureName, String address);
 
     private native void interopDatabaseAddRemoveAddrNative(
             boolean doAdd, String featureName, String address, int length);

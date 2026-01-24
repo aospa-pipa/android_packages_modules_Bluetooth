@@ -17,13 +17,10 @@
  ******************************************************************************/
 
 #include <bluetooth/types/uuid.h>
-#include <string.h>
 
 #include <algorithm>
 #include <cstring>
-#include <iomanip>
-#include <ios>
-#include <sstream>
+#include <format>
 
 namespace bluetooth {
 
@@ -68,20 +65,16 @@ uint32_t Uuid::As32Bit() const {
   return (((uint32_t)uu[0]) << 24) + (((uint32_t)uu[1]) << 16) + (((uint32_t)uu[2]) << 8) + uu[3];
 }
 
-Uuid Uuid::FromString(const std::string& uuid, bool* is_valid) {
-  if (is_valid) {
-    *is_valid = false;
-  }
-  Uuid ret = kBase;
-
+std::optional<Uuid> Uuid::FromString(const std::string& uuid) {
   if (uuid.empty()) {
-    return ret;
+    return std::nullopt;
   }
 
+  Uuid ret = kBase;
   uint8_t* p = ret.uu.data();
   if (uuid.size() == kString128BitLen) {
     if (uuid[8] != '-' || uuid[13] != '-' || uuid[18] != '-' || uuid[23] != '-') {
-      return ret;
+      return std::nullopt;
     }
 
     int c;
@@ -91,41 +84,33 @@ Uuid Uuid::FromString(const std::string& uuid, bool* is_valid) {
                     &p[0], &p[1], &p[2], &p[3], &p[4], &p[5], &p[6], &p[7], &p[8], &p[9], &p[10],
                     &p[11], &p[12], &p[13], &p[14], &p[15], &c);
     if (rc != 16) {
-      return ret;
+      return std::nullopt;
     }
     if (c != kString128BitLen) {
-      return ret;
+      return std::nullopt;
     }
 
-    if (is_valid) {
-      *is_valid = true;
-    }
   } else if (uuid.size() == 8) {
     int c;
     int rc = sscanf(uuid.c_str(), "%02hhx%02hhx%02hhx%02hhx%n", &p[0], &p[1], &p[2], &p[3], &c);
     if (rc != 4) {
-      return ret;
+      return std::nullopt;
     }
     if (c != 8) {
-      return ret;
+      return std::nullopt;
     }
 
-    if (is_valid) {
-      *is_valid = true;
-    }
   } else if (uuid.size() == 4) {
     int c;
     int rc = sscanf(uuid.c_str(), "%02hhx%02hhx%n", &p[2], &p[3], &c);
     if (rc != 2) {
-      return ret;
+      return std::nullopt;
     }
     if (c != 4) {
-      return ret;
+      return std::nullopt;
     }
-
-    if (is_valid) {
-      *is_valid = true;
-    }
+  } else {
+    return std::nullopt;
   }
 
   return ret;
@@ -179,8 +164,6 @@ bool Uuid::IsEmpty() const { return *this == kEmpty; }
 
 bool Uuid::IsBase() const { return *this == kBase; }
 
-void Uuid::UpdateUuid(const Uuid& uuid) { uu = uuid.uu; }
-
 bool Uuid::operator<(const Uuid& rhs) const {
   return std::lexicographical_compare(uu.begin(), uu.end(), rhs.uu.begin(), rhs.uu.end());
 }
@@ -190,14 +173,11 @@ bool Uuid::operator==(const Uuid& rhs) const { return uu == rhs.uu; }
 bool Uuid::operator!=(const Uuid& rhs) const { return uu != rhs.uu; }
 
 std::string Uuid::ToString() const {
-  std::stringstream uuid;
-  uuid << std::hex << std::setfill('0');
-  for (size_t i = 0; i < 16; i++) {
-    uuid << std::setw(2) << +uu[i];
-    if (i == 3 || i == 5 || i == 7 || i == 9) {
-      uuid << "-";
-    }
-  }
-  return uuid.str();
+  return std::format(
+          "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}"
+          "-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+          uu[0], uu[1], uu[2], uu[3], uu[4], uu[5], uu[6], uu[7], uu[8], uu[9], uu[10], uu[11],
+          uu[12], uu[13], uu[14], uu[15]);
 }
+
 }  // namespace bluetooth

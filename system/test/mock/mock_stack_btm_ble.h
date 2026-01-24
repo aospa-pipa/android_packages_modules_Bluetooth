@@ -504,6 +504,20 @@ struct btm_sec_save_le_key {
 };
 extern struct btm_sec_save_le_key btm_sec_save_le_key;
 
+// Name: BTM_BleSetPhy
+// Params: const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys
+// uint16_t phy_options
+// Return: void
+struct BTM_BleSetPhy {
+  std::function<void(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys, uint16_t phy_options)>
+          body{[](const RawAddress& /* bd_addr */, uint8_t /* tx_phys */, uint8_t /* rx_phys */,
+                  uint16_t /* phy_options */) {}};
+  void operator()(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys, uint16_t phy_options) {
+    body(bd_addr, tx_phys, rx_phys, phy_options);
+  }
+};
+extern struct BTM_BleSetPhy BTM_BleSetPhy;
+
 }  // namespace stack_btm_ble
 }  // namespace mock
 }  // namespace test

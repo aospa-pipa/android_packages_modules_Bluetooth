@@ -16,6 +16,7 @@
 
 #include "main/shim/acl.h"
 
+#include <base/functional/bind.h>
 #include <base/location.h>
 #include <bluetooth/log.h>
 #include <bluetooth/metrics/bluetooth_event.h>
@@ -328,8 +329,8 @@ public:
         send_data_upwards_(send_data_upwards),
         queue_up_end_(queue_up_end),
         creation_time_(creation_time) {
-    queue_up_end_->RegisterDequeue(handler_, common::Bind(&ShimAclConnection::data_ready_callback,
-                                                          common::Unretained(this)));
+    queue_up_end_->RegisterDequeue(
+            handler_, base::Bind(&ShimAclConnection::data_ready_callback, base::Unretained(this)));
   }
 
   virtual ~ShimAclConnection() {
@@ -435,7 +436,7 @@ private:
     }
     is_enqueue_registered_ = true;
     queue_up_end_->RegisterEnqueue(
-            handler_, common::Bind(&ShimAclConnection::handle_enqueue, common::Unretained(this)));
+            handler_, base::Bind(&ShimAclConnection::handle_enqueue, base::Unretained(this)));
   }
 
   virtual void RegisterCallbacks() = 0;
@@ -743,9 +744,9 @@ public:
                         latency, supervision_timeout);
   }
   void OnDataLengthChange(uint16_t max_tx_octets, uint16_t max_tx_time, uint16_t max_rx_octets,
-                          uint16_t max_rx_time) {
+                          uint16_t max_rx_time, uint8_t phys) {
     TRY_POSTING_ON_MAIN(interface_.on_data_length_change, handle_, max_tx_octets, max_tx_time,
-                        max_rx_octets, max_rx_time);
+                        max_rx_octets, max_rx_time, phys);
   }
   void OnLeSubrateChange(hci::ErrorCode hci_status, uint16_t subrate_factor,
                          uint16_t peripheral_latency, uint16_t continuation_number,
@@ -770,6 +771,23 @@ public:
   void OnPhyUpdate(hci::ErrorCode hci_status, uint8_t tx_phy, uint8_t rx_phy) override {
     TRY_POSTING_ON_MAIN(interface_.on_phy_update, ToLegacyHciErrorCode(hci_status), handle_, tx_phy,
                         rx_phy);
+  }
+
+  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
+                            uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
+                            uint8_t key_sched_debug_flag) {
+    TRY_POSTING_ON_MAIN(interface_.on_encryption_change_v3, handle_,
+                        ToLegacyHciErrorCode(hci_status), encr_enable, key_size, mic_length, 
+                        key_sched_enabled, key_sched_debug_flag);
+  }
+
+  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status,
+                                        uint8_t mic_length,
+                                        uint8_t key_sched_enabled,
+                                        uint8_t key_sched_debug_flag) override {
+    TRY_POSTING_ON_MAIN(interface_.on_encryption_key_refresh_complete_v2, handle_,
+                        ToLegacyHciErrorCode(hci_status), mic_length, key_sched_enabled,
+                        key_sched_debug_flag);
   }
 
   void OnDisconnection(hci::ErrorCode reason) {
@@ -1003,6 +1021,8 @@ struct shim::Acl::impl {
     if (com_android_bluetooth_flags_disconnect_acl_on_gatt_timeout() ||
         !com_android_bluetooth_flags_remove_device_with_connection_manager()) {
       GetAclManagerLe()->RemoveFromBackgroundList(remote_address_with_type);
+      connection_manager::on_removed_from_accept_list(
+              ToRawAddress(remote_address_with_type.GetAddress()));
     } else {
       connection_manager::remove_unconditional(ToRawAddress(remote_address_with_type.GetAddress()));
     }
@@ -1255,38 +1275,11 @@ shim::Acl::~Acl() {
 }
 
 bool shim::Acl::CheckForOrphanedAclConnections() const {
-  if (com_android_bluetooth_flags_fix_race_in_orphaned_acls()) {
-    std::promise<bool> promise;
-    auto future = promise.get_future();
-    handler_->CallOn(pimpl_.get(), &Acl::impl::check_for_orphaned_acl_connections,
-                     std::move(promise));
-    return future.get();
-  }
-
-  bool orphaned_acl_connections = false;
-
-  if (!pimpl_->handle_to_classic_connection_map_.empty()) {
-    log::error("About to destroy classic active ACL");
-    for (const auto& connection : pimpl_->handle_to_classic_connection_map_) {
-      log::error("Orphaned classic ACL handle:0x{:04x} bd_addr:{} created:{}",
-                 connection.second->Handle(), connection.second->GetRemoteAddress(),
-                 common::StringFormatTimeWithMilliseconds(kConnectionDescriptorTimeFormat,
-                                                          connection.second->GetCreationTime()));
-    }
-    orphaned_acl_connections = true;
-  }
-
-  if (!pimpl_->handle_to_le_connection_map_.empty()) {
-    log::error("About to destroy le active ACL");
-    for (const auto& connection : pimpl_->handle_to_le_connection_map_) {
-      log::error("Orphaned le ACL handle:0x{:04x} bd_addr:{} created:{}",
-                 connection.second->Handle(), connection.second->GetRemoteAddressWithType(),
-                 common::StringFormatTimeWithMilliseconds(kConnectionDescriptorTimeFormat,
-                                                          connection.second->GetCreationTime()));
-    }
-    orphaned_acl_connections = true;
-  }
-  return orphaned_acl_connections;
+  std::promise<bool> promise;
+  auto future = promise.get_future();
+  handler_->CallOn(pimpl_.get(), &Acl::impl::check_for_orphaned_acl_connections,
+                   std::move(promise));
+  return future.get();
 }
 
 void shim::Acl::on_incoming_acl_credits(uint16_t handle, uint16_t credits) {
@@ -1314,8 +1307,8 @@ void shim::Acl::Flush(HciHandle handle) {
   handler_->Post(common::BindOnce(&Acl::flush, common::Unretained(this), handle));
 }
 
-void shim::Acl::CreateClassicConnection(const hci::Address& address) {
-  GetAclManagerClassic()->CreateConnection(address);
+void shim::Acl::CreateClassicConnection(const hci::Address& address, uint16_t clock_offset) {
+  GetAclManagerClassic()->CreateConnection(address, clock_offset);
   log::debug("Connection initiated for classic to remote:{}", address);
   BTM_LogHistory(kBtmLogTag, ToRawAddress(address), "Initiated connection", "classic");
 }
@@ -1502,10 +1495,8 @@ void shim::Acl::OnLeConnectSuccess(hci::AddressWithType address_with_type,
     BTM_LogHistory(kBtmLogTag, ToLegacyAddressWithType(address_with_type), "Connection canceled",
                    "Le");
 
-    if (com_android_bluetooth_flags_gatt_failure_callback_on_cancel()) {
-      // When reporting back, remote becomes local.
-      OnLeConnectFail(address_with_type, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
-    }
+    // When reporting back, remote becomes local.
+    OnLeConnectFail(address_with_type, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
     return;
   }
 

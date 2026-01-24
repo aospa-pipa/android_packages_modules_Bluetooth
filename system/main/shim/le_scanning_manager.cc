@@ -138,9 +138,8 @@ void BleScannerInterfaceImpl::Init() {
 }
 
 /** Registers a scanner with the stack */
-void BleScannerInterfaceImpl::RegisterScanner(const bluetooth::Uuid& uuid, RegisterCallback) {
-  auto app_uuid = bluetooth::hci::Uuid::From128BitBE(uuid.To128BitBE());
-  log::info("in shim layer, UUID={}", app_uuid.ToString());
+void BleScannerInterfaceImpl::RegisterScanner(const bluetooth::Uuid& app_uuid, RegisterCallback) {
+  log::info("in shim layer, UUID={}", app_uuid);
   bluetooth::shim::GetScanning()->RegisterScanner(app_uuid);
 }
 
@@ -175,13 +174,6 @@ void BleScannerInterfaceImpl::Scan(bool start) {
     log::warn("Invalid state: start:{}, current scan state: {}", start,
               btm_cb.ble_ctr_cb.is_ble_observe_active());
     return;
-  }
-
-  // TODO (b/432614634): When the flag remove_address_cache_from_ble_scanner is removed,
-  //                     also remove the AddressCache class entirely.
-  if (!com_android_bluetooth_flags_remove_address_cache_from_ble_scanner()) {
-    do_in_jni_thread(base::BindOnce(&BleScannerInterfaceImpl::AddressCache::init,
-                                    base::Unretained(&address_cache_)));
   }
 }
 
@@ -390,8 +382,8 @@ void BleScannerInterfaceImpl::BatchScanReadReports(int client_if, int scan_mode)
 
 void BleScannerInterfaceImpl::StartSync(uint8_t sid, RawAddress address,
                                         tBLE_ADDR_TYPE address_type, uint16_t skip,
-                                        uint16_t timeout, int reg_id) {
-  log::info("in shim layer");
+                                        uint16_t timeout, int reg_id, uint8_t client_id) {
+  log::info("in shim layer, client_id={}", client_id);
   if (!is_ble_addr_type_valid(address_type)) {
     address_type = BLE_ADDR_RANDOM;
   }
@@ -401,6 +393,7 @@ void BleScannerInterfaceImpl::StartSync(uint8_t sid, RawAddress address,
   }
   btm_random_pseudo_to_identity_addr(&address, &address_type);
   address_type &= ~BLE_ADDR_TYPE_ID_BIT;
+  periodic_sync_reg_id_to_client_map_[reg_id] = client_id;
   bluetooth::shim::GetScanning()->StartSync(sid, ToAddressWithType(address, address_type), skip,
                                             timeout, reg_id);
 }
@@ -478,14 +471,23 @@ void BleScannerInterfaceImpl::SyncTxParameters(RawAddress addr, uint8_t mode, ui
 void BleScannerInterfaceImpl::RegisterCallbacks(ScanningCallbacks* callbacks) {
   log::info("in shim layer");
   scanning_callbacks_ = callbacks;
+  RegisterCallbacksNative(callbacks, kScannerClientIdJni);
 }
 
-void BleScannerInterfaceImpl::OnScannerRegistered(const bluetooth::hci::Uuid app_uuid,
+void BleScannerInterfaceImpl::RegisterCallbacksNative(ScanningCallbacks* callbacks,
+                                                      uint8_t client_id) {
+  log::info("in shim layer, client_id={}", client_id);
+  if (callbacks) {
+    native_client_to_callbacks_map_[client_id] = callbacks;
+  }
+}
+
+void BleScannerInterfaceImpl::OnScannerRegistered(const bluetooth::Uuid app_uuid,
                                                   bluetooth::hci::ScannerId scanner_id,
                                                   ScanningStatus status) {
-  auto uuid = bluetooth::Uuid::From128BitBE(app_uuid.To128BitBE());
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnScannerRegistered,
-                                  base::Unretained(scanning_callbacks_), uuid, scanner_id, status));
+                                  base::Unretained(scanning_callbacks_), app_uuid, scanner_id,
+                                  status));
 }
 
 void BleScannerInterfaceImpl::OnSetScannerParameterComplete(bluetooth::hci::ScannerId scanner_id,
@@ -509,10 +511,6 @@ void BleScannerInterfaceImpl::on_scan_result(uint16_t event_type, uint8_t addres
   tBLE_ADDR_TYPE ble_addr_type = to_ble_addr_type(address_type);
 
   btm_cb.neighbor.le_scan.results++;
-  if (!com_android_bluetooth_flags_resolve_address_for_adv_report() &&
-      ble_addr_type != BLE_ADDR_ANONYMOUS) {
-    btm_ble_process_adv_addr(raw_address, &ble_addr_type);
-  }
 
   // Do not update device properties of already bonded devices.
   if (!BTM_IsBonded(raw_address)) {
@@ -583,6 +581,7 @@ void BleScannerInterfaceImpl::OnTrackAdvFoundLost(
     track_info.scan_response.insert(track_info.scan_response.end(), scan_rsp_data.begin(),
                                     scan_rsp_data.end());
   }
+
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnTrackAdvFoundLost,
                                   base::Unretained(scanning_callbacks_), track_info));
 }
@@ -608,6 +607,27 @@ void BleScannerInterfaceImpl::OnPeriodicSyncStarted(
     btm_identity_addr_to_random_pseudo(&raw_address, &ble_addr_type, true);
   }
 
+  if (com_android_bluetooth_flags_support_native_pa_callback()) {
+    if (periodic_sync_reg_id_to_client_map_.count(reg_id)) {
+      uint8_t client_id = periodic_sync_reg_id_to_client_map_[reg_id];
+      periodic_sync_reg_id_to_client_map_.erase(reg_id);
+
+      if (status == 0) {  // Success
+        periodic_sync_handle_to_client_map_[sync_handle] = client_id;
+      }
+
+      if (native_client_to_callbacks_map_.count(client_id)) {
+        do_in_jni_thread(
+                base::BindOnce(&ScanningCallbacks::OnPeriodicSyncStarted,
+                               base::Unretained(native_client_to_callbacks_map_[client_id]), reg_id,
+                               status, sync_handle, advertising_sid,
+                               static_cast<int>(ble_addr_type), raw_address, phy, interval));
+      }
+      return;
+    }
+    log::warn("OnPeriodicSyncStarted: Unknown reg_id={}", reg_id);
+    return;
+  }
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnPeriodicSyncStarted,
                                   base::Unretained(scanning_callbacks_), reg_id, status,
                                   sync_handle, advertising_sid, static_cast<int>(ble_addr_type),
@@ -631,12 +651,41 @@ bool BleScannerInterfaceImpl::OnFetchPseudoAddressFromIdentityAddress(
 void BleScannerInterfaceImpl::OnPeriodicSyncReport(uint16_t sync_handle, int8_t tx_power,
                                                    int8_t rssi, uint8_t status,
                                                    std::vector<uint8_t> data) {
+  if (com_android_bluetooth_flags_support_native_pa_callback()) {
+    if (periodic_sync_handle_to_client_map_.count(sync_handle)) {
+      uint8_t client_id = periodic_sync_handle_to_client_map_[sync_handle];
+      if (native_client_to_callbacks_map_.count(client_id)) {
+        do_in_jni_thread(
+                base::BindOnce(&ScanningCallbacks::OnPeriodicSyncReport,
+                               base::Unretained(native_client_to_callbacks_map_[client_id]),
+                               sync_handle, tx_power, rssi, status, data));
+      }
+      return;
+    }
+    log::warn("OnPeriodicSyncReport: Unknown sync_handle={}", sync_handle);
+    return;
+  }
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnPeriodicSyncReport,
                                   base::Unretained(scanning_callbacks_), sync_handle, tx_power,
                                   rssi, status, std::move(data)));
 }
 
 void BleScannerInterfaceImpl::OnPeriodicSyncLost(uint16_t sync_handle) {
+  if (com_android_bluetooth_flags_support_native_pa_callback()) {
+    if (periodic_sync_handle_to_client_map_.count(sync_handle)) {
+      uint8_t client_id = periodic_sync_handle_to_client_map_[sync_handle];
+      periodic_sync_handle_to_client_map_.erase(sync_handle);
+
+      if (native_client_to_callbacks_map_.count(client_id)) {
+        do_in_jni_thread(base::BindOnce(
+                &ScanningCallbacks::OnPeriodicSyncLost,
+                base::Unretained(native_client_to_callbacks_map_[client_id]), sync_handle));
+      }
+      return;
+    }
+    log::warn("OnPeriodicSyncLost: Unknown sync_handle={}", sync_handle);
+    return;
+  }
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnPeriodicSyncLost,
                                   base::Unretained(scanning_callbacks_), sync_handle));
 }
@@ -649,6 +698,20 @@ void BleScannerInterfaceImpl::OnPeriodicSyncTransferred(int pa_source, uint8_t s
 }
 
 void BleScannerInterfaceImpl::OnBigInfoReport(uint16_t sync_handle, bool encrypted) {
+  if (com_android_bluetooth_flags_support_native_pa_callback()) {
+    if (periodic_sync_handle_to_client_map_.count(sync_handle)) {
+      uint8_t client_id = periodic_sync_handle_to_client_map_[sync_handle];
+      if (native_client_to_callbacks_map_.count(client_id)) {
+        do_in_jni_thread(
+                base::BindOnce(&ScanningCallbacks::OnBigInfoReport,
+                               base::Unretained(native_client_to_callbacks_map_[client_id]),
+                               sync_handle, encrypted));
+      }
+      return;
+    }
+    log::warn("OnBigInfoReport: Unknown sync_handle={}", sync_handle);
+    return;
+  }
   do_in_jni_thread(base::BindOnce(&ScanningCallbacks::OnBigInfoReport,
                                   base::Unretained(scanning_callbacks_), sync_handle, encrypted));
 }
@@ -675,45 +738,11 @@ bool BleScannerInterfaceImpl::parse_filter_command(
           static_cast<bluetooth::hci::ApcfApplicationAddressType>(apcf_command.addr_type);
 
   if (!apcf_command.uuid.IsEmpty()) {
-    uint8_t uuid_len = apcf_command.uuid.GetShortestRepresentationSize();
-    switch (uuid_len) {
-      case bluetooth::Uuid::kNumBytes16: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From16Bit(apcf_command.uuid.As16Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes32: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From32Bit(apcf_command.uuid.As32Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes128: {
-        advertising_packet_content_filter_command.uuid =
-                bluetooth::hci::Uuid::From128BitBE(apcf_command.uuid.To128BitBE());
-      } break;
-      default:
-        log::warn("illegal UUID length {}", (uint16_t)uuid_len);
-        return false;
-    }
+    advertising_packet_content_filter_command.uuid = apcf_command.uuid;
   }
 
   if (!apcf_command.uuid_mask.IsEmpty()) {
-    uint8_t uuid_len = apcf_command.uuid.GetShortestRepresentationSize();
-    switch (uuid_len) {
-      case bluetooth::Uuid::kNumBytes16: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From16Bit(apcf_command.uuid_mask.As16Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes32: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From32Bit(apcf_command.uuid_mask.As32Bit());
-      } break;
-      case bluetooth::Uuid::kNumBytes128: {
-        advertising_packet_content_filter_command.uuid_mask =
-                bluetooth::hci::Uuid::From128BitBE(apcf_command.uuid_mask.To128BitBE());
-      } break;
-      default:
-        log::warn("illegal UUID length {}", (uint16_t)uuid_len);
-        return false;
-    }
+    advertising_packet_content_filter_command.uuid_mask = apcf_command.uuid_mask;
   }
 
   advertising_packet_content_filter_command.name.assign(apcf_command.name.begin(),
@@ -772,24 +801,17 @@ void BleScannerInterfaceImpl::handle_remote_properties(RawAddress bd_addr, tBLE_
 
   // update device name
   if (p_eir_remote_name) {
-    if (com_android_bluetooth_flags_remove_address_cache_from_ble_scanner() ||
-        !address_cache_.find(bd_addr)) {
-      if (!com_android_bluetooth_flags_remove_address_cache_from_ble_scanner()) {
-        address_cache_.add(bd_addr);
-      }
-
-      if (remote_name_len > BD_NAME_LEN + 1 ||
-          (remote_name_len == BD_NAME_LEN + 1 && p_eir_remote_name[BD_NAME_LEN] != '\0')) {
-        log::info("dropping invalid packet - device name too long: {}", remote_name_len);
-        return;
-      }
-
-      memcpy(bdname.name, p_eir_remote_name, remote_name_len);
-      if (remote_name_len < BD_NAME_LEN + 1) {
-        bdname.name[remote_name_len] = '\0';
-      }
-      btif_update_remote_properties(bd_addr, bdname.name, kDevClassEmpty, device_type);
+    if (remote_name_len > BD_NAME_LEN + 1 ||
+        (remote_name_len == BD_NAME_LEN + 1 && p_eir_remote_name[BD_NAME_LEN] != '\0')) {
+      log::info("dropping invalid packet - device name too long: {}", remote_name_len);
+      return;
     }
+
+    memcpy(bdname.name, p_eir_remote_name, remote_name_len);
+    if (remote_name_len < BD_NAME_LEN + 1) {
+      bdname.name[remote_name_len] = '\0';
+    }
+    btif_update_remote_properties(bd_addr, bdname.name, kDevClassEmpty, device_type);
   }
 
   DEV_CLASS dev_class = btm_ble_get_appearance_as_cod(advertising_data);
@@ -801,36 +823,12 @@ void BleScannerInterfaceImpl::handle_remote_properties(RawAddress bd_addr, tBLE_
   bluetooth::hci::Address address = bd_addr;
 
   // update device type
-  auto mutation = storage_module->Modify();
   bluetooth::storage::Device device = storage_module->GetDeviceByLegacyKey(address);
-  mutation.Add(device.SetDeviceType(device_type));
-  mutation.Commit();
+  device.SetDeviceType(device_type);
 
   // update address type
-  auto mutation2 = storage_module->Modify();
   bluetooth::storage::LeDevice le_device = device.Le();
-  mutation2.Add(le_device.SetAddressType((bluetooth::hci::AddressType)addr_type));
-  mutation2.Commit();
-}
-
-void BleScannerInterfaceImpl::AddressCache::add(const RawAddress& p_bda) {
-  // Remove the oldest entries
-  while (remote_bdaddr_cache_.size() >= remote_bdaddr_cache_max_size_) {
-    const RawAddress& raw_address = remote_bdaddr_cache_ordered_.front();
-    remote_bdaddr_cache_.erase(raw_address);
-    remote_bdaddr_cache_ordered_.pop();
-  }
-  remote_bdaddr_cache_.insert(p_bda);
-  remote_bdaddr_cache_ordered_.push(p_bda);
-}
-
-bool BleScannerInterfaceImpl::AddressCache::find(const RawAddress& p_bda) {
-  return remote_bdaddr_cache_.find(p_bda) != remote_bdaddr_cache_.end();
-}
-
-void BleScannerInterfaceImpl::AddressCache::init(void) {
-  remote_bdaddr_cache_.clear();
-  remote_bdaddr_cache_ordered_ = {};
+  le_device.SetAddressType((bluetooth::hci::AddressType)addr_type);
 }
 
 BleScannerInterface* bluetooth::shim::get_ble_scanner_instance() {

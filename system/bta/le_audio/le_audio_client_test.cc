@@ -1671,8 +1671,6 @@ protected:
             ->leaudio_use_game_sonification_as_regular_sonification(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_switching_le_audio_devices(true);
     com::android::bluetooth::flags::provider_->dsa_use_codec_extensibility(true);
-    com::android::bluetooth::flags::provider_->leaudio_connection_subrating(true);
-    com::android::bluetooth::flags::provider_->start_leaudio_subrate_for_active_set_only(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_unicast_monitor(true);
     com::android::bluetooth::flags::provider_->leaudio_improve_state_machine_invalid_status(true);
     com::android::bluetooth::flags::provider_->leaudio_fix_allocation_in_codec_config(true);
@@ -4149,8 +4147,6 @@ TEST_F(UnicastTestCsis, ConnectDeviceWithCsisButNotUsedForGrouping) {
 }
 
 TEST_F(UnicastTestCsis, AutoconnectTwoEarbudsOneEarlyConnected) {
-  com::android::bluetooth::flags::provider_->leaudio_do_not_set_autoconnecting_on_connected_device(
-          true);
   // First earbud
   const RawAddress test_address0 = GetTestAddress(0);
   EXPECT_CALL(mock_btif_storage_, AddLeaudioAutoconnect(test_address0, true)).Times(1);
@@ -12339,7 +12335,7 @@ TEST_F(UnicastTest, UpdateMultipleBidirContextTypes_SpeedUpReconfigFlagEnabled) 
   EXPECT_CALL(mock_state_machine_, StartStream(_, _, contexts, _)).Times(1);
 
   /* Make sure GAME is bidirectional */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
 
   UpdateLocalSourceMetadata(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, false);
@@ -12414,7 +12410,7 @@ TEST_F(UnicastTest, UpdateDisableLocalAudioSinkOnGame) {
 
   // 1) Start the recording. Sink resume will trigger the reconfiguration
   // ---------------------------------------------------------------------
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_MUSIC, group_id, AUDIO_SOURCE_MIC);
 
@@ -13377,7 +13373,7 @@ TEST_F(UnicastTest, BidirectionalGameContextRequestedFromAudioFramework) {
   SyncOnMainLoop();
 
   /* Set TAG */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC);
 
@@ -13452,7 +13448,7 @@ TEST_F(UnicastTest, SwitchFromUniToBidirectionalGameContext) {
           .Times(1);
 
   /* Set TAG and expect reconfiguration */
-  char test_tag[] = "TEST_TAG2;VX_AOSP_bidirectional;TEST_TAG1";
+  char test_tag[] = "TEST_TAG2;VX_AOSP_BIDIRECTIONAL;TEST_TAG1";
   test_tags_ptr_ = test_tag;
   StartStreaming(AUDIO_USAGE_GAME, AUDIO_CONTENT_TYPE_UNKNOWN, group_id, AUDIO_SOURCE_MIC, true);
 

@@ -249,8 +249,8 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
     uint16_t max_procedure_count = 1;
     bool waiting_for_start_callback = false;
     std::unique_ptr<os::Alarm> procedure_schedule_guard_alarm = nullptr;
-    int reflector_rssi_sum;
-    int reflector_rssi_count;
+    int reflector_rssi_sum = 0;
+    int reflector_rssi_count = 0;
     uint8_t min_main_mode_steps = 0;
     uint8_t max_main_mode_steps = 0;
     uint8_t main_mode_repetition = 0;
@@ -383,7 +383,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
               ranging_result.confidence_level_, elapsedRealtimeNanos);
 
     int reflector_rssi = kInvalidRssi;
-    if (com::android::bluetooth::flags::add_rssi_and_power_in_distance_measurement_result()) {
+    if (com::android::bluetooth::flags::include_power_and_rssi_in_distance_measurement_result()) {
       int rssi_count = cs_requester_trackers_[connection_handle].reflector_rssi_count;
       if (rssi_count > 0) {
         reflector_rssi = cs_requester_trackers_[connection_handle].reflector_rssi_sum / rssi_count;
@@ -432,9 +432,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
   }
 
   void stop() {
-    if (com_android_bluetooth_flags_fix_event_handler_reg_and_dereg()) {
-      hci_layer_->ReleaseDistanceMeasurementInterface();
-    }
+    hci_layer_->ReleaseDistanceMeasurementInterface();
 
     hci_layer_->UnregisterLeEventHandler(hci::SubeventCode::TRANSMIT_POWER_REPORTING);
     cs_requester_trackers_.clear();
@@ -1222,19 +1220,33 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
        preferred_peer_antenna.use_third_ordered_antenna_element_ = 1;
      if (procedure_setting.preferred_peer_antenna & 0x08)
        preferred_peer_antenna.use_fourth_ordered_antenna_element_ = 1;
+
+     uint16_t conn_interval = cs_requester_trackers_[connection_handle].conn_interval_;
+     uint16_t min_period_time_ms = procedure_setting.min_period_between_proc;
+     uint16_t max_period_time_ms = procedure_setting.max_period_between_proc;
+
+     uint16_t min_period_between_proc = static_cast<uint16_t>(std::round(
+         (double)min_period_time_ms / (conn_interval * kConnIntervalUnitMs)));
+     uint16_t max_period_between_proc = static_cast<uint16_t>(std::round(
+         (double)max_period_time_ms / (conn_interval * kConnIntervalUnitMs)));
+
+     log::info("config_avb: conn_interval={}, min_period_time={}ms, max_period_time={}ms, "
+               "min_period_between_proc={}, max_period_between_proc={}",
+               conn_interval, min_period_time_ms, max_period_time_ms,
+               min_period_between_proc, max_period_between_proc);
      
       hci_layer_->EnqueueCommand(
             LeCsSetProcedureParametersBuilder::Create(
             connection_handle,
             config_id,
             procedure_setting.max_proc_duration,
-            procedure_setting.min_period_between_proc,
-            procedure_setting.max_period_between_proc,
+            min_period_between_proc,
+            max_period_between_proc,
             procedure_setting.max_proc_count,
             min_subevent_len,
 	    max_subevent_len,
            // kToneAntennaConfigSelection,
-	    tone_antenna_config_selection,
+	    procedure_setting.tone_ant_cfg_selection,
             (CsPhy)procedure_setting.phy,
             procedure_setting.tx_pwr_delta,
             preferred_peer_antenna,
@@ -2992,9 +3004,9 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
               live_tracker->procedure_sequence_after_enable;
     }
 
-    if (com::android::bluetooth::flags::add_rssi_and_power_in_distance_measurement_result()) {
+    if (com::android::bluetooth::flags::include_power_and_rssi_in_distance_measurement_result()) {
       for (size_t i = 0; i < procedure_data->rssi_reflector.size(); i++) {
-        live_tracker->reflector_rssi_sum = procedure_data->rssi_reflector[i];
+        live_tracker->reflector_rssi_sum += procedure_data->rssi_reflector[i];
       }
       live_tracker->reflector_rssi_count += procedure_data->rssi_reflector.size();
     }

@@ -38,7 +38,9 @@ import android.util.SparseArray;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.a2dpsink.A2dpSinkService;
+import com.android.bluetooth.avrcpcontroller.AvrcpControllerNativeInterface.RemoteFeatures;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.media_audio.sink.BluetoothMediaBrowserService;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.internal.annotations.VisibleForTesting;
@@ -88,6 +90,7 @@ class AvrcpControllerStateMachine extends StateMachine {
     static final int MESSAGE_PROCESS_CURRENT_APPLICATION_SETTINGS = 218;
     static final int MESSAGE_PROCESS_AVAILABLE_PLAYER_CHANGED = 219;
     static final int MESSAGE_PROCESS_RECEIVED_COVER_ART_PSM = 220;
+    static final int MESSAGE_PROCESS_RECEIVED_REMOTE_FEATURES = 221;
 
     // 300->399 Events for Browsing
     static final int MESSAGE_GET_FOLDER_ITEMS = 300;
@@ -101,6 +104,11 @@ class AvrcpControllerStateMachine extends StateMachine {
 
     // Notification types for Avrcp protocol JNI.
     private static final byte NOTIFICATION_RSP_TYPE_INTERIM = 0x00;
+    private static final byte NOTIFICATION_RSP_TYPE_CHANGED = 0x01;
+
+    // Denotes that we do not have a registration from the AVRCP Target for an Absolute Volume
+    // Changed Notification.
+    private static final int VOLUME_NOTIFICATION_LABEL_NONE = -1;
 
     private final AdapterService mAdapterService;
     private final GetFolderList mGetFolderList;
@@ -129,7 +137,9 @@ class AvrcpControllerStateMachine extends StateMachine {
 
     private AvrcpPlayer mAddressedPlayer;
     private int mAddressedPlayerId;
-    private int mVolumeNotificationLabel = -1;
+
+    private int mVolumeNotificationLabel = VOLUME_NOTIFICATION_LABEL_NONE;
+    private RemoteFeatures mRemoteFeatures;
 
     // Number of items to get in a single fetch
     static final int ITEM_PAGE_SIZE = 20;
@@ -176,7 +186,21 @@ class AvrcpControllerStateMachine extends StateMachine {
 
         mGetFolderList = new GetFolderList();
         addState(mGetFolderList, mConnected);
-        mVolumeHandler = new AvrcpControllerVolumeHandler(mAdapterService, mDevice);
+
+        AvrcpControllerVolumeHandler.Callback callback =
+                new AvrcpControllerVolumeHandler.Callback() {
+                    @Override
+                    public void onAbsoluteVolumeChanged(int absVol) {
+                        if (!Flags.avrcpControllerAbsVolChangedNotification()) {
+                            return;
+                        }
+                        debug("onAbsoluteVolumeChanged: absVol=" + absVol);
+                        sendMessage(MESSAGE_PROCESS_VOLUME_CHANGED_NOTIFICATION, absVol);
+                    }
+                };
+        mVolumeHandler =
+                new AvrcpControllerVolumeHandler(
+                        mAdapterService, mDevice, callback, getHandler().getLooper());
 
         setInitialState(mDisconnected);
 
@@ -252,6 +276,9 @@ class AvrcpControllerStateMachine extends StateMachine {
                         + (mCoverArtManager != null
                                 ? mCoverArtManager.getState(mDevice) == STATE_CONNECTED
                                 : "false, mCoverArtManager is null"));
+
+        ProfileService.println(sb, "mRemoteFeatures: " + mRemoteFeatures);
+        ProfileService.println(sb, "mVolumeNotificationLabel: " + mVolumeNotificationLabel);
         ProfileService.println(sb, "mVolumeHandler: " + mVolumeHandler);
 
         ProfileService.println(sb, "Addressed Player ID: " + mAddressedPlayerId);
@@ -412,6 +439,7 @@ class AvrcpControllerStateMachine extends StateMachine {
             if (mMostRecentState != STATE_DISCONNECTED) {
                 sendMessage(CLEANUP);
             }
+            mRemoteFeatures = null;
             broadcastConnectionStateChanged(STATE_DISCONNECTED);
         }
 
@@ -453,6 +481,7 @@ class AvrcpControllerStateMachine extends StateMachine {
                 BluetoothMediaBrowserService.onBrowseNodeChanged(
                         mService.getBrowseTree().mRootNode);
                 connectCoverArt(); // only works if we have a valid PSM
+                mVolumeHandler.start();
             } else {
                 debug("Connected: Re-entering Connected ");
             }
@@ -537,13 +566,13 @@ class AvrcpControllerStateMachine extends StateMachine {
                         default -> {} // Nothing to do
                     }
                 }
-                case MESSAGE_PROCESS_SET_ABS_VOL_CMD -> {
-                    handleAbsVolumeRequest(msg.arg1, msg.arg2);
-                }
-                case MESSAGE_PROCESS_REGISTER_ABS_VOL_NOTIFICATION -> {
-                    mVolumeNotificationLabel = msg.arg1;
-                    registerAbsoluteVolumeChanged();
-                }
+                case MESSAGE_PROCESS_RECEIVED_REMOTE_FEATURES ->
+                        onRemoteFeaturesChanged((RemoteFeatures) msg.obj);
+                case MESSAGE_PROCESS_SET_ABS_VOL_CMD -> handleAbsVolumeRequest(msg.arg1, msg.arg2);
+                case MESSAGE_PROCESS_REGISTER_ABS_VOL_NOTIFICATION ->
+                        registerAbsoluteVolumeChanged(msg.arg1);
+                case MESSAGE_PROCESS_VOLUME_CHANGED_NOTIFICATION ->
+                        notifyAbsoluteVolumeChanged(msg.arg1);
                 case MESSAGE_GET_FOLDER_ITEMS -> transitionTo(mGetFolderList);
                 case MESSAGE_PLAY_ITEM -> processPlayItem((BrowseTree.BrowseNode) msg.obj);
                 case MSG_AVRCP_PASSTHRU -> passThru(msg.arg1);
@@ -1141,9 +1170,16 @@ class AvrcpControllerStateMachine extends StateMachine {
             onBrowsingDisconnected();
             mService.getBrowseTree().mRootNode.removeChild(mBrowseTree.mRootNode);
             BluetoothMediaBrowserService.onBrowseNodeChanged(mService.getBrowseTree().mRootNode);
+            mVolumeHandler.stop();
             broadcastConnectionStateChanged(STATE_DISCONNECTING);
             transitionTo(mDisconnected);
         }
+    }
+
+    /** Triggered when the remote device's features are changed/reported. */
+    private void onRemoteFeaturesChanged(RemoteFeatures features) {
+        debug("onRemoteFeaturesChanged: features=" + features);
+        mRemoteFeatures = features;
     }
 
     /**
@@ -1164,12 +1200,24 @@ class AvrcpControllerStateMachine extends StateMachine {
         return mVolumeHandler.getAbsoluteVolume();
     }
 
-    private void registerAbsoluteVolumeChanged() {
+    private void registerAbsoluteVolumeChanged(int label) {
+        mVolumeNotificationLabel = label;
         mNativeInterface.sendRegisterAbsVolRsp(
                 mDeviceAddress,
                 NOTIFICATION_RSP_TYPE_INTERIM,
                 getAbsVolume(),
                 mVolumeNotificationLabel);
+    }
+
+    private void notifyAbsoluteVolumeChanged(int absVol) {
+        if (mVolumeNotificationLabel == VOLUME_NOTIFICATION_LABEL_NONE) {
+            // We don't have an outstanding registration from the AVRCP Target for an Absolute
+            // Volume Changed Notification.
+            return;
+        }
+        mNativeInterface.sendRegisterAbsVolRsp(
+                mDeviceAddress, NOTIFICATION_RSP_TYPE_CHANGED, absVol, mVolumeNotificationLabel);
+        mVolumeNotificationLabel = VOLUME_NOTIFICATION_LABEL_NONE;
     }
 
     private boolean shouldDownloadBrowsedImages() {
@@ -1349,6 +1397,8 @@ class AvrcpControllerStateMachine extends StateMachine {
             case CONNECT_TIMEOUT -> "CONNECT_TIMEOUT";
             case STACK_EVENT -> "STACK_EVENT";
             case MESSAGE_INTERNAL_CMD_TIMEOUT -> "MESSAGE_INTERNAL_CMD_TIMEOUT";
+            case MESSAGE_PROCESS_RECEIVED_REMOTE_FEATURES ->
+                    "MESSAGE_PROCESS_RECEIVED_REMOTE_FEATURES";
             case MESSAGE_PROCESS_SET_ABS_VOL_CMD -> "MESSAGE_PROCESS_SET_ABS_VOL_CMD";
             case MESSAGE_PROCESS_REGISTER_ABS_VOL_NOTIFICATION ->
                     "MESSAGE_PROCESS_REGISTER_ABS_VOL_NOTIFICATION";

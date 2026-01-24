@@ -24,6 +24,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import com.android.bluetooth.R;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -185,7 +186,7 @@ public class SapServer extends Thread implements Handler.Callback {
      * @param testMode Use SapMessage.TEST_MODE_XXX
      */
     public void setTestMode(int testMode) {
-        if (SapMessage.TEST || Utils.isInstrumentationTestMode()) {
+        if (SapMessage.TEST || Util.isInstrumentationTestMode()) {
             mTestMode = testMode;
         }
     }
@@ -740,7 +741,6 @@ public class SapServer extends Thread implements Handler.Callback {
      */
     @VisibleForTesting
     void shutdown() {
-
         Log.d(TAG_HANDLER, "in Shutdown()");
         try {
             if (mRfcommOut != null) {
@@ -764,7 +764,6 @@ public class SapServer extends Thread implements Handler.Callback {
 
     @VisibleForTesting
     void startDisconnectTimer(int discType, int timeMs) {
-
         stopDisconnectTimer();
         synchronized (this) {
             Intent sapDisconnectIntent = new Intent(SapServer.SAP_DISCONNECT_ACTION);
@@ -810,7 +809,6 @@ public class SapServer extends Thread implements Handler.Callback {
     @VisibleForTesting
     void handleRfcommReply(SapMessage sapMsg) {
         if (sapMsg != null) {
-
             Log.d(
                     TAG_HANDLER,
                     "handleRfcommReply() handling "

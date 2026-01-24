@@ -33,6 +33,8 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import kotlin.concurrent.thread
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assume
 import org.junit.Assume.assumeTrue
@@ -43,23 +45,22 @@ import org.junit.runner.RunWith
 import org.mockito.AdditionalMatchers
 import org.mockito.ArgumentCaptor
 import org.mockito.InOrder
-import org.mockito.Mockito
-import org.mockito.Mockito.any
-import org.mockito.Mockito.anyInt
-import org.mockito.Mockito.eq
-import org.mockito.Mockito.inOrder
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.mockingDetails
-import org.mockito.Mockito.never
-import org.mockito.Mockito.timeout
-import org.mockito.Mockito.times
-import org.mockito.Mockito.verify
+import org.mockito.kotlin.any
+import org.mockito.kotlin.clearInvocations
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.mockingDetails
+import org.mockito.kotlin.never
+import org.mockito.kotlin.timeout
+import org.mockito.kotlin.verify
 import pandora.GattProto
 import pandora.HostProto
 import pandora.HostProto.AdvertiseRequest
 import pandora.HostProto.AdvertiseResponse
 
 @RunWith(TestParameterInjector::class)
+@ExperimentalCoroutinesApi
 class GattClientTest {
     @get:Rule(order = 0) val checkFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
 
@@ -105,7 +106,7 @@ class GattClientTest {
                 BluetoothDevice.ADDRESS_TYPE_RANDOM,
             )
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = device.connectGatt(context, false, gattCallback)
         gatt.close()
 
@@ -113,10 +114,10 @@ class GattClientTest {
         val invocations = mockingDetails(gattCallback).invocations
         val numberOfCalls = invocations.size
 
-        val gattCallback2 = mock(BluetoothGattCallback::class.java)
+        val gattCallback2 = mock<BluetoothGattCallback>()
         val gatt2 = device.connectGatt(context, false, gattCallback2)
         verify(gattCallback2, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
         disconnectAndWaitDisconnection(gatt2, gattCallback2)
 
         // After reconnecting, verify the first callback was not invoked.
@@ -130,66 +131,140 @@ class GattClientTest {
         if (autoConnect) {
             createLeBondAndWaitBonding(remoteLeDevice)
         }
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback, autoConnect)
         disconnectAndWaitDisconnection(gatt, gattCallback)
     }
 
     @Test
-    fun fullGattClientLifecycleWithGattSettings(@TestParameter autoConnect: Boolean) {
-        // val autoConnect = false
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_conn_settings")
+    fun fullGattClientLifecycleWithGattSettings(
+        @TestParameter autoConnect: Boolean,
+        @TestParameter autoMtu: Boolean,
+    ) {
         if (autoConnect) {
             createLeBondAndWaitBonding(remoteLeDevice)
         }
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
 
         val gattSettings =
             BluetoothGattConnectionSettings.Builder()
                 .setTransport(BluetoothDevice.TRANSPORT_LE)
-                .setAutomaticMtuEnabled(true)
-                .setAutoConnectEnabled(false)
+                .setAutomaticMtuEnabled(autoMtu)
+                .setAutoConnectEnabled(autoConnect)
                 .setOpportunisticEnabled(false)
                 .build()
 
         val gatt =
             connectGattAndWaitConnectionWithGattSettings(gattCallback, autoConnect, gattSettings)
+
+        verify(gattCallback, timeout(1000))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
+
+        // Ensure Application receive MTU update with default ANDROID_MTU value
+        if (autoMtu) {
+            verify(gattCallback, timeout(5000).atLeast(1))
+                .onMtuChanged(eq(gatt), eq(ANDROID_MTU), eq(GATT_SUCCESS))
+        }
         disconnectAndWaitDisconnection(gatt, gattCallback)
+    }
+
+    @Test
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_conn_settings")
+    fun fullGattClientLifecycleWithGattSettingsWithMultipleClients(
+        @TestParameter autoConnect: Boolean
+    ) {
+        if (autoConnect) {
+            createLeBondAndWaitBonding(remoteLeDevice)
+        }
+
+        val gattCallback = mock<BluetoothGattCallback>()
+        // first gatt connection settings with autoMtu as false
+        val gattSettings =
+            BluetoothGattConnectionSettings.Builder()
+                .setTransport(BluetoothDevice.TRANSPORT_LE)
+                .setAutomaticMtuEnabled(false)
+                .setAutoConnectEnabled(autoConnect)
+                .setOpportunisticEnabled(false)
+                .build()
+
+        // first gatt connection settings with autoMtu as false
+        val gattCallback1 = mock<BluetoothGattCallback>()
+        // second settings with autoMtu as True
+        val gattSettings1 =
+            BluetoothGattConnectionSettings.Builder()
+                .setTransport(BluetoothDevice.TRANSPORT_LE)
+                .setAutomaticMtuEnabled(true)
+                .setAutoConnectEnabled(autoConnect)
+                .setOpportunisticEnabled(false)
+                .build()
+
+        // Trigger gatt connection with gatt connection setting with autoMtu as FALSE
+        val gatt =
+            connectGattAndWaitConnectionWithGattSettings(gattCallback, autoConnect, gattSettings)
+
+        // First Gatt connection should only generate connection state without any
+        // MTU update
+        verify(gattCallback, timeout(1000))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
+        // No MTU update callback
+        verify(gattCallback, never()).onMtuChanged(eq(gatt), eq(ANDROID_MTU), eq(GATT_SUCCESS))
+
+        // Trigger gatt connection with gatt connection with setting of autoMtu as TRUE
+        val gatt1 =
+            connectGattAndWaitConnectionWithGattSettings(gattCallback1, autoConnect, gattSettings1)
+
+        // Second Gatt connection should only generate connection state for second GATT client
+        // and MTU update for both the GATT clients
+        verify(gattCallback, timeout(1000))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
+
+        // Ensure both GATT client receive MTU update with default ANDROID_MTU value
+        verify(gattCallback, timeout(5000).atLeast(1))
+            .onMtuChanged(eq(gatt), eq(ANDROID_MTU), eq(GATT_SUCCESS))
+
+        verify(gattCallback1, timeout(5000).atLeast(1))
+            .onMtuChanged(eq(gatt1), eq(ANDROID_MTU), eq(GATT_SUCCESS))
+
+        // disconnect both GATT clients
+        disconnectAndWaitDisconnection(gatt, gattCallback)
+        disconnectAndWaitDisconnection(gatt1, gattCallback1)
     }
 
     @Test
     fun reconnectExistingClient() {
         advertiseWithBumble()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val inOrder = inOrder(gattCallback)
 
         val gatt = remoteLeDevice.connectGatt(context, false, gattCallback)
         inOrder
             .verify(gattCallback, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         gatt.disconnect()
         inOrder
             .verify(gattCallback, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(STATE_DISCONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
         gatt.connect()
         inOrder
             .verify(gattCallback, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         // TODO(323889717): Fix callback being called after gatt.close(). This disconnect shouldn't
         // be necessary.
         gatt.disconnect()
         inOrder
             .verify(gattCallback, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(STATE_DISCONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
         gatt.close()
     }
 
     @Test
     fun clientGattDiscoverServices() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -204,7 +279,7 @@ class GattClientTest {
 
     @Test
     fun clientGattReadCharacteristics() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -215,7 +290,8 @@ class GattClientTest {
             val firstCharacteristic = firstService.characteristics.first()
 
             gatt.readCharacteristic(firstCharacteristic)
-            verify(gattCallback, timeout(5000)).onCharacteristicRead(any(), any(), any(), anyInt())
+            verify(gattCallback, timeout(5000))
+                .onCharacteristicRead(any(), any(), any(), any<Int>())
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
@@ -225,7 +301,7 @@ class GattClientTest {
     fun clientGattWriteCharacteristic() {
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -252,7 +328,7 @@ class GattClientTest {
     fun clientGattNotifyOrIndicateCharacteristic(@TestParameter isIndicate: Boolean) {
         registerNotificationIndicationGattService(isIndicate)
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -298,7 +374,7 @@ class GattClientTest {
                 Utils.BUMBLE_RANDOM_ADDRESS,
                 BluetoothDevice.ADDRESS_TYPE_RANDOM,
             )
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
 
         // Connecting to a device not advertising results in connection timeout after 30 seconds
         device.connectGatt(context, false, gattCallback)
@@ -315,8 +391,8 @@ class GattClientTest {
     fun consecutiveWriteCharacteristicFails_thenSuccess() {
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
-        val gattCallback2 = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
+        val gattCallback2 = mock<BluetoothGattCallback>()
 
         val gatt = connectGattAndWaitConnection(gattCallback)
         val gatt2 = connectGattAndWaitConnection(gattCallback2)
@@ -372,8 +448,8 @@ class GattClientTest {
 
     @Test
     fun connectMultiple_closeOne_shouldSuccess() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
-        val gattCallback2 = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
+        val gattCallback2 = mock<BluetoothGattCallback>()
 
         advertiseWithBumble()
         val device =
@@ -480,46 +556,46 @@ class GattClientTest {
                 BluetoothDevice.ADDRESS_TYPE_RANDOM,
             )
 
-        val gattCallbackA = mock(BluetoothGattCallback::class.java)
-        val gattCallbackB = mock(BluetoothGattCallback::class.java)
+        val gattCallbackA = mock<BluetoothGattCallback>()
+        val gattCallbackB = mock<BluetoothGattCallback>()
         val inOrder: InOrder = inOrder(gattCallbackA, gattCallbackB)
 
         val gattA = device.connectGatt(context, false, gattCallbackA)
         inOrder
             .verify(gattCallbackA, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         val gattB = device.connectGatt(context, false, gattCallbackB)
         inOrder
             .verify(gattCallbackB, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         gattA.disconnect()
         inOrder
             .verify(gattCallbackA, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_DISCONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
         gattA.connect()
         inOrder
             .verify(gattCallbackA, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         gattB.disconnect()
         inOrder
             .verify(gattCallbackB, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_DISCONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
         gattB.close()
 
         gattA.disconnect()
         inOrder
             .verify(gattCallbackA, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_DISCONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
         gattA.connect()
         inOrder
             .verify(gattCallbackA, timeout(1000))
-            .onConnectionStateChange(any(), anyInt(), eq(BluetoothProfile.STATE_CONNECTED))
+            .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
         gattA.close()
     }
@@ -596,14 +672,14 @@ class GattClientTest {
 
     @Test
     fun requestMtu_invalidParameter_isFalse() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             assertThat(gatt.requestMtu(1024)).isTrue()
             // status should be 0x87 (GATT_ILLEGAL_PARAMETER) but not defined.
             verify(gattCallback, timeout(5000).atLeast(1))
-                .onMtuChanged(eq(gatt), anyInt(), AdditionalMatchers.not(eq(GATT_SUCCESS)))
+                .onMtuChanged(eq(gatt), any<Int>(), AdditionalMatchers.not(eq(GATT_SUCCESS)))
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
@@ -611,7 +687,7 @@ class GattClientTest {
 
     @Test
     fun requestMtu_once_isSuccess() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -626,7 +702,7 @@ class GattClientTest {
 
     @Test
     fun requestMtu_multipleTimeFromSameClient_isRejected() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -645,7 +721,7 @@ class GattClientTest {
 
     @Test
     fun requestMtu_onceFromMultipleClient_secondIsSuccessWithoutUpdate() {
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -653,7 +729,7 @@ class GattClientTest {
             verify(gattCallback, timeout(5000))
                 .onMtuChanged(eq(gatt), eq(ANDROID_MTU), eq(GATT_SUCCESS))
 
-            val gattCallback2 = mock(BluetoothGattCallback::class.java)
+            val gattCallback2 = mock<BluetoothGattCallback>()
             val gatt2 = connectGattAndWaitConnection(gattCallback2)
             try {
                 // first callback because there is already a connected device
@@ -681,7 +757,7 @@ class GattClientTest {
 
         try {
             repeat(repeatTimes) {
-                var gattCallback = mock(BluetoothGattCallback::class.java)
+                var gattCallback = mock<BluetoothGattCallback>()
                 var gatt = tryConnectGatt(gattCallback, false)
                 // If it fails, close an existing gatt instance and try again.
                 if (gatt == null) {
@@ -689,7 +765,7 @@ class GattClientTest {
                     val connectedGatt = gatts.removeAt(0)
                     connectedGatt.disconnect()
                     connectedGatt.close()
-                    gattCallback = mock(BluetoothGattCallback::class.java)
+                    gattCallback = mock<BluetoothGattCallback>()
                     gatt = connectGattAndWaitConnection(gattCallback)
                 }
                 gatts.add(gatt)
@@ -700,7 +776,7 @@ class GattClientTest {
                     gatt.getService(TEST_SERVICE_UUID).getCharacteristic(TEST_CHARACTERISTIC_UUID)
                 gatt.readCharacteristic(characteristic)
                 verify(gattCallback, timeout(5000))
-                    .onCharacteristicRead(any(), any(), any(), anyInt())
+                    .onCharacteristicRead(any(), any(), any(), any<Int>())
             }
         } finally {
             gatts.forEach {
@@ -716,7 +792,7 @@ class GattClientTest {
     fun writeCharacteristic_disconnected_shouldNotCrash() {
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
 
         val gatt = connectGattAndWaitConnection(gattCallback)
 
@@ -751,29 +827,29 @@ class GattClientTest {
         val gattCallbackTimeout = 5000L
         try {
             repeat(100) {
-                val gattCallback = mock(BluetoothGattCallback::class.java)
+                val gattCallback = mock<BluetoothGattCallback>()
                 val inOrder = inOrder(gattCallback)
 
                 val gatt = remoteLeDevice.connectGatt(context, false, gattCallback)
                 gatts.add(gatt)
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(any(), anyInt(), eq(STATE_CONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
                 gatt.disconnect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(any(), anyInt(), eq(STATE_DISCONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
                 gatt.connect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(any(), anyInt(), eq(STATE_CONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
                 gatt.disconnect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(any(), anyInt(), eq(STATE_DISCONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
             }
         } finally {
             gatts.forEach { it.close() }
@@ -783,23 +859,22 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientOffloadCharacteristics() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getService(TEST_SERVICE_UUID)
-
-            var status =
+            val firstService = gatt.getService(TEST_SERVICE_UUID)
+            val status =
                 gatt.offloadCharacteristics(
                     firstService,
-                    firstService.getCharacteristics(),
+                    firstService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
@@ -812,16 +887,15 @@ class GattClientTest {
                     sessionCaptor.capture(),
                     eq(GattOffloadSession.STATUS_SUCCESS),
                 )
-            var session = sessionCaptor.getValue()
+            val session = sessionCaptor.getValue()
             assertThat(session).isNotNull()
             Log.i(TAG, "Offload session: ${session}")
-            assertThat(session.getSessionId())
+            assertThat(session.sessionId)
                 .isNotEqualTo(GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN)
-            assertThat(session.getGattService()).isEqualTo(firstService)
-            assertThat(session.getGattCharacteristics())
-                .isEqualTo(firstService.getCharacteristics())
-            assertThat(session.getEndpointId()).isEqualTo(TEST_ENDPOINT_ID)
-            assertThat(session.getHubId()).isEqualTo(TEST_HUB_ID)
+            assertThat(session.gattService).isEqualTo(firstService)
+            assertThat(session.gattCharacteristics).isEqualTo(firstService.characteristics)
+            assertThat(session.endpointId).isEqualTo(TEST_ENDPOINT_ID)
+            assertThat(session.hubId).isEqualTo(TEST_HUB_ID)
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
@@ -830,21 +904,20 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientsConcurrentOffloadDifferentCharacteristics() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getService(TEST_SERVICE_UUID)
-
-            var t1 = thread {
-                var status =
+            val firstService = gatt.getService(TEST_SERVICE_UUID)
+            val t1 = thread {
+                val status =
                     gatt.offloadCharacteristics(
                         firstService,
                         listOf(firstService.getCharacteristic(TEST_CHARACTERISTIC_UUID)),
@@ -854,8 +927,8 @@ class GattClientTest {
                 assertThat(status).isEqualTo(GattOffloadSession.STATUS_SUCCESS)
             }
 
-            var t2 = thread {
-                var status =
+            val t2 = thread {
+                val status =
                     gatt.offloadCharacteristics(
                         firstService,
                         listOf(firstService.getCharacteristic(TEST_CHARACTERISTIC_UUID2)),
@@ -878,19 +951,18 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientOffloadSameCharacteristicsFails() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getService(TEST_SERVICE_UUID)
-
+            val firstService = gatt.getService(TEST_SERVICE_UUID)
             var status =
                 gatt.offloadCharacteristics(
                     firstService,
@@ -902,7 +974,7 @@ class GattClientTest {
             verify(gattCallback, timeout(10000))
                 .onCharacteristicsOffloaded(any(), any(), eq(GattOffloadSession.STATUS_SUCCESS))
 
-            Mockito.clearInvocations(gattCallback)
+            clearInvocations(gattCallback)
             status =
                 gatt.offloadCharacteristics(
                     firstService,
@@ -911,7 +983,7 @@ class GattClientTest {
                     TEST_HUB_ID,
                 )
             assertThat(status).isNotEqualTo(GattOffloadSession.STATUS_SUCCESS)
-            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), anyInt())
+            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), any<Int>())
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
@@ -920,19 +992,18 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientOffloadSameCharacteristicsDifferentEndpointFails() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getService(TEST_SERVICE_UUID)
-
+            val firstService = gatt.getService(TEST_SERVICE_UUID)
             var status =
                 gatt.offloadCharacteristics(
                     firstService,
@@ -944,7 +1015,7 @@ class GattClientTest {
             verify(gattCallback, timeout(10000))
                 .onCharacteristicsOffloaded(any(), any(), eq(GattOffloadSession.STATUS_SUCCESS))
 
-            Mockito.clearInvocations(gattCallback)
+            clearInvocations(gattCallback)
             status =
                 gatt.offloadCharacteristics(
                     firstService,
@@ -953,7 +1024,7 @@ class GattClientTest {
                     TEST_HUB_ID,
                 )
             assertThat(status).isNotEqualTo(GattOffloadSession.STATUS_SUCCESS)
-            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), anyInt())
+            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), any<Int>())
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
@@ -962,12 +1033,12 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun differentClientsOffloadSameCharacteristicsFails() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerGattService()
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
-        val gattCallback2 = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
+        val gattCallback2 = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
         val gatt2 = connectGattAndWaitConnection(gattCallback2)
 
@@ -978,8 +1049,7 @@ class GattClientTest {
             gatt2.discoverServices()
             verify(gattCallback2, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getService(TEST_SERVICE_UUID)
-
+            val firstService = gatt.getService(TEST_SERVICE_UUID)
             var status =
                 gatt.offloadCharacteristics(
                     firstService,
@@ -991,7 +1061,7 @@ class GattClientTest {
             verify(gattCallback, timeout(10000))
                 .onCharacteristicsOffloaded(any(), any(), eq(GattOffloadSession.STATUS_SUCCESS))
 
-            Mockito.clearInvocations(gattCallback)
+            clearInvocations(gattCallback)
             status =
                 gatt2.offloadCharacteristics(
                     firstService,
@@ -1000,7 +1070,7 @@ class GattClientTest {
                     TEST_HUB_ID,
                 )
             assertThat(status).isNotEqualTo(GattOffloadSession.STATUS_SUCCESS)
-            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), anyInt())
+            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), any<Int>())
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
             disconnectAndWaitDisconnection(gatt2, gattCallback2)
@@ -1010,21 +1080,20 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientUnoffloadCharacteristics() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getServices().get(0)
-
-            var status =
+            val firstService = gatt.services[0]
+            val status =
                 gatt.offloadCharacteristics(
                     firstService,
-                    firstService.getCharacteristics(),
+                    firstService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
@@ -1037,8 +1106,8 @@ class GattClientTest {
                     sessionCaptor.capture(),
                     eq(GattOffloadSession.STATUS_SUCCESS),
                 )
-            var session = sessionCaptor.getValue()
-            var sessionId = session.getSessionId()
+            val session = sessionCaptor.getValue()
+            val sessionId = session.sessionId
             assertThat(session).isNotNull()
             Log.i(TAG, "Offload session: ${session}")
             assertThat(sessionId).isNotEqualTo(GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN)
@@ -1058,23 +1127,22 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientUnoffloadCharacteristics_autoClose() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
             gatt.discoverServices()
             verify(gattCallback, timeout(10000)).onServicesDiscovered(any(), eq(GATT_SUCCESS))
 
-            var firstService = gatt.getServices().get(0)
-            var sessionId: Int =
-                GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN // Initialize sessionId
+            val firstService = gatt.services[0]
+            var sessionId = GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN // Initialize sessionId
 
             val status =
                 gatt.offloadCharacteristics(
                     firstService,
-                    firstService.getCharacteristics(),
+                    firstService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
@@ -1087,13 +1155,13 @@ class GattClientTest {
                     sessionCaptor.capture(),
                     eq(GattOffloadSession.STATUS_SUCCESS),
                 )
-            var session = sessionCaptor.getValue()
+            val session = sessionCaptor.getValue()
             assertThat(session).isNotNull()
-            sessionId = session.getSessionId()
+            sessionId = session.sessionId
 
             session.use { currentSession ->
                 Log.i(TAG, "Current offload session: ${currentSession}")
-                assertThat(currentSession.getSessionId())
+                assertThat(currentSession.sessionId)
                     .isNotEqualTo(GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN)
             } // session.close() is automatically called here
             verify(gattCallback, timeout(10000))
@@ -1110,11 +1178,11 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientOffloadNotificationCharacteristicsFails_thenSuccess() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerNotificationIndicationGattService(/* isIndicate */ false)
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -1129,20 +1197,20 @@ class GattClientTest {
             var status =
                 gatt.offloadCharacteristics(
                     notiService,
-                    notiService.getCharacteristics(),
+                    notiService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
             assertThat(status).isNotEqualTo(GattOffloadSession.STATUS_SUCCESS)
-            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), anyInt())
+            verify(gattCallback, never()).onCharacteristicsOffloaded(any(), any(), any<Int>())
 
             // Unregister the notification characteristic
             gatt.setCharacteristicNotification(characteristic, false)
-            Mockito.clearInvocations(gattCallback)
+            clearInvocations(gattCallback)
             status =
                 gatt.offloadCharacteristics(
                     notiService,
-                    notiService.getCharacteristics(),
+                    notiService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
@@ -1157,11 +1225,11 @@ class GattClientTest {
     @Test
     @RequiresFlagsEnabled("com.android.bluetooth.flags.gatt_offload_api")
     fun clientOffloadNotificationCharacteristics_thenUnoffloaded() {
-        assumeTrue(adapter.getSupportedGattOffloadCapabilities()?.isClientOffloadSupported ?: false)
+        assumeTrue(adapter.supportedGattOffloadCapabilities?.isClientOffloadSupported ?: false)
 
         registerNotificationIndicationGattService(/* isIndicate */ false)
 
-        val gattCallback = mock(BluetoothGattCallback::class.java)
+        val gattCallback = mock<BluetoothGattCallback>()
         val gatt = connectGattAndWaitConnection(gattCallback)
 
         try {
@@ -1171,10 +1239,10 @@ class GattClientTest {
             val notiService = gatt.getService(TEST_SERVICE_UUID)
             val characteristic = notiService.getCharacteristic(TEST_CHARACTERISTIC_UUID)
 
-            var status =
+            val status =
                 gatt.offloadCharacteristics(
                     notiService,
-                    notiService.getCharacteristics(),
+                    notiService.characteristics,
                     TEST_ENDPOINT_ID,
                     TEST_HUB_ID,
                 )
@@ -1187,19 +1255,30 @@ class GattClientTest {
                     sessionCaptor.capture(),
                     eq(GattOffloadSession.STATUS_SUCCESS),
                 )
-            var session = sessionCaptor.getValue()
+            val session = sessionCaptor.getValue()
             assertThat(session).isNotNull()
-            var sessionId = session.getSessionId()
+            val sessionId = session.sessionId
             Log.i(TAG, "Offload session: ${session}")
             assertThat(sessionId).isNotEqualTo(GattOffloadSession.OFFLOAD_SESSION_ID_UNKNOWN)
 
             // Register the notification characteristic
             gatt.setCharacteristicNotification(characteristic, true)
             verify(gattCallback, timeout(10000))
-                .onCharacteristicsUnoffloaded(any(), eq(sessionId), anyInt())
+                .onCharacteristicsUnoffloaded(any(), eq(sessionId), any<Int>())
         } finally {
             disconnectAndWaitDisconnection(gatt, gattCallback)
         }
+    }
+
+    private fun disconnectAndWaitDisconnection(
+        gatt: BluetoothGatt,
+        callback: BluetoothGattCallback,
+    ) {
+        val state = STATE_DISCONNECTED
+        gatt.disconnect()
+        verify(callback, timeout(1000)).onConnectionStateChange(eq(gatt), any<Int>(), eq(state))
+
+        gatt.close()
     }
 
     private fun createLeBondAndWaitBonding(device: BluetoothDevice) {
@@ -1224,16 +1303,5 @@ class GattClientTest {
             UUID.fromString("00010001-0000-0000-0000-000000000000")
         private val TEST_CHARACTERISTIC_UUID2 =
             UUID.fromString("00010002-0000-0000-0000-000000000000")
-
-        private fun disconnectAndWaitDisconnection(
-            gatt: BluetoothGatt,
-            callback: BluetoothGattCallback,
-        ) {
-            val state = STATE_DISCONNECTED
-            gatt.disconnect()
-            verify(callback, timeout(1000)).onConnectionStateChange(eq(gatt), anyInt(), eq(state))
-
-            gatt.close()
-        }
     }
 }

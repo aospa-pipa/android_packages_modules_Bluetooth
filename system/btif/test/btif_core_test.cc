@@ -151,9 +151,9 @@ void device_found_callback(int /* num_properties */, bt_property_t* /* propertie
 void discovery_state_changed_callback(bt_discovery_state_t /* state */) {}
 void pin_request_callback(RawAddress /* remote_bd_addr */, bt_bdname_t* /* bd_name */,
                           uint32_t /* cod */, bool /* min_16_digit */,
-                          PairingAlgorithm /* pairing_algorithm */) {}
+                          int /* pairing_algorithm */) {}
 void ssp_request_callback(RawAddress /* remote_bd_addr */, bt_ssp_variant_t /* pairing_variant */,
-                          uint32_t /* pass_key */, PairingAlgorithm /* pairing_algorithm */) {}
+                          uint32_t /* pass_key */, int /* pairing_algorithm */) {}
 void bond_state_changed_callback(bt_status_t /* status */, RawAddress /* remote_bd_addr */,
                                  tBT_TRANSPORT /* transport */, bt_bond_state_t /* state */,
                                  PairingType /* pairing_type */, int /* fail_reason */) {}
@@ -1069,7 +1069,7 @@ TEST_F(BtifCoreSocketTest, CreateTwoRfcommServerSockets) {
   static constexpr int kChannelTwo = 2;
   static constexpr int kFlagsTwo = 4;
   static constexpr int kAppUidTwo = 6;
-  const Uuid server_uuid_two = Uuid::FromString("12345678-1234-2345-3456-456789123456");
+  const Uuid server_uuid_two = Uuid("12345678-1234-2345-3456-456789123456");
   int socket_number_two = 1;
   ASSERT_EQ(BtifStatus(), btif_sock_get_interface()->listen(
                                   BTSOCK_RFCOMM, "ServiceTwo", &server_uuid_two, kChannelTwo,
@@ -1089,7 +1089,7 @@ TEST_F(BtifCoreSocketTest, CreateManyRfcommServerSockets) {
     server_uuid_str[2] = (i / 10) % 10 + '0';
     server_uuid_str[1] = (i / 100) % 10 + '0';
     server_uuid_str[0] = (i / 1000) % 10 + '0';
-    Uuid server_uuid = Uuid::FromString(server_uuid_str);
+    Uuid server_uuid = Uuid::FromString(server_uuid_str).value();
     btsock_data_path_t data_path = BTSOCK_DATA_PATH_NO_OFFLOAD;
     uint64_t hub_id = 0;
     uint64_t endpoint_id = 0;

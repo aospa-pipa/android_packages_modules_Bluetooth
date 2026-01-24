@@ -412,7 +412,7 @@ void bta_gattc_cancel_bk_conn(const tBTA_GATTC_API_CANCEL_OPEN* p_data);
 void bta_gattc_send_open_cback(tBTA_GATTC_RCB* p_clreg, tGATT_STATUS status,
                                const RawAddress& remote_bda, tCONN_ID conn_id,
                                tBT_TRANSPORT transport, uint16_t mtu);
-void bta_gattc_process_api_refresh(const RawAddress& remote_bda);
+void bta_gattc_process_api_refresh(tGATT_IF client_if, const RawAddress& remote_bda);
 void bta_gattc_cfg_mtu(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data);
 tGATT_STATUS bta_gattc_subrate_mode_request(tGATT_IF client_if, const RawAddress& bd_addr,
                                             tGATT_SUBRATE_MODE subrate_mode,
@@ -465,8 +465,7 @@ tBTA_GATTC_SERV* bta_gattc_find_srvr_cache(const RawAddress& bda);
 /* discovery functions */
 void bta_gattc_disc_res_cback(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type, tGATT_DISC_RES* p_data);
 void bta_gattc_disc_cmpl_cback(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type, tGATT_STATUS status);
-tGATT_STATUS bta_gattc_discover_pri_service(tCONN_ID conn_id, tBTA_GATTC_SERV* p_server_cb,
-                                            tGATT_DISC_TYPE disc_type);
+tGATT_STATUS bta_gattc_discover_pri_service(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type);
 void bta_gattc_search_service(tBTA_GATTC_CLCB* p_clcb, bluetooth::Uuid* p_uuid);
 const std::list<gatt::Service>* bta_gattc_get_services(tCONN_ID conn_id);
 const gatt::Service* bta_gattc_get_service_for_handle(tCONN_ID conn_id, uint16_t handle);

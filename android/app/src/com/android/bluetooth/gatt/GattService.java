@@ -98,7 +98,6 @@ import android.util.Log;
 
 import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AbstractionLayer;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
@@ -236,7 +235,6 @@ public class GattService extends ProfileService {
                 advertiseManagerNativeInterface,
                 distanceMeasurementNativeInterface,
                 new ContextMap<>() /* mClientMap */,
-                new ContextMap<>() /* mServerMap */,
                 new HashSet<>() /* mReliableQueue */,
                 companionDeviceManager,
                 null,
@@ -250,7 +248,6 @@ public class GattService extends ProfileService {
             AdvertiseManagerNativeInterface advertiseManagerNativeInterface,
             DistanceMeasurementNativeInterface distanceMeasurementNativeInterface,
             ContextMap<IBluetoothGattCallback> clientMap,
-            ContextMap<IBluetoothGattServerCallback> serverMap,
             Set<BluetoothDevice> reliableQueue,
             CompanionDeviceManager companionDeviceManager,
             @Nullable Looper gattLooper,
@@ -265,8 +262,7 @@ public class GattService extends ProfileService {
         Settings.Global.putInt(
                 getContentResolver(), "bluetooth_sanitized_exposure_notification_supported", 1);
 
-        mServerManager =
-                new GattServerManager(getAdapterService(), this, serverMap, mMetricsReporter);
+        mServerManager = new GattServerManager(getAdapterService(), this, mMetricsReporter);
         var nativeCallback = new GattNativeCallback(getAdapterService(), this, mServerManager);
         mNativeInterface =
                 requireNonNullElseGet(
@@ -877,11 +873,23 @@ public class GattService extends ProfileService {
                 ("onConfigureMTU(): device=" + device)
                         + (", status=" + statusToString(status) + ", mtu=" + mtu));
 
-        var app = mClientMap.getByConnId(connId);
-        if (app == null) {
-            return;
+        if (!Flags.gattConnSettings()) {
+            var app = mClientMap.getByConnId(connId);
+            if (app == null) {
+                return;
+            }
+            callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
+        } else {
+            Log.d(TAG, "pushing callback to all registered clients");
+            final Map<Integer, BluetoothDevice> connMap = mClientMap.getConnectedMap();
+            for (Map.Entry<Integer, BluetoothDevice> entry : connMap.entrySet()) {
+                var app = mClientMap.getById(entry.getKey());
+                if (app == null) {
+                    continue;
+                }
+                callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
+            }
         }
-        callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
     }
 
     void onClientCongestionFromNative(int connId, boolean congested) {
@@ -1698,7 +1706,7 @@ public class GattService extends ProfileService {
     }
 
     private void forceRunSyncOnGattThread(Runnable r) {
-        if (!Flags.gattThread() || Utils.isInstrumentationTestMode()) {
+        if (!Flags.gattThread() || Util.isInstrumentationTestMode()) {
             r.run();
             return;
         }
@@ -1753,12 +1761,12 @@ public class GattService extends ProfileService {
 
     // TODO(b/377424060) Remove when "use internal APIs instead of framework APIs" is fixed
     boolean isOnGattThread() {
-        if (!Flags.gattThread() || Utils.isInstrumentationTestMode()) return false;
+        if (!Flags.gattThread() || Util.isInstrumentationTestMode()) return false;
         return mGattHandler.getLooper().isCurrentThread();
     }
 
     void enforceGattThread() {
-        if (!Flags.gattThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.gattThread() || Util.isInstrumentationTestMode()) return;
 
         if (!mGattHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Not on gatt thread");
@@ -1766,7 +1774,7 @@ public class GattService extends ProfileService {
     }
 
     private void enforceGattThreadIsNotUsed() {
-        if (!Flags.gattThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.gattThread() || Util.isInstrumentationTestMode()) return;
 
         if (mGattHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Must NOT be on gatt thread");

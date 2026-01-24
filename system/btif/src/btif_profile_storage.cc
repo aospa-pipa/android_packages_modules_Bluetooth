@@ -43,7 +43,7 @@
 #include "bta_hearing_aid_api.h"
 #include "bta_hh_api.h"
 #include "bta_le_audio_api.h"
-#include "bta_vc_api.h"
+#include "bta_vcp_controller_api.h"
 #include "btif/include/btif_dm.h"
 #include "btif/include/btif_jni_task.h"
 #include "btif_config.h"
@@ -360,11 +360,11 @@ static bool btif_device_supports_classic_hid(const RawAddress& bd_addr) {
 }
 
 static bool btif_device_supports_hearing_aid(const RawAddress& bd_addr) {
-  return btif_device_supports_profile(bd_addr, Uuid::FromString("FDF0"));
+  return btif_device_supports_profile(bd_addr, Uuid("FDF0"));
 }
 
 static bool btif_device_supports_le_audio(const RawAddress& bd_addr) {
-  return btif_device_supports_profile(bd_addr, Uuid::FromString("184E"));
+  return btif_device_supports_profile(bd_addr, Uuid("184E"));
 }
 
 /*******************************************************************************
@@ -943,7 +943,7 @@ void btif_storage_load_bonded_volume_control_devices(void) {
   for (const auto& bd_addr : btif_config_get_paired_devices()) {
     if (btif_device_supports_profile(bd_addr,
                                      Uuid::From16Bit(UUID_SERVCLASS_VOLUME_CONTROL_SERVER))) {
-      do_in_main_thread(BindOnce(&VolumeControl::AddFromStorage, bd_addr));
+      do_in_main_thread(BindOnce(&VolumeController::AddFromStorage, bd_addr));
     }
   }
 }
@@ -1050,8 +1050,8 @@ bt_status_t btif_storage_set_hidd(const RawAddress& remote_bd_addr) {
  * Returns          BT_STATUS_SUCCESS
  *
  ******************************************************************************/
-bt_status_t btif_storage_remove_hidd(RawAddress* remote_bd_addr) {
-  btif_config_remove(remote_bd_addr->ToString(), BTIF_STORAGE_KEY_HID_DEVICE_CABLED);
+bt_status_t btif_storage_remove_hidd(RawAddress remote_bd_addr) {
+  btif_config_remove(remote_bd_addr.ToString(), BTIF_STORAGE_KEY_HID_DEVICE_CABLED);
 
   return BT_STATUS_SUCCESS;
 }

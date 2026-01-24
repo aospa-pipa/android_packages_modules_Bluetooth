@@ -30,17 +30,14 @@
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/ble_address_with_type.h>
-#include <bluetooth/types/bt_transport.h>
 #include <bluetooth/types/uuid.h>
 #include <com_android_bluetooth_flags.h>
 #include <hardware/bluetooth.h>
 #include <hardware/bt_gatt.h>
 #include <hardware/bt_gatt_types.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "bta/include/bta_gatt_api.h"
-#include "bta/include/bta_sec_api.h"
 #include "btif/include/btif_common.h"
 #include "btif/include/btif_dm.h"
 #include "btif/include/btif_gatt.h"
@@ -479,15 +476,17 @@ static BtStatus btif_gatts_read_phy(
 
 static BtStatus btif_gatts_offload_characteristics(int conn_id, btgatt_db_element_t* service,
                                                    size_t elements_count, uint64_t endpoint_id,
-                                                   uint64_t hub_id,
+                                                   uint64_t hub_id, int uid,
+                                                   std::string attribution_tag,
                                                    btgatt_offload_result_t* result) {
   CHECK_BTGATT_INIT();
   std::promise<btgatt_offload_result_t> promise;
   std::future future = promise.get_future();
 
-  BtStatus status = do_in_main_thread(base::BindOnce(
-          &BTA_GATTS_OffloadCharacteristics, static_cast<tCONN_ID>(conn_id),
-          std::vector(service, service + elements_count), endpoint_id, hub_id, std::move(promise)));
+  BtStatus status = do_in_main_thread(
+          base::BindOnce(&BTA_GATTS_OffloadCharacteristics, static_cast<tCONN_ID>(conn_id),
+                         std::vector(service, service + elements_count), endpoint_id, hub_id, uid,
+                         std::move(attribution_tag), std::move(promise)));
   if (!status) {
     return status;
   }

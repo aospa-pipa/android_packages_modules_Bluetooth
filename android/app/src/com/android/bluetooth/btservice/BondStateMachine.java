@@ -131,21 +131,8 @@ public final class BondStateMachine extends StateMachine {
         start(false);
     }
 
-    BondStateMachine(AdapterService service, AdapterProperties prop, RemoteDevices remoteDevices) {
-        super("BondStateMachine:");
-
-        addState(mStateIdle);
-        addState(mStateBonding);
-        mAdapterService = service;
-        mRemoteDevices = remoteDevices;
-        mAdapterProperties = prop;
-        mAdapter = mAdapterService.getSystemService(BluetoothManager.class).getAdapter();
-        setInitialState(mStateIdle);
-        start();
-    }
-
     public synchronized void doQuit() {
-        quitNow(!Flags.bondStateMachineLooper());
+        quitNow(false);
     }
 
     private class StateIdle extends State {
@@ -581,7 +568,6 @@ public final class BondStateMachine extends StateMachine {
             int pairingAlgorithm,
             int pairingVariant,
             int reason) {
-
         // If new bond state is invalid, immediately return.
         if (newState < BluetoothDevice.BOND_NONE || newState > BluetoothDevice.BOND_BONDED) {
             logE("handleBondStateChanged: Invalid new state: " + newState);
@@ -686,7 +672,6 @@ public final class BondStateMachine extends StateMachine {
 
     /** UUIDs received or timeout, send bonded intent */
     void handlePendingUuids(BluetoothDevice device) {
-
         if (!mDevicesWaitingForUuids.contains(device)) {
             logW("handlePendingUuids: " + device + " was not waiting for UUIDs, abort.");
             return;
@@ -761,20 +746,6 @@ public final class BondStateMachine extends StateMachine {
             logD("bondStateChangeCallback: Unknown device:" + device);
         }
 
-        logI(
-                "bondStateChangeCallback: Status: "
-                        + status
-                        + " Address: "
-                        + device
-                        + " Transport: "
-                        + transport
-                        + " newState: "
-                        + bondStateToString(newState)
-                        + " pairingAlgorithm: "
-                        + pairingAlgorithm
-                        + " hciReason: "
-                        + hciReason);
-
         Message msg = obtainMessage(MESSAGE_BOND_STATE_CHANGE);
         msg.obj = device;
 
@@ -790,6 +761,20 @@ public final class BondStateMachine extends StateMachine {
         msg.getData().putInt(KEY_BOND_TRANSPORT, transport);
         msg.getData().putInt(KEY_PAIRING_ALGORITHM, pairingAlgorithm);
         msg.getData().putInt(KEY_PAIRING_VARIANT, pairingVariant);
+
+        logI(
+                "bondStateChangeCallback: Status: "
+                        + status
+                        + " Address: "
+                        + device
+                        + " Transport: "
+                        + transport
+                        + " newState: "
+                        + bondStateToString(msg.arg1)
+                        + " pairingAlgorithm: "
+                        + pairingAlgorithm
+                        + " hciReason: "
+                        + hciReason);
 
         sendMessage(msg);
     }
@@ -868,14 +853,14 @@ public final class BondStateMachine extends StateMachine {
 
         Message msg = obtainMessage(MESSAGE_PAIRING_REQUEST);
         msg.obj = device;
+        Bundle bundle = new Bundle();
+        bundle.putInt(KEY_PAIRING_CONTEXT, context);
+        bundle.putInt(KEY_PAIRING_ALGORITHM, pairingAlgorithm);
         if (displayPasskey) {
             msg.arg1 = passkey;
-            Bundle bundle = new Bundle();
             bundle.putByte(KEY_DISPLAY_PASSKEY, (byte) 1 /* true */);
-            bundle.putInt(KEY_PAIRING_CONTEXT, context);
-            bundle.putInt(KEY_PAIRING_ALGORITHM, pairingAlgorithm);
-            msg.setData(bundle);
         }
+        msg.setData(bundle);
         msg.arg2 = variant;
         sendMessage(msg);
     }
@@ -954,17 +939,7 @@ public final class BondStateMachine extends StateMachine {
                 .flatMap(Optional::stream)
                 .forEach(
                         profile -> {
-                            if (profile.getProfileId() == HAP_CLIENT
-                                    && Flags.hapOnMainLooper()
-                                    && !Flags.bondStateMachineLooper()) {
-                                ((HapClientService) profile)
-                                        .syncPost(
-                                                hap ->
-                                                        hap.setConnectionPolicy(
-                                                                device, CONNECTION_POLICY_UNKNOWN));
-                            } else {
-                                profile.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN);
-                            }
+                            profile.setConnectionPolicy(device, CONNECTION_POLICY_UNKNOWN);
                         });
         Log.d(TAG, "Removing device " + device.getAddress() + " from Absolute Volume rejectlist");
         InteropUtil.interopDatabaseRemoveAddr(

@@ -430,7 +430,7 @@ static void bta_gattc_init_bk_conn(const tBTA_GATTC_API_OPEN* p_data, tBTA_GATTC
   /* always call open to hold a connection */
   if (!GATT_Connect(p_data->client_if, p_data->remote_bda, BLE_ADDR_PUBLIC, p_data->connection_type,
                     p_data->transport, false, p_data->preferred_mtu, p_data->prefer_relax_mode,
-                    false)) {
+                    p_data->auto_mtu_enabled)) {
     log::error("Unable to connect to remote bd_addr={}", p_data->remote_bda);
     bta_gattc_send_open_cback(p_clreg, GATT_ILLEGAL_PARAMETER, p_data->remote_bda,
                               GATT_INVALID_CONN_ID, BT_TRANSPORT_LE, 0);
@@ -525,6 +525,13 @@ void bta_gattc_conn(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data) {
   }
 
   p_clcb->p_srcb->connected = true;
+  if (com::android::bluetooth::flags::gatt_conn_settings()) {
+    if (p_clcb->p_srcb->mtu == GATT_DEF_BLE_MTU_SIZE) {
+      // Set the default based on the APP's preference
+      log::verbose("bd_addr: {}", p_clcb->bda);
+      GATTC_SetDefaultMtu(p_clcb->bda);
+    }
+  }
 
   if (p_clcb->p_srcb->mtu == 0) {
     p_clcb->p_srcb->mtu = GATT_DEF_BLE_MTU_SIZE;
@@ -854,8 +861,7 @@ void bta_gattc_start_discover_internal(tBTA_GATTC_CLCB* p_clcb) {
   }
 
   bta_gattc_init_cache(p_clcb->p_srcb);
-  p_clcb->status =
-          bta_gattc_discover_pri_service(p_clcb->bta_conn_id, p_clcb->p_srcb, GATT_DISC_SRVC_ALL);
+  p_clcb->status = bta_gattc_discover_pri_service(p_clcb->bta_conn_id, GATT_DISC_SRVC_ALL);
   if (p_clcb->status != GATT_SUCCESS) {
     log::error("discovery on server failed");
     bta_gattc_reset_discover_st(p_clcb->p_srcb, p_clcb->status);
@@ -1275,6 +1281,10 @@ static void bta_gattc_cfg_mtu_cmpl(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_OP_
     }
   }
 
+  if (com::android::bluetooth::flags::gatt_conn_settings() && p_data->p_cmpl &&
+      p_data->status == GATT_SUCCESS) {
+    p_clcb->p_srcb->mtu = p_data->p_cmpl->mtu;
+  }
   /* configure MTU complete, callback */
   cb_data.cfg_mtu.conn_id = p_clcb->bta_conn_id;
   cb_data.cfg_mtu.status = p_data->status;
@@ -1494,15 +1504,20 @@ static void bta_gattc_enc_cmpl_cback(tGATT_IF gattc_if, const RawAddress& bda) {
 
 /** process refresh API to delete cache and start a new discovery if currently
  * connected */
-void bta_gattc_process_api_refresh(const RawAddress& remote_bda) {
+void bta_gattc_process_api_refresh(tGATT_IF client_if, const RawAddress& remote_bda) {
   tBTA_GATTC_SERV* p_srvc_cb = bta_gattc_find_srvr_cache(remote_bda);
   if (p_srvc_cb) {
+    // Service discovery is in progress, ignore the request.
+    if (p_srvc_cb->state == BTA_GATTC_SERV_DISC || p_srvc_cb->state == BTA_GATTC_SERV_DISC_ACT) {
+      return;
+    }
     /* try to find a CLCB */
     if (p_srvc_cb->connected && p_srvc_cb->num_clcb != 0) {
       bool found = false;
       tBTA_GATTC_CLCB* p_clcb = nullptr;
       for (auto& p_clcb_i : bta_gattc_cb.clcb_set) {
-        if (p_clcb_i->in_use && p_clcb_i->p_srcb == p_srvc_cb) {
+        if (p_clcb_i->in_use && p_clcb_i->p_srcb == p_srvc_cb &&
+            (client_if == 0 || p_clcb_i->p_rcb->client_if == client_if)) {
           p_clcb = p_clcb_i.get();
           found = true;
           break;

@@ -22,6 +22,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_fix_clear_cises_in_the_cig"
+    namespace: "bluetooth"
+    description: "Improve operations around CIG, especially on the occasion of the controller issue."
+    bug: "465088801"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_fix_stop_stream_race"
     namespace: "bluetooth"
     description: "Fix race when resume is called just after stream release"
@@ -29,6 +39,14 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "leaudio_codec_id_support"
+    is_exported: true
+    namespace: "bluetooth"
+    description: "Allow application to get any codec id along with vendor specific codecs information"
+    bug: "463280176"
 }
 
 flag {
@@ -198,16 +216,6 @@ flag {
 }
 
 flag {
-    name: "leaudio_do_not_set_autoconnecting_on_connected_device"
-    namespace: "bluetooth"
-    description: "When `autoConnect` triggers, do not set CONNECTING_AUTOCONNECT for device that is already in CONNECTED state."
-    bug: "407958032"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "leaudio_broadcast_source_channel_map_classification"
     namespace: "bluetooth"
     description: "Uses channel classification from buds who synced with the phone's broadcast stream to determine the BIG channel map"
@@ -215,47 +223,11 @@ flag {
 }
 
 flag {
-    name: "leaudio_check_ecosystem_base_interval_support"
-    namespace: "bluetooth"
-    description: "Before sending Set Ecosystem Base Interval command, check that the controller actually supports it"
-    bug: "422626923"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_broadcast_fix_autonomous_source_adding"
-    namespace: "bluetooth"
-    description: "Improve handling of broadcast autonomous source adding"
-    bug: "422399972"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_connection_subrating"
-    namespace: "bluetooth"
-    description: "Support LE audio connection subrating to speed up the reconfiguration process"
-    bug: "423028406"
-}
-
-flag {
     name: "leaudio_peripheral_feature"
+    is_exported: true
     namespace: "bluetooth"
     description: "LE Audio peripheral feature"
     bug: "428719427"
-}
-
-flag {
-    name: "leaudio_broadcast_simplify_set_bcast_code"
-    namespace: "bluetooth"
-    description: "Simplify the use of SET_BCAST_CODE"
-    bug: "434681485"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
 }
 
 flag {
@@ -263,26 +235,6 @@ flag {
     namespace: "bluetooth"
     description: "GAME sonifications will not impact on the main use case i.e. will not force context type change."
     bug: "436171822"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_broadcast_config_data_path_before_set_iso_data_path"
-    namespace: "bluetooth"
-    description: "Configure data path before setting ISO data path"
-    bug: "438088172"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "start_leaudio_subrate_for_active_set_only"
-    namespace: "bluetooth"
-    description: "Only start LE audio subrate for the active le audio set"
-    bug: "437449260"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -389,6 +341,16 @@ flag {
 }
 
 flag {
+    name: "leaudio_broadcast_always_use_background_scanner"
+    namespace: "bluetooth"
+    description: "Always use the scanner when trying to sync to a broadcaster"
+    bug: "467625545"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_improve_unicast_monitor"
     namespace: "bluetooth"
     description: "Improve unicast monitor mode robustness"
@@ -403,6 +365,16 @@ flag {
     namespace: "bluetooth"
     description: "Disable BIG monitoring when no BIS are selected to be synced to."
     bug: "441243548"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_broadcast_check_sync_advancement_on_remote_resume"
+    namespace: "bluetooth"
+    description: "Check broadcast sync advancement when detecting a remote resume"
+    bug: "467968060"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -505,6 +477,16 @@ flag {
     namespace: "bluetooth"
     description: "Close gatt channel while it is connecting"
     bug: "459264847"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "le_audio_use_highest_sample_rate_for_mic"
+    namespace: "bluetooth"
+    description: "Use highest sample rate available for mic in LE audio"
+    bug: "464457342"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

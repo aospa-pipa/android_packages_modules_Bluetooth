@@ -85,8 +85,8 @@ import org.mockito.Mockito.eq
 import org.mockito.Mockito.inOrder
 import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
-import org.mockito.MockitoAnnotations
 import org.mockito.hamcrest.MockitoHamcrest.argThat
+import org.mockito.junit.MockitoJUnit
 import org.mockito.kotlin.whenever
 import org.mockito.stubbing.Answer
 import pandora.HIDGrpc
@@ -99,12 +99,10 @@ import pandora.SecurityProto
 @RunWith(TestParameterInjector::class)
 @VirtualOnly
 class HidHostTest {
+    @get:Rule val mockitoRule = MockitoJUnit.rule()
     @get:Rule(order = 0) val checkFlagsRule = DeviceFlagsValueProvider.createCheckFlagsRule()
-
     @get:Rule(order = 1) val permissionRule = AdoptShellPermissionsRule()
-
     @get:Rule(order = 2) val bumble = PandoraDevice()
-
     @get:Rule(order = 3) val enableBluetoothRule = EnableBluetoothRule(false, true)
 
     @Mock private lateinit var receiver: BroadcastReceiver
@@ -210,8 +208,6 @@ class HidHostTest {
     @SuppressLint("MissingPermission")
     @Before
     fun setUp() {
-        MockitoAnnotations.initMocks(this)
-
         doAnswer(intentHandler).whenever(receiver).onReceive(any(), any())
 
         inOrder = inOrder(receiver)
@@ -219,6 +215,7 @@ class HidHostTest {
         val filter =
             IntentFilter().apply {
                 addAction(BluetoothDevice.ACTION_FOUND)
+                addAction(BluetoothDevice.ACTION_UUID)
                 addAction(ACTION_PAIRING_REQUEST)
                 addAction(ACTION_BOND_STATE_CHANGED)
                 addAction(BluetoothHidHost.ACTION_CONNECTION_STATE_CHANGED)
@@ -269,6 +266,8 @@ class HidHostTest {
             hasExtra(EXTRA_DEVICE, device),
             hasExtra(EXTRA_BOND_STATE, BOND_BONDED),
         )
+
+        verifyIntentReceived(hasAction(BluetoothDevice.ACTION_UUID), hasExtra(EXTRA_DEVICE, device))
 
         if (a2dpService.getConnectionPolicy(device) == CONNECTION_POLICY_ALLOWED) {
             assertThat(a2dpService.setConnectionPolicy(device, CONNECTION_POLICY_FORBIDDEN))
@@ -460,6 +459,11 @@ class HidHostTest {
                 BluetoothHidHost.EXTRA_VIRTUAL_UNPLUG_STATUS,
                 BluetoothHidHost.VIRTUAL_UNPLUG_STATUS_SUCCESS,
             ),
+        )
+        verifyIntentReceived(
+            hasAction(ACTION_BOND_STATE_CHANGED),
+            hasExtra(EXTRA_DEVICE, device),
+            hasExtra(EXTRA_BOND_STATE, BOND_NONE),
         )
     }
 

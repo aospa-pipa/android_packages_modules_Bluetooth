@@ -43,6 +43,7 @@
 #include "ble_appearance.h"
 #include "bta/include/bta_api.h"
 #include "btif/include/btif_gatt.h"
+#include "btif/include/stack_manager_t.h"
 #include "common/time_util.h"
 #include "hci/controller.h"
 #include "main/shim/acl_api.h"
@@ -837,6 +838,7 @@ static void btm_ble_read_remote_name_cmpl(bool status, const RawAddress& bda, ui
     log::warn("stack is not running");
     return;
   }
+
   tHCI_STATUS hci_status = HCI_SUCCESS;
   BD_NAME bd_name;
   bd_name_from_char_pointer(bd_name, p_name);

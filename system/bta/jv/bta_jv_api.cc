@@ -64,13 +64,13 @@ bool bta_jv_enabled = false;
  ******************************************************************************/
 tBTA_JV_STATUS BTA_JvEnable(tBTA_JV_DM_CBACK* p_cback) {
   log::verbose("");
-  if (!p_cback || bta_jv_enabled) {
+  if (p_cback == nullptr || bta_jv_enabled) {
     log::error("failure");
     return tBTA_JV_STATUS::FAILURE;
   }
 
-  memset(&bta_jv_cb, 0, sizeof(tBTA_JV_CB));
-  /* set handle to invalid value by default */
+  bta_jv_cb = {};
+  // set handle to invalid value by default
   for (int i = 0; i < BTA_JV_PM_MAX_NUM; i++) {
     bta_jv_cb.pm_cb[i].handle = BTA_JV_PM_HANDLE_CLEAR;
   }
@@ -353,7 +353,7 @@ tBTA_JV_STATUS BTA_JvL2capRead(uint32_t handle, uint32_t req_id, uint8_t* p_data
  * Function         BTA_JvL2capReady
  *
  * Description      This function determined if there is data to read from
- *                    an L2CAP connection
+ *                  an L2CAP connection
  *
  * Returns          tBTA_JV_STATUS::SUCCESS, if data queue size is in
  *                  *p_data_size.
@@ -406,7 +406,7 @@ tBTA_JV_STATUS BTA_JvL2capWrite(uint32_t handle, uint32_t req_id, BT_HDR* msg, u
  *
  * Function         BTA_JvRfcommConnect
  *
- * Description      This function makes an RFCOMM conection to a remote BD
+ * Description      This function makes an RFCOMM connection to a remote BD
  *                  Address.
  *                  When the connection is initiated or failed to initiate,
  *                  tBTA_JV_RFCOMM_CBACK is called with
@@ -425,8 +425,8 @@ tBTA_JV_STATUS BTA_JvRfcommConnect(tBTA_SEC sec_mask, uint8_t remote_scn,
   log::verbose("remote_scn:{}, peer_bd_addr:{}, rfcomm_slot_id:{}", remote_scn, peer_bd_addr,
                rfcomm_slot_id);
 
-  if (!p_cback) {
-    return tBTA_JV_STATUS::FAILURE; /* Nothing to do */
+  if (p_cback == nullptr) {
+    return tBTA_JV_STATUS::FAILURE;  // Nothing to do
   }
 
   do_in_main_thread(BindOnce(&bta_jv_rfcomm_connect, sec_mask, remote_scn, peer_bd_addr, p_cback,
@@ -451,7 +451,7 @@ tBTA_JV_STATUS BTA_JvRfcommClose(uint32_t handle, uint32_t rfcomm_slot_id) {
   log::verbose("handle:{}, rfcomm_slot_id:{}", handle, rfcomm_slot_id);
 
   if (hi >= BTA_JV_MAX_RFC_CONN || !bta_jv_cb.rfc_cb[hi].p_cback ||
-      si >= BTA_JV_MAX_RFC_SR_SESSION || !bta_jv_cb.rfc_cb[hi].rfc_hdl[si]) {
+      si >= BTA_JV_MAX_RFC_SR_SESSION || !bta_jv_cb.rfc_cb[hi].port_hdls[si]) {
     return tBTA_JV_STATUS::FAILURE;
   }
 
@@ -479,8 +479,8 @@ tBTA_JV_STATUS BTA_JvRfcommStartServer(tBTA_SEC sec_mask, uint8_t local_scn, uin
                                        RfcommCfgInfo cfg, uint32_t app_uid) {
   log::verbose("local_scn:{}, rfcomm_slot_id:{}", local_scn, rfcomm_slot_id);
 
-  if (p_cback == NULL) {
-    return tBTA_JV_STATUS::FAILURE; /* Nothing to do */
+  if (p_cback == nullptr) {
+    return tBTA_JV_STATUS::FAILURE;  // Nothing to do
   }
 
   if (max_session == 0) {
@@ -520,7 +520,9 @@ tBTA_JV_STATUS BTA_JvRfcommStopServer(uint32_t handle, uint32_t rfcomm_slot_id) 
  *
  * Description      This function fetches the rfcomm port handle
  *
- * Returns
+ * Parameters       handle - rfc_handle associated with the rfcomm port
+ *
+ * Returns          port handle if handle is valid, 0xffff otherwise
  *
  ******************************************************************************/
 uint16_t BTA_JvRfcommGetPortHdl(uint32_t handle) {
@@ -528,8 +530,8 @@ uint16_t BTA_JvRfcommGetPortHdl(uint32_t handle) {
   uint32_t si = BTA_JV_RFC_HDL_TO_SIDX(handle);
 
   if (hi < BTA_JV_MAX_RFC_CONN && si < BTA_JV_MAX_RFC_SR_SESSION &&
-      bta_jv_cb.rfc_cb[hi].rfc_hdl[si]) {
-    return bta_jv_cb.port_cb[bta_jv_cb.rfc_cb[hi].rfc_hdl[si] - 1].port_handle;
+      bta_jv_cb.rfc_cb[hi].port_hdls[si]) {
+    return bta_jv_cb.port_cb[bta_jv_cb.rfc_cb[hi].port_hdls[si] - 1].port_handle;
   } else {
     return 0xffff;
   }
@@ -551,15 +553,15 @@ tBTA_JV_STATUS BTA_JvRfcommWrite(uint32_t handle, uint32_t req_id) {
 
   log::verbose("handle:{}, req_id:{}, hi:{}, si:{}", handle, req_id, hi, si);
   if (hi >= BTA_JV_MAX_RFC_CONN || !bta_jv_cb.rfc_cb[hi].p_cback ||
-      si >= BTA_JV_MAX_RFC_SR_SESSION || !bta_jv_cb.rfc_cb[hi].rfc_hdl[si]) {
+      si >= BTA_JV_MAX_RFC_SR_SESSION || !bta_jv_cb.rfc_cb[hi].port_hdls[si]) {
     return tBTA_JV_STATUS::FAILURE;
   }
 
   log::verbose("write ok");
 
-  tBTA_JV_RFC_CB* p_cb = &bta_jv_cb.rfc_cb[hi];
+  BtaJvRfcommCb* p_cb = &bta_jv_cb.rfc_cb[hi];
   do_in_main_thread(BindOnce(&bta_jv_rfcomm_write, handle, req_id, p_cb,
-                             &bta_jv_cb.port_cb[p_cb->rfc_hdl[si] - 1]));
+                             &bta_jv_cb.port_cb[p_cb->port_hdls[si] - 1]));
   return tBTA_JV_STATUS::SUCCESS;
 }
 

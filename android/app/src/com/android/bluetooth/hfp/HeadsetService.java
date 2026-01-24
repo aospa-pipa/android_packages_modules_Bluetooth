@@ -279,9 +279,7 @@ public class HeadsetService extends ConnectableProfile {
         if (!android.media.audio.Flags.unifyAbsoluteVolumeManagement()) {
             filter.addAction(AudioManager.ACTION_VOLUME_CHANGED);
         }
-        if (Flags.microphoneMuteStatusSync()) {
-            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
-        }
+        filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
         filter.addAction(BluetoothDevice.ACTION_CONNECTION_ACCESS_REPLY);
         registerReceiver(mHeadsetReceiver, filter);
     }
@@ -428,16 +426,6 @@ public class HeadsetService extends ConnectableProfile {
         }
     }
 
-    private void doForEachConnectedStateMachine(List<StateMachineTask> tasks) {
-        synchronized (mStateMachines) {
-            for (BluetoothDevice device : getConnectedDevices()) {
-                for (StateMachineTask task : tasks) {
-                    task.execute(mStateMachines.get(device));
-                }
-            }
-        }
-    }
-
     private void doForEachConnectedOrConnectingStateMachine(List<StateMachineTask> tasks) {
         synchronized (mStateMachines) {
             for (BluetoothDevice device : getConnectedOrConnectingDevices()) {
@@ -562,9 +550,6 @@ public class HeadsetService extends ConnectableProfile {
                             }
                         }
                         case AudioManager.ACTION_MICROPHONE_MUTE_CHANGED -> {
-                            if (!Flags.microphoneMuteStatusSync()) {
-                                break;
-                            }
                             Log.i(TAG, "received microphone mute status changed");
                             doForEachConnectedStateMachine(
                                     stateMachine ->
@@ -890,7 +875,7 @@ public class HeadsetService extends ConnectableProfile {
                 return false;
             }
 
-            if (Flags.voiceRecognitionFixes() && !isVoiceRecognitionSupported(device)) {
+            if (!isVoiceRecognitionSupported(device)) {
                 Log.w(TAG, "voice recognition not supported on the device");
                 return false;
             }
@@ -1027,31 +1012,28 @@ public class HeadsetService extends ConnectableProfile {
             }
             if (!mVoiceRecognitionStarted) {
                 Log.w(TAG, "stopVoiceRecognition: voice recognition was not started");
-                if (Flags.voiceRecognitionFixes()) {
-                    if (mVoiceRecognitionTimeoutEvent != null) {
-                        if (!mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice.equals(device)) {
-                            // TODO(b/79660380): Workaround when target device != requesting device
-                            Log.w(
-                                    TAG,
-                                    "stopVoiceRecognition: device "
-                                            + device
-                                            + " is not the same as requesting device "
-                                            + mVoiceRecognitionTimeoutEvent
-                                                    .mVoiceRecognitionDevice);
-                        }
-                        mStateMachinesThreadHandler.removeCallbacks(mVoiceRecognitionTimeoutEvent);
-                        mVoiceRecognitionTimeoutEvent = null;
-                        if (mSystemInterface.getVoiceRecognitionWakeLock().isHeld()) {
-                            try {
-                                mSystemInterface.getVoiceRecognitionWakeLock().release();
-                            } catch (RuntimeException e) {
-                                Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
-                            }
+                if (mVoiceRecognitionTimeoutEvent != null) {
+                    if (!mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice.equals(device)) {
+                        // TODO(b/79660380): Workaround when target device != requesting device
+                        Log.w(
+                                TAG,
+                                "stopVoiceRecognition: device "
+                                        + device
+                                        + " is not the same as requesting device "
+                                        + mVoiceRecognitionTimeoutEvent.mVoiceRecognitionDevice);
+                    }
+                    mStateMachinesThreadHandler.removeCallbacks(mVoiceRecognitionTimeoutEvent);
+                    mVoiceRecognitionTimeoutEvent = null;
+                    if (mSystemInterface.getVoiceRecognitionWakeLock().isHeld()) {
+                        try {
+                            mSystemInterface.getVoiceRecognitionWakeLock().release();
+                        } catch (RuntimeException e) {
+                            Log.d(TAG, "non properly release getVoiceRecognitionWakeLock", e);
                         }
                     }
-                    stateMachine.sendMessage(
-                            HeadsetStateMachine.VOICE_RECOGNITION_RESULT, 0 /* fail */, 0, device);
                 }
+                stateMachine.sendMessage(
+                        HeadsetStateMachine.VOICE_RECOGNITION_RESULT, 0 /* fail */, 0, device);
                 return false;
             }
             mVoiceRecognitionStarted = false;
@@ -2192,12 +2174,7 @@ public class HeadsetService extends ConnectableProfile {
                                 new HeadsetClccResponse(
                                         index, direction, status, mode, mpty, number, type)));
         if (index == CLCC_END_MARK_INDEX) {
-            if (Flags.sendOkClccBeforeSlc()) {
-                doForEachConnectedOrConnectingStateMachine(mPendingClccResponses);
-            } else {
-                doForEachConnectedStateMachine(mPendingClccResponses);
-            }
-
+            doForEachConnectedOrConnectingStateMachine(mPendingClccResponses);
             mPendingClccResponses.clear();
         }
     }
@@ -2521,12 +2498,22 @@ public class HeadsetService extends ConnectableProfile {
         if (toState == BluetoothHeadset.STATE_AUDIO_DISCONNECTED) {
             mStateMachinesThreadHandler.post(() -> {
                 // Unsuspend A2DP when SCO connection is gone and call state is idle
-                if (wrapper.isCallIdleAndScoNotManagedbyHal) {
-                    Log.i(TAG, "Resume A2DP when SCO is gone and call state is idle");
-                    mSystemInterface.getAudioManager().setA2dpSuspended(false);
-                    mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+                if (!Flags.hfpAvoidDeadlock()) {
+                    if (wrapper.isCallIdleAndScoNotManagedbyHal) {
+                        Log.i(TAG, "Resume A2DP when SCO is gone and call state is idle");
+                        mSystemInterface.getAudioManager().setA2dpSuspended(false);
+                        mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+                    }
                 }
+
             });
+        }
+        if (Flags.hfpAvoidDeadlock() && toState == BluetoothHeadset.STATE_AUDIO_DISCONNECTED) {
+            // Resume A2DP when call ended and SCO is not connected
+            if (mSystemInterface.isCallIdle() && !mSystemInterface.isScoManagedByAudioEnabled()) {
+                mSystemInterface.getAudioManager().setA2dpSuspended(false);
+                mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+            }
         }
     }
 
@@ -2749,11 +2736,9 @@ public class HeadsetService extends ConnectableProfile {
         if (connectionPolicy != CONNECTION_POLICY_UNKNOWN
                 && connectionPolicy != CONNECTION_POLICY_ALLOWED) {
             // Otherwise, reject the connection if connection policy is not valid.
-            boolean matched =
-                    InteropUtil.interopMatchAddrOrName(
-                            getAdapterService(),
-                            InteropUtil.InteropFeature.INTEROP_DISABLE_PROFILE_FALLBACK,
-                            device.getAddress());
+            var feature = InteropUtil.InteropFeature.INTEROP_DISABLE_PROFILE_FALLBACK;
+            var matched = getAdapterService().interopMatchDevice(feature, device);
+            Log.d(TAG, "INTEROP_DISABLE_PROFILE_FALLBACK: matched=" + matched);
             if (!isOutgoingRequest && !matched) {
                 final var a2dp = getAdapterService().getA2dpService();
                 if (a2dp.isPresent() && a2dp.get().okToConnect(device, true)) {

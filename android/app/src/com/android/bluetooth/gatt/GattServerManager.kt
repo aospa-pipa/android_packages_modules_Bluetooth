@@ -46,10 +46,12 @@ private const val TAG = GattUtil.TAG_PREFIX + "GattServerManager"
 class GattServerManager(
     private val adapterService: AdapterService,
     private val gatt: GattService,
-    val serverMap: ContextMap<IBluetoothGattServerCallback>,
     private val metricsReporter: GattMetricsReporter,
 ) {
+    val serverMap = ContextMap<IBluetoothGattServerCallback>()
+
     internal val handleMap = HandleMap()
+
     private val nativeInterface: GattNativeInterface
         get() = gatt.nativeInterface
 
@@ -894,6 +896,8 @@ class GattServerManager(
         characteristics: List<BluetoothGattCharacteristic>,
         endpointId: Long,
         hubId: Long,
+        uid: Int,
+        attributionTag: String?,
     ): GattOffloadSession.InnerParcel {
         gatt.enforceGattThread()
         check(adapterService.isGattClientOffloadSupported()) { "GATT client offload unsupported" }
@@ -915,6 +919,8 @@ class GattServerManager(
                 getGattDatabaseForOffload(service, characteristics),
                 endpointId,
                 hubId,
+                uid,
+                attributionTag ?: "",
             )
         }
     }
@@ -948,6 +954,8 @@ class GattServerManager(
         characteristics: List<BluetoothGattCharacteristic>,
         endpointId: Long,
         hubId: Long,
+        uid: Int,
+        attributionTag: String?,
     ): GattOffloadSession.InnerParcel {
         gatt.enforceGattThread()
         check(adapterService.isGattServerOffloadSupported()) { "GATT server offload unsupported" }
@@ -971,6 +979,8 @@ class GattServerManager(
                 getGattDatabaseForOffload(service, characteristics),
                 endpointId,
                 hubId,
+                uid,
+                attributionTag ?: "",
             )
         }
     }

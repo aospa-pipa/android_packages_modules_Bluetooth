@@ -68,7 +68,6 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.AudioRecordingConfiguration;
 import android.media.BluetoothProfileConnectionInfo;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -2983,6 +2982,13 @@ public class LeAudioService extends ConnectableProfile {
         try {
             LeAudioGroupDescriptor descriptor = mGroupDescriptorsView.get(groupId);
             if (descriptor != null) {
+                if(descriptor.isGettingActive()){
+                    Log.w(TAG, "group is already in process of getting active: device="
+                                + device
+                                + ", groupId = "
+                                + groupId);
+                    return true;
+                }
                 descriptor.setActiveState(ACTIVE_STATE_GETTING_ACTIVE);
             }
         } finally {

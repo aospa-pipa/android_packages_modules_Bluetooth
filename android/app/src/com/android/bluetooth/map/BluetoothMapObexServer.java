@@ -34,7 +34,6 @@ import android.util.Log;
 import com.android.bluetooth.BluetoothMethodProxy;
 import com.android.bluetooth.SignedLongLong;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.map.BluetoothMapUtils.TYPE;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.obex.HeaderSet;
@@ -436,9 +435,7 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
             Log.d(TAG, "type = " + type + ", name = " + name);
 
             boolean shouldContinue =
-                    Flags.mapContinueOperation()
-                            && (op instanceof ServerOperation)
-                            && !((ServerOperation) op).finalBitSet;
+                    (op instanceof ServerOperation) && !((ServerOperation) op).finalBitSet;
             if (shouldContinue) {
                 int continueCnt = 0;
                 while (((ServerOperation) op).continueOperation(true, true)) {
@@ -1595,7 +1592,6 @@ public class BluetoothMapObexServer extends ServerRequestHandler {
      *     ResponseCodes.OBEX_HTTP_BAD_REQUEST} on error.
      */
     private int sendMASInstanceInformationRsp(Operation op, BluetoothMapAppParams appParams) {
-
         OutputStream outStream = null;
         byte[] outBytes = null;
         String outString = null;

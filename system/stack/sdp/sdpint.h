@@ -29,6 +29,7 @@
 #include <bluetooth/types/uuid.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "include/macros.h"
@@ -106,9 +107,16 @@ struct tSDP_RECORD {
   uint8_t attr_pad[SDP_MAX_PAD_LEN];
 };
 
+struct tSERVICE_DISC_SERVER_INFO {
+  uint32_t handle;   /* Record of ServiceDiscoveryServer */
+  uint32_t db_state; /* ServiceDatabaseState of ServiceDiscoveryServer */
+};
+
 /* Define the SDP database */
 struct tSDP_DB {
-  uint32_t di_primary_handle; /* Device ID Primary record or NULL if nonexistent */
+  uint32_t di_primary_handle; /* Device ID Primary record or 0 if nonexistent */
+  std::optional<tSERVICE_DISC_SERVER_INFO>
+          service_disc_server_info; /* ServiceDiscoveryServer info or NULL if nonexistent */
   uint16_t num_records;
   tSDP_RECORD record[SDP_MAX_RECORDS];
 };
@@ -254,7 +262,8 @@ tCONN_CB* sdpu_allocate_ccb(void);
 void sdpu_release_ccb(tCONN_CB& p_ccb);
 void sdpu_dump_all_ccb();
 
-uint8_t* sdpu_build_attrib_seq(uint8_t* p_out, uint16_t* p_attr, uint16_t num_attrs);
+uint8_t* sdpu_build_attrib_seq(uint8_t* p_out, uint16_t* p_attr, uint16_t num_attrs,
+                               uint16_t& bytes_left);
 uint8_t* sdpu_build_attrib_entry(uint8_t* p_out, const tSDP_ATTRIBUTE* p_attr);
 void sdpu_build_n_send_error(tCONN_CB* p_ccb, uint16_t trans_num, tSDP_STATUS error_code,
                              char* p_error_text);
@@ -283,8 +292,8 @@ uint16_t sdpu_is_avrcp_profile_description_list(const tSDP_ATTRIBUTE* p_attr);
 bool sdpu_is_service_id_avrc_target(const tSDP_ATTRIBUTE* p_attr);
 bool sdpu_is_service_id_a2dp_src(const tSDP_ATTRIBUTE* p_attr);
 bool spdu_is_avrcp_version_valid(const uint16_t version);
-void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress* bdaddr);
-void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, const RawAddress* bdaddr,
+void sdpu_set_avrc_target_version(const tSDP_ATTRIBUTE* p_attr, RawAddress bdaddr);
+void sdpu_set_avrc_target_features(const tSDP_ATTRIBUTE* p_attr, RawAddress bdaddr,
                                    uint16_t profile_version);
 uint16_t sdpu_get_active_ccb_cid(const RawAddress& bd_addr);
 bool sdpu_process_pend_ccb_same_cid(const tCONN_CB& ccb);
@@ -302,6 +311,7 @@ const tSDP_ATTRIBUTE* sdp_db_find_attr_in_rec(const tSDP_RECORD* p_rec, uint16_t
 /* Functions provided by sdp_server.cc */
 void sdp_server_handle_client_req(tCONN_CB* p_ccb, BT_HDR* p_msg);
 bool sdp_dynamic_change_hfp_version(const tSDP_ATTRIBUTE* p_attr, const RawAddress& remote_address);
+void sdp_register_sdp_discovery_server_records();
 
 /* Functions provided by sdp_discovery.cc */
 void sdp_disc_connected(tCONN_CB* p_ccb);

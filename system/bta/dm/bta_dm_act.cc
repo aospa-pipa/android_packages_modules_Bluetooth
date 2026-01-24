@@ -214,16 +214,13 @@ static void bta_dm_deinit_cb(void) {
   alarm_free(bta_dm_cb.disable_timer);
   alarm_free(bta_dm_cb.bond_retrail_timer);
   alarm_free(bta_dm_cb.switch_delay_timer);
-  if (com_android_bluetooth_flags_set_ptr_null_after_free()) {
-    bta_dm_cb.switch_delay_timer = nullptr;
-    bta_dm_cb.disable_timer = nullptr;
-  }
+  bta_dm_cb.switch_delay_timer = nullptr;
+  bta_dm_cb.disable_timer = nullptr;
+
   for (size_t i = 0; i < BTA_DM_NUM_PM_TIMER; i++) {
     for (size_t j = 0; j < BTA_DM_PM_MODE_TIMER_MAX; j++) {
       alarm_free(bta_dm_cb.pm_timer[i].timer[j]);
-      if (com_android_bluetooth_flags_set_ptr_null_after_free()) {
-        bta_dm_cb.pm_timer[i].timer[j] = nullptr;
-      }
+      bta_dm_cb.pm_timer[i].timer[j] = nullptr;
     }
   }
   bta_dm_cb.pending_removals.clear();
@@ -313,11 +310,15 @@ void BTA_dm_on_hw_on(const std::string local_name) {
   }
 
   // Synchronize with the controller before continuing
+  std::promise<void> enable_promise;
+  std::future<void> enable_future = enable_promise.get_future();
+
   bta_dm_le_rand(get_main_thread()->BindOnce(
-          [](const std::string local_name, uint64_t /*value*/) {
+          [](const std::string local_name, std::promise<void> enable_promise, uint64_t /*value*/) {
             BTIF_dm_enable(std::move(local_name));
+            enable_promise.set_value();
           },
-          std::move(local_name)));
+          std::move(local_name), std::move(enable_promise)));
 
   bta_sys_rm_register(bta_dm_rm_cback);
 
@@ -333,6 +334,8 @@ void BTA_dm_on_hw_on(const std::string local_name) {
   }
 
   bta_dm_disc_gattc_register();
+
+  enable_future.wait();
 }
 
 /** Disables the BT device manager */
@@ -1018,12 +1021,9 @@ static void bta_dm_adjust_roles(bool delay_role_switch) {
                 break;
             }
           } else {
-            uint64_t delay = BTA_DM_SWITCH_DELAY_TIMER_MS;
-            if (com_android_bluetooth_flags_extend_and_randomize_role_switch_delay()) {
-              delay = bluetooth::os::GenerateRandom() %
-                              (BTA_DM_MAX_SWITCH_DELAY_MS - BTA_DM_MIN_SWITCH_DELAY_MS) +
-                      BTA_DM_MIN_SWITCH_DELAY_MS;
-            }
+            uint64_t delay = bluetooth::os::GenerateRandom() %
+                                     (BTA_DM_MAX_SWITCH_DELAY_MS - BTA_DM_MIN_SWITCH_DELAY_MS) +
+                             BTA_DM_MIN_SWITCH_DELAY_MS;
             log::debug("Set timer to delay role switch:{}", delay);
             alarm_set_on_mloop(bta_dm_cb.switch_delay_timer, delay, bta_dm_delay_role_switch_cback,
                                NULL);
@@ -1322,7 +1322,7 @@ static void bta_dm_update_cust_uuid(uint8_t c_uu_idx, const Uuid& uuid, uint32_t
 #if (BTA_EIR_SERVER_NUM_CUSTOM_UUID > 0)
   if (c_uu_idx < BTA_EIR_SERVER_NUM_CUSTOM_UUID) {
     tBTA_CUSTOM_UUID& curr = bta_dm_cb.bta_custom_uuid[c_uu_idx];
-    curr.custom_uuid.UpdateUuid(uuid);
+    curr.custom_uuid = uuid;
     curr.handle = handle;
   } else {
     log::error("invalid uuid index {}", c_uu_idx);
@@ -1507,8 +1507,16 @@ void bta_dm_ble_update_conn_params(const RawAddress& bd_addr, uint16_t min_int, 
 
 /** This function set the maximum transmission packet size */
 void bta_dm_ble_set_data_length(const RawAddress& bd_addr) {
-  uint16_t max_len =
-          bluetooth::shim::GetController()->GetLeMaximumDataLength().supported_max_tx_octets_;
+  uint16_t max_len = 0;
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
+  if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                        bluetooth::hci::OpCode::LE_READ_MAXIMUM_DATA_LENGTH_V2)) {
+    max_len = bluetooth::shim::GetController()->GetLeMaximumDataLengthV2()
+                      .supported_max_tx_octets_;
+  } else {
+    max_len = bluetooth::shim::GetController()->GetLeMaximumDataLength()
+                      .supported_max_tx_octets_;
+  }
 
   if (get_btm_client_interface().ble.BTM_SetBleDataLength(
               bd_addr, max_len, /* is_privileged_client */ false) != tBTM_STATUS::BTM_SUCCESS) {

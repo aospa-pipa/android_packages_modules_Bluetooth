@@ -41,6 +41,7 @@ import android.companion.CompanionDeviceManager;
 import android.content.AttributionSource;
 import android.content.Intent;
 import android.net.MacAddress;
+import android.os.BatteryStatsManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
@@ -58,7 +59,6 @@ import android.util.Log;
 import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.R;
 import com.android.bluetooth.Util;
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.TimeProvider;
@@ -106,6 +106,7 @@ public class ScanController {
 
     private final AdapterService mAdapterService;
     private final AppOpsManager mAppOps;
+    private final BatteryStatsManager mBatteryStatsManager;
     private final CompanionDeviceManager mCompanionManager;
     private final ScanBinder mBinder;
     private final ScannerMap mScannerMap;
@@ -133,6 +134,7 @@ public class ScanController {
             AdapterService service,
             ScanNativeInterface scanNativeInterface,
             PeriodicScanNativeInterface periodicScanNativeInterface,
+            BatteryStatsManager batteryStatsManager,
             CompanionDeviceManager companionDeviceManager) {
         this(
                 service,
@@ -141,6 +143,7 @@ public class ScanController {
                 null,
                 periodicScanNativeInterface,
                 new ScannerMap(),
+                batteryStatsManager,
                 companionDeviceManager,
                 null,
                 TimeProvider.getSystemClock());
@@ -154,12 +157,14 @@ public class ScanController {
             PeriodicScanManager periodicScanManager,
             PeriodicScanNativeInterface periodicScanNativeInterface,
             ScannerMap scannerMap,
+            BatteryStatsManager batteryStatsManager,
             CompanionDeviceManager companionDeviceManager,
             @Nullable Looper looper,
             TimeProvider timeProvider) {
         Log.i(TAG, "Created with Flags.scanControllerThread: " + Flags.scanControllerThread());
         mAdapterService = requireNonNull(service);
         mAppOps = mAdapterService.getSystemService(AppOpsManager.class);
+        mBatteryStatsManager = batteryStatsManager;
         mCompanionManager = companionDeviceManager;
         mBinder = new ScanBinder(mAdapterService, this);
         mScannerMap = scannerMap;
@@ -1001,7 +1006,16 @@ public class ScanController {
                 ("registerScanner(): uid=" + uid + ", pid=" + uid + ", ")
                         + ("app=" + appName + ", UUID=" + uuid));
         mScannerMap.addWithCallback(
-                uid, pid, appName, uuid, source, workSource, callback, mAdapterService, false);
+                uid,
+                pid,
+                appName,
+                uuid,
+                source,
+                workSource,
+                callback,
+                mAdapterService,
+                mBatteryStatsManager,
+                false);
         mScanManager.registerScanner(uuid);
     }
 
@@ -1043,6 +1057,7 @@ public class ScanController {
                 settings,
                 filters,
                 mAdapterService,
+                mBatteryStatsManager,
                 isInternal);
         mScanManager.registerScanner(uuid);
     }
@@ -1199,7 +1214,8 @@ public class ScanController {
                         piInfo,
                         settings,
                         filters,
-                        mAdapterService);
+                        mAdapterService,
+                        mBatteryStatsManager);
         mAppOps.checkPackage(uid, callingPackage);
         app.setEligibleForSanitizedExposureNotification(
                 callingPackage.equals(mExposureNotificationPackage));
@@ -1342,7 +1358,7 @@ public class ScanController {
     }
 
     void enforceScanThread() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return;
 
         if (!mScanHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Not on scan thread");
@@ -1350,7 +1366,7 @@ public class ScanController {
     }
 
     private void enforceScanThreadIsNotUsed() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return;
 
         if (mScanHandler.getLooper().isCurrentThread()) {
             throw new IllegalStateException("Must NOT be on scan thread");
@@ -1358,7 +1374,7 @@ public class ScanController {
     }
 
     public boolean isOnScanThread() {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) return false;
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) return false;
         return mScanHandler.getLooper().isCurrentThread();
     }
 
@@ -1385,7 +1401,7 @@ public class ScanController {
     }
 
     public void forceRunSyncOnScanThread(Runnable r) {
-        if (!Flags.scanControllerThread() || Utils.isInstrumentationTestMode()) {
+        if (!Flags.scanControllerThread() || Util.isInstrumentationTestMode()) {
             r.run();
             return;
         }

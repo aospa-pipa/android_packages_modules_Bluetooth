@@ -28,14 +28,12 @@
 #include <com_android_bluetooth_flags.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/a2dp/enums.pb.h>
 #include <frameworks/proto_logging/stats/enums/bluetooth/enums.pb.h>
-#include <stdio.h>
 
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <future>
-#include <ios>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -47,7 +45,6 @@
 
 #include "audio_hal_interface/a2dp_encoding.h"
 #include "bta/include/bta_api.h"
-#include "bta/include/bta_api_data_types.h"
 #include "bta/include/bta_av_api.h"
 #include "btif/avrcp/avrcp_service.h"
 #include "btif/include/btif_a2dp.h"
@@ -77,7 +74,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_ble_api.h"
-#include "stack/include/btm_ble_api_types.h"
 #include "stack/include/btm_log_history.h"
 #include "stack/include/main_thread.h"
 #include "stack/include/btm_client_interface.h"
@@ -4272,9 +4268,7 @@ void btif_av_set_audio_delay(const RawAddress& peer_address, uint16_t delay,
 
   BtifAvPeer* peer = btif_av_find_peer(peer_address, local_a2dp_type);
   if (peer != nullptr && peer->IsSink()) {
-    if (com_android_bluetooth_flags_a2dp_delay_report_in_dumpsys()) {
-      btif_report_audio_delay(peer_address, delay);
-    }
+    btif_report_audio_delay(peer_address, delay);
     peer->SetDelayReport(delay);
     if (peer->IsActivePeer()) {
       bluetooth::audio::a2dp::set_remote_delay(peer->GetDelayReport());

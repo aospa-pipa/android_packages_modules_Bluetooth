@@ -26,16 +26,16 @@ import android.bluetooth.le.IDistanceMeasurementCallback
 import android.content.pm.PackageManager
 import android.os.HandlerThread
 import android.os.TestLooperManager
-import android.platform.test.annotations.EnableFlags
 import android.platform.test.flag.junit.SetFlagsRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SmallTest
 import androidx.test.platform.app.InstrumentationRegistry
 import com.android.bluetooth.BluetoothStatsLog
-import com.android.bluetooth.TestUtils
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.btservice.MetricsLogger
 import com.android.bluetooth.flags.Flags
+import com.android.bluetooth.getTestDevice
+import com.android.bluetooth.mockPackageManager
 import com.android.tests.bluetooth.MockitoRule
 import com.google.common.truth.Truth.assertThat
 import java.util.UUID
@@ -57,7 +57,6 @@ import org.mockito.kotlin.whenever
 /** Test cases for [DistanceMeasurementManager]. */
 @SmallTest
 @RunWith(AndroidJUnit4::class)
-@EnableFlags(Flags.FLAG_DISTANCE_MEASUREMENT_THREAD)
 class DistanceMeasurementManagerTest {
     @get:Rule val mockitoRule = MockitoRule()
     @get:Rule val setFlagsRule = SetFlagsRule()
@@ -69,7 +68,7 @@ class DistanceMeasurementManagerTest {
     @Mock private lateinit var callback: IDistanceMeasurementCallback
     @Mock private lateinit var mockMetricsLogger: MetricsLogger
 
-    private val device = TestUtils.getTestDevice(57)
+    private val device = getTestDevice(57)
 
     private lateinit var distanceMeasurementManager: DistanceMeasurementManager
     private lateinit var uuid: UUID
@@ -78,7 +77,7 @@ class DistanceMeasurementManagerTest {
 
     @Before
     fun setUp() {
-        doReturn(packageManager).whenever(adapterService).packageManager
+        adapterService.mockPackageManager(packageManager)
         doReturn(true).whenever(packageManager).hasSystemFeature(any())
         doReturn(true).whenever(adapterService).isLeChannelSoundingSupported
         val address = device.address
@@ -260,8 +259,8 @@ class DistanceMeasurementManagerTest {
             45,
             0,
             10000L,
-            127,
-            127,
+            DistanceMeasurementResult.INVALID_TX_POWER_DBM,
+            -20,
             1,
             /* delaySpreadMeters = */ 10.0,
             /* detectedAttackLevel= */ DistanceMeasurementResult.NADM_ATTACK_IS_POSSIBLE,
@@ -275,6 +274,11 @@ class DistanceMeasurementManagerTest {
         assertThat(result.azimuthAngle).isEqualTo(100)
         assertThat(result.altitudeAngle).isEqualTo(45)
         assertThat(result.measurementTimestampNanos).isEqualTo(10000)
+        if (Flags.includePowerAndRssiInDistanceMeasurementResult()) {
+            assertThat(result.remoteTxPowerDbm)
+                .isEqualTo(DistanceMeasurementResult.INVALID_TX_POWER_DBM)
+            assertThat(result.rssiDbm).isEqualTo(-20)
+        }
         assertThat(result.confidenceLevel).isEqualTo(0.01)
         assertThat(result.delaySpreadMeters).isEqualTo(10.0)
         assertThat(result.detectedAttackLevel)
@@ -334,8 +338,8 @@ class DistanceMeasurementManagerTest {
             -1,
             -1,
             1000L,
-            127,
-            127,
+            -10,
+            -20,
             -1,
             /* delaySpreadMeters= */ 10.0,
             /* detectedAttackLevel= */ DistanceMeasurementResult.NADM_ATTACK_IS_POSSIBLE,
@@ -349,6 +353,10 @@ class DistanceMeasurementManagerTest {
         assertThat(result.errorMeters).isEqualTo(1.00)
         assertThat(result.azimuthAngle).isEqualTo(Double.NaN)
         assertThat(result.errorAzimuthAngle).isEqualTo(Double.NaN)
+        if (Flags.includePowerAndRssiInDistanceMeasurementResult()) {
+            assertThat(result.remoteTxPowerDbm).isEqualTo(-10)
+            assertThat(result.rssiDbm).isEqualTo(-20)
+        }
         assertThat(result.altitudeAngle).isEqualTo(Double.NaN)
         assertThat(result.errorAltitudeAngle).isEqualTo(Double.NaN)
         assertThat(result.measurementTimestampNanos).isEqualTo(1000L)

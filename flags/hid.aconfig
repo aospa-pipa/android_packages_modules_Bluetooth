@@ -2,36 +2,6 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "hh_state_update_race_fix"
-    namespace: "bluetooth"
-    description: "Fix stuck in connecting state due to race when updating state"
-    bug: "403420458"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "wait_hid_disconnect_before_marking_unused"
-    namespace: "bluetooth"
-    description: "Mark device unused only after it's properly disconnected"
-    bug: "412876005"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "hogp_direct_connection_upgrade"
-    namespace: "bluetooth"
-    description: "Allow background connection requests to be upgraded to direct connections"
-    bug: "430179438"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "reset_state_when_removing_non_connected_hid_device"
     namespace: "bluetooth"
     description: "When removing a not-yet-connected HID device, set conn_state to UNUSED and CID to 0"
@@ -166,6 +136,26 @@ flag {
     namespace: "bluetooth"
     description: "Propagate the handshake reply of get_idle and set_idle to the java layer"
     bug: "464973851"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "hid_default_preferred_transport"
+    namespace: "bluetooth"
+    description: "Link default HID preferred transport to LE Audio system property"
+    bug: "467386258"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "ignore_duplicate_hid_connect_request"
+    namespace: "bluetooth"
+    description: "Ignore duplicate HID connection requests"
+    bug: "467422920"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

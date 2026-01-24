@@ -84,6 +84,12 @@ public:
 
   virtual void UnregisterLeEventHandler(SubeventCode subevent_code);
 
+  virtual void RegisterHdtEventHandler(
+          SubeventCode subevent_code,
+          common::ContextualCallback<void(HdtEventView)> event_handler);
+
+  virtual void UnregisterHdtEventHandler(SubeventCode subevent_code);      
+
   virtual void RegisterVendorSpecificEventHandler(
           VseSubeventCode event, common::ContextualCallback<void(VendorSpecificEventView)> handler);
 
@@ -163,7 +169,7 @@ protected:
   template <typename T>
   class CommandInterfaceImpl : public CommandInterface<T> {
   public:
-    explicit CommandInterfaceImpl(HciInterface* hci, common::OnceCallback<void()> cleanup)
+    explicit CommandInterfaceImpl(HciInterface* hci, base::OnceCallback<void()> cleanup)
         : hci_(hci), cleanup_(std::move(cleanup)) {}
     explicit CommandInterfaceImpl(HciInterface* hci) : hci_(hci) {
       cleanup_ = common::BindOnce([]() {});
@@ -189,7 +195,7 @@ protected:
     }
 
     HciInterface* hci_;
-    common::OnceCallback<void()> cleanup_;
+    base::OnceCallback<void()> cleanup_;
   };
 
   void StartWithNoHalDependencies(os::Handler* handler);

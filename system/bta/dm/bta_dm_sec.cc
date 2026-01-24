@@ -658,7 +658,11 @@ static void ble_io_req(const RawAddress& bd_addr, BtIoCap* p_io_cap, tBTM_OOB_DA
    * If the answer can not be obtained right away, set *p_oob_data to BTA_OOB_UNKNOWN and call
    * bta_dm_ci_io_req() when the answer is available. */
 
-  *p_oob_data = btif_dm_set_oob_for_le_io_req(bd_addr, p_auth_req);
+  auto auth_req = btif_dm_le_oob_auth_req(bd_addr, *p_auth_req);
+  if (auth_req.has_value()) {
+    *p_oob_data = true;
+    *p_auth_req = auth_req.value();
+  }
 
   /* Override priority order:
   * 1. Application config
@@ -844,10 +848,10 @@ static tBTM_STATUS bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda
           /* delete this device entry from Sec Dev DB */
           bta_dm_remove_sec_dev_entry(bda);
         }
-
       } else {
         sec_event.auth_cmpl.success = true;
-        if (!p_data->complt.smp_over_br) {
+        if (!com_android_bluetooth_flags_gatt_service_changed_subscription() &&
+            !p_data->complt.smp_over_br) {
           GATT_ConfigServiceChangeCCC(bda, true, BT_TRANSPORT_LE);
         }
       }

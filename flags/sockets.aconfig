@@ -22,16 +22,6 @@ flag {
 }
 
 flag {
-    name: "fix_buf_len_check_for_first_k_frame"
-    namespace: "bluetooth"
-    description: "Fix L2cap buffer length check against MPS for the first k-frame"
-    bug: "386382446"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "invalidate_hci_handle_on_acl_removal"
     namespace: "bluetooth"
     description: "invalidate hci handle associated with lcb on acl removal"
@@ -86,16 +76,6 @@ flag {
     namespace: "bluetooth"
     description: "Donot exit the sniff on classic link if on LE only traffic"
     bug: "416266693"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "monitor_read_flag_on_offloaded_socket"
-    namespace: "bluetooth"
-    description: "Monitor read flag on the offloaded socket to catch close signal"
-    bug: "419864098"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -163,6 +143,16 @@ flag {
     namespace: "bluetooth"
     description: "Derive the pseudo address from the identity address for LE CoC"
     bug: "465859619"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "fix_flow_control_logic_at_l2cap"
+    namespace: "bluetooth"
+    description: "Fix the flow control logic at l2cap layer"
+    bug: "467155293"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

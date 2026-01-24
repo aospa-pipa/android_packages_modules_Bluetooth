@@ -22,25 +22,11 @@ flag {
 }
 
 flag {
-    name: "hci_instance_name_use_injected"
-    namespace: "bluetooth"
-    description: "Inject service manager bluetooth hci instance name"
-    bug: "413484664"
-}
-
-flag {
     name: "add_profile_as_intent_extra"
     is_exported: true
     namespace: "bluetooth"
     description: "Add Profile as intent extra"
     bug: "419074085"
-}
-
-flag {
-    name: "add_bond_loss_reason"
-    namespace: "bluetooth"
-    description: "Add bond loss reason to ACTION_KEY_MISSING Intent"
-    bug: "421377117"
 }
 
 flag {
@@ -75,4 +61,12 @@ flag {
     description: "Enhanced Bluetooth Framework Support for Accessing Bluetooth Quality Report v8 Information"
     bug: "457686158"
     is_exported: true
+}
+
+flag {
+    name: "add_new_local_disconnect_reason"
+    namespace: "bluetooth"
+    description: "Add new local disconnect reason to ACL_DISCONNECTED Intent"
+    is_exported: true
+    bug: "470011145"
 }

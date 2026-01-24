@@ -1616,11 +1616,30 @@ public:
       }
 
       if (event->status == HCI_ERR_CONN_FAILED_ESTABLISHMENT &&
-          ((leAudioDevice->cis_failed_to_be_established_retry_cnt_++) < kNumberOfCisRetries) &&
-          (CisCreateForDevice(group, leAudioDevice))) {
-        log::info("Retrying ({}) to create CIS for {}",
+          ((leAudioDevice->cis_failed_to_be_established_retry_cnt_++) < kNumberOfCisRetries)) {
+
+        //Check if device still has active ASEs before retry
+        if (!leAudioDevice->HaveActiveAse()) {
+          log::error("Device {} has no active ASEs, cannot retry CIS creation",
+                    leAudioDevice->address_.ToString());
+          leAudioDevice->cis_failed_to_be_established_retry_cnt_ = 0;
+          return;
+        }
+
+        //Check if group is still in valid state for streaming
+        if ((group->GetTargetState() != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) &&
+            (group->GetTargetState() != AseState::BTA_LE_AUDIO_ASE_STATE_ENABLING)) {
+          log::error("Group {} target state is {}, not streaming/enabling. Cannot retry CIS creation.",
+                    group->group_id_, ToString(group->GetTargetState()));
+          leAudioDevice->cis_failed_to_be_established_retry_cnt_ = 0;
+          return;
+        }
+
+        if (CisCreateForDevice(group, leAudioDevice)) {
+          log::info("Retrying ({}) to create CIS for {}",
                   leAudioDevice->cis_failed_to_be_established_retry_cnt_, leAudioDevice->address_);
-        return;
+          return;
+        }
       }
 
       if (event->status == HCI_ERR_UNSUPPORTED_REM_FEATURE &&
@@ -2371,8 +2390,26 @@ private:
   }
 
   static bool CisCreateForDevice(LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice) {
+    // Validate parameters
+    if (group == nullptr) {
+      log::error("group is null in CisCreateForDevice, cannot create CIS");
+      return false;
+    }
+
+    if (leAudioDevice == nullptr) {
+      log::error("leAudioDevice is null in CisCreateForDevice, cannot create CIS");
+      return false;
+    }
+
     std::vector<EXT_CIS_CREATE_CFG> conn_pairs;
     struct ase* ase = leAudioDevice->GetFirstActiveAse();
+
+    //Check if no active ASEs (after cleanup)
+    if (ase == nullptr) {
+      log::error("No active ASEs for device {}, cannot create CIS",
+                leAudioDevice->address_.ToString());
+      return false;
+    }
 
     /* Make sure CIG is there */
     if (group->cig.GetState() != CigState::CREATED) {
@@ -4172,6 +4209,14 @@ private:
           state_machine_callbacks_->OnStateMachineInvalidStatusCb(
                   group->group_id_, StateMachineInvalidStatus::INVALID_ASE_STATE_PARAMETERS);
           return;
+        }
+
+        if (CodecManager::GetInstance()->IsUsingCodecExtensibility()) {
+          state_machine_callbacks_->UpdateMetadataCb(ase->state, rsp.cig_id, rsp.cis_id,
+            rsp.metadata);
+        } else {
+          parseVSMetadata(rsp.metadata.size(), rsp.metadata, rsp.cig_id,
+             rsp.cis_id, ase);
         }
 
         /* Cache current as streaming metadata */

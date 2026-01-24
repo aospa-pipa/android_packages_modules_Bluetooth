@@ -18,3 +18,20 @@ flag {
     bug: "457538952"
 }
 
+flag {
+    name: "max_advertising_power"
+    namespace: "bluetooth"
+    is_exported: true
+    description: "Increase max Tx power for LE advertising"
+    bug: "464003245"
+}
+
+flag {
+    name: "multi_adv_index"
+    namespace: "bluetooth"
+    description: "start multi-advertising index from 0"
+    bug: "465985107"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

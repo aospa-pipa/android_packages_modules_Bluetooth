@@ -78,6 +78,8 @@ namespace {
 constexpr char kBtmLogTag[] = "SEC";
 }
 
+constexpr uint16_t kDefaultMicLength = 2;
+constexpr uint16_t kDefaultEncryptionType = 0;
 static constexpr char kPropertyCtkdDisableCsrkDistribution[] =
         "bluetooth.core.smp.le.ctkd.quirk_disable_csrk_distribution";
 
@@ -146,6 +148,8 @@ void BTM_SecAddBleDevice(const RawAddress& bd_addr, tBT_DEVICE_TYPE dev_type,
                p_info->results.ble_addr_type);
     p_info->results.device_type = p_device->device_type;
   }
+
+  p_device->clock_offset = BTM_GetCachedClockOffset(bd_addr);
 }
 
 /*******************************************************************************
@@ -988,12 +992,27 @@ tBTM_STATUS btm_ble_start_encrypt(const RawAddress& bda, bool use_stk, Octet16* 
   }
 
   p_cb->enc_handle = p_device->ble_hci_handle;
-
+  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
   if (use_stk) {
-    btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, dummy_rand, 0, *p_stk);
+    if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                            bluetooth::hci::OpCode::LE_START_ENCRYPTION_V2)) {
+      // Sending default values for mic_length and enc type - will be decided by controller
+      btsnd_hcic_ble_start_enc_v2(p_device->ble_hci_handle, dummy_rand, 0, *p_stk,
+                                  kDefaultMicLength, kDefaultEncryptionType);
+    } else {
+      btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, dummy_rand, 0, *p_stk);
+    }
   } else if (p_device->sec_rec.ble_keys.key_type & BTM_LE_KEY_PENC) {
-    btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
+    if (hdt_enabled && bluetooth::shim::GetController()->IsSupported(
+                            bluetooth::hci::OpCode::LE_START_ENCRYPTION_V2)) {
+      // Sending def values for mic_length and enc type - will be decided by controller
+      btsnd_hcic_ble_start_enc_v2(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
+                             p_device->sec_rec.ble_keys.ediv, p_device->sec_rec.ble_keys.pltk,
+                             kDefaultMicLength, kDefaultEncryptionType);
+    } else {
+      btsnd_hcic_ble_start_enc(p_device->ble_hci_handle, p_device->sec_rec.ble_keys.rand,
                              p_device->sec_rec.ble_keys.ediv, p_device->sec_rec.ble_keys.pltk);
+    }
   } else {
     log::error("No key available to encrypt the link");
     return tBTM_STATUS::BTM_ERR_KEY_MISSING;
@@ -1418,6 +1437,13 @@ static bool btm_ble_complete_evt_ignore(const BtmDevice* p_device, const tBTM_LE
 
 static void btm_ble_user_confirmation_req(const RawAddress& bd_addr, BtmDevice* p_device,
                                           tBTM_LE_EVT event, tBTM_LE_EVT_DATA* p_data) {
+  if (com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing() &&
+      btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE &&
+      (bd_addr != btm_sec_cb.link_spec.addrt.bda ||
+       BT_TRANSPORT_LE != btm_sec_cb.link_spec.transport)) {
+    log::warn("Already in pairing state, ignoring user confirmation request from {}", bd_addr);
+    return;
+  }
   p_device->sec_rec.sec_flags |= BTM_SEC_LE_AUTHENTICATED;
   p_device->sec_rec.le_link = tSECURITY_STATE::AUTHENTICATING;
   btm_sec_cb.link_spec.addrt.bda = bd_addr;
@@ -1440,6 +1466,13 @@ static void btm_ble_sec_req(const RawAddress& bd_addr, BtmDevice* p_device,
 }
 
 static void btm_ble_consent_req(const RawAddress& bd_addr, tBTM_LE_EVT_DATA* p_data) {
+  if (com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing() &&
+      btm_sec_cb.pairing_state != BTM_PAIR_STATE_IDLE &&
+      (bd_addr != btm_sec_cb.link_spec.addrt.bda ||
+       BT_TRANSPORT_LE != btm_sec_cb.link_spec.transport)) {
+    log::warn("Already in pairing state, ignoring pairing request from {}", bd_addr);
+    return;
+  }
   btm_sec_cb.link_spec.addrt.bda = bd_addr;
   btm_sec_cb.link_spec.transport = BT_TRANSPORT_LE;
   btm_sec_cb.pairing_flags |= BTM_PAIR_FLAGS_LE_ACTIVE;

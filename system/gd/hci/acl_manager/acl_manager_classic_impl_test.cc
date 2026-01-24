@@ -16,6 +16,7 @@
 
 #include "hci/acl_manager/acl_manager_classic_impl.h"
 
+#include <base/functional/bind.h>
 #include <bluetooth/log.h>
 #include <com_android_bluetooth_flags.h>
 #include <gmock/gmock.h>
@@ -223,7 +224,7 @@ protected:
                       promise.set_value();
                       return NextPayload(handle);
                     },
-                    queue_end, handle, common::Passed(std::move(promise))));
+                    queue_end, handle, base::Passed(std::move(promise))));
     auto status = future.wait_for(kTimeout);
     ASSERT_EQ(status, std::future_status::ready);
   }
@@ -257,7 +258,7 @@ protected:
     AclManagerClassicTest::SetUp();
 
     handle_ = 0x123;
-    acl_manager_classic_->CreateConnection(remote);
+    acl_manager_classic_->CreateConnection(remote, 0);
 
     // Wait for the connection request
     auto last_command = GetConnectionManagementCommand(OpCode::CREATE_CONNECTION);
@@ -299,7 +300,7 @@ protected:
 TEST_F(AclManagerClassicTest, startup_teardown) {}
 
 TEST_F(AclManagerClassicTest, invoke_registered_callback_connection_complete_success) {
-  acl_manager_classic_->CreateConnection(remote);
+  acl_manager_classic_->CreateConnection(remote, 0);
 
   // Wait for the connection request
   auto last_command = GetConnectionManagementCommand(OpCode::CREATE_CONNECTION);
@@ -320,7 +321,7 @@ TEST_F(AclManagerClassicTest, invoke_registered_callback_connection_complete_suc
 }
 
 TEST_F(AclManagerClassicTest, invoke_registered_callback_connection_complete_fail) {
-  acl_manager_classic_->CreateConnection(remote);
+  acl_manager_classic_->CreateConnection(remote, 0);
 
   // Wait for the connection request
   auto last_command = GetConnectionManagementCommand(OpCode::CREATE_CONNECTION);
@@ -810,7 +811,7 @@ protected:
 
 TEST_F(AclManagerClassicLifeCycleTest, unregister_classic_after_create_connection) {
   // Inject create connection
-  acl_manager_classic_->CreateConnection(remote);
+  acl_manager_classic_->CreateConnection(remote, 0);
   auto connection_command = GetConnectionManagementCommand(OpCode::CREATE_CONNECTION);
 
   // Unregister callbacks after sending connection request

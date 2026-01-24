@@ -44,10 +44,8 @@
 #include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/uuid.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 
 #include <unordered_set>
 #include <vector>
@@ -588,13 +586,12 @@ size_t btif_split_uuids_string(const char* str, bluetooth::Uuid* p_uuid, size_t 
 
   size_t num_uuids = 0;
   while (str && num_uuids < max_uuids) {
-    bool is_valid;
-    bluetooth::Uuid tmp = Uuid::FromString(std::string(str, Uuid::kString128BitLen), &is_valid);
-    if (!is_valid) {
+    auto tmp = Uuid::FromString(std::string(str, Uuid::kString128BitLen));
+    if (!tmp.has_value()) {
       break;
     }
 
-    *p_uuid = tmp;
+    *p_uuid = *tmp;
     p_uuid++;
 
     num_uuids++;
@@ -939,6 +936,9 @@ void btif_storage_load_le_devices(void) {
     if (btif_storage_get_ble_bonding_key(bonded_devices.devices[i].bda, BTM_LE_KEY_PID,
                                          reinterpret_cast<uint8_t*>(&key),
                                          sizeof(tBTM_LE_PID_KEYS)) == BT_STATUS_SUCCESS) {
+
+          tBLE_BD_ADDR identity_addr = {.type = key.pid_key.identity_addr_type,
+                                         .bda = key.pid_key.identity_addr};
       if (bonded_devices.devices[i].bda != key.pid_key.identity_addr) {
         log::info("Found device with a known identity address {} {}", bonded_devices.devices[i],
                   key.pid_key.identity_addr);
@@ -946,10 +946,16 @@ void btif_storage_load_le_devices(void) {
         if (bonded_devices.devices[i].bda.IsEmpty() || key.pid_key.identity_addr.IsEmpty()) {
           log::warn("Address is empty! Skip");
         } else {
-          tBLE_BD_ADDR identity_addr = {.type = key.pid_key.identity_addr_type,
-                                        .bda = key.pid_key.identity_addr};
           consolidated_devices.emplace_back(bonded_devices.devices[i], identity_addr);
         }
+      }
+      else{
+      static thread_local std::unordered_set<RawAddress> s_logged_equal_addrs;
+      if (s_logged_equal_addrs.insert(bonded_devices.devices[i].bda).second)
+      {
+      log::info("loaded public devices");
+      consolidated_devices.emplace_back(bonded_devices.devices[i],identity_addr);
+      }
       }
     }
   }
@@ -1105,7 +1111,7 @@ bt_status_t btif_storage_load_bonded_devices(void) {
 #if TARGET_FLOSS
       // Floss needs VID:PID for metrics purposes
       bt_vendor_product_info_t vp_info;
-      if (btif_storage_get_remote_prop(p_remote_addr, BT_PROPERTY_VENDOR_PRODUCT_INFO, &vp_info,
+      if (btif_storage_get_remote_prop(remote_addr, BT_PROPERTY_VENDOR_PRODUCT_INFO, &vp_info,
                                        sizeof(vp_info),
                                        &remote_properties[num_props]) == BT_STATUS_SUCCESS) {
         num_props++;
@@ -1312,7 +1318,7 @@ bt_status_t btif_storage_set_remote_addr_type(RawAddress remote_bd_addr, tBLE_AD
 
 #if TARGET_FLOSS
   // Floss needs to get address type for diagnosis API.
-  btif_storage_invoke_addr_type_update(*remote_bd_addr, addr_type);
+  btif_storage_invoke_addr_type_update(remote_bd_addr, addr_type);
 #endif
 
   return ret ? BT_STATUS_SUCCESS : BT_STATUS_FAIL;

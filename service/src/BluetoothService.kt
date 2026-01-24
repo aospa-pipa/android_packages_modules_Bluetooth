@@ -70,30 +70,35 @@ class BluetoothService(context: Context) : SystemService(context) {
             val isUserVisible =
                 context
                     .createContextAsUser(user.userHandle, 0)
-                    .getSystemService(android.os.UserManager::class.java)!!
+                    .getSystemService(UserManager::class.java)!!
                     .isUserVisible
             if (!isUserVisible) {
-                Log.i(TAG, "onUserStarting($user) Skipping non visible user ")
+                Log.i(TAG, "onUserStarting($user): Skipping non visible user")
                 return
             }
-            Log.i(TAG, "onUserStarting($user) Initializing for visible user ")
+            Log.i(TAG, "onUserStarting($user): Initializing for visible user")
         } else {
             val isForeground =
                 context
                     .createContextAsUser(user.userHandle, 0)
-                    .getSystemService(android.os.UserManager::class.java)!!
+                    .getSystemService(UserManager::class.java)!!
                     .isUserForeground
             if (!isForeground) {
-                Log.i(TAG, "onUserStarting($user) Skipping non foreground user ")
+                Log.i(TAG, "onUserStarting($user): Skipping non foreground user")
                 return
             }
-            Log.i(TAG, "onUserStarting($user) Initializing for foreground user ")
+            Log.i(TAG, "onUserStarting($user): Initializing for foreground user")
         }
         runOnBmsThread { supervisor.onUserStarting(user.userHandle) }
     }
 
     override fun onUserStopping(user: TargetUser) {
-        Log.i(TAG, "onUserStopping($user): Not implemented")
+        if (!Flags.switchWhenCurrentUserStop()) {
+            Log.i(TAG, "onUserStopping($user): Not implemented. Flag Disabled")
+            return
+        }
+        Log.i(TAG, "onUserStopping($user)")
+        runOnBmsThread { supervisor.onUserStopping(user.userHandle) }
     }
 
     override fun onUserStopped(user: TargetUser) {
@@ -101,7 +106,7 @@ class BluetoothService(context: Context) : SystemService(context) {
     }
 
     override fun onUserSwitching(from: TargetUser?, to: TargetUser) {
-        Log.i(TAG, "onUserSwitching:$from => $to")
+        Log.i(TAG, "onUserSwitching($from => $to)")
         runOnBmsThread { supervisor.onUserSwitching(to.userHandle) }
     }
 }

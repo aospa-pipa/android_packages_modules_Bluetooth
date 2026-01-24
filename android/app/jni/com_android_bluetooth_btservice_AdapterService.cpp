@@ -412,7 +412,7 @@ static void discovery_state_changed_callback(bt_discovery_state_t state) {
 }
 
 static void pin_request_callback(RawAddress bd_addr, bt_bdname_t* bdname, uint32_t cod,
-                                 bool min_16_digits, PairingAlgorithm pairing_algorithm) {
+                                 bool min_16_digits, int pairing_algorithm) {
   std::shared_lock<std::shared_timed_mutex> lock(jniObjMutex);
   if (!sJniCallbacksObj) {
     log::error("JNI obj is null. Failed to call JNI callback");
@@ -436,11 +436,11 @@ static void pin_request_callback(RawAddress bd_addr, bt_bdname_t* bdname, uint32
                                    reinterpret_cast<jbyte*>(bdname));
 
   sCallbackEnv->CallVoidMethod(sJniCallbacksObj, method_pinRequestCallback, addr.get(),
-                               devname.get(), cod, min_16_digits, (jint)pairing_algorithm);
+                               devname.get(), cod, min_16_digits, pairing_algorithm);
 }
 
 static void ssp_request_callback(RawAddress bd_addr, bt_ssp_variant_t pairing_variant,
-                                 uint32_t pass_key, PairingAlgorithm pairing_algorithm) {
+                                 uint32_t pass_key, int pairing_algorithm) {
   std::shared_lock<std::shared_timed_mutex> lock(jniObjMutex);
   if (!sJniCallbacksObj) {
     log::error("JNI obj is null. Failed to call JNI callback");
@@ -455,7 +455,7 @@ static void ssp_request_callback(RawAddress bd_addr, bt_ssp_variant_t pairing_va
   ScopedLocalRef<jbyteArray> addr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
 
   sCallbackEnv->CallVoidMethod(sJniCallbacksObj, method_sspRequestCallback, addr.get(),
-                               (jint)pairing_variant, pass_key, (jint)pairing_algorithm);
+                               (jint)pairing_variant, pass_key, pairing_algorithm);
 }
 
 static jobject createClassicOobDataObject(JNIEnv* env, bt_oob_data_t oob_data) {
@@ -909,15 +909,8 @@ static bt_os_callouts_t sBluetoothOsCallouts = {
         release_wake_lock_callout,
 };
 
-static int hal_util_load_bt_library(const bt_interface_t** interface) {
-  *interface = &bluetoothInterface;
-  return 0;
-}
-
 static bool initNative(JNIEnv* env, jobject obj, jboolean isGuest, jboolean isCommonCriteriaMode,
-                       int configCompareResult, jboolean isAtvDevice, jstring hciInstanceName) {
-  log::assert_that(hciInstanceName != nullptr, "hciInstanceName is never null");
-
+                       int configCompareResult, jboolean isAtvDevice, jstring jHciInstanceName) {
   std::unique_lock<std::shared_timed_mutex> lock(jniObjMutex);
 
   log::verbose("");
@@ -932,29 +925,11 @@ static bool initNative(JNIEnv* env, jobject obj, jboolean isGuest, jboolean isCo
     return JNI_FALSE;
   }
 
-  const char* nativeHciInstanceName = env->GetStringUTFChars(hciInstanceName, nullptr);
-  if (!nativeHciInstanceName) {
-    return JNI_FALSE;
-  }
+  const std::string hci_instance_name = stringFromJstring(env, jHciInstanceName);
 
-  int ret = sBluetoothInterface->init(&sBluetoothCallbacks, isGuest == JNI_TRUE ? 1 : 0,
-                                      isCommonCriteriaMode == JNI_TRUE ? 1 : 0, configCompareResult,
-                                      isAtvDevice == JNI_TRUE ? 1 : 0, nativeHciInstanceName);
-
-  env->ReleaseStringUTFChars(hciInstanceName, nativeHciInstanceName);
-
-  if (ret != BT_STATUS_SUCCESS) {
-    log::error("Error while setting the callbacks: {}", ret);
-    sBluetoothInterface = NULL;
-    return JNI_FALSE;
-  }
-  ret = sBluetoothInterface->set_os_callouts(&sBluetoothOsCallouts);
-  if (ret != BT_STATUS_SUCCESS) {
-    log::error("Error while setting Bluetooth callouts: {}", ret);
-    sBluetoothInterface->cleanup();
-    sBluetoothInterface = NULL;
-    return JNI_FALSE;
-  }
+  bluetooth_init(&sBluetoothCallbacks, isGuest == JNI_TRUE, isCommonCriteriaMode == JNI_TRUE,
+                 configCompareResult, isAtvDevice == JNI_TRUE, std::move(hci_instance_name),
+                 &sBluetoothOsCallouts);
 
   sBluetoothSocketInterface = reinterpret_cast<const btsock_interface_t*>(
           sBluetoothInterface->get_profile_interface(BT_PROFILE_SOCKETS_ID));
@@ -1000,14 +975,10 @@ static jboolean enableNative(JNIEnv* env, jobject /* obj */, jstring jLocalName)
   if (!sBluetoothInterface) {
     return JNI_FALSE;
   }
-  const char* nativeLocalName = env->GetStringUTFChars(jLocalName, nullptr);
-  if (!nativeLocalName) {
-    return JNI_FALSE;
-  }
-  std::string nativeName = std::string(nativeLocalName);
-  env->ReleaseStringUTFChars(jLocalName, nativeLocalName);
 
-  int ret = sBluetoothInterface->enable(std::move(nativeName));
+  const std::string local_name = stringFromJstring(env, jLocalName);
+
+  int ret = sBluetoothInterface->enable(std::move(local_name));
 
   return (ret == BT_STATUS_SUCCESS || ret == BT_STATUS_DONE) ? JNI_TRUE : JNI_FALSE;
 }
@@ -1411,14 +1382,10 @@ static void setLocalNameNative(JNIEnv* env, jobject /* obj */, jstring jLocalNam
   if (!sBluetoothInterface) {
     return;
   }
-  const char* nativeLocalName = env->GetStringUTFChars(jLocalName, nullptr);
-  if (!nativeLocalName) {
-    return;
-  }
-  std::string nativeName = std::string(nativeLocalName);
-  env->ReleaseStringUTFChars(jLocalName, nativeLocalName);
 
-  BTA_DmSetDeviceName(nativeName.c_str());
+  const std::string local_name = stringFromJstring(env, jLocalName);
+
+  BTA_DmSetDeviceName(local_name.c_str());
 }
 
 static jboolean setAdapterPropertyNative(JNIEnv* env, jobject /* obj */, jint type,
@@ -1796,7 +1763,7 @@ static jboolean interopMatchNameNative(JNIEnv* env, jclass /* clazz */, jstring 
   return matched ? JNI_TRUE : JNI_FALSE;
 }
 
-static jboolean interopMatchAddrOrNameNative(JNIEnv* env, jclass /* clazz */, jstring feature_name,
+static jboolean interopMatchDeviceNative(JNIEnv* env, jclass /* clazz */, jstring feature_name,
                                              jstring address) {
   log::verbose("");
 
@@ -2065,8 +2032,8 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) 
            reinterpret_cast<void*>(interopMatchAddrNative)},
           {"interopMatchNameNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
            reinterpret_cast<void*>(interopMatchNameNative)},
-          {"interopMatchAddrOrNameNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
-           reinterpret_cast<void*>(interopMatchAddrOrNameNative)},
+          {"interopMatchDeviceNative", "(Ljava/lang/String;Ljava/lang/String;)Z",
+           reinterpret_cast<void*>(interopMatchDeviceNative)},
           {"interopDatabaseAddRemoveAddrNative", "(ZLjava/lang/String;Ljava/lang/String;I)V",
            reinterpret_cast<void*>(interopDatabaseAddRemoveAddrNative)},
           {"interopDatabaseAddRemoveNameNative", "(ZLjava/lang/String;Ljava/lang/String;)V",
@@ -2132,10 +2099,7 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) 
     log::error("Could not get JavaVM");
   }
 
-  if (hal_util_load_bt_library(&sBluetoothInterface)) {
-    log::error("No Bluetooth Library found");
-  }
-
+  sBluetoothInterface = &bluetoothInterface;
   return 0;
 }
 

@@ -38,6 +38,7 @@ import com.android.bluetooth.Util.checkProfileAvailable
 import com.android.bluetooth.Utils
 import com.android.bluetooth.gatt.GattUtil.isHidCharUuid
 import com.android.bluetooth.profile.ProfileService
+import com.android.bluetooth.util.getLastAttributionTag
 
 private const val TAG = GattUtil.TAG_PREFIX + "GattServiceBinder"
 
@@ -427,7 +428,7 @@ class GattServiceBinder(private var gattService: GattService?) :
         source: AttributionSource,
     ): Int {
         val gatt = gatt() ?: return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED
-        if (!Utils.callerIsSystemOrActiveOrManagedUser(gatt, TAG, "subrateModeRequest")) {
+        if (!Util.callerIsSystemOrActiveOrManagedUser(gatt, TAG, "subrateModeRequest")) {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED
         }
         if (
@@ -585,6 +586,8 @@ class GattServiceBinder(private var gattService: GattService?) :
                     characteristics,
                     endpointId,
                     hubId,
+                    source.uid,
+                    source.getLastAttributionTag(),
                 )
             }
         val message = "Failed to complete offloadClientCharacteristics synchronously on GATT thread"
@@ -622,6 +625,8 @@ class GattServiceBinder(private var gattService: GattService?) :
                     characteristics,
                     endpointId,
                     hubId,
+                    source.uid,
+                    source.getLastAttributionTag(),
                 )
             }
         val message = "Failed to complete offloadServerCharacteristics synchronously on GATT thread"
@@ -650,7 +655,7 @@ class GattServiceBinder(private var gattService: GattService?) :
      * T+ for specific handles that are stored in [GattService.restrictedHandles] via the code flow
      * found in [GattService.isRestrictedSrvcUuid].
      */
-    @SuppressWarnings("IncorrectRequiresPermissionPropagation")
+    @Suppress("IncorrectRequiresPermissionPropagation")
     private fun <T> onGattThreadAndEnforcePrivilegedOnBinderIfNeeded(
         gatt: GattService,
         callback: IBluetoothGattCallback,
@@ -659,7 +664,7 @@ class GattServiceBinder(private var gattService: GattService?) :
         defaultValue: T,
         block: GattService.() -> T,
     ): T {
-        if (Utils.isInstrumentationTestMode()) {
+        if (Util.isInstrumentationTestMode) {
             return gatt.block()
         }
 

@@ -42,12 +42,14 @@
 
 #include <algorithm>
 
+#include "btif/include/btif_storage.h"
 #include "hal/snoop_logger.h"
 #include "hci/controller.h"
 #include "internal_include/bt_target.h"
 #include "main/shim/acl_api.h"
 #include "main/shim/entry.h"
 #include "osi/include/allocator.h"
+#include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/bt_hdr.h"
@@ -2276,7 +2278,8 @@ void l2cu_create_conn_br_edr(tL2C_LCB* p_lcb) {
  *
  ******************************************************************************/
 void l2cu_create_conn_after_switch(tL2C_LCB* p_lcb) {
-  bluetooth::shim::ACL_CreateClassicConnection(p_lcb->remote_bd_addr);
+  uint16_t clock_offset = BTM_GetCachedClockOffset(p_lcb->remote_bd_addr);
+  bluetooth::shim::ACL_CreateClassicConnection(p_lcb->remote_bd_addr, clock_offset);
 
   alarm_set_on_mloop(p_lcb->l2c_lcb_timer, L2CAP_LINK_CONNECT_TIMEOUT_MS, l2c_lcb_timer_timeout,
                      p_lcb);
@@ -2359,9 +2362,15 @@ bool l2cu_lcb_disconnecting(void) {
 
 static void l2cu_set_acl_priority_latency_brcm(tL2C_LCB* p_lcb, tL2CAP_PRIORITY priority) {
   uint8_t vs_param;
+  log::info("acl_priority: {}, preset_acl_latency: {}, rate_control_enabled: {}",
+            p_lcb->acl_priority, p_lcb->acl_latency, p_lcb->rate_control_enabled);
+
   if (priority == L2CAP_PRIORITY_HIGH) {
-    // priority to high, if using latency mode check preset latency
-    if (p_lcb->use_latency_mode && p_lcb->preset_acl_latency == L2CAP_LATENCY_LOW) {
+    if (!p_lcb->rate_control_enabled) {
+      log::info("Set ACL priority: High Priority and Disable Rate Control");
+      vs_param = HCI_BRCM_ACL_HIGH_PRIORITY_DISABLE_RATE_CONTROL;
+    } else if (p_lcb->use_latency_mode && p_lcb->preset_acl_latency == L2CAP_LATENCY_LOW) {
+      // priority to high, if using latency mode check preset latency
       log::info("Set ACL priority: High Priority and Low Latency Mode");
       vs_param = HCI_BRCM_ACL_HIGH_PRIORITY_LOW_LATENCY;
       p_lcb->set_latency(L2CAP_LATENCY_LOW);
@@ -2629,6 +2638,31 @@ bool l2cu_set_acl_latency(const RawAddress& bd_addr, tL2CAP_LATENCY latency) {
   }
   /* save the latency mode even if acl does not use latency mode or start*/
   p_lcb->preset_acl_latency = latency;
+
+  return true;
+}
+
+/*******************************************************************************
+ *
+ * Function         L2CA_DisableRateControl
+ *
+ * Description      Disable rate control algorithm for a channel.
+ *
+ * Returns          true if a valid channel, else false
+ *
+ ******************************************************************************/
+
+bool l2cu_set_rate_control_enabled(const RawAddress& bd_addr, bool enabled) {
+  log::info("enabled={}", enabled);
+
+  tL2C_LCB* p_lcb = l2cu_find_lcb_by_bd_addr(bd_addr, BT_TRANSPORT_BR_EDR);
+
+  if (p_lcb == nullptr) {
+    log::warn("Set rate control in use failed: LCB is null");
+    return false;
+  }
+
+  p_lcb->set_rate_control_enabled(enabled);
 
   return true;
 }
@@ -3734,4 +3768,19 @@ void l2cu_update_outstanding_packets_lcb(tL2C_LCB* p_lcb, uint16_t num_sent) {
       }
     }
   }
+}
+
+/*******************************************************************************
+ *
+ * Function        l2c_should_skip_ertm
+ *
+ * Description     checks if remote should skip ERTM
+ *
+ * Returns         true/false if ERTM checks need to be skipped or not.
+ *
+ *******************************************************************************/
+bool l2c_should_skip_ertm(const RawAddress& bd_addr) {
+  const Uuid RMT_CUSTOM_UUID = Uuid("74ec2172-0bad-4d01-8f77-997b2be0722a");
+  std::vector<bluetooth::Uuid> remote_uuids = btif_storage_get_services(bd_addr);
+  return std::find(remote_uuids.begin(), remote_uuids.end(), RMT_CUSTOM_UUID) != remote_uuids.end();
 }
