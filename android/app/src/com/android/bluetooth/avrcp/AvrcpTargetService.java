@@ -55,6 +55,7 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.bluetooth.storage.BluetoothStorageManager;
+import com.android.bluetooth.util.Text;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.List;
@@ -678,6 +679,6 @@ public class AvrcpTargetService extends ProfileService {
         }
 
         // Tab everything over by two spaces
-        sb.append(tempBuilder.toString().replaceAll("(?m)^", "  "));
+        sb.append(Text.indent(tempBuilder.toString(), "  "));
     }
 }

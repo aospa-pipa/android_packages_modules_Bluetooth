@@ -43,12 +43,9 @@
 #include "osi/include/properties.h"
 
 using bluetooth::hci::Address;
-using bluetooth::hci::AddressType;
 using bluetooth::hci::AdvertiserAddressType;
-using bluetooth::hci::ErrorCode;
 using bluetooth::hci::GapData;
 using bluetooth::shim::parse_gap_data;
-using std::vector;
 using namespace bluetooth;
 
 namespace bluetooth {
@@ -146,8 +143,8 @@ public:
   }
 
   // ::BleAdvertiserInterface
-  void SetData(int advertiser_id, bool set_scan_rsp, vector<uint8_t> data,
-               vector<uint8_t> data_encrypt, ::BleAdvertiserInterface::StatusCallback cb) override {
+  void SetData(int advertiser_id, bool set_scan_rsp, std::vector<uint8_t> data,
+               std::vector<uint8_t> data_encrypt, ::BleAdvertiserInterface::StatusCallback /* cb */) override {
     log::info("in shim layer");
     std::vector<GapData> advertising_data = {};
     parse_gap_data(data, advertising_data);

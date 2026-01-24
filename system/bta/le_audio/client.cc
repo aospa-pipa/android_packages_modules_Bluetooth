@@ -5194,17 +5194,17 @@ public:
 
   void printCurrentStreamConfiguration(std::stringstream& stream) {
     auto config_printer = [&stream](LeAudioCodecConfiguration& conf) {
-      stream << "\tsample rate: " << +conf.sample_rate << ", chan: " << +conf.num_channels
+      stream << "    sample rate: " << +conf.sample_rate << ", chan: " << +conf.num_channels
              << ", bits: " << +conf.bits_per_sample
              << ", data_interval_us: " << +conf.data_interval_us << "\n";
     };
 
     stream << "  AF playback codec config:\n";
-    stream << "\taudio sender state: " << audio_sender_state_ << "\n";
+    stream << "    audio sender state: " << audio_sender_state_ << "\n";
     config_printer(audio_framework_source_config);
 
     stream << "  AF recording codec config:\n";
-    stream << "\taudio receiver state: " << audio_receiver_state_ << "\n";
+    stream << "    audio receiver state: " << audio_receiver_state_ << "\n";
     config_printer(audio_framework_sink_config);
 
     if (CodecManager::GetInstance()->GetCodecLocation() ==
@@ -5225,7 +5225,7 @@ public:
     stream << "  TBS state: " << (in_call_ ? " In call" : "No calls") << "\n";
     stream << "  Game mode: " << (audioContextTypeManager_->IsInGame() ? "Enabled" : "Disabled")
            << "\n";
-    stream << "  Reconnection mode: Targeted Announcements \n";
+    stream << "  Reconnection mode: Targeted Announcements\n";
     stream << "  Current scenario: " << bluetooth::common::ToString(configuration_context_type_)
            << " (" << loghex(static_cast<uint16_t>(configuration_context_type_)) << ")\n";
     stream << "  Playback metadata context type mask: "
@@ -5796,8 +5796,8 @@ public:
                         upcoming_configuration_context_type,
                         bluetooth::le_audio::types::kLeAudioDirectionSink)) {
               log::warn(
-                      "sink is not configured. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "sink is not configured.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(),
@@ -5818,8 +5818,8 @@ public:
                 startSendingAudioWrapper(group);
               } else {
                 log::warn(
-                        "sink is not configured. \n audio_receiver_state: {} "
-                        "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                        "sink is not configured.\n audio_receiver_state: {} "
+                        "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                         "Reconfiguring to {}",
                         ToString(audio_receiver_state_), ToString(audio_sender_state_),
                         group->IsPendingConfiguration(),
@@ -5829,8 +5829,8 @@ public:
               }
             } else {
               log::error(
-                      "called in wrong state. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "called in wrong state.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(),
@@ -5857,8 +5857,8 @@ public:
                 startSendingAudioWrapper(group);
               } else {
                 log::warn(
-                        "sink is not configured. \n audio_receiver_state: {} "
-                        "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                        "sink is not configured.\n audio_receiver_state: {} "
+                        "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                         "Reconfiguring to {}",
                         ToString(audio_receiver_state_), ToString(audio_sender_state_),
                         group->IsPendingConfiguration(),
@@ -5868,8 +5868,8 @@ public:
               }
             } else {
               log::error(
-                      "called in wrong state. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "called in wrong state.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(),
@@ -5894,9 +5894,9 @@ public:
       }
       case AudioState::READY_TO_START:
         log::error(
-                "called in wrong state, ignoring double start request. \n "
-                "audio_receiver_state: {} \naudio_sender_state: {} \n "
-                "isPendingConfiguration: {} \n Reconfiguring to {}",
+                "called in wrong state, ignoring double start request.\n "
+                "audio_receiver_state: {}\n audio_sender_state: {}\n "
+                "isPendingConfiguration: {}\n Reconfiguring to {}",
                 ToString(audio_receiver_state_), ToString(audio_sender_state_),
                 group->IsPendingConfiguration(), ToString(upcoming_configuration_context_type));
         group->PrintDebugState();
@@ -6184,8 +6184,8 @@ public:
                         configuration_context_type_,
                         bluetooth::le_audio::types::kLeAudioDirectionSource)) {
               log::warn(
-                      "source is not configured. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "source is not configured.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(), ToString(configuration_context_type_));
@@ -6205,8 +6205,8 @@ public:
                 startReceivingAudioWrapper(group);
               } else {
                 log::warn(
-                        "source is not configured. \n audio_receiver_state: {} "
-                        "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                        "source is not configured.\n audio_receiver_state: {} "
+                        "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                         "Reconfiguring to {}",
                         ToString(audio_receiver_state_), ToString(audio_sender_state_),
                         group->IsPendingConfiguration(), ToString(configuration_context_type_));
@@ -6215,8 +6215,8 @@ public:
               }
             } else {
               log::error(
-                      "called in wrong state. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "called in wrong state.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(), ToString(configuration_context_type_));
@@ -6243,8 +6243,8 @@ public:
                 startReceivingAudioWrapper(group);
               } else {
                 log::warn(
-                        "source is not configured. \n audio_receiver_state: {} "
-                        "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                        "source is not configured.\n audio_receiver_state: {} "
+                        "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                         "Reconfiguring to {}",
                         ToString(audio_receiver_state_), ToString(audio_sender_state_),
                         group->IsPendingConfiguration(), ToString(configuration_context_type_));
@@ -6253,8 +6253,8 @@ public:
               }
             } else {
               log::error(
-                      "called in wrong state. \n audio_receiver_state: {} "
-                      "\naudio_sender_state: {} \n isPendingConfiguration: {} \n "
+                      "called in wrong state.\n audio_receiver_state: {} "
+                      "\naudio_sender_state: {}\n isPendingConfiguration: {}\n "
                       "Reconfiguring to {}",
                       ToString(audio_receiver_state_), ToString(audio_sender_state_),
                       group->IsPendingConfiguration(), ToString(configuration_context_type_));
@@ -6278,8 +6278,8 @@ public:
       }
       case AudioState::READY_TO_START:
         log::error(
-                "Double resume request, just ignore it.. \n audio_receiver_state: "
-                "{} \naudio_sender_state: {} \n isPendingConfiguration: {} \n Reconfiguring to {}",
+                "Double resume request, just ignore it..\n audio_receiver_state: "
+                "{}\naudio_sender_state: {}\n isPendingConfiguration: {}\n Reconfiguring to {}",
                 ToString(audio_receiver_state_), ToString(audio_sender_state_),
                 group->IsPendingConfiguration(), ToString(configuration_context_type_));
         group->PrintDebugState();
@@ -8556,11 +8556,11 @@ void LeAudioClient::DebugDump(int fd) {
   GmapServer::DebugDump(fd);
   bluetooth::le_audio::AudioContextTypeManager::DebugDump(fd);
 
-  dprintf(fd, "LeAudio Manager: \n");
+  dprintf(fd, "LeAudio Manager:\n");
   if (instance) {
     instance->Dump(fd);
   } else {
-    dprintf(fd, "  Not initialized \n");
+    dprintf(fd, "  Not initialized\n");
   }
 
   LeAudioSinkAudioHalClient::DebugDump(fd);
