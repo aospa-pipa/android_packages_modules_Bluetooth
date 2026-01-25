@@ -1040,6 +1040,7 @@ protected:
                 leAudioDevice = group->GetNextDevice(leAudioDevice);
               }
               group->ClearAllCises();
+              group->cig.ClearCisIds();
               /* end */
 
               if (!group->Configure(context_type, metadata_context_types, ccid_lists)) {
@@ -1262,6 +1263,7 @@ protected:
                   leAudioDevice = group->GetNextDevice(leAudioDevice);
                 }
                 group->ClearAllCises();
+                group->cig.ClearCisIds();
                 /* end */
 
                 group->Deactivate();
@@ -1520,17 +1522,31 @@ protected:
       SyncOnMainLoop();
     });
 
+    ON_CALL(mock_state_machine_, ProcessHciNotifOnCigRemove(_, _))
+            .WillByDefault([](uint8_t /*status*/, LeAudioDeviceGroup* group) {
+              if (!group) {
+                log::warn("ProcessHciNotifOnCigRemove group empty");
+                return;
+              }
+              log::info("ProcessHciNotifOnCigRemove group: {}", group->group_id_);
+              group->cig.UnassignAllCises();
+              group->cig.ClearCisIds();
+            });
+
     ON_CALL(mock_state_machine_, ProcessHciNotifAclDisconnected(_, _))
             .WillByDefault([this](LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice) {
               if (!group) {
+                log::warn("ProcessHciNotifAclDisconnected group empty");
                 return;
               }
+
+              log::info("ProcessHciNotifAclDisconnected group: {}", group->group_id_);
 
               for (auto& ase : leAudioDevice->ases_) {
                 group->RemoveCisFromStreamIfNeeded(leAudioDevice, ase.cis_conn_hdl);
               }
 
-              if (group->IsEmpty()) {
+              if (!group->IsAnyDeviceConnected()) {
                 group->cig.SetState(bluetooth::le_audio::types::CigState::NONE);
                 InjectCigRemoved(group->group_id_);
               }
@@ -1683,6 +1699,7 @@ protected:
     com::android::bluetooth::flags::provider_->csis_quirk_for_single_device_with_sirk_all_zeros(
             true);
     com::android::bluetooth::flags::provider_->leaudio_game_detector(true);
+    com::android::bluetooth::flags::provider_->leaudio_fix_clear_cises_in_the_cig(true);
 
     init_message_loop_thread();
     init_delayed_message_loop_thread();
@@ -3069,7 +3086,7 @@ protected:
     evt.cig_id = cig_id;
 
     ASSERT_NE(cig_callbacks_, nullptr);
-    cig_callbacks_->OnCisEvent(bluetooth::hci::iso_manager::kIsoEventCigOnRemoveCmpl, &evt);
+    cig_callbacks_->OnCigEvent(bluetooth::hci::iso_manager::kIsoEventCigOnRemoveCmpl, &evt);
   }
 
   NiceMock<MockAudioHalClientCallbacks> mock_audio_hal_client_callbacks_;
@@ -15628,6 +15645,7 @@ protected:
     UnicastTest::SetUp();
     com::android::bluetooth::flags::provider_->reset_flags();
     com::android::bluetooth::flags::provider_->leaudio_game_detector(true);
+    com::android::bluetooth::flags::provider_->leaudio_fix_clear_cises_in_the_cig(true);
     GmapClient::UpdateGmapOffloaderSupport(true);
     GmapServer::UpdateGmapOffloaderSupport(true);
   }
@@ -15645,6 +15663,7 @@ protected:
     UnicastTestCsis::SetUp();
     com::android::bluetooth::flags::provider_->reset_flags();
     com::android::bluetooth::flags::provider_->leaudio_game_detector(true);
+    com::android::bluetooth::flags::provider_->leaudio_fix_clear_cises_in_the_cig(true);
     GmapClient::UpdateGmapOffloaderSupport(true);
     GmapServer::UpdateGmapOffloaderSupport(true);
   }
