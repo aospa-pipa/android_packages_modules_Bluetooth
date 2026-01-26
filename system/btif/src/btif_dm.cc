@@ -94,7 +94,6 @@
 #include "stack/include/btm_api_types.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/btm_ble_api.h"
-#include "stack/include/btm_ble_sec_api.h"
 #include "stack/include/btm_ble_sec_api_types.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_log_history.h"
@@ -266,6 +265,9 @@ static skip_sdp_entry_t sdp_rejectlist[] = {{76}};  // Apple Mouse and Keyboard
 /* This flag will be true if HCI_Inquiry is in progress */
 static bool btif_dm_inquiry_in_progress = false;
 
+/* This variable is used to track the discovery state to be passed to the upper layer */
+static bt_discovery_state_t btif_dm_discovery_state = BT_DISCOVERY_STOPPED;
+
 /*******************************************************************************
  *  Static variables
  ******************************************************************************/
@@ -311,6 +313,7 @@ static void btif_stats_add_bond_event(const RawAddress& bd_addr, bt_bond_functio
 static void btif_on_name_read(RawAddress bd_addr, tHCI_ERROR_CODE hci_status, const BD_NAME bd_name,
                               bool during_device_search);
 
+static void btif_dm_report_discovery_state_change(bt_discovery_state_t state);
 static bool btif_extract_uuids_in_adv_data(const uint8_t* p_ad, size_t ad_len,
                                            const RawAddress& bdaddr, std::list<Uuid>* p_uuid_list);
 
@@ -702,9 +705,7 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
     if (!bluetooth::metrics::SaveDeviceOnMetricIdAllocator(bd_addr)) {
       log::error("Fail to save metric id for device:{}", bd_addr);
     }
-    if (com_android_bluetooth_flags_save_cache_for_bonded_device()) {
-      bta_gattc_link_cache_for_bonded_device(bd_addr);
-    }
+    bta_gattc_link_cache_for_bonded_device(bd_addr);
   }
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Bond state changed",
                  std::format("bt_status:{} bond_state:{} reason:{}", bt_status_text(status), state,
@@ -1011,10 +1012,10 @@ uint16_t btif_dm_get_connection_state(const RawAddress& bd_addr) {
   uint16_t rc = 0;
   if (BTA_DmGetConnectionState(bd_addr)) {
     rc = (uint16_t)true;
-    if (BTM_IsEncrypted(bd_addr, BT_TRANSPORT_BR_EDR)) {
+    if (get_btm_client_interface().security.BTM_IsEncrypted(bd_addr, BT_TRANSPORT_BR_EDR)) {
       rc |= ENCRYPTED_BREDR;
     }
-    if (BTM_IsEncrypted(bd_addr, BT_TRANSPORT_LE)) {
+    if (get_btm_client_interface().security.BTM_IsEncrypted(bd_addr, BT_TRANSPORT_LE)) {
       rc |= ENCRYPTED_LE;
     }
   } else {
@@ -1028,10 +1029,11 @@ static uint16_t btif_dm_get_resolved_connection_state(tBLE_BD_ADDR ble_bd_addr) 
   if (maybe_resolve_address(&ble_bd_addr.bda, &ble_bd_addr.type)) {
     if (BTA_DmGetConnectionState(ble_bd_addr.bda)) {
       rc = 0x0001;
-      if (BTM_IsEncrypted(ble_bd_addr.bda, BT_TRANSPORT_BR_EDR)) {
+      if (get_btm_client_interface().security.BTM_IsEncrypted(ble_bd_addr.bda,
+                                                              BT_TRANSPORT_BR_EDR)) {
         rc |= ENCRYPTED_BREDR;
       }
-      if (BTM_IsEncrypted(ble_bd_addr.bda, BT_TRANSPORT_LE)) {
+      if (get_btm_client_interface().security.BTM_IsEncrypted(ble_bd_addr.bda, BT_TRANSPORT_LE)) {
         rc |= ENCRYPTED_LE;
       }
     }
@@ -1510,7 +1512,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
       }
 
       // Do not update device properties of already bonded devices.
-      if (BTM_IsBonded(bdaddr)) {
+      if (get_btm_client_interface().security.BTM_IsBonded(bdaddr, BT_TRANSPORT_AUTO)) {
         log::debug("Ignore device properties from discovery results for the bonded device: {}[{}]",
                    bdaddr, AddressTypeText(addr_type));
 
@@ -1522,30 +1524,19 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
           break;
         }
 
-        if (com_android_bluetooth_flags_get_svc_uuids_from_ble_adv_data() &&
-            com_android_bluetooth_flags_get_svc_uuids_bugfix()) {
-          std::vector<bt_property_t> bt_properties;
-          bt_properties.push_back(bt_property_t{BT_PROPERTY_BDADDR, sizeof(bdaddr), &bdaddr});
-          bt_properties.push_back(bt_property_t{BT_PROPERTY_REMOTE_RSSI,
-                                                sizeof(p_search_data->inq_res.rssi),
-                                                &(p_search_data->inq_res.rssi)});
-          bt_properties.push_back(
-                  bt_property_t{BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type), &addr_type});
+        std::vector<bt_property_t> bt_properties;
+        bt_properties.push_back(bt_property_t{BT_PROPERTY_BDADDR, sizeof(bdaddr), &bdaddr});
+        bt_properties.push_back(bt_property_t{BT_PROPERTY_REMOTE_RSSI,
+                                              sizeof(p_search_data->inq_res.rssi),
+                                              &(p_search_data->inq_res.rssi)});
+        bt_properties.push_back(
+                bt_property_t{BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type), &addr_type});
 
-          // Report the advertised Service UUIDs.
-          std::vector<uint8_t> uuids_value;
-          add_advertised_uuids_to_properties(bt_properties, p_search_data->inq_res, uuids_value);
-          GetInterfaceToProfiles()->events->invoke_device_found_cb(bt_properties.size(),
-                                                                   bt_properties.data());
-        } else {
-          bt_property_t bt_property[] = {
-                  {BT_PROPERTY_BDADDR, sizeof(bdaddr), &bdaddr},
-                  {BT_PROPERTY_REMOTE_RSSI, sizeof(p_search_data->inq_res.rssi),
-                   &(p_search_data->inq_res.rssi)},
-                  {BT_PROPERTY_REMOTE_ADDR_TYPE, sizeof(addr_type), &addr_type}};
-          GetInterfaceToProfiles()->events->invoke_device_found_cb(ARRAY_SIZE(bt_property),
-                                                                   bt_property);
-        }
+        // Report the advertised Service UUIDs.
+        std::vector<uint8_t> uuids_value;
+        add_advertised_uuids_to_properties(bt_properties, p_search_data->inq_res, uuids_value);
+        GetInterfaceToProfiles()->events->invoke_device_found_cb(bt_properties.size(),
+                                                                 bt_properties.data());
         break;
       }
 
@@ -1706,9 +1697,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
 
         // Scope needs to persist until `invoke_device_found_cb` below.
         std::vector<uint8_t> uuids_value;
-        if (com_android_bluetooth_flags_get_svc_uuids_from_ble_adv_data()) {
-          add_advertised_uuids_to_properties(bt_properties, p_search_data->inq_res, uuids_value);
-        }
+        add_advertised_uuids_to_properties(bt_properties, p_search_data->inq_res, uuids_value);
 
         // Floss needs appearance for metrics purposes
         uint16_t appearance = 0;
@@ -1737,7 +1726,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
     } break;
 
     case BTA_DM_DISC_CMPL_EVT: {
-      GetInterfaceToProfiles()->events->invoke_discovery_state_changed_cb(BT_DISCOVERY_STOPPED);
+      btif_dm_report_discovery_state_change(BT_DISCOVERY_STOPPED);
     } break;
     case BTA_DM_SEARCH_CANCEL_CMPL_EVT: {
       /* if inquiry is not in progress and we get a cancel event, then
@@ -1750,7 +1739,7 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
        *
        */
       if (!btif_dm_inquiry_in_progress) {
-        GetInterfaceToProfiles()->events->invoke_discovery_state_changed_cb(BT_DISCOVERY_STOPPED);
+        btif_dm_report_discovery_state_change(BT_DISCOVERY_STOPPED);
       }
     } break;
     default:
@@ -1775,10 +1764,6 @@ static void btif_dm_search_devices_evt(tBTA_DM_SEARCH_EVT event, tBTA_DM_SEARCH*
 static void add_advertised_uuids_to_properties(std::vector<bt_property_t>& bt_properties,
                                                tBTA_DM_INQ_RES& inq_res,
                                                std::vector<uint8_t>& uuids_value) {
-  if (!com_android_bluetooth_flags_get_svc_uuids_from_ble_adv_data()) {
-    return;
-  }
-
   if (!uuids_value.empty()) {
     log::error("uuids_value is not empty!");
     return;
@@ -1799,7 +1784,7 @@ static void add_advertised_uuids_to_properties(std::vector<bt_property_t>& bt_pr
       uuids_value.insert(uuids_value.end(), uuid_128bit.begin(), uuid_128bit.end());
     }
 
-    if (com_android_bluetooth_flags_get_svc_uuids_bugfix() && uuids_value.empty()) {
+    if (uuids_value.empty()) {
       if (uuid_type_exists) {
         log::debug("UUID types exist, but uuid list is empty");
         uuids_value.push_back(BT_REASON_FOR_NO_UUIDS_EMPTY_UUID_LIST);
@@ -2086,7 +2071,7 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
           (bd_addr == pairing_cb.bd_addr || bd_addr == pairing_cb.static_bdaddr);
 
   if (results_for_bonding_device && result != BTA_SUCCESS &&
-      pairing_cb.state == BT_BOND_STATE_BONDED &&
+      (pairing_cb.state == BT_BOND_STATE_BONDED || pairing_cb.sdp_attempts) &&
       pairing_cb.sdp_attempts < BTIF_DM_MAX_SDP_ATTEMPTS_AFTER_PAIRING) {
     if (pairing_cb.sdp_attempts) {
       log::warn("SDP failed after bonding re-attempting for {}", bd_addr);
@@ -2476,10 +2461,21 @@ void BTIF_dm_report_inquiry_status_change(tBTM_INQUIRY_STATE status) {
   btif_dm_inquiry_in_progress = (status == tBTM_INQUIRY_STATE::BTM_INQUIRY_STARTED);
 
   if (status == tBTM_INQUIRY_STATE::BTM_INQUIRY_STARTED) {
-    GetInterfaceToProfiles()->events->invoke_discovery_state_changed_cb(BT_DISCOVERY_STARTED);
+    btif_dm_report_discovery_state_change(BT_DISCOVERY_STARTED);
   } else if (status == tBTM_INQUIRY_STATE::BTM_INQUIRY_CANCELLED) {
-    GetInterfaceToProfiles()->events->invoke_discovery_state_changed_cb(BT_DISCOVERY_STOPPED);
+    btif_dm_report_discovery_state_change(BT_DISCOVERY_STOPPED);
   }
+}
+
+static void btif_dm_report_discovery_state_change(bt_discovery_state_t state) {
+  if (com_android_bluetooth_flags_fix_multiple_discovery_stopped_broadcast()) {
+    if (state == btif_dm_discovery_state) {
+      log::info("Skipping discovery state change broadcast, already in the current state");
+      return;
+    }
+    btif_dm_discovery_state = state;
+  }
+  GetInterfaceToProfiles()->events->invoke_discovery_state_changed_cb(state);
 }
 
 static void btif_add_local_irk_to_resolving_list() {
@@ -3182,7 +3178,7 @@ void btif_dm_remove_bond(const RawAddress bd_addr) {
       log::warn("Ongoing pairing/sdp detected, cancelling it first before removing bond.");
       btif_dm_cancel_bond(bd_addr);
     }
-    if (!BTM_IsBonded(bd_addr, BT_TRANSPORT_AUTO)) {
+    if (!get_btm_client_interface().security.BTM_IsBonded(bd_addr, BT_TRANSPORT_AUTO)) {
       log::warn("Device is not bonded on any transport, skipping remove bond!!");
       return;
     }
@@ -3599,7 +3595,7 @@ static void stop_oob_advertiser() {
 void btif_dm_generate_local_oob_data(tBT_TRANSPORT transport) {
   log::debug("Transport {}", bt_transport_text(transport));
   if (transport == BT_TRANSPORT_BR_EDR) {
-    BTM_ReadLocalOobData();
+    get_btm_client_interface().security.BTM_ReadLocalOobData();
   } else if (transport == BT_TRANSPORT_LE) {
     // Call create data first, so we don't have to hold on to the address for
     // the state machine lifecycle.  Rather, lets create the data, then start
@@ -4000,7 +3996,8 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
         bool during_bonding =
                 (bd_addr == pairing_cb.bd_addr || bd_addr == pairing_cb.static_bdaddr);
 
-        if (during_bonding || p_auth_cmpl->is_ctkd || !BTM_IsBonded(bd_addr)) {
+        if (during_bonding || p_auth_cmpl->is_ctkd ||
+            !get_btm_client_interface().security.BTM_IsBonded(bd_addr, BT_TRANSPORT_AUTO)) {
           log::info("Removing ble bonding keys on SMP_CONN_TOUT during_bonding: {}, is_ctkd: {}",
                     during_bonding, p_auth_cmpl->is_ctkd);
           btif_dm_remove_ble_bonding_keys();
@@ -4294,7 +4291,8 @@ static void btif_dm_ble_oob_req_evt(tBTA_DM_SP_RMT_OOB* req_oob_type) {
 
   // TODO (b/268380987): Update the pairing algorithm in Java for OOB.
 
-  BTM_BleOobDataReply(req_oob_type->bd_addr, tBTM_STATUS::BTM_SUCCESS, 16, oob_cb.p192_data.sm_tk);
+  get_btm_client_interface().security.BTM_BleOobDataReply(
+          req_oob_type->bd_addr, tBTM_STATUS::BTM_SUCCESS, 16, oob_cb.p192_data.sm_tk);
 }
 
 static void btif_dm_ble_sc_oob_req_evt(tBTA_DM_SP_RMT_OOB* req_oob_type) {
@@ -4347,7 +4345,8 @@ static void btif_dm_ble_sc_oob_req_evt(tBTA_DM_SP_RMT_OOB* req_oob_type) {
 
   // TODO (b/268380987): Update the pairing algorithm to Java for OOB.
 
-  BTM_BleSecureConnectionOobDataReply(req_oob_type->bd_addr, oob_data_to_use.c, oob_data_to_use.r);
+  get_btm_client_interface().security.BTM_BleSecureConnectionOobDataReply(
+          req_oob_type->bd_addr, oob_data_to_use.c, oob_data_to_use.r);
 }
 
 static void btif_dm_ble_tx_test_cback(void* p) {

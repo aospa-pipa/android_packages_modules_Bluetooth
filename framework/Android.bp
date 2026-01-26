@@ -107,6 +107,7 @@ java_sdk_library {
             "GuardedLogInvocation",
             "HandlerLeak",
             "InflateParams",
+            "InlinedApi",
             "LabelFor",
             "MissingClass",
             "MonochromeLauncherIcon",

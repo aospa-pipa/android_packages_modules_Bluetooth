@@ -182,7 +182,7 @@ import com.android.bluetooth.tbs.TbsService;
 import com.android.bluetooth.telephony.BluetoothInCallService;
 import com.android.bluetooth.util.DeviceConfigUtils;
 import com.android.bluetooth.util.Text;
-import com.android.bluetooth.vaps.VapsServerService;
+import com.android.bluetooth.vap.VapServerService;
 import com.android.bluetooth.vc.VolumeControlService;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -962,8 +962,8 @@ public class AdapterService extends Service {
         return getStartedProfile(BluetoothProfile.VOLUME_CONTROL, VolumeControlService.class);
     }
 
-    public Optional<VapsServerService> getVapsServerService() {
-        return getStartedProfile(BluetoothProfile.VAPS_SERVER, VapsServerService.class);
+    public Optional<VapServerService> getVapServerService() {
+        return getStartedProfile(BluetoothProfile.VAP_SERVER, VapServerService.class);
     }
 
     public Optional<LeAudioPeripheralService> getLeAudioPeripheralService() {
@@ -1394,7 +1394,7 @@ public class AdapterService extends Service {
             case BluetoothProfile.PBAP ->
                     new BluetoothPbapService(this, getSystemService(NotificationManager.class));
             case BluetoothProfile.SAP -> new SapService(this);
-            case BluetoothProfile.VAPS_SERVER -> new VapsServerService(this);
+            case BluetoothProfile.VAP_SERVER -> new VapServerService(this);
             case BluetoothProfile.VOLUME_CONTROL -> new VolumeControlService(this);
             case BluetoothProfile.LE_AUDIO_PERIPHERAL -> {
                 if (!Flags.leaudioPeripheralFeature()) {
@@ -5626,8 +5626,7 @@ public class AdapterService extends Service {
                 deviceProp.isCoordinatedSetMember());
 
         int discoveryResultType = deviceProp.getDiscoveryResultType();
-        if (Flags.getSvcUuidsFromBleAdvData()
-                && discoveryResultType != BluetoothDevice.DEVICE_TYPE_UNKNOWN) {
+        if (discoveryResultType != BluetoothDevice.DEVICE_TYPE_UNKNOWN) {
             intent.putExtra(BluetoothDevice.EXTRA_DISCOVERY_RESULT_TYPE, discoveryResultType);
 
             if ((discoveryResultType & BluetoothDevice.DEVICE_TYPE_CLASSIC) != 0) {

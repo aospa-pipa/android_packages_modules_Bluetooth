@@ -398,7 +398,7 @@ public final class ScanResult implements Parcelable, Attributable {
 
     @Override
     public String toString() {
-        return ("ScanResult [" + "device=" + mDevice)
+        return ("ScanResult[device=" + mDevice)
                 + (", scanRecord=" + Objects.toString(mScanRecord))
                 + (", rssi=" + mRssi)
                 + (", timestampNanos=" + mTimestampNanos)

@@ -329,4 +329,13 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
     public void clccResponseDsDa(int index, int direction, int status, int mode, boolean mpty,
 				  String number, int type, AttributionSource source) {
     }
+
+    @Override
+    public int getCodecType(BluetoothDevice device, AttributionSource source) {
+        HeadsetService service = getService(source);
+        if (service == null) {
+            return BluetoothHeadset.CODEC_TYPE_UNSUPPORTED;
+        }
+        return service.getCodecType(device);
+    }
 }

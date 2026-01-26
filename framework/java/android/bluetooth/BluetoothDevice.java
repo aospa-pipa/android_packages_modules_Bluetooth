@@ -532,7 +532,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * </ul>
      */
     @SuppressLint("ActionValue")
-    @FlaggedApi(Flags.FLAG_GET_SVC_UUIDS_FROM_BLE_ADV_DATA)
     public static final String EXTRA_DISCOVERY_RESULT_TYPE =
             "android.bluetooth.device.extra.DISCOVERY_RESULT_TYPE";
 
@@ -1023,13 +1022,13 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * content://com.example.fileprovider/example_bluetooth_metadata/f1234model.png). Data type
      * should be {@link Byte} array.
      */
-    @Hide
-    @FlaggedApi(Flags.FLAG_SUPPORT_ZOOMED_IN_ICON_METADATA)
-    @SystemApi
-    public static final int METADATA_ZOOMED_IN_ICON = 30;
+    @Hide @SystemApi public static final int METADATA_ZOOMED_IN_ICON = 30;
+
+    // DO NOT UPDATE ADDITIONAL METADATA_FOO
+    // Instead, look into adding proper setter/getter
 
     // Need to update this value after adding new Metadata
-    private static final int METADATA_MAX_KEY = METADATA_EXCLUSIVE_MANAGER;
+    private static final int METADATA_MAX_KEY = METADATA_ZOOMED_IN_ICON;
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1433,7 +1432,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * <p>A {@code null} or absent EXTRA_UUID_LE indicates the system failed obtain the UUIDs.
      */
     @SuppressLint("ActionValue")
-    @FlaggedApi(Flags.FLAG_GET_SVC_UUIDS_FROM_BLE_ADV_DATA)
     public static final String EXTRA_UUID_LE = "android.bluetooth.device.extra.UUID_LE";
 
     @Hide public static final String EXTRA_SDP_RECORD = "android.bluetooth.device.extra.SDP_RECORD";
@@ -3826,7 +3824,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return Whether the on-head detection enabled state was set properly.
      */
     @Hide
-    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
@@ -3850,7 +3847,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return Whether the on head detection state was set properly.
      */
     @Hide
-    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})

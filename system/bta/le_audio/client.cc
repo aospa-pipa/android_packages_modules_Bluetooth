@@ -93,11 +93,11 @@
 #include "osi/include/alarm.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/btm_client_interface.h"
+#include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
@@ -2491,7 +2491,7 @@ public:
 
     LeAudioDevice* leAudioDevice = leAudioDevices_.FindByAddress(address);
     if (!leAudioDevice) {
-      if (!BTM_IsBonded(address, BT_TRANSPORT_LE)) {
+      if (!get_btm_client_interface().security.BTM_IsBonded(address, BT_TRANSPORT_LE)) {
         log::error("Connecting  {} when not bonded", address);
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
         bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
@@ -3275,7 +3275,7 @@ public:
 
     /* Check if the device is in allow list and update the flag */
     leAudioDevice->UpdateDeviceAllowlistFlag();
-    if (BTM_SecIsLeSecurityPending(address)) {
+    if (get_btm_client_interface().security.BTM_SecIsLeSecurityPending(address)) {
       /* if security collision happened, wait for encryption done
        * (BTA_GATTC_ENC_CMPL_CB_EVT) */
       log::warn("{} Security Collision. Security is not completed", address);
@@ -3283,14 +3283,14 @@ public:
     }
 
     /* verify bond */
-    if (BTM_IsEncrypted(address, BT_TRANSPORT_LE)) {
+    if (get_btm_client_interface().security.BTM_IsEncrypted(address, BT_TRANSPORT_LE)) {
       /* if link has been encrypted */
       OnEncryptionComplete(address, tBTM_STATUS::BTM_SUCCESS);
       return;
     }
 
-    tBTM_STATUS result =
-            BTM_SetEncryption(address, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
+    tBTM_STATUS result = get_btm_client_interface().security.BTM_SetEncryption(
+            address, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
 
     log::info("Encryption required for {}. Request result: 0x{:02x}", address, result);
 
@@ -7474,14 +7474,12 @@ public:
 
         if (audio_sender_state_ == AudioState::READY_TO_START) {
           startSendingAudioWrapper(group);
-          if (com_android_bluetooth_flags_add_profile_as_intent_extra()) {
-            auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
-            if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
-              log::info(" audio sender: NotifyVaSessionStarted");
-              if (group) {
-                bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
-                        GetGroupDevices(group->group_id_), true);
-              }
+          auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
+          if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
+            log::info(" audio sender: NotifyVaSessionStarted");
+            if (group) {
+              bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
+                      GetGroupDevices(group->group_id_), true);
             }
           }
         } else if (audio_sender_state_ == AudioState::STARTED) {
@@ -7497,14 +7495,12 @@ public:
 
         if (audio_receiver_state_ == AudioState::READY_TO_START) {
           startReceivingAudioWrapper(group);
-          if (com_android_bluetooth_flags_add_profile_as_intent_extra()) {
-            auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
-            if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
-              log::info(" audio receiver: NotifyVaSessionStarted");
-              if (group) {
-                bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
-                        GetGroupDevices(group->group_id_), true);
-              }
+          auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
+          if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
+            log::info(" audio receiver: NotifyVaSessionStarted");
+            if (group) {
+              bluetooth::vaps::GetVapsServer()->NotifyVaSessionStarted(
+                      GetGroupDevices(group->group_id_), true);
             }
           }
         } else if (audio_receiver_state_ == AudioState::STARTED) {
@@ -7729,21 +7725,19 @@ public:
           HandlePendingDeviceDisconnection(group);
         }
 
-        if (com_android_bluetooth_flags_add_profile_as_intent_extra()) {
-          if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+        if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+          log::info(" Status Idle: NotifyVaSessionStopped");
+          if (group) {
+            bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
+                    GetGroupDevices(group->group_id_), true);
+          }
+        } else {
+          auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
+          if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
             log::info(" Status Idle: NotifyVaSessionStopped");
             if (group) {
               bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
                       GetGroupDevices(group->group_id_), true);
-            }
-          } else {
-            auto metadata_contexts = get_bidirectional(local_metadata_context_types_);
-            if (metadata_contexts.test(LeAudioContextType::VOICEASSISTANTS)) {
-              log::info(" Status Idle: NotifyVaSessionStopped");
-              if (group) {
-                bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
-                        GetGroupDevices(group->group_id_), true);
-              }
             }
           }
         }
@@ -8122,7 +8116,8 @@ void le_audio_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
 
     case BTA_GATTC_ENC_CMPL_CB_EVT: {
       tBTM_STATUS encryption_status;
-      if (BTM_IsEncrypted(p_data->enc_cmpl.remote_bda, BT_TRANSPORT_LE)) {
+      if (get_btm_client_interface().security.BTM_IsEncrypted(p_data->enc_cmpl.remote_bda,
+                                                              BT_TRANSPORT_LE)) {
         encryption_status = tBTM_STATUS::BTM_SUCCESS;
       } else {
         encryption_status = tBTM_STATUS::BTM_FAILED_ON_SECURITY;
