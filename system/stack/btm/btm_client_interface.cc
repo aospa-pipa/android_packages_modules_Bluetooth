@@ -21,7 +21,7 @@
 #include "stack/btm/btm_ble_int.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/btm_ble_api.h"
-#include "stack/include/btm_ble_sec_api.h"
+#include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_vendor_api.h"
 
 static struct btm_client_interface_t btm_client_interface = {

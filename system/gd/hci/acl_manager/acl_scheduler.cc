@@ -70,9 +70,8 @@ struct AclScheduler::impl {
         outgoing_entry_.reset();
         handle_outgoing_connection();
         // Check if incoming request also exists for this address
-        if (com_android_bluetooth_flags_acl_fix_in_and_out_connection_reqs() &&
-            incoming_connecting_address_set_.find(address) !=
-                    incoming_connecting_address_set_.end()) {
+        if (incoming_connecting_address_set_.find(address) !=
+            incoming_connecting_address_set_.end()) {
           log::warn("Incoming connection request also exists for {}", address);
           incoming_connecting_address_set_.erase(address);
         }
@@ -264,7 +263,7 @@ private:
       pending_outgoing_operations_.pop_front();
       std::visit([](auto&& variant) { variant.callback(); }, entry);
       outgoing_entry_ = std::move(entry);
-    } else if (!pending_outgoing_operations_.empty()){
+     } else if (!pending_outgoing_operations_.empty()){
       if (const RemoteNameRequestQueueEntry* peek =
                   std::get_if<RemoteNameRequestQueueEntry>(&pending_outgoing_operations_.front())) {
         if (incoming_connecting_address_set_.contains(peek->address) &&
@@ -276,13 +275,10 @@ private:
             outgoing_entry_ = std::move(entry);
         }
       }
-    }
-    else {
+    } else {
       // log the reasons on why we're not sending the next operation
       log_try_dequeue_next_operation();
     }
-    log::info("Exit, outgoing_entry_.has_value() : {}", outgoing_entry_.has_value());
-
   }
 
   template <typename T, typename U, typename V>

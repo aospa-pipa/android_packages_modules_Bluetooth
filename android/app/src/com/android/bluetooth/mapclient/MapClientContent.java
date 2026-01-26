@@ -40,9 +40,7 @@ import android.telephony.TelephonyManager;
 import android.util.ArraySet;
 import android.util.Log;
 
-import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
-import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.map.BluetoothMapbMessageMime;
 import com.android.bluetooth.map.BluetoothMapbMessageMime.MimePart;
 import com.android.vcard.VCardConstants;
@@ -235,13 +233,11 @@ class MapClientContent {
                         + ", folder="
                         + message.getFolder());
 
-        if (Flags.ignoreMessageSmsDisallowed()) {
-            UserManager userManager = mContext.getSystemService(UserManager.class);
-            if (userManager != null
-                    && userManager.getUserRestrictions().getBoolean(UserManager.DISALLOW_SMS)) {
-                warn("SMS is disallowed for the user, skip storing message");
-                return;
-            }
+        UserManager userManager = mContext.getSystemService(UserManager.class);
+        if (userManager != null
+                && userManager.getUserRestrictions().getBoolean(UserManager.DISALLOW_SMS)) {
+            warn("SMS is disallowed for the user, skip storing message");
+            return;
         }
 
         switch (message.getType()) {
@@ -460,11 +456,7 @@ class MapClientContent {
 
     /** cleanUp clear the subscription info and content on shutdown */
     void cleanUp() {
-        debug(
-                "cleanUp(device="
-                        + Utils.getLoggableAddress(mDevice)
-                        + ", subscriptionId="
-                        + mSubscriptionId);
+        debug("cleanUp(device=" + mDevice + ", subscriptionId=" + mSubscriptionId);
         mResolver.unregisterContentObserver(mContentObserver);
         clearMessages(mContext, mSubscriptionId);
         try {
