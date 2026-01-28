@@ -192,10 +192,21 @@ struct btif_dm_pairing_cb_t {
   ServiceDiscoveryState sdp_over_classic;
 };
 
+static inline std::string ServiceDiscoveryStateText(
+        const btif_dm_pairing_cb_t::ServiceDiscoveryState& state) {
+  switch (state) {
+    CASE_RETURN_STRING(btif_dm_pairing_cb_t::ServiceDiscoveryState::NOT_STARTED);
+    CASE_RETURN_STRING(btif_dm_pairing_cb_t::ServiceDiscoveryState::SCHEDULED);
+    CASE_RETURN_STRING(btif_dm_pairing_cb_t::ServiceDiscoveryState::FINISHED);
+    default:
+      RETURN_UNKNOWN_TYPE_STRING(btif_dm_pairing_cb_t::ServiceDiscoveryState, state);
+  }
+}
+
 namespace std {
 template <>
 struct formatter<btif_dm_pairing_cb_t::ServiceDiscoveryState>
-    : enum_formatter<btif_dm_pairing_cb_t::ServiceDiscoveryState> {};
+    : string_formatter<btif_dm_pairing_cb_t::ServiceDiscoveryState, &ServiceDiscoveryStateText> {};
 }  // namespace std
 
 // TODO(jpawlowski): unify ?
@@ -850,10 +861,8 @@ bool is_device_le_audio_capable(const RawAddress bd_addr) {
     return true;
   }
 
-  tBT_DEVICE_TYPE tmp_dev_type;
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
-  get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &tmp_dev_type, &addr_type);
-  if (tmp_dev_type & BT_DEVICE_TYPE_BLE) {
+  auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
+  if (dev_info.device_type & BT_DEVICE_TYPE_BLE) {
     /* LE Audio capable device is discoverable over both LE and Classic using
      * same address. Prefer to use LE transport, as we don't know if it can do
      * CTKD from Classic to LE */
@@ -886,10 +895,8 @@ bool is_le_audio_preferred(const RawAddress bd_addr) {
     return true;
   }
 
-  tBT_DEVICE_TYPE tmp_dev_type;
-  tBLE_ADDR_TYPE addr_type = BLE_ADDR_PUBLIC;
-  get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &tmp_dev_type, &addr_type);
-  if ((tmp_dev_type & BT_DEVICE_TYPE_BLE) && !btif_check_cod_phone(bd_addr)) {
+  auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
+  if ((dev_info.device_type & BT_DEVICE_TYPE_BLE) && !btif_check_cod_phone(bd_addr)) {
     /* LE Audio capable device is discoverable over both LE and Classic using
      * same address. Prefer to use LE transport, as we don't know if it can do
      * CTKD from Classic to LE */
@@ -949,16 +956,14 @@ static void btif_dm_cb_create_bond(const RawAddress bd_addr, tBT_TRANSPORT trans
     if (btif_storage_get_remote_addr_type(bd_addr, &addr_type) != BT_STATUS_SUCCESS) {
       // Try to read address type. OOB pairing might have set it earlier, but
       // didn't store it, it defaults to BLE_ADDR_PUBLIC
-      uint8_t tmp_dev_type;
-      tBLE_ADDR_TYPE tmp_addr_type = BLE_ADDR_PUBLIC;
-      get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &tmp_dev_type, &tmp_addr_type);
-      addr_type = tmp_addr_type;
+      auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
+      addr_type = dev_info.addr_type;
 
       btif_storage_set_remote_addr_type(bd_addr, addr_type);
     }
   }
   if ((btif_config_get_int(bdstr, BTIF_STORAGE_KEY_DEV_TYPE, &device_type) &&
-       (btif_storage_get_remote_addr_type(bd_addr, &addr_type) == BT_STATUS_SUCCESS) &&
+       btif_storage_get_remote_addr_type(bd_addr, &addr_type) == BT_STATUS_SUCCESS &&
        (device_type & BT_DEVICE_TYPE_BLE) == BT_DEVICE_TYPE_BLE) ||
       (transport == BT_TRANSPORT_LE)) {
     BTA_DmAddBleDevice(bd_addr, addr_type, static_cast<tBT_DEVICE_TYPE>(device_type));
@@ -966,7 +971,7 @@ static void btif_dm_cb_create_bond(const RawAddress bd_addr, tBT_TRANSPORT trans
 
   /*  Track originator of bond creation  */
   pairing_cb.is_local_initiated = true;
-  BTA_DmBond(bd_addr, addr_type, transport, device_type);
+  BTA_DmBond(bd_addr, addr_type, transport);
 }
 
 /*******************************************************************************
@@ -983,7 +988,7 @@ static void btif_dm_cb_create_bond_le(const RawAddress bd_addr, tBLE_ADDR_TYPE a
   bond_state_changed(BT_STATUS_SUCCESS, bd_addr, BT_TRANSPORT_LE, BT_BOND_STATE_BONDING);
   /* Handle only LE create bond with random address case */
   BTA_DmAddBleDevice(bd_addr, addr_type, BT_DEVICE_TYPE_BLE);
-  BTA_DmBond(bd_addr, addr_type, BT_TRANSPORT_LE, BT_DEVICE_TYPE_BLE);
+  BTA_DmBond(bd_addr, addr_type, BT_TRANSPORT_LE);
   /*  Track  originator of bond creation  */
   pairing_cb.is_local_initiated = true;
 
@@ -1159,6 +1164,17 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Pin request",
                  std::format("name:\"{}\" min16:{:c}", reinterpret_cast<char const*>(bd_name.name),
                              p_pin_req->min_16_digit ? 'T' : 'F'));
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_bredr_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_pin_reply(bd_addr, /*accept=*/0, 0, bt_pin_code_t{});
+    return;
+  }
+
   GetInterfaceToProfiles()->events->invoke_pin_request_cb(
           bd_addr, bd_name, cod, p_pin_req->min_16_digit,
           map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
@@ -1233,6 +1249,18 @@ static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Ssp request",
                  std::format("just_works:{:c} pin:{}", (p_ssp_cfm_req->just_works) ? 'T' : 'F',
                              p_ssp_cfm_req->num_val));
+
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_bredr_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
+    return;
+  }
+
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
           bd_addr, pairing_cb.pairing_type.variant, p_ssp_cfm_req->num_val,
           map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
@@ -1265,6 +1293,17 @@ static void btif_dm_ssp_key_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif) {
 
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Ssp request",
                  std::format("passkey:{}", p_ssp_key_notif->passkey));
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_bredr_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
+    return;
+  }
+
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
           bd_addr, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
           map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
@@ -3103,7 +3142,7 @@ void btif_dm_create_bond_out_of_band(const RawAddress bd_addr, tBT_TRANSPORT tra
       pairing_cb.is_local_initiated = true;
       get_btm_client_interface().security.BTM_SecAddBleDevice(bd_addr, BT_DEVICE_TYPE_BLE,
                                                               address_type);
-      BTA_DmBond(bd_addr, address_type, transport, BT_DEVICE_TYPE_BLE);
+      BTA_DmBond(bd_addr, address_type, transport);
       break;
     }
     default:
@@ -3846,6 +3885,16 @@ static void btif_dm_ble_passkey_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif)
 
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Ssp request",
                  std::format("passkey:{}", p_ssp_key_notif->passkey));
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
+    return;
+  }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
           bd_addr, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
@@ -4004,12 +4053,10 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
           status = BT_STATUS_AUTH_FAILURE;
           is_ble_keys_removed = true;
         } else {
-          uint8_t dev_type;
-          uint8_t addr_type;
-          get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &dev_type, &addr_type);
+          auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
 
-          if ((pairing_cb.state == BT_BOND_STATE_BONDING) && (dev_type == BT_DEVICE_TYPE_DUMO) &&
-              (addr_type == BLE_ADDR_PUBLIC) &&
+          if ((pairing_cb.state == BT_BOND_STATE_BONDING) && (dev_info.device_type == BT_DEVICE_TYPE_DUMO) &&
+              (dev_info.addr_type == BLE_ADDR_PUBLIC) &&
               !btm_sec_is_a_bonded_dev_by_transport(bd_addr, BT_TRANSPORT_LE)) {
             btif_storage_remove_bonded_device(bd_addr);
             status = BT_STATUS_AUTH_FAILURE;
@@ -4190,6 +4237,22 @@ static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool consent
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "SSP ble request",
                  consent ? "PairingVariant::CONSENT" : "PairingVariant::PARTICIPATION");
 
+  // Skip for PARTICIPATION, as the algorithm is not final yet and is NONE, so downgrade check is
+  // not applicable.
+  if (pairing_cb.pairing_type.variant != PairingVariant::PARTICIPATION) {
+    // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+    // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+    // doesn't store variant, and have nothing for BLE only devices.
+    std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
+    if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+        compare_pairing_type_for_downgrade(existing_pairing_type.value(),
+                                           pairing_cb.pairing_type)) {
+      // Reject the re-pairing.
+      btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
+      return;
+    }
+  }
+
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
           bd_addr, pairing_cb.pairing_type.variant, 0,
           map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_LE));
@@ -4230,6 +4293,16 @@ static void btif_dm_ble_passkey_req_evt(tBTA_DM_PIN_REQ* p_passkey_req) {
 
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "PIN request",
                  std::format("name:'{}'", reinterpret_cast<char const*>(bd_name.name)));
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_pin_reply(bd_addr, /*accept=*/0, 0, bt_pin_code_t{});
+    return;
+  }
 
   GetInterfaceToProfiles()->events->invoke_pin_request_cb(
           bd_addr, bd_name, cod, false,
@@ -4257,6 +4330,16 @@ static void btif_dm_ble_key_nc_req_evt(tBTA_DM_SP_KEY_NOTIF* p_notif_req) {
 
   BTM_LogHistory(kBtmLogTagCallback, bd_addr, "Ssp request",
                  std::format("passkey:{}", p_notif_req->passkey));
+  // Check for a downgrade? If yes, do not send to the user for approval and instead reject it.
+  // TODO (b/476882345): Query from device record (instead of persistent storage), currently it
+  // doesn't store variant, and have nothing for BLE only devices.
+  std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
+  if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
+    // Reject the re-pairing.
+    btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
+    return;
+  }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
           bd_addr, pairing_cb.pairing_type.variant, p_notif_req->passkey,
@@ -4489,24 +4572,28 @@ void btif_debug_bond_event_dump(int fd) {
         break;
     }
 
-    const char* bond_state;
-    switch (event->state) {
-      case BT_BOND_STATE_NONE:
-        bond_state = "BOND_STATE_NONE";
-        break;
-      case BT_BOND_STATE_BONDING:
-        bond_state = "BOND_STATE_BONDING";
-        break;
-      case BT_BOND_STATE_BONDED:
-        bond_state = "BOND_STATE_BONDED";
-        break;
-      default:
-        bond_state = "Invalid bond state";
-        break;
-    }
-
     dprintf(fd, "  %s  %s  %s  %s\n", eventtime,
-            event->bd_addr.ToRedactedStringForLogging().c_str(), func_name, bond_state);
+            event->bd_addr.ToRedactedStringForLogging().c_str(), func_name,
+            bt_bond_state_text(event->state).c_str());
+  }
+
+  // Dump pairing state
+  if (is_bonding_or_sdp()) {
+    dprintf(fd,
+            "\nPairing state:%s device:%s[%s] bond_type:%s is_locally_initiated:%s io_cap:%s "
+            "is_ssp:%s is_le_only:%s is_le_nc:%s sdp_attempts:%d is_ctkd:%s pairing_type:%s "
+            "gatt_over_le:%s sdp_over_classic:%s\n",
+            bt_bond_state_text(pairing_cb.state).c_str(),
+            pairing_cb.bd_addr.ToRedactedStringForLogging().c_str(),
+            pairing_cb.static_bdaddr.ToRedactedStringForLogging().c_str(),
+            bond_type_text(pairing_cb.bond_type).c_str(),
+            pairing_cb.is_local_initiated ? "true" : "false",
+            BtIoCapText(pairing_cb.io_cap).c_str(), pairing_cb.is_ssp ? "true" : "false",
+            pairing_cb.is_le_only ? "true" : "false", pairing_cb.is_le_nc ? "true" : "false",
+            pairing_cb.sdp_attempts, pairing_cb.is_ctkd ? "true" : "false",
+            pairing_type_text(pairing_cb.pairing_type).c_str(),
+            ServiceDiscoveryStateText(pairing_cb.gatt_over_le).c_str(),
+            ServiceDiscoveryStateText(pairing_cb.sdp_over_classic).c_str());
   }
 }
 
