@@ -32,15 +32,21 @@
  std::string uuid::getUuidName(const bluetooth::Uuid& uuid) {
    switch (uuid.As16Bit()) {
      case kVaeNameCharacteristic16bit:
-       return "VAE Name";
+       return "Voice Assistant Name";
      case kVaeUuidCharacteristic16bit:
-       return "VAE UUID";
+       return "Voice Assistant UUID";
      case kVaeControlPointCharacteristic16bit:
-       return "VAE Control Point";
+       return "Voice Assistant Service Control Point";
      case kVaeCcidCharacteristic16bit:
        return "VAE CCID";
      case kVaSessionStateCharacteristic16bit:
-       return "VA Session State";
+       return "Voice Assistant Session State";
+     case kVaSessionFlagCharacteristic16bit:
+       return "Voice Assistant Session Flag";
+     case kVaSupportedLanguagesCharacteristic16bit:
+       return "Voice Assistant Supported Languages";
+     case kVaSupportedFeaturesCharacteristic16bit:
+       return "Voice Assistant Supported Features";
      case kClientCharacteristicConfiguration16bit:
        return "Client Characteristic Configuration";
      default:
@@ -160,6 +166,9 @@
      case kVaeControlPointCharacteristic16bit:
      case kVaeCcidCharacteristic16bit:
      case kVaSessionStateCharacteristic16bit:
+     case kVaSessionFlagCharacteristic16bit:
+     case kVaSupportedLanguagesCharacteristic16bit:
+     case kVaSupportedFeaturesCharacteristic16bit:
        return true;
      default:
        return false;

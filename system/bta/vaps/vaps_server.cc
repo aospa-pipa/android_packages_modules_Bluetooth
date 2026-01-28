@@ -56,6 +56,8 @@
 
  static uint8_t kVapsCcid = 0;
  static uint8_t kVaSupportedFeatures = 0;
+ static uint8_t kVaSessionFlag = 0;
+ static std::string kVaSupportedLanguages = "";
 
  class VapsServerImpl : public bluetooth::vaps::VapsServer {
  public:
@@ -466,6 +468,7 @@
      // VAPS service
      btgatt_db_element_t vaps_service;
      vaps_service.uuid = kVapsService;
+     log::info("uuid={}", vaps_service.uuid);
      vaps_service.type = BTGATT_DB_PRIMARY_SERVICE;
      service.push_back(vaps_service);
 
@@ -527,6 +530,28 @@
      service.push_back(ccc_descriptor);
 
      if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+       // VA Session Flag characteristic
+       btgatt_db_element_t va_session_flag_characteristic;
+       va_session_flag_characteristic.uuid = kVaSessionFlagCharacteristic;
+       va_session_flag_characteristic.type = BTGATT_DB_CHARACTERISTIC;
+       va_session_flag_characteristic.properties =
+            (GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
+       va_session_flag_characteristic.permissions = GATT_PERM_READ_ENCRYPTED;
+       service.push_back(va_session_flag_characteristic);
+       //CCC descriptor for VA Session Flag characteristic
+       service.push_back(ccc_descriptor);
+
+       // VA Supported Languages characteristic
+       btgatt_db_element_t va_supported_lang_characteristic;
+       va_supported_lang_characteristic.uuid = kVaSupportedLanguagesCharacteristic;
+       va_supported_lang_characteristic.type = BTGATT_DB_CHARACTERISTIC;
+       va_supported_lang_characteristic.properties =
+            (GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
+       va_supported_lang_characteristic.permissions = GATT_PERM_READ_ENCRYPTED;
+       service.push_back(va_supported_lang_characteristic);
+       //CCC descriptor for VA Supported Languages characteristic
+       service.push_back(ccc_descriptor);
+
        // VA Supported Features characteristic
        btgatt_db_element_t va_supported_features_characteristic;
        va_supported_features_characteristic.uuid = kVaSupportedFeaturesCharacteristic;
@@ -603,6 +628,19 @@
        case kVaSessionStateCharacteristic16bit: {
          p_msg.attr_value.len = 1;
          memcpy(p_msg.attr_value.value, &va_session_state_, sizeof(uint8_t));
+       } break;
+       case kVaSessionFlagCharacteristic16bit: {
+         p_msg.attr_value.len = 1;
+         memcpy(p_msg.attr_value.value, &kVaSessionFlag, sizeof(uint8_t));
+       } break;
+       case kVaSupportedLanguagesCharacteristic16bit: {
+        std::vector<uint8_t> languages(kVaSupportedLanguages.begin(), kVaSupportedLanguages.end());
+        size_t copy_len = 0;
+        if (offset < languages.size()) {
+          copy_len = std::min((size_t)(languages.size() - offset), (size_t)remote_client->mtu_);
+          memcpy(p_msg.attr_value.value, languages.data() + offset, copy_len);
+        }
+        p_msg.attr_value.len = copy_len;
        } break;
        case kVaSupportedFeaturesCharacteristic16bit: {
          p_msg.attr_value.len = 1;
@@ -729,6 +767,8 @@
      stream << "    VAE Name: " << +vae_name_.c_str() << "\n"
             << "    VA Session State: " << +GetVaSessionStateText(va_session_state_).c_str()<< "\n"
             << "    VAPS CCID: " << +kVapsCcid << "\n"
+            << "    VA Session Flag: " << +kVaSessionFlag << "\n"
+            << "    VA Supported Languages: " << +kVaSupportedLanguages.c_str() << "\n"
             << "    VA Supported Features: " << +kVaSupportedFeatures << "\n"
             << "    VAPS GATT Server IF: " << +server_if_ << "\n";
      for (auto& [address, remote_client] : remote_clients_) {
