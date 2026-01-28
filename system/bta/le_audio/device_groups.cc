@@ -1863,49 +1863,6 @@ void LeAudioDeviceGroup::CigConfiguration::GenerateCisIds(LeAudioContextType con
     return;
   }
 
-  uint8_t cis_count_bidir = 0;
-  uint8_t cis_count_unidir_sink = 0;
-  uint8_t cis_count_unidir_source = 0;
-  auto group_contexts = group_->GetLatestAvailableContexts();
-  GetCisCount(context_type, cis_count_bidir, cis_count_unidir_sink, cis_count_unidir_source,
-              group_->GetConfiguration(context_type), group_contexts);
-
-  uint8_t idx = 0;
-  while (cis_count_bidir > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_BIDIRECTIONAL,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_bidir--;
-    idx++;
-  }
-
-  while (cis_count_unidir_sink > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SINK,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_unidir_sink--;
-    idx++;
-  }
-
-  while (cis_count_unidir_source > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SOURCE,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_unidir_source--;
-    idx++;
-  }
   cises = generate_expected_cis_ids(context_type);
 }
 
