@@ -604,7 +604,7 @@ public:
     }
 
     if(stack_config_get_interface()->get_pts_bcs_rej_write_req() && ccc_value == 0x0001) {
-      BTA_GATTS_SendRsp(conn_id, p_data->req_data.trans_id, WRITE_REJECTED, &p_msg);
+      BTA_GATTS_SendRsp(conn_id, p_data->req_data.trans_id, GATT_WRITE_REQ_REJECTED, &p_msg);
       return;
     }
     trackers_[remote_bda].ccc_values_[characteristic->uuid_] = ccc_value;
