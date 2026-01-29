@@ -136,22 +136,19 @@ void bta_dm_remote_key_missing(const RawAddress bd_addr, tBTM_KEY_MISSING_REASON
 }
 
 /** Bonds with peer device */
-void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                 tBT_DEVICE_TYPE device_type) {
-  log::debug("Bonding with peer device:{} type:{} transport:{} type:{}", bd_addr,
-             AddressTypeText(addr_type), bt_transport_text(transport), DeviceTypeText(device_type));
+void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
+  log::debug("Bonding with peer device:{} type:{} transport:{}", bd_addr,
+             AddressTypeText(addr_type), bt_transport_text(transport));
 
-  tBTA_DM_SEC sec_event;
-
-  tBTM_STATUS status = get_btm_client_interface().security.BTM_SecBond(bd_addr, addr_type,
-                                                                       transport, device_type);
+  tBTM_STATUS status =
+          get_btm_client_interface().security.BTM_SecBond(bd_addr, addr_type, transport);
 
   if (status == tBTM_STATUS::BTM_BUSY) {
     tBTA_DM_API_BOND* p_msg = (tBTA_DM_API_BOND*)osi_malloc(sizeof(tBTA_DM_API_BOND));
     if (p_msg) {
       p_msg->bd_addr = bd_addr;
       p_msg->addr_type = addr_type;
-      p_msg->device_type = device_type;
+      p_msg->device_type = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr).device_type;
       p_msg->transport = transport;
       log::warn("Queueing bond request as RNR might be active");
       alarm_set_on_mloop(bta_dm_cb.bond_retrail_timer, BTA_DM_BOND_TIMER_RETRIAL_MS,
@@ -161,8 +158,8 @@ void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSP
   }
 
   // TODO (b/440298497): If the link exist with the bd_addr device, disconnect it now, as per status
-  if (bta_dm_sec_cb.p_sec_cback && (status != tBTM_STATUS::BTM_CMD_STARTED)) {
-    memset(&sec_event, 0, sizeof(tBTA_DM_SEC));
+  if (bta_dm_sec_cb.p_sec_cback && status != tBTM_STATUS::BTM_CMD_STARTED) {
+    tBTA_DM_SEC sec_event = {};
     sec_event.auth_cmpl.bd_addr = bd_addr;
     bd_name_from_char_pointer(sec_event.auth_cmpl.bd_name,
                               get_btm_client_interface().security.BTM_SecReadDevName(bd_addr));
@@ -356,8 +353,10 @@ static tBTM_STATUS bta_dm_new_link_key_cback(const RawAddress& bd_addr, DEV_CLAS
   sec_event.auth_cmpl.fail_reason = HCI_SUCCESS;
 
   // Report the BR link key based on the BR/EDR address and type
-  get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &sec_event.auth_cmpl.dev_type,
-                                                  &sec_event.auth_cmpl.addr_type);
+  auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
+  sec_event.auth_cmpl.dev_type = dev_info.device_type;
+  sec_event.auth_cmpl.addr_type = dev_info.addr_type;
+
   if (bta_dm_sec_cb.p_sec_cback) {
     bta_dm_sec_cb.p_sec_cback(event, &sec_event);
   }
@@ -395,8 +394,9 @@ static void bta_dm_authentication_complete_cback(const RawAddress& bd_addr,
       bd_name_copy(sec_event.auth_cmpl.bd_name, bd_name);
 
       // Report the BR link key based on the BR/EDR address and type
-      get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &sec_event.auth_cmpl.dev_type,
-                                                      &sec_event.auth_cmpl.addr_type);
+      auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
+      sec_event.auth_cmpl.dev_type = dev_info.device_type;
+      sec_event.auth_cmpl.addr_type = dev_info.addr_type;
       sec_event.auth_cmpl.fail_reason = reason;
 
       bta_dm_sec_cb.p_sec_cback(BTA_DM_AUTH_CMPL_EVT, &sec_event);
@@ -826,10 +826,11 @@ static tBTM_STATUS bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda
       bta_dm_sec_cb.p_sec_cback(BTA_DM_BLE_KEY_EVT, &sec_event);
       break;
 
-    case BTM_LE_COMPLT_EVT:
+    case BTM_LE_COMPLT_EVT: {
+      auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bda);
       sec_event.auth_cmpl.bd_addr = bda;
-      get_btm_client_interface().peer.BTM_ReadDevInfo(bda, &sec_event.auth_cmpl.dev_type,
-                                                      &sec_event.auth_cmpl.addr_type);
+      sec_event.auth_cmpl.dev_type = dev_info.device_type;
+      sec_event.auth_cmpl.addr_type = dev_info.addr_type;
       bd_name_from_char_pointer(sec_event.auth_cmpl.bd_name,
                                 get_btm_client_interface().security.BTM_SecReadDevName(bda));
 
@@ -868,8 +869,7 @@ static tBTM_STATUS bta_dm_ble_smp_cback(tBTM_LE_EVT event, const RawAddress& bda
       if (bta_dm_sec_cb.p_ble_auth_cmpl_cback) {
         bta_dm_sec_cb.p_ble_auth_cmpl_cback(BTA_DM_BLE_AUTH_CMPL_EVT, &sec_event);
       }
-
-      break;
+    } break;
 
     case BTM_LE_ADDR_ASSOC_EVT:
       sec_event.proc_id_addr.pairing_bda = bda;
@@ -1121,8 +1121,7 @@ static void bta_dm_bond_retrail_cback(void* data) {
   tBT_TRANSPORT transport = p_msg->transport;
   tBT_DEVICE_TYPE device_type = p_msg->device_type;
 
-  tBTM_STATUS status = get_btm_client_interface().security.BTM_SecBond(bd_addr, addr_type,
-                                                                       transport, device_type);
+  tBTM_STATUS status = get_btm_client_interface().security.BTM_SecBond(bd_addr, addr_type, transport);
 
   if (bta_dm_sec_cb.p_sec_cback && (status != tBTM_STATUS::BTM_CMD_STARTED)) {
     memset(&sec_event, 0, sizeof(tBTA_DM_SEC));

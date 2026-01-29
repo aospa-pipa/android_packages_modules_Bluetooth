@@ -144,7 +144,7 @@
        uint16_t ccc_va_session_state = remote_client.ccc_values_[kVaSessionStateCharacteristic];
        log::info("device:{}", bda);
 
-       if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+       if (true /*com_android_bluetooth_flags_leaudio_vaps_improvements()*/) {
          uint16_t ccc_vae_name = remote_client.ccc_values_[kVaeNameCharacteristic];
          uint16_t ccc_vae_uuid = remote_client.ccc_values_[kVaeUuidCharacteristic];
          // Send VA Name notification
@@ -183,7 +183,7 @@
        // Send VAE Control Point notification
        SendVaeControlPointNotification(remote_client, rsp_code_value, ccc_vae_control_point);
 
-       if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+       if (true /*com_android_bluetooth_flags_leaudio_vaps_improvements()*/) {
          int group_id;
          auto csis_api = CsisClient::Get();
          if (csis_api == nullptr) {
@@ -529,7 +529,7 @@
      // CCC descriptor for VA Session State characteristic
      service.push_back(ccc_descriptor);
 
-     if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+     if (true /*com_android_bluetooth_flags_leaudio_vaps_improvements()*/) {
        // VA Session Flag characteristic
        btgatt_db_element_t va_session_flag_characteristic;
        va_session_flag_characteristic.uuid = kVaSessionFlagCharacteristic;
@@ -793,7 +793,7 @@
      uint16_t ccc_vae_control_point = GATT_CLT_CONFIG_NONE;
      VaSessionState va_session_state = GetVaSessionState();
 
-     if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+     if (true /*com_android_bluetooth_flags_leaudio_vaps_improvements()*/) {
        ccc_vae_control_point = remote_client->ccc_values_[kVaeControlPointCharacteristic];
        if (ccc_vae_control_point == GATT_CLT_CONFIG_NONE) {
          log::warn(" VAE Control Point CCCD not configured by remote client, ignore the command");

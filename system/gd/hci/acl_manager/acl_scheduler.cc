@@ -279,6 +279,7 @@ private:
       // log the reasons on why we're not sending the next operation
       log_try_dequeue_next_operation();
     }
+    log::info("Exit, outgoing_entry_.has_value() : {}", outgoing_entry_.has_value());
   }
 
   template <typename T, typename U, typename V>

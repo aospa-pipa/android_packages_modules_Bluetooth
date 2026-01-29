@@ -7726,7 +7726,7 @@ public:
           HandlePendingDeviceDisconnection(group);
         }
 
-        if (com_android_bluetooth_flags_leaudio_vaps_improvements()) {
+        if (true /*com_android_bluetooth_flags_leaudio_vaps_improvements()*/) {
           log::info(" Status Idle: NotifyVaSessionStopped");
           if (group) {
             bluetooth::vaps::GetVapsServer()->NotifyVaSessionStopped(
