@@ -1608,11 +1608,31 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             Log.d(TAG, "a2dpFallbackDevice: " + a2dpFallbackDevice);
         }
 
+        if (mA2dpActiveDevice != null &&
+                !Objects.equals(mA2dpActiveDevice, recentlyRemovedDevice)) {
+            if (a2dp.isPresent() &&
+                    a2dp.get().getConnectionState(mA2dpActiveDevice) ==
+                        BluetoothProfile.STATE_CONNECTED) {
+                Log.d(TAG, "Use current A2DP active device as fallback: " + mA2dpActiveDevice);
+                a2dpFallbackDevice = mA2dpActiveDevice;
+            }
+        }
+
         final var headset = mAdapterService.getHeadsetService();
         BluetoothDevice headsetFallbackDevice = null;
         if (headset.isPresent()) {
             headsetFallbackDevice = headset.get().getFallbackDevice();
             Log.d(TAG, "headsetFallbackDevice: " + headsetFallbackDevice);
+        }
+
+        if (mHfpActiveDevice != null &&
+                !Objects.equals(mHfpActiveDevice, recentlyRemovedDevice)) {
+            if (headset.isPresent() &&
+                    headset.get().getConnectionState(mHfpActiveDevice) ==
+                        BluetoothProfile.STATE_CONNECTED) {
+                Log.d(TAG, "Use current HFP active device as fallback: " + mHfpActiveDevice);
+                headsetFallbackDevice = mHfpActiveDevice;
+            }
         }
 
         List<BluetoothDevice> connectedDevices = new ArrayList<>();
