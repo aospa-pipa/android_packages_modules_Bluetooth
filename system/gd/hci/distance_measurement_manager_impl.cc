@@ -463,10 +463,12 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
 
     if(cs_requester_trackers_.find(connection_handle) != cs_requester_trackers_.end()) {
       auto it = cs_requester_trackers_.find(connection_handle);
-      if(it->second.state == CsTrackerState::HOLD) {
-          log::warn("Cs tracker on hold and params removed");
+      if(it->second.state == CsTrackerState::HOLD || it->second.state == CsTrackerState::STOPPED) {
+          log::warn("Cs tracker on hold/stopped and params removed");
           set_cs_params_.erase(connection_handle);
       }
+    } else {
+      set_cs_params_.erase(connection_handle);
     }
     tCS_PROCEDURE_PARAM cs_proc_setting;
     tCS_CONFIG cs_config_setting;
@@ -556,7 +558,7 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
       cs_requester_trackers_[connection_handle] = CsTracker();
       it = cs_requester_trackers_.find(connection_handle);
     }
-    if (it->second.state != CsTrackerState::STOPPED) {
+    if (it->second.state != CsTrackerState::STOPPED && it->second.state != CsTrackerState::HOLD) {
       it->second.requester_metrics_->app_uids.push_back(app_uid);
       it->second.requester_metrics_->measurement_interval_ms.push_back(interval_ms);
       log::info("reuse the current ongoing session");
@@ -1954,6 +1956,12 @@ struct DistanceMeasurementManagerImpl::impl : bluetooth::hal::RangingHalCallback
         uint8_t valid_responder_states = static_cast<uint8_t>(CsTrackerState::STARTED);
         live_tracker = get_live_tracker(connection_handle, config_id, valid_requester_states,
                                         valid_responder_states);
+        if (live_tracker == nullptr) {
+          auto it = cs_requester_trackers_.find(connection_handle);
+          if (it != cs_requester_trackers_.end() && it->second.state == CsTrackerState::HOLD) {
+            live_tracker = &it->second;
+          }
+        }
         if (live_tracker == nullptr) {
           log::error("disable - no tracker is available for {}", connection_handle);
           procedure_disable_in_progress = false;
