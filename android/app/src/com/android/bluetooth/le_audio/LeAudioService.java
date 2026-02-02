@@ -3828,6 +3828,36 @@ public class LeAudioService extends ConnectableProfile {
             return true;
         }
 
+        if ((previous.getOutputCodecConfig() == null) && (next.getOutputCodecConfig() == null)) {
+            /* Nothing changed here.*/
+            return false;
+        }
+
+        if ((previous.getOutputCodecConfig() == null || next.getOutputCodecConfig() == null)) {
+            Log.d(
+                    TAG,
+                    "New output codec: "
+                            + (previous.getOutputCodecConfig()
+                                    + " != "
+                                    + next.getOutputCodecConfig()));
+            return true;
+        }
+
+        if ((previous.getInputCodecConfig() == null) && (next.getInputCodecConfig() == null)) {
+            /* Nothing changed here.*/
+            return false;
+        }
+
+        if ((previous.getInputCodecConfig() == null || next.getInputCodecConfig() == null)) {
+            Log.d(
+                    TAG,
+                    "New input codec: "
+                            + (previous.getOutputCodecConfig()
+                                    + " != "
+                                    + next.getOutputCodecConfig()));
+            return true;
+        }
+
         if (previous.getOutputCodecConfig().getCodecType()
                         != next.getOutputCodecConfig().getCodecType()
                 && previous.getOutputCodecConfig().getCodecType()
