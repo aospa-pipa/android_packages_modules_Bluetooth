@@ -833,6 +833,10 @@ void HciLayer::EnqueueCommand(unique_ptr<CommandBuilder> command,
 void HciLayer::EnqueueCommand(
         unique_ptr<CommandBuilder> command,
         ContextualOnceCallback<void(CommandStatusOrCompleteView)> on_status_or_complete) {
+  std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
+  if (life_cycle_stopped) {
+    return;
+  }
   impl_->handler_->CallOn(impl_, &impl::enqueue_command<CommandStatusOrCompleteView>,
                           std::move(command), std::move(on_status_or_complete));
 }
@@ -1187,10 +1191,12 @@ void HciLayer::StopWithNoHalDependencies() {
 HciLayer::~HciLayer() {
   std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
   life_cycle_stopped = true;
+
   if (!impl_) {
     return;
   }
 
+  impl_->command_queue_.clear();
   impl_->hal_->unregisterIncomingPacketCallback();
   delete hal_callbacks_;
 
