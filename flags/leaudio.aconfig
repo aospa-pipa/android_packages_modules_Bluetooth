@@ -2,6 +2,16 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
+    name: "leaudio_csis_handle_misconfigured_sets"
+    namespace: "bluetooth"
+    description: "Disconnect CSIS from devices which has invalid SIRK"
+    bug: "478807871"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "leaudio_improve_state_machine_invalid_status"
     namespace: "bluetooth"
     description: "Improve handling state machine internal invalid status"
@@ -418,4 +428,14 @@ flag {
     namespace: "bluetooth"
     description: "Make TMAP GATT service centralized for central and peripheral Bluetooth services"
     bug: "477546285"
+}
+
+flag {
+    name: "leaudio_allowlist_refactor"
+    namespace: "bluetooth"
+    description: "Refactor LE Audio allowlist to increase device capacity"
+    bug: "477447231"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
 }
