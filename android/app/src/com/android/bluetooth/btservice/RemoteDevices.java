@@ -61,6 +61,7 @@ import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfp.HeadsetHalConstants;
+import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.PrintWriter;
@@ -99,6 +100,10 @@ public class RemoteDevices {
     private final HashMap<String, String> mAddressMap =
             new HashMap<>(); // Identity address to pseudo address map
     private final WatchConnectionStateListener mWatchConnectionStateListener;
+
+    record AclLinkSpec(BluetoothDevice device, int transport) {}
+
+    private final Set<AclLinkSpec> mConnectedDevices = new HashSet<AclLinkSpec>();
 
     /**
      * Bluetooth HFP v1.8 specifies the Battery Charge indicator of AG can take values from {@code
@@ -228,6 +233,7 @@ public class RemoteDevices {
         }
 
         mAddressMap.clear();
+        mConnectedDevices.clear();
     }
 
     @Override
@@ -250,6 +256,10 @@ public class RemoteDevices {
         }
     }
 
+    Set<AclLinkSpec> getConnectedDevices() {
+        return Collections.unmodifiableSet(mConnectedDevices);
+    }
+
     int getBondState(BluetoothDevice device) {
         DeviceProperties deviceProp = getDeviceProperties(device);
         if (deviceProp == null) {
@@ -258,7 +268,7 @@ public class RemoteDevices {
         return deviceProp.getBondState();
     }
 
-    String getName(BluetoothDevice device) {
+    public String getName(BluetoothDevice device) {
         DeviceProperties deviceProp = getDeviceProperties(device);
         if (deviceProp == null) {
             return null;
@@ -1718,6 +1728,10 @@ public class RemoteDevices {
         Intent intent = null;
         if (newState == AbstractionLayer.BT_ACL_STATE_CONNECTED) {
             deviceProperties.setConnected(transport, handle);
+            if (Flags.leHidConnectionPolicySuspend()) {
+                mConnectedDevices.add(new AclLinkSpec(device, transport));
+            }
+
             if (Flags.fixIntentSelectionForAcl()
                     || state == State.ON
                     || state == State.TURNING_ON) {
@@ -1740,6 +1754,9 @@ public class RemoteDevices {
                     "");
         } else {
             deviceProperties.setDisconnected(transport);
+            if (Flags.leHidConnectionPolicySuspend()) {
+                mConnectedDevices.remove(new AclLinkSpec(device, transport));
+            }
             if (getBondState(device) == BluetoothDevice.BOND_BONDING) {
                 // Send PAIRING_CANCEL intent to dismiss any dialog requesting bonding.
                 sendPairingCancelIntent(device);

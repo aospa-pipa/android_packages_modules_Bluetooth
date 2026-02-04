@@ -298,6 +298,10 @@ public class AdapterNativeInterface {
         return restoreFilterAcceptListNative();
     }
 
+    boolean setSuspendState(boolean suspend) {
+        return setSuspendStateNative(suspend);
+    }
+
     private native boolean initNative(
             boolean startRestricted,
             boolean isCommonCriteriaMode,
@@ -426,4 +430,6 @@ public class AdapterNativeInterface {
     private native boolean allowWakeByHidNative();
 
     private native boolean restoreFilterAcceptListNative();
+
+    private native boolean setSuspendStateNative(boolean suspend);
 }
