@@ -167,6 +167,7 @@ import com.android.bluetooth.le_scan.ScanUtil;
 import com.android.bluetooth.map.BluetoothMapService;
 import com.android.bluetooth.mapclient.MapClientService;
 import com.android.bluetooth.mcp.McpService;
+import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.bluetooth.notification.NotificationHelperService;
 import com.android.bluetooth.opp.BluetoothOppService;
 import com.android.bluetooth.pan.PanService;
@@ -2427,6 +2428,9 @@ public class AdapterService extends Service {
                 () ->
                         mAdapterProperties.updateOnProfileConnectionChanged(
                                 device, profile, state, prevState));
+        if (Flags.adapterSuspendMgmt() && Flags.leHidConnectionPolicySuspend()) {
+            mAdapterSuspend.profileConnectionStateChanged(profile, device, prevState, state);
+        }
     }
 
     /**
@@ -3894,6 +3898,11 @@ public class AdapterService extends Service {
             setDeviceDisconnectReason(device, reason);
         }
 
+        if (Util.isTv(this)) {
+            mNativeInterface.disconnectAllAcls(device);
+            return BluetoothStatusCodes.SUCCESS;
+        }
+
         if (!profileServicesRunning()) {
             Log.e(TAG, "disconnectAllEnabledProfiles: Not all profile services bound");
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
@@ -4519,7 +4528,7 @@ public class AdapterService extends Service {
         return false;
     }
 
-    List<BluetoothDevice> getConnectedMediaDevices(int profile) {
+    List<BluetoothDevice> getConnectedDevicesForProfile(int profile) {
         List<BluetoothDevice> connectedDevices = new ArrayList<>();
         switch (profile) {
             case BluetoothProfile.A2DP -> {
@@ -4540,7 +4549,13 @@ public class AdapterService extends Service {
                     connectedDevices = leAudio.get().getConnectedDevices();
                 }
             }
-            default -> Log.e(TAG, "getConnectedMediaDevices: profile value is not valid");
+            case BluetoothProfile.HID_HOST -> {
+                final var hh = getHidHostService();
+                if (hh.isPresent()) {
+                    connectedDevices = hh.get().getConnectedDevices();
+                }
+            }
+            default -> Log.e(TAG, "getConnectedDevicesForProfile: profile value is not valid");
         }
         return connectedDevices;
     }
@@ -4554,6 +4569,9 @@ public class AdapterService extends Service {
      * for a given {@code transport}.
      */
     public void notifyAclDisconnected(BluetoothDevice device, int transport) {
+        if (Flags.leHidConnectionPolicySuspend() && Flags.adapterSuspendMgmt()) {
+            mAdapterSuspend.aclDisconnected(device, transport);
+        }
         getMapService().ifPresent(profile -> profile.aclDisconnected(device));
         getMapClientService().ifPresent(profile -> profile.aclDisconnected(device, transport));
         getSapService().ifPresent(profile -> profile.aclDisconnected(device));
@@ -4591,7 +4609,9 @@ public class AdapterService extends Service {
         mPhonePolicy.ifPresent(
                 policy ->
                         policy.profileConnectionStateChanged(profile, device, fromState, toState));
-        if (Flags.adapterSuspendMgmt()) {
+        if (Flags.adapterSuspendMgmt() && !Flags.leHidConnectionPolicySuspend()) {
+            // When leHidConnectionPolicySuspend is true, the function call below is done by
+            // updateProfileConnectionAdapterProperties, so it can be safely removed.
             mAdapterSuspend.profileConnectionStateChanged(profile, device, fromState, toState);
         }
         boolean mediaConnected = isMediaProfileConnected();
