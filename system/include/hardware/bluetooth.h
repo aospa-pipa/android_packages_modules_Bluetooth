@@ -58,7 +58,7 @@
 #define BT_PROFILE_PAN_ID "pan"
 #define BT_PROFILE_SDP_CLIENT_ID "sdp"
 #define BT_PROFILE_SOCKETS_ID "socket"
-#define BT_PROFILE_VAPS_SERVER_ID "vaps_server"
+#define BT_PROFILE_VAP_SERVER_ID "vap_server"
 #define BT_PROFILE_VCP_CONTROLLER_ID "volume_control"
 #define BT_PROFILE_VCP_RENDERER_ID "vcp_renderer"
 
@@ -723,8 +723,9 @@ typedef void (*pin_request_callback)(RawAddress remote_bd_addr, bt_bdname_t* bd_
  *  BT_SSP_PAIRING_PASSKEY_ENTRY */
 /* TODO: Passkey request callback shall not be needed for devices with display
  * capability. We still need support this in the stack for completeness */
-typedef void (*ssp_request_callback)(RawAddress remote_bd_addr, PairingVariant pairing_variant,
-                                     uint32_t pass_key, int pairing_algorithm);
+typedef void (*ssp_request_callback)(RawAddress remote_bd_addr, int transport,
+                                     PairingVariant pairing_variant, uint32_t pass_key,
+                                     int pairing_algorithm);
 
 /** Bluetooth Bond state changed callback */
 /* Invoked in response to create_bond, cancel_bond or remove_bond */

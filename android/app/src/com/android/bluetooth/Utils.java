@@ -24,7 +24,6 @@ import static android.content.pm.PackageManager.PERMISSION_GRANTED;
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
@@ -59,7 +58,6 @@ import java.nio.charset.CharsetDecoder;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -480,21 +478,6 @@ public final class Utils {
     }
 
     /**
-     * Checks that value is present as at least one of the elements of the array.
-     *
-     * @param array the array to check in
-     * @param value the value to check for
-     * @return true if the value is present in the array
-     */
-    public static <T> boolean arrayContains(@Nullable T[] array, T value) {
-        if (array == null) return false;
-        for (T element : array) {
-            if (Objects.equals(element, value)) return true;
-        }
-        return false;
-    }
-
-    /**
      * CCC descriptor short integer value to string.
      *
      * @param cccValue the short value of CCC descriptor
@@ -618,4 +601,3 @@ public final class Utils {
                 MAX_SUPPORTED_TX_POWER_DBM);
     }
 }
-
