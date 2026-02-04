@@ -110,6 +110,18 @@ struct BTA_dm_on_hw_on {
 };
 extern struct BTA_dm_on_hw_on BTA_dm_on_hw_on;
 
+// Name: BTA_dm_remove_on_disconnect
+// Params: const tAclLinkSpec& link_spec
+// Return: void
+struct BTA_dm_remove_on_disconnect {
+  std::function<void(const AclLinkSpec& link_spec)> body{
+          [](const AclLinkSpec& /* link_spec */) {}};
+  void operator()(const AclLinkSpec& link_spec) {
+    body(link_spec);
+  }
+};
+extern struct BTA_dm_remove_on_disconnect BTA_dm_remove_on_disconnect;
+
 // Name: BTA_dm_report_role_change
 // Params: const RawAddress bd_addr, tHCI_ROLE new_role, tHCI_STATUS hci_status
 // Return: void

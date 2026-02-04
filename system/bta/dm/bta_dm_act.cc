@@ -824,6 +824,13 @@ void BTA_dm_acl_down(const AclLinkSpec& link_spec) {
   do_in_main_thread(base::BindOnce(bta_dm_acl_down, link_spec));
 }
 
+void BTA_dm_remove_on_disconnect(const AclLinkSpec& link_spec) {
+  const RawAddress& bd_addr = link_spec.addrt.bda;
+  tBT_TRANSPORT transport = link_spec.transport;
+
+  do_in_main_thread(base::BindOnce(bta_dm_remove_on_disconnect, bd_addr, transport));
+}
+
 /*******************************************************************************
  *
  * Function         bta_dm_check_av
