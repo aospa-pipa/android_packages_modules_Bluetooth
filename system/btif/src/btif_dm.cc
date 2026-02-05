@@ -639,11 +639,7 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
   // TODO (b/472924859): Use appropriate pairing initiator value which will be passed through the
   // callers.
   PairingInitiator pairing_initiator = PairingInitiator::APP;
-  PairingType api_pairing_type = pairing_type;
-  // Update the pairing algorithm to the API pairing algorithm.
-  // Note: this value will only be useful for Java now.
-  api_pairing_type.algorithm = static_cast<PairingAlgorithm>(
-          map_pairing_algo_to_api(api_pairing_type.algorithm, transport));
+
   btif_stats_add_bond_event(bd_addr, BTIF_DM_FUNC_BOND_STATE_CHANGED, state);
 
   if (bond_loss_scenario) {
@@ -664,7 +660,7 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
               std::format("Crosskey bt_status:{} bond_state:{} reason:{}", bt_status_text(status),
                           state, hci_reason_code_text(to_hci_reason_code(pairing_cb.fail_reason))));
       GetInterfaceToProfiles()->events->invoke_bond_state_changed_cb(
-              status, bd_addr, transport, state, api_pairing_type, pairing_cb.fail_reason,
+              status, bd_addr, transport, state, pairing_type, pairing_cb.fail_reason,
               pairing_initiator);
     }
     return;
@@ -682,14 +678,14 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
           "2:bonded],prev_state={}, sdp_attempts={}, (native_)pairing_algorithm={}, "
           "(API_)pairing_algorithm={}",
           bd_addr, bt_transport_text(transport), state, pairing_cb.state, pairing_cb.sdp_attempts,
-          pairing_type.algorithm, api_pairing_type.algorithm);
+          pairing_type.algorithm, pairing_type.algorithm);
 
   if (bond_loss_scenario) {
     if (state == BT_BOND_STATE_BONDED) {
       bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::BOND_REPAIR_SUCCESS);
 
       // This indicates that re-pairing was successful, send the bond_state_change sequence.
-      btif_dm_repair_success_cb(bd_addr, transport, api_pairing_type, pairing_cb.fail_reason,
+      btif_dm_repair_success_cb(bd_addr, transport, pairing_type, pairing_cb.fail_reason,
                                 pairing_initiator);
     } else if (state == BT_BOND_STATE_NONE) {
       bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::BOND_REPAIR_FAILURE);
@@ -722,7 +718,7 @@ static void bond_state_changed(bt_status_t status, const RawAddress& bd_addr,
                  std::format("bt_status:{} bond_state:{} reason:{}", bt_status_text(status), state,
                              hci_reason_code_text(to_hci_reason_code(pairing_cb.fail_reason))));
   GetInterfaceToProfiles()->events->invoke_bond_state_changed_cb(
-          status, bd_addr, transport, state, api_pairing_type, pairing_cb.fail_reason,
+          status, bd_addr, transport, state, pairing_type, pairing_cb.fail_reason,
           pairing_initiator);
 
   if ((state == BT_BOND_STATE_NONE) && (pairing_cb.bd_addr != bd_addr) && is_bonding_or_sdp()) {
@@ -1169,6 +1165,7 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
   // doesn't store variant, and have nothing for BLE only devices.
   std::optional<PairingType> existing_pairing_type = btif_storage_get_bredr_pairing_type(bd_addr);
   if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      btm_is_bond_lost(bd_addr) &&
       compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
     // Reject the re-pairing.
     btif_dm_pin_reply(bd_addr, /*accept=*/0, 0, bt_pin_code_t{});
@@ -1177,7 +1174,7 @@ static void btif_dm_pin_req_evt(tBTA_DM_PIN_REQ* p_pin_req) {
 
   GetInterfaceToProfiles()->events->invoke_pin_request_cb(
           bd_addr, bd_name, cod, p_pin_req->min_16_digit,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 static tBTM_BOND_TYPE btif_dm_get_pairing_type(const RawAddress& bd_addr, const bool just_works,
@@ -1255,6 +1252,7 @@ static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   // doesn't store variant, and have nothing for BLE only devices.
   std::optional<PairingType> existing_pairing_type = btif_storage_get_bredr_pairing_type(bd_addr);
   if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      btm_is_bond_lost(bd_addr) &&
       compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
     // Reject the re-pairing.
     btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
@@ -1262,8 +1260,8 @@ static void btif_dm_ssp_cfm_req_evt(tBTA_DM_SP_CFM_REQ* p_ssp_cfm_req) {
   }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
-          bd_addr, pairing_cb.pairing_type.variant, p_ssp_cfm_req->num_val,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
+          bd_addr, BT_TRANSPORT_BR_EDR, pairing_cb.pairing_type.variant, p_ssp_cfm_req->num_val,
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 static void btif_dm_ssp_key_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif) {
@@ -1305,8 +1303,8 @@ static void btif_dm_ssp_key_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif) {
   }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
-          bd_addr, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_BR_EDR));
+          bd_addr, BT_TRANSPORT_BR_EDR, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 /*******************************************************************************
@@ -2116,7 +2114,7 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
       log::warn("SDP failed after bonding re-attempting for {}", bd_addr);
       pairing_cb.sdp_attempts++;
       bluetooth::metrics::LogSDPComplete(bd_addr, result);
-      btif_dm_get_remote_services(bd_addr, BT_TRANSPORT_BR_EDR);
+      btif_dm_sdp_delay_timer(&bd_addr);
     } else {
       log::warn("SDP triggered by someone failed when bonding");
     }
@@ -3890,6 +3888,7 @@ static void btif_dm_ble_passkey_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif)
   // doesn't store variant, and have nothing for BLE only devices.
   std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
   if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      btm_is_bond_lost(bd_addr) &&
       compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
     // Reject the re-pairing.
     btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
@@ -3897,8 +3896,8 @@ static void btif_dm_ble_passkey_notif_evt(tBTA_DM_SP_KEY_NOTIF* p_ssp_key_notif)
   }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
-          bd_addr, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_LE));
+          bd_addr, BT_TRANSPORT_LE, pairing_cb.pairing_type.variant, p_ssp_key_notif->passkey,
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 static bool btif_dm_ble_is_temp_pairing(RawAddress& bd_addr, bool ctkd) {
@@ -4036,6 +4035,7 @@ static void btif_dm_ble_auth_cmpl_evt(tBTA_DM_AUTH_CMPL* p_auth_cmpl) {
       case BTA_DM_AUTH_SMP_PAIR_AUTH_FAIL:
       case BTA_DM_AUTH_SMP_CONFIRM_VALUE_FAIL:
       case BTA_DM_AUTH_SMP_UNKNOWN_ERR:
+      case BTA_DM_AUTH_SMP_UNSPECIFIED_FAIL:
         btif_dm_remove_ble_bonding_keys();
         status = BT_STATUS_AUTH_FAILURE;
         is_ble_keys_removed = true;
@@ -4245,6 +4245,7 @@ static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool consent
     // doesn't store variant, and have nothing for BLE only devices.
     std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
     if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+        btm_is_bond_lost(bd_addr) &&
         compare_pairing_type_for_downgrade(existing_pairing_type.value(),
                                            pairing_cb.pairing_type)) {
       // Reject the re-pairing.
@@ -4254,8 +4255,8 @@ static void btif_dm_ble_sec_req_evt(tBTA_DM_BLE_SEC_REQ* p_ble_req, bool consent
   }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
-          bd_addr, pairing_cb.pairing_type.variant, 0,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_LE));
+          bd_addr, BT_TRANSPORT_LE, pairing_cb.pairing_type.variant, 0,
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 /*******************************************************************************
@@ -4298,6 +4299,7 @@ static void btif_dm_ble_passkey_req_evt(tBTA_DM_PIN_REQ* p_passkey_req) {
   // doesn't store variant, and have nothing for BLE only devices.
   std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
   if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      btm_is_bond_lost(bd_addr) &&
       compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
     // Reject the re-pairing.
     btif_dm_pin_reply(bd_addr, /*accept=*/0, 0, bt_pin_code_t{});
@@ -4305,8 +4307,7 @@ static void btif_dm_ble_passkey_req_evt(tBTA_DM_PIN_REQ* p_passkey_req) {
   }
 
   GetInterfaceToProfiles()->events->invoke_pin_request_cb(
-          bd_addr, bd_name, cod, false,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_LE));
+          bd_addr, bd_name, cod, false, static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 static void btif_dm_ble_key_nc_req_evt(tBTA_DM_SP_KEY_NOTIF* p_notif_req) {
@@ -4335,6 +4336,7 @@ static void btif_dm_ble_key_nc_req_evt(tBTA_DM_SP_KEY_NOTIF* p_notif_req) {
   // doesn't store variant, and have nothing for BLE only devices.
   std::optional<PairingType> existing_pairing_type = btif_storage_get_ble_pairing_type(bd_addr);
   if (is_autonomous_repairing_supported() && existing_pairing_type.has_value() &&
+      btm_is_bond_lost(bd_addr) &&
       compare_pairing_type_for_downgrade(existing_pairing_type.value(), pairing_cb.pairing_type)) {
     // Reject the re-pairing.
     btif_dm_ssp_reply(bd_addr, PairingVariant::PASSKEY_CONFIRMATION, /*accept=*/0);
@@ -4342,8 +4344,8 @@ static void btif_dm_ble_key_nc_req_evt(tBTA_DM_SP_KEY_NOTIF* p_notif_req) {
   }
 
   GetInterfaceToProfiles()->events->invoke_ssp_request_cb(
-          bd_addr, pairing_cb.pairing_type.variant, p_notif_req->passkey,
-          map_pairing_algo_to_api(pairing_cb.pairing_type.algorithm, BT_TRANSPORT_LE));
+          bd_addr, BT_TRANSPORT_LE, pairing_cb.pairing_type.variant, p_notif_req->passkey,
+          static_cast<int>(pairing_cb.pairing_type.algorithm));
 }
 
 static void btif_dm_ble_oob_req_evt(tBTA_DM_SP_RMT_OOB* req_oob_type) {

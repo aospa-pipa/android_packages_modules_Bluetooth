@@ -1173,7 +1173,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     setA2dpActiveDevice(null, /* stopAudio= */ false);
                     setHfpActiveDevice(null);
                 } else {
-                    boolean isCsipSupported = Utils.arrayContains(mAdapterService.getRemoteUuids(device),
+                    boolean isCsipSupported = Util.arrayContains(mAdapterService.getRemoteUuids(device),
                                                        BluetoothUuid.COORDINATED_SET);
                     if (isCsipSupported) {
                        Log.d(TAG, "set A2dp and HFP active device as null for csip");

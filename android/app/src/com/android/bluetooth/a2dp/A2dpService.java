@@ -230,13 +230,13 @@ public class A2dpService extends ConnectableProfile {
             return false;
         }
 
-        if (!Utils.arrayContains(
+        if (!Util.arrayContains(
                 getAdapterService().getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have A2DP Sink UUID");
             return false;
         }
 
-        boolean isCsipSupported = Utils.arrayContains(getAdapterService().getRemoteUuids(device),
+        boolean isCsipSupported = Util.arrayContains(getAdapterService().getRemoteUuids(device),
                                                       BluetoothUuid.COORDINATED_SET);
         final var csipClient = getAdapterService().getCsipSetCoordinatorService();
         int CsipGroupSize = 1;
@@ -422,7 +422,7 @@ public class A2dpService extends ConnectableProfile {
         final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
         synchronized (mStateMachines) {
             for (BluetoothDevice device : bondedDevices) {
-                if (!Utils.arrayContains(
+                if (!Util.arrayContains(
                         getAdapterService().getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
                     continue;
                 }

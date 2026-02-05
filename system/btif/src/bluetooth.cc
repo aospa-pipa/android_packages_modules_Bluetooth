@@ -60,7 +60,7 @@
 #include "bta/include/bta_le_audio_api.h"
 #include "bta/include/bta_le_audio_broadcaster_api.h"
 #include "bta/include/bta_mcp_client_api.h"
-#include "bta/include/bta_vaps_server_api.h"
+#include "bta/include/bta_vap_server_api.h"
 #include "bta/include/bta_vcp_controller_api.h"
 #include "bta/include/bta_vcp_renderer_api.h"
 #include "btif/avrcp/avrcp_service.h"
@@ -360,6 +360,12 @@ struct CoreInterfaceImpl : bluetooth::core::CoreInterface {
 
     if (VolumeController::IsRunning()) {
       btif_vcp_controller_get_interface()->RemoveDevice(bd_addr);
+    }
+
+    if (com_android_bluetooth_flags_hap_keep_bonded_dev_in_ram()) {
+      if (bluetooth::le_audio::has::HasClient::IsHasClientRunning()) {
+        btif_has_client_get_interface()->RemoveDevice(bd_addr);
+      }
     }
   }
 
@@ -937,7 +943,7 @@ static void dump(int fd, const char** /*arguments*/) {
   ::bluetooth::mcp::McpClient::DebugDump(fd);
   VolumeController::DebugDump(fd);
   ::bluetooth::vcp::VolumeRenderer::DebugDump(fd);
-  bluetooth::vaps::GetVapsServer()->DebugDump(fd);
+  bluetooth::vap::GetVapServer()->DebugDump(fd);
   connection_manager::dump(fd);
   bluetooth::bqr::DebugDump(fd);
   AVCT_Dumpsys(fd);
@@ -1050,8 +1056,8 @@ static const void* get_profile_interface(const char* profile_id) {
     return btif_vendor_get_interface();
   }
 
-  if (is_profile(profile_id, BT_PROFILE_VAPS_SERVER_ID)) {
-    return btif_vaps_server_get_interface();
+  if (is_profile(profile_id, BT_PROFILE_VAP_SERVER_ID)) {
+    return btif_vap_server_get_interface();
   }
 
   if (is_profile(profile_id, BT_PROFILE_VCP_RENDERER_ID)) {
@@ -1372,15 +1378,15 @@ void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod
           bd_addr, bd_name, cod, min_16_digit, pairing_algorithm));
 }
 
-void invoke_ssp_request_cb(RawAddress bd_addr, PairingVariant pairing_variant, uint32_t pass_key,
-                           int pairing_algorithm) {
+void invoke_ssp_request_cb(RawAddress bd_addr, int transport, PairingVariant pairing_variant,
+                           uint32_t pass_key, int pairing_algorithm) {
   do_in_jni_thread(base::BindOnce(
-          [](RawAddress bd_addr, PairingVariant pairing_variant, uint32_t pass_key,
+          [](RawAddress bd_addr, int transport, PairingVariant pairing_variant, uint32_t pass_key,
              int pairing_algorithm) {
-            HAL_CBACK(bt_hal_cbacks, ssp_request_cb, bd_addr, pairing_variant, pass_key,
+            HAL_CBACK(bt_hal_cbacks, ssp_request_cb, bd_addr, transport, pairing_variant, pass_key,
                       pairing_algorithm);
           },
-          bd_addr, pairing_variant, pass_key, pairing_algorithm));
+          bd_addr, transport, pairing_variant, pass_key, pairing_algorithm));
 }
 
 void invoke_oob_data_request_cb(tBT_TRANSPORT t, bool valid, Octet16 c, Octet16 r,

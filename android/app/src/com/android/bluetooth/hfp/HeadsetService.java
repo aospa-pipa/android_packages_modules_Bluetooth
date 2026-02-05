@@ -632,7 +632,7 @@ public class HeadsetService extends ConnectableProfile {
             return false;
         }
 
-        boolean isCsipSupported = Utils.arrayContains(getAdapterService().getRemoteUuids(device),
+        boolean isCsipSupported = Util.arrayContains(getAdapterService().getRemoteUuids(device),
                                                       BluetoothUuid.COORDINATED_SET);
         final var csipClient = getAdapterService().getCsipSetCoordinatorService();
         int CsipGroupSize = 1;
