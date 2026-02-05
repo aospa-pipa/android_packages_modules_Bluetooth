@@ -2114,7 +2114,7 @@ static void btif_on_service_discovery_results(RawAddress bd_addr,
       log::warn("SDP failed after bonding re-attempting for {}", bd_addr);
       pairing_cb.sdp_attempts++;
       bluetooth::metrics::LogSDPComplete(bd_addr, result);
-      btif_dm_get_remote_services(bd_addr, BT_TRANSPORT_BR_EDR);
+      btif_dm_sdp_delay_timer(&bd_addr);
     } else {
       log::warn("SDP triggered by someone failed when bonding");
     }
