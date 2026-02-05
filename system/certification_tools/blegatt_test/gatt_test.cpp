@@ -143,6 +143,7 @@ static void register_server_cb(int status, int server_if, const Uuid& app_uuid);
 static unsigned char main_done = 0;
 static int status;
 
+
 bool sr_gaw_bi_09 = false;
 bool sr_gar_bi_13 = false;
 typedef struct {
@@ -170,7 +171,7 @@ static unsigned long g_delay = 1; /* Default delay before data transfer */
 static int count = 1;
 static uint16_t g_BleEncKeySize = 16;
 static int g_le_coc_if = 0;
-static int rcv_itration = 0;
+static int rcv_iteration = 0;
 static volatile bool cong_status = FALSE;
 static tL2CAP_LE_CONN_INFO le_conn_info;
 static tL2CAP_LE_CFG_INFO local_coc_cfg;
@@ -206,6 +207,7 @@ const btgap_interface_t* sGapInterface = NULL;
 const btl2cap_interface_t* sL2capInterface = NULL;
 const bthci_test_interface_t* sHciInterface = NULL; // New HCI interface
 const btvendor_interface_t* btvendorInterface = NULL;
+
 
 int Btif_gatt_layer = TRUE;
 RawAddress remote_bd_address;
@@ -1635,6 +1637,7 @@ void do_send_ble_set_data_length(char* p);
 void do_send_ble_set_default_phy(char* p);
 void do_send_refresh_enc_key_v2(char* p);
 void do_send_ble_set_data_length_v2(char* p);
+void reset_rcv_iteration(char* p);
 
 
 /*******************************************************************
@@ -1803,6 +1806,8 @@ const t_cmd console_cmd_list[] = {
      ":: handle(hex), hdt_mic_length(hex)", 0},
      {"btsnd_hcic_ble_set_data_length_v2", do_send_ble_set_data_length,
      ":: handle(hex) tx_pdu_length(hex) tx_time(hex) phys(hex)", 0},
+     {"reset_rcv_iteration", reset_rcv_iteration,
+     ":: ", 0},
 
     /* LE-L2CAP cmds */
     {" ", NULL, "\n\t\t\033[0m\033[34mLE L2CAP CoC Commands\033[0m", 0},
@@ -2236,18 +2241,18 @@ static void l2test_l2c_QoSViolationInd(const RawAddress& bd_addr) {
   printf("l2test_l2c_QoSViolationInd\n");
 }
 static void l2test_l2c_data_ind_cb(uint16_t lcid, BT_HDR* p_buf) {
-  rcv_itration++;
+  rcv_iteration++;
   printf(
       "l2test_l2c_data_ind_cb:: itration=%d, event=%u, len=%u, "
       "offset=%u, layer_specific=%u\n",
-      rcv_itration, p_buf->event, p_buf->len, p_buf->offset,
+      rcv_iteration, p_buf->event, p_buf->len, p_buf->offset,
       p_buf->layer_specific);
-  if (rcv_itration == 1) {
+  if (rcv_iteration == 1) {
     start = std::chrono::steady_clock::now();
   }
   auto end = std::chrono::steady_clock::now();
   auto elapsed_seconds = std::chrono::duration<double>(end - start).count();
-  int file_size = (rcv_itration - 1) * p_buf->len;
+  int file_size = (rcv_iteration - 1) * p_buf->len;
   double throughput = ((file_size * 8.0) / elapsed_seconds) / (1024.0 * 1024.0);
   printf("Throughput = %f" , throughput);
   
@@ -3595,7 +3600,6 @@ static void le_l2cap_listen(char* p) {
   cfg.mtu = le_conn_info->loc_conn_info.le_mtu;
   cfg.mps = le_conn_info->loc_conn_info.le_mps;
   cfg.credits = le_conn_info->loc_conn_info.init_credits;
-
   sL2capInterface->RegisterLePsm(le_conn_info->loc_conn_info.le_psm, FALSE,
                                  le_coc_seclevel, g_BleEncKeySize,
                                  l2test_l2c_appl, cfg);
@@ -3668,6 +3672,8 @@ static int Send_Data(char* p) {
   send_mode = get_int(&p, -1);
   int length = get_int(&p, -1);
   int loop = get_int(&p, -1);
+  int buffer = get_int(&p, -1);
+  int timer = get_int(&p, -1);
 
   char tmpBuffer_2[] = {0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
                         0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
@@ -3678,18 +3684,24 @@ static int Send_Data(char* p) {
     printf("Sending Segmented data...\nData written len %d...\n",
            sizeof(tmpBuffer_2));
     int i=0;
+    int j=1;
     while (i<loop) {
       char* tmpBuffer_1;
       tmpBuffer_1 = (char*)malloc(length);
       memset(tmpBuffer_1, '\x7f', length);
       printf("Sending Segmented data...\nData written len %d...\n",
-           sizeof(tmpBuffer_1));
+           length);
       while (cong_status) {
         usleep(50*1000);
 
       }
       do_l2cap_DataWrite(lcid, tmpBuffer_1, length);
       i++;
+      j++;
+      if (j==buffer && timer > 0) {
+        j = 1;
+        usleep(timer*1000);
+      }
     }
   } else if (send_mode == 0)  // unsegmented
   {
@@ -3933,6 +3945,7 @@ int main(int argc, char* argv[]) {
   sHciInterface =
       (bthci_test_interface_t*)btvendorInterface->get_testapp_interface(
           TEST_APP_HCI);
+      
   printf("\n Before l2cap init\n");
   do_l2cap_init(NULL);
   printf("\n after l2cap init\n");
@@ -4131,5 +4144,10 @@ void do_send_ble_set_data_length_v2(char* p) {
   } else {
     printf("HCI Interface not available.\n");
   }
+}
+
+void reset_rcv_iteration(char* p) {
+  printf("Resetting rcv iteration, previous itaration: %d", rcv_iteration);
+  rcv_iteration = 0;
 }
 #endif  // TEST_APP_INTERFACE
