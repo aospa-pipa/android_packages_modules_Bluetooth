@@ -7032,14 +7032,13 @@ public:
 
   void updateLexAvailableTransportDevices(uint64_t bdAddr) {
     if (bdAddr != 0xFFFFFFFFFFFFFFFF) {
-      RawAddress rawAddress;
       uint8_t addr[] = {static_cast<uint8_t>((bdAddr >> 40) & 0xFF),
                         static_cast<uint8_t>((bdAddr >> 32) & 0xFF),
                         static_cast<uint8_t>((bdAddr >> 24) & 0xFF),
                         static_cast<uint8_t>((bdAddr >> 16) & 0xFF),
                         static_cast<uint8_t>((bdAddr >> 8) & 0xFF),
                         static_cast<uint8_t>((bdAddr) & 0xFF)};
-      rawAddress.FromOctets((uint8_t*)addr);
+      RawAddress rawAddress = RawAddress::FromOctets(addr);
       log::info("Updating Transport device {}", rawAddress.ToString());
       auto it = std::find(lexAvailableTransportDevices_.begin(),
           lexAvailableTransportDevices_.end(), rawAddress);
