@@ -50,43 +50,68 @@ import org.mockito.kotlin.whenever
 /** Test cases for [AvrcpControllerStateMachine]. */
 @RunWith(AndroidJUnit4::class)
 class AvrcpControllerVolumeHandlerTest {
-    @get:Rule val mSetFlagsRule = SetFlagsRule()
-    @get:Rule val mMockitoRule = MockitoRule()
+    @get:Rule val setFlagsRule = SetFlagsRule()
+    @get:Rule val mockitoRule = MockitoRule()
 
-    @Mock private lateinit var mAdapterService: AdapterService
-    @Mock private lateinit var mAudioManager: AudioManager
-    @Mock private lateinit var mPackageManager: PackageManager
-    @Mock private lateinit var mCallback: AvrcpControllerVolumeHandler.Callback
+    @Mock private lateinit var adapterService: AdapterService
+    @Mock private lateinit var audioManager: AudioManager
+    @Mock private lateinit var packageManager: PackageManager
+    @Mock private lateinit var callback: AvrcpControllerVolumeHandler.Callback
 
-    private val mDevice = getTestDevice(43)
+    private val device = getTestDevice(43)
 
     /** [makeVolumeHandler] must be called per test */
-    private lateinit var mVolumeHandler: AvrcpControllerVolumeHandler
+    private lateinit var volumeHandler: AvrcpControllerVolumeHandler
     // A temporary workaround in #makeVolumeHandler is done because the receiver is only registered
     // when Flags.avrcpControllerAbsVolChangedNotification() is true
-    private var mBroadcastReceiver: BroadcastReceiver? = null
-    // private lateinit var mBroadcastReceiver: BroadcastReceiver  // Use this when removing flag
-    private val mLooper = TestLooper()
+    private var receiver: BroadcastReceiver? = null
+    // private lateinit var receiver: BroadcastReceiver  // Use this when removing flag
+    private val looper = TestLooper()
 
     @Before
     fun setUp() {
-        doReturn(100).whenever(mAudioManager).getStreamMaxVolume(eq(AudioManager.STREAM_MUSIC))
-        doReturn(25).whenever(mAudioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
+        doReturn(100).whenever(audioManager).getStreamMaxVolume(eq(AudioManager.STREAM_MUSIC))
+        doReturn(25).whenever(audioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
 
-        doReturn(mPackageManager).whenever(mAdapterService).packageManager
+        doReturn(packageManager).whenever(adapterService).packageManager
 
-        mockGetSystemService(mAdapterService, AudioManager::class.java, mAudioManager)
+        mockGetSystemService(adapterService, AudioManager::class.java, audioManager)
     }
 
     @After
     fun tearDown() {
         destroyAvrcpControllerVolumeHandler()
-        assertThat(mLooper.nextMessage()).isNull()
+        assertThat(looper.nextMessage()).isNull()
     }
 
     // *********************************************************************************************
     // * Tests
     // *********************************************************************************************
+
+    // Volume conversion
+
+    /**
+     * The volume conversion methods use floating-point math and rounding. This test verifies that
+     * the boundaries of the volume domains do not go out of bounds.
+     *
+     * The volume conversions are non-decreasing functions of their input. Testing solely the
+     * boundaries of the input domains is sufficient; the intermediate volumes need not be checked.
+     */
+    @Test
+    fun testVolumeConversion_convertsDomainExtremaCorrectly() {
+        makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
+
+        val maxLocalVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val maxAbsoluteVolume = 127
+
+        // Local volume -> Absolute volume
+        assertThat(volumeHandler.localToAbsoluteVolume(0)).isEqualTo(0)
+        assertThat(volumeHandler.localToAbsoluteVolume(maxLocalVolume)).isEqualTo(maxAbsoluteVolume)
+
+        // Absolute volume -> local volume
+        assertThat(volumeHandler.absoluteToLocalVolume(0)).isEqualTo(0)
+        assertThat(volumeHandler.absoluteToLocalVolume(maxAbsoluteVolume)).isEqualTo(maxLocalVolume)
+    }
 
     // getVolumeStrategy
 
@@ -95,7 +120,7 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetVolumeStrategy_isVolumeFixed_isAutomotive_getsStrategyLoud() {
         makeVolumeHandler(isVolumeFixed = true, isAutomotive = true)
 
-        val strategy = mVolumeHandler.mVolumeStrategy
+        val strategy = volumeHandler.volumeStrategy
         assertThat(strategy).isEqualTo(AvrcpControllerVolumeHandler.STRATEGY_LOUD)
     }
 
@@ -104,7 +129,7 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetVolumeStrategy_isVolumeFixed_getsStrategyLoud() {
         makeVolumeHandler(isVolumeFixed = true, isAutomotive = false)
 
-        val strategy = mVolumeHandler.mVolumeStrategy
+        val strategy = volumeHandler.volumeStrategy
         assertThat(strategy).isEqualTo(AvrcpControllerVolumeHandler.STRATEGY_LOUD)
     }
 
@@ -113,7 +138,7 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetVolumeStrategy_isAutomotive_getsStrategyLoud() {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = true)
 
-        val strategy = mVolumeHandler.mVolumeStrategy
+        val strategy = volumeHandler.volumeStrategy
         assertThat(strategy).isEqualTo(AvrcpControllerVolumeHandler.STRATEGY_LOUD)
     }
 
@@ -122,7 +147,7 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetVolumeStrategy_notVolumeFixed_notAutomotive_getsStrategyAbsolute() {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
-        val strategy = mVolumeHandler.mVolumeStrategy
+        val strategy = volumeHandler.volumeStrategy
         assertThat(strategy).isEqualTo(AvrcpControllerVolumeHandler.STRATEGY_ABSOLUTE)
     }
 
@@ -133,7 +158,7 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetAbsoluteVolume_isStrategyLoud_getsAbsVolumeMax() {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = true)
 
-        val absVol = mVolumeHandler.absoluteVolume
+        val absVol = volumeHandler.absoluteVolume
         assertThat(absVol).isEqualTo(127)
     }
 
@@ -142,8 +167,8 @@ class AvrcpControllerVolumeHandlerTest {
     fun testGetAbsoluteVolume_isStrategyAbsolute_doesNotGetAbsVolumeMax() {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
-        val absVol = mVolumeHandler.absoluteVolume
-        assertThat(absVol).isEqualTo(31)
+        val absVol = volumeHandler.absoluteVolume
+        assertThat(absVol).isEqualTo(32)
     }
 
     // setAbsoluteVolume
@@ -158,7 +183,7 @@ class AvrcpControllerVolumeHandlerTest {
         assertThat(absVol).isEqualTo(127)
         // Loud devices should never set stream volume
         verifyNoSetStreamVolume()
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /** Test #setAbsoluteVolume: Strategy Absolute */
@@ -169,8 +194,8 @@ class AvrcpControllerVolumeHandlerTest {
         val setLabel: Byte = 52
         val absVol = setAbsoluteVolume(setLabel, 20)
         assertThat(absVol).isEqualTo(20)
-        verifySetStreamVolume(15)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verifySetStreamVolume(16)
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /** Test #setAbsoluteVolume: Strategy Absolute */
@@ -178,14 +203,14 @@ class AvrcpControllerVolumeHandlerTest {
     fun testSetAbsoluteVolume_isStrategyAbsolute_currentVol_doesNotSetStreamVolume() {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
-        // Absolute volume 32 -> Local volume 25
         val setLabel: Byte = 52
         val absVol = setAbsoluteVolume(setLabel, 32)
         assertThat(absVol).isEqualTo(32)
         // Setting absolute volume to match the current stream volume shouldn't change the stream
         // volume
+        // Absolute volume 32 -> Local volume 25 == current stream volume
         verifyNoSetStreamVolume()
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     // Volume changed events
@@ -198,7 +223,7 @@ class AvrcpControllerVolumeHandlerTest {
 
         // Volume changed event
         sendVolumeChangedEvent(39)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /** Absolute volume devices should trigger the callback after a volume changed event */
@@ -208,8 +233,8 @@ class AvrcpControllerVolumeHandlerTest {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
         // Volume changed event
-        sendVolumeChangedEvent(39)
-        verify(mCallback).onAbsoluteVolumeChanged(49)
+        sendVolumeChangedEvent(16)
+        verify(callback).onAbsoluteVolumeChanged(20)
     }
 
     /**
@@ -222,8 +247,9 @@ class AvrcpControllerVolumeHandlerTest {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
         // Volume changed event that matches the current stream volume
+        // Current stream volume: 25
         sendVolumeChangedEvent(25)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /**
@@ -239,12 +265,12 @@ class AvrcpControllerVolumeHandlerTest {
         val setLabel: Byte = 52
         val absVol = setAbsoluteVolume(setLabel, 20)
         assertThat(absVol).isEqualTo(20)
-        verifySetStreamVolume(15)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verifySetStreamVolume(16)
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
 
         // Volume changed event for a different volume than was set
         sendVolumeChangedEvent(39)
-        verify(mCallback).onAbsoluteVolumeChanged(49)
+        verify(callback).onAbsoluteVolumeChanged(50)
     }
 
     /**
@@ -260,12 +286,12 @@ class AvrcpControllerVolumeHandlerTest {
         val setLabel: Byte = 52
         val absVol = setAbsoluteVolume(setLabel, 20)
         assertThat(absVol).isEqualTo(20)
-        verifySetStreamVolume(15)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verifySetStreamVolume(16)
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
 
         // Volume changed event for the same volume that was set
-        sendVolumeChangedEvent(15)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        sendVolumeChangedEvent(16)
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /**
@@ -279,16 +305,16 @@ class AvrcpControllerVolumeHandlerTest {
 
         // Volume changed event
         sendVolumeChangedEvent(39)
-        verify(mCallback).onAbsoluteVolumeChanged(49)
+        verify(callback).onAbsoluteVolumeChanged(50)
 
-        clearInvocations(mCallback)
+        clearInvocations(callback)
 
         // Set absolute volume to a different volume than the event
         val setLabel: Byte = 52
         val absVol = setAbsoluteVolume(setLabel, 20)
         assertThat(absVol).isEqualTo(20)
-        verifySetStreamVolume(15)
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verifySetStreamVolume(16)
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     /**
@@ -301,10 +327,10 @@ class AvrcpControllerVolumeHandlerTest {
         makeVolumeHandler(isVolumeFixed = false, isAutomotive = false)
 
         // Volume changed event
-        sendVolumeChangedEvent(15)
-        verify(mCallback).onAbsoluteVolumeChanged(19)
+        sendVolumeChangedEvent(16)
+        verify(callback).onAbsoluteVolumeChanged(20)
 
-        clearInvocations(mCallback)
+        clearInvocations(callback)
 
         // Set absolute volume to the same volume as the event
         val setLabel: Byte = 52
@@ -313,7 +339,7 @@ class AvrcpControllerVolumeHandlerTest {
         // Setting absolute volume with the same volume as the previous event shouldn't change the
         // stream volume
         verifyNoSetStreamVolume()
-        verify(mCallback, never()).onAbsoluteVolumeChanged(any<Int>())
+        verify(callback, never()).onAbsoluteVolumeChanged(any<Int>())
     }
 
     // *********************************************************************************************
@@ -322,57 +348,56 @@ class AvrcpControllerVolumeHandlerTest {
 
     /** Create a volume handler to test */
     private fun makeVolumeHandler(isVolumeFixed: Boolean, isAutomotive: Boolean) {
-        doReturn(isVolumeFixed).whenever(mAudioManager).isVolumeFixed
+        doReturn(isVolumeFixed).whenever(audioManager).isVolumeFixed
 
         // Absolute volume support (Utils.isAutomotive())
         doReturn(isAutomotive)
-            .whenever(mPackageManager)
+            .whenever(packageManager)
             .hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
 
-        mVolumeHandler =
-            AvrcpControllerVolumeHandler(mAdapterService, mDevice, mCallback, mLooper.looper)
-        mVolumeHandler.start()
+        volumeHandler =
+            AvrcpControllerVolumeHandler(adapterService, device, callback, looper.looper)
 
         // Capture broadcast receiver
         val receiverCaptor = ArgumentCaptor.forClass(BroadcastReceiver::class.java)
         // The temporary workaround below is done because the receiver is only registered when
         // Flags.avrcpControllerAbsVolChangedNotification() is true
-        verify(mAdapterService, atLeast(0))
+        verify(adapterService, atLeast(0))
             .registerReceiver(receiverCaptor.capture(), any<IntentFilter>())
         val receivers = receiverCaptor.allValues
-        if (!receivers.isEmpty()) mBroadcastReceiver = receivers.last()
+        if (!receivers.isEmpty()) receiver = receivers.last()
         // Use this when removing flag
-        // verify(mAdapterService, atLeastOnce())
+        // verify(adapterService, atLeastOnce())
         //     .registerReceiver(receiverCaptor.capture(), any<IntentFilter>())
-        // mBroadcastReceiver = receiverCaptor.value
+        // receiver = receiverCaptor.value
     }
 
     /** Destroy a volume handler you created to test */
     private fun destroyAvrcpControllerVolumeHandler() {
-        mVolumeHandler.stop()
+        volumeHandler.stop()
     }
 
     /** Call [AvrcpControllerVolumeHandler.setAbsoluteVolume] and drive the test looper. */
     private fun setAbsoluteVolume(setLabel: Byte, absVol: Int): Int {
-        val absVolActual = mVolumeHandler.setAbsoluteVolume(absVol, setLabel.toInt())
-        mLooper.dispatchAll()
+        val absVolActual = volumeHandler.setAbsoluteVolume(absVol, setLabel.toInt())
+        looper.dispatchAll()
         return absVolActual
     }
 
     /** Verify that [AudioManager.setStreamVolume] is called with the expected value. */
     private fun verifySetStreamVolume(localVol: Int) {
-        verify(mAudioManager)
+        verify(audioManager)
             .setStreamVolume(
                 eq(AudioManager.STREAM_MUSIC),
                 eq(localVol),
                 eq(AudioManager.FLAG_SHOW_UI),
             )
-        doReturn(localVol).whenever(mAudioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
+        doReturn(localVol).whenever(audioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
     }
 
     /** Verify that [AudioManager.setStreamVolume] is not called. */
     private fun verifyNoSetStreamVolume() {
-        verify(mAudioManager, never())
+        verify(audioManager, never())
             .setStreamVolume(
                 eq(AudioManager.STREAM_MUSIC),
                 any<Int>(),
@@ -390,8 +415,8 @@ class AvrcpControllerVolumeHandlerTest {
         val intent = Intent(AudioManager.ACTION_VOLUME_CHANGED)
         intent.putExtra(AudioManager.EXTRA_VOLUME_STREAM_TYPE, AudioManager.STREAM_MUSIC)
         intent.putExtra(AudioManager.EXTRA_VOLUME_STREAM_VALUE, localVol)
-        doReturn(localVol).whenever(mAudioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
-        mBroadcastReceiver!!.onReceive(mAdapterService, intent)
-        mLooper.dispatchAll()
+        doReturn(localVol).whenever(audioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
+        receiver!!.onReceive(adapterService, intent)
+        looper.dispatchAll()
     }
 }

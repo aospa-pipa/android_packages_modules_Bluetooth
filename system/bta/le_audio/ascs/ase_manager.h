@@ -61,15 +61,15 @@ public:
     virtual bool IsEncodingSessionReady() const = 0;
     virtual void OnDecodingIsoChannelParametersUpdated(
             const RawAddress& pseudo_address, const tBLE_BD_ADDR address_with_type, int ase_id,
-            uint16_t cis_conn_hdl, bool is_setup,
+            uint16_t cis_conn_hdl,
             const std::optional<ascs::AseStateCodecConfiguration>& codec_configuration,
             const std::optional<ascs::AseStateQosConfiguration>& qos_configuration,
-            const std::optional<std::vector<uint8_t>>& metadata) = 0;
+            uint8_t target_latency, const std::optional<std::vector<uint8_t>>& metadata) = 0;
     virtual void OnEncodingIsoChannelParametersUpdated(
             uint16_t cis_conn_hdl, const RawAddress& pseudo_address, const tBLE_BD_ADDR addr,
             const std::optional<ascs::AseStateCodecConfiguration>& codec_configuration,
             const std::optional<ascs::AseStateQosConfiguration>& qos_configuration,
-            const std::optional<std::vector<uint8_t>>& metadata) = 0;
+            uint8_t target_latency, const std::optional<std::vector<uint8_t>>& metadata) = 0;
     virtual void OnIsoDataReceived(
             uint8_t ase_id, const bluetooth::hci::iso_manager::cis_data_evt* event,
             const std::optional<ascs::AseStateCodecConfiguration>& codec_configuration,

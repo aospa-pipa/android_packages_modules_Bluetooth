@@ -886,6 +886,7 @@ enum EventCode : 8 {
   NUMBER_OF_COMPLETED_DATA_BLOCKS = 0x48,
   AUTHENTICATED_PAYLOAD_TIMEOUT_EXPIRED = 0x57,
   ENCRYPTION_CHANGE_V2 = 0x59,
+  DEVELOPMENT = 0xFE,
   ENCRYPTION_CHANGE_V3 = 0xFC,
   ENCRYPTION_KEY_REFRESH_COMPLETE_V2 = 0xFB,
   VENDOR_SPECIFIC = 0xFF,
@@ -947,6 +948,10 @@ enum SubeventCode : 8 {
   LE_CREATE_BIG_COMPLETE_V2 = 0xF9,
   DATA_LENGTH_CHANGE_V2 = 0xF8,
   LE_TEST_REPORT_HDT_LINK_QUALITY = 0xF3,
+}
+
+enum DevelopmentSubeventCode : 8 {
+  RFU = 0xFF,
 }
 
 // Vendor specific events
@@ -6433,6 +6438,11 @@ packet RemoteHostSupportedFeaturesNotification : Event (event_code = REMOTE_HOST
 
 packet LeMetaEvent : Event (event_code = LE_META_EVENT) {
   subevent_code : SubeventCode,
+  _body_,
+}
+
+packet DevelopmentEvent : Event (event_code = DEVELOPMENT) {
+  subevent_code : DevelopmentSubeventCode,
   _body_,
 }
 

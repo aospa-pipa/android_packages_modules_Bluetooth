@@ -31,6 +31,7 @@ struct LeAudioCodecId {
   uint16_t vendor_codec_id;
 };
 
+
 namespace bluetooth::le_audio {
 /* Represents configuration used to configure the local audio sessions and
  * the software codecs in case of a software coding sessions.

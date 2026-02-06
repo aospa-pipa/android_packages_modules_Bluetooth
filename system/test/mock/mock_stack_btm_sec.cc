@@ -297,9 +297,10 @@ void btm_sec_conn_req(const RawAddress& bda, const DEV_CLASS dc) {
   test::mock::stack_btm_sec::btm_sec_conn_req(bda, dc);
 }
 void btm_sec_connected(const RawAddress& bda, uint16_t handle, tHCI_STATUS status, uint8_t enc_mode,
-                       tHCI_ROLE assigned_role) {
+                       bool locally_initiated, tHCI_ROLE assigned_role) {
   inc_func_call_count(__func__);
-  test::mock::stack_btm_sec::btm_sec_connected(bda, handle, status, enc_mode, assigned_role);
+  test::mock::stack_btm_sec::btm_sec_connected(bda, handle, status, enc_mode, locally_initiated,
+                                               assigned_role);
 }
 tBTM_STATUS btm_sec_execute_procedure(BtmDevice* p_dev) {
   inc_func_call_count(__func__);
