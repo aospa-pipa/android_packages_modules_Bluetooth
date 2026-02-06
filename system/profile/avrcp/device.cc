@@ -264,9 +264,6 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
       }
       case CommandPdu::SET_ABSOLUTE_VOLUME: {
         active_labels_.erase(label);
-        if (!com_android_bluetooth_flags_use_returned_absolute_volume()) {
-          break;
-        }
 
         set_vol_cmd_in_progress_ = false;
 
@@ -756,7 +753,7 @@ void Device::HandleVolumeChanged(uint8_t label,
 
   // Handle the first volume update.
   if (volume_ == VOL_NOT_SUPPORTED) {
-    log::info("Absolute voluem updated later in the DeviceConnected");
+    log::info("Absolute volume updated later in the DeviceConnected");
     volume_interface_->DeviceConnected(
             GetAddress(), base::Bind(&Device::SetVolume, weak_ptr_factory_.GetWeakPtr()));
 
@@ -773,9 +770,7 @@ void Device::HandleVolumeChanged(uint8_t label,
   int8_t vol = pkt->GetVolume();
   vol &= ~0x80;  // remove RFA bit
 
-  bool use_returned_volume_flag = com_android_bluetooth_flags_use_returned_absolute_volume();
-
-  if (!use_returned_volume_flag || (use_returned_volume_flag && volume_ != vol)) {
+  if (volume_ != vol) {
     volume_ = vol;
     log::info("Volume has changed to {}", (uint32_t)volume_);
     volume_interface_->SetVolume(volume_);
@@ -786,24 +781,20 @@ void Device::HandleVolumeChanged(uint8_t label,
 
 void Device::SetVolume(int8_t volume) {
   // TODO (apanicke): Implement logic for Multi-AVRCP
-  log::info("volume={}", (int)volume);
+  log::info("volume: {}", (int)volume);
   if (volume == volume_) {
     log::warn("{}: Ignoring volume change same as current volume level", address_);
     return;
   }
   volume_ = volume;
 
-  bool use_returned_volume_flag = com_android_bluetooth_flags_use_returned_absolute_volume();
-
-  if (use_returned_volume_flag) {
-    if (set_vol_cmd_in_progress_) {
-      log::info("There is already a volume command in progress");
-      pending_volume_ = std::make_optional(volume);
-      return;
-    }
-
-    set_vol_cmd_in_progress_ = true;
+  if (set_vol_cmd_in_progress_) {
+    log::info("There is already a volume command in progress");
+    pending_volume_ = std::make_optional(volume);
+    return;
   }
+
+  set_vol_cmd_in_progress_ = true;
 
   auto request = SetAbsoluteVolumeRequestBuilder::MakeBuilder(volume);
 
