@@ -372,7 +372,7 @@ public class AvrcpControllerStateMachineTest {
     /** Verify that an absolute volume interim response was sent to the native interface. */
     private void verifyAbsoluteVolumeInterimResponse(byte label, int absVolRsp) {
         verify(mNativeInterface)
-                .sendRegisterAbsVolRsp(any(), eq((byte) 0x00), eq(absVolRsp), eq((int) label));
+                .sendRegisterAbsVolInterimRsp(any(), eq(absVolRsp), eq((int) label));
     }
 
     /** Send a set absolute volume command to the state machine and drive its looper. */
@@ -384,7 +384,7 @@ public class AvrcpControllerStateMachineTest {
 
     /** Verify that a set absolute volume response was sent to the native interface. */
     private void verifySetAbsoluteVolumeResponse(byte setLabel, int absVolRsp) {
-        verify(mNativeInterface).sendAbsVolRsp(any(), eq(absVolRsp), eq((int) setLabel));
+        verify(mNativeInterface).sendSetAbsVolRsp(any(), eq(absVolRsp), eq((int) setLabel));
     }
 
     /** Verify that {@code AudioManager.setStreamVolume} is called with the expected value. */
@@ -419,14 +419,12 @@ public class AvrcpControllerStateMachineTest {
 
     /** Verify that an absolute volume changed notification was sent to the native interface. */
     private void verifyAbsoluteVolumeChangedNotification(byte label, int absVol) {
-        verify(mNativeInterface)
-                .sendRegisterAbsVolRsp(any(), eq((byte) 0x01), eq(absVol), eq((int) label));
+        verify(mNativeInterface).sendRegisterAbsVolChangedRsp(any(), eq(absVol), eq((int) label));
     }
 
     /** Verify that an absolute volume changed notification was not sent to the native interface. */
     private void verifyNoAbsoluteVolumeChangedNotification() {
-        verify(mNativeInterface, never())
-                .sendRegisterAbsVolRsp(any(), eq((byte) 0x01), anyInt(), anyInt());
+        verify(mNativeInterface, never()).sendRegisterAbsVolChangedRsp(any(), anyInt(), anyInt());
     }
 
     /**
@@ -1152,7 +1150,7 @@ public class AvrcpControllerStateMachineTest {
 
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
     }
 
     /** Test that set absolute volume is working: Strategy Loud */
@@ -1178,7 +1176,7 @@ public class AvrcpControllerStateMachineTest {
         byte setLabel = 52;
         setAbsoluteVolume(setLabel, 20);
         verifySetAbsoluteVolumeResponse(setLabel, 20);
-        verifySetStreamVolume(15);
+        verifySetStreamVolume(16);
         verifyNoAbsoluteVolumeChangedNotification();
     }
 
@@ -1188,12 +1186,12 @@ public class AvrcpControllerStateMachineTest {
         makeStateMachineForAbsVolumeTests(false, false);
         setUpConnectedState(true, true);
 
-        // Absolute volume 32 -> Local volume 25
         byte setLabel = 52;
         setAbsoluteVolume(setLabel, 32);
         verifySetAbsoluteVolumeResponse(setLabel, 32);
         // Setting absolute volume to match the current stream volume shouldn't change the stream
         // volume
+        // Absolute volume 32 -> Local volume 25 == current stream volume
         verifyNoSetStreamVolume();
         verifyNoAbsoluteVolumeChangedNotification();
     }
@@ -1228,11 +1226,11 @@ public class AvrcpControllerStateMachineTest {
         // Register notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Volume changed event
-        sendVolumeChangedEvent(15);
-        verifyAbsoluteVolumeChangedNotification(label, 19);
+        sendVolumeChangedEvent(16);
+        verifyAbsoluteVolumeChangedNotification(label, 20);
     }
 
     /**
@@ -1246,7 +1244,7 @@ public class AvrcpControllerStateMachineTest {
         setUpConnectedState(true, true);
 
         // Volume changed event when not registered
-        sendVolumeChangedEvent(15);
+        sendVolumeChangedEvent(16);
         verifyNoAbsoluteVolumeChangedNotification();
     }
 
@@ -1263,9 +1261,10 @@ public class AvrcpControllerStateMachineTest {
         // Register notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Volume changed event that matches the current stream volume
+        // Current stream volume: 25
         sendVolumeChangedEvent(25);
         verifyNoAbsoluteVolumeChangedNotification();
     }
@@ -1283,18 +1282,18 @@ public class AvrcpControllerStateMachineTest {
         // Register for first notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Set absolute volume
         byte setLabel = 52;
         setAbsoluteVolume(setLabel, 20);
         verifySetAbsoluteVolumeResponse(setLabel, 20);
-        verifySetStreamVolume(15);
+        verifySetStreamVolume(16);
         verifyNoAbsoluteVolumeChangedNotification();
 
         // Volume changed event for a different volume than was set
         sendVolumeChangedEvent(39);
-        verifyAbsoluteVolumeChangedNotification(label, 49);
+        verifyAbsoluteVolumeChangedNotification(label, 50);
     }
 
     /**
@@ -1310,17 +1309,17 @@ public class AvrcpControllerStateMachineTest {
         // Register notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Set absolute volume
         byte setLabel = 52;
         setAbsoluteVolume(setLabel, 20);
         verifySetAbsoluteVolumeResponse(setLabel, 20);
-        verifySetStreamVolume(15);
+        verifySetStreamVolume(16);
         verifyNoAbsoluteVolumeChangedNotification();
 
         // Volume changed event for the same volume that was set
-        sendVolumeChangedEvent(15);
+        sendVolumeChangedEvent(16);
         verifyNoAbsoluteVolumeChangedNotification();
     }
 
@@ -1337,16 +1336,16 @@ public class AvrcpControllerStateMachineTest {
         // Register notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Volume changed event
         sendVolumeChangedEvent(39);
-        verifyAbsoluteVolumeChangedNotification(label, 49);
+        verifyAbsoluteVolumeChangedNotification(label, 50);
 
         // Register notification
         label++;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 49);
+        verifyAbsoluteVolumeInterimResponse(label, 50);
 
         clearInvocations(mNativeInterface);
 
@@ -1354,7 +1353,7 @@ public class AvrcpControllerStateMachineTest {
         byte setLabel = 52;
         setAbsoluteVolume(setLabel, 20);
         verifySetAbsoluteVolumeResponse(setLabel, 20);
-        verifySetStreamVolume(15);
+        verifySetStreamVolume(16);
         verifyNoAbsoluteVolumeChangedNotification();
     }
 
@@ -1371,16 +1370,16 @@ public class AvrcpControllerStateMachineTest {
         // Register notification
         byte label = 42;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 31);
+        verifyAbsoluteVolumeInterimResponse(label, 32);
 
         // Volume changed event
-        sendVolumeChangedEvent(15);
-        verifyAbsoluteVolumeChangedNotification(label, 19);
+        sendVolumeChangedEvent(16);
+        verifyAbsoluteVolumeChangedNotification(label, 20);
 
         // Register notification
         label++;
         registerAbsoluteVolumeNotification(label);
-        verifyAbsoluteVolumeInterimResponse(label, 19);
+        verifyAbsoluteVolumeInterimResponse(label, 20);
 
         clearInvocations(mNativeInterface);
 

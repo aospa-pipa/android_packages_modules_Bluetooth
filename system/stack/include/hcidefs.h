@@ -44,6 +44,8 @@
 #define HCI_GRP_BLE_CMDS (0x08 << 10)                /* 0x2000 (LE Commands) */
 #define HCI_GRP_HDT_CMDS (0x3E << 10)
 
+#define HCI_DEVELOPMENT_FEATURE (0x3E << 10) /* 0xFB00 */
+
 #define HCI_GRP_VENDOR_SPECIFIC (0x3F << 10) /* 0xFC00 */
 
 /*
@@ -591,6 +593,7 @@ where they are handled will be finalized once event codes are finalized*/
 
 /* ULP HCI Event */
 #define HCI_BLE_EVENT 0x3e
+#define HCI_DEVELOPMENT_EVENT 0xfe
 /* ULP Event sub code */
 #define HCI_BLE_CONN_COMPLETE_EVT 0x01
 #define HCI_BLE_ADV_PKT_RPT_EVT 0x02

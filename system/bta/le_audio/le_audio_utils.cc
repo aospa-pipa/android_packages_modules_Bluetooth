@@ -25,6 +25,7 @@
 
 #include "audio_hal_client/audio_hal_client.h"
 #include "codec_manager.h"
+#include "com_android_bluetooth_flags.h"
 #include "common/strings.h"
 #include "hardware/bt_le_audio.h"
 #include "le_audio/codec_manager.h"
