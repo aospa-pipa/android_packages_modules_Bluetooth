@@ -4310,6 +4310,9 @@ public final class BluetoothAdapter {
                                 false,
                                 false);
             } else {
+                if (Flags.fixedPsmForOffloadSocket()) {
+                   psm = settings.getL2capPsm();
+                }
                 socket =
                         new BluetoothServerSocket(
                                 this,
