@@ -217,6 +217,9 @@ public:
   bool is_encrypted = false;
   tHCI_ROLE link_role;
   uint8_t switch_role_failed_attempts;
+  uint8_t switch_role_attempts;
+
+#define BTM_MAX_BL_SW_ROLE_ATTEMPTS 1
 
   tREMOTE_VERSION_INFO remote_version_info;
 

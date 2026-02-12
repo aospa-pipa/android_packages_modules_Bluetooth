@@ -75,6 +75,8 @@
 #include "stack/include/main_thread.h"
 #include "stack/include/stack_le_connection.h"
 #include "osi/include/osi.h"
+#include "device/include/interop.h"
+#include "device/include/interop_config.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -504,12 +506,13 @@ void bta_dm_remove_device(const RawAddress& target) {
     log::warn("{} already getting removed", target);
     return;
   }
-
   conn_info = bta_dm_get_conn_info(target);
   const RawAddress& pseudo_addr = conn_info.pseudo_addr;
   const RawAddress& identity_addr = conn_info.identity_addr;
   bool& le_connected = conn_info.le_connected;
   bool& bredr_connected = conn_info.bredr_connected;
+
+  interop_database_remove_addr(INTEROP_DYNAMIC_ROLE_SWITCH, identity_addr);
 
   // Remove from LE allowlist
   if (!stack::leConnectionCancelConnect(0, pseudo_addr, false)) {
@@ -1051,9 +1054,9 @@ static void bta_dm_adjust_roles() {
       continue;
     }
 
-    // If there is only one connection, switch roles is not needed unless central role is
+    // If there is no connections, switch roles is not needed unless central role is
     // preferred
-    if (link.pref_role != BTA_CENTRAL_ROLE_ONLY && link_db.count <= 1) {
+    if (link.pref_role != BTA_CENTRAL_ROLE_ONLY && link_db.count < 1) {
       continue;
     }
 
