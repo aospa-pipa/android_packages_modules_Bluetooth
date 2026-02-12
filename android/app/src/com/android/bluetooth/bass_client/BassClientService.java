@@ -5828,7 +5828,16 @@ public class BassClientService extends ConnectableProfile {
                 continue;
             }
 
-            if (getAllSources(device).stream().anyMatch(rs -> !isLocalBroadcast(rs))) {
+            Map<Integer, BluetoothLeBroadcastMetadata> entry =
+                    mBroadcastMetadataMap.get(device);
+
+            /* null means that this source was not added or modified by assistant */
+            if (entry == null) {
+                continue;
+            }
+
+            /* Assistant manages some external broadcast */
+            if (entry.values().stream().anyMatch(e -> !isLocalBroadcast(e))) {
                 return true;
             }
         }

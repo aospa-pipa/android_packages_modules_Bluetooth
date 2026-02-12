@@ -2468,6 +2468,8 @@ public class HeadsetService extends ConnectableProfile {
                         }
                     }
                 }
+                if (mSystemInterface.isScoManagedByAudioEnabled()) return;
+
                 if (mVoiceRecognitionStarted) {
                     if (!stopVoiceRecognitionByHeadset(device)) {
                         Log.w(
@@ -2484,8 +2486,6 @@ public class HeadsetService extends ConnectableProfile {
                                         + "voice call");
                     }
                 }
-
-                if (mSystemInterface.isScoManagedByAudioEnabled()) return;
                 // Resumes LE audio previous active device if HFP handover happened before.
                 // Do it here because some controllers cannot handle SCO and CIS
                 // co-existence see {@link LeAudioService#setInactiveForHfpHandover}
@@ -2527,6 +2527,21 @@ public class HeadsetService extends ConnectableProfile {
             if (mSystemInterface.isCallIdle() && !mSystemInterface.isScoManagedByAudioEnabled()) {
                 mSystemInterface.getAudioManager().setA2dpSuspended(false);
                 mSystemInterface.getAudioManager().setLeAudioSuspended(false);
+            }
+        }
+    }
+
+    /** When SCO is disconnected with AMSCO, need to ensure that cleanup of VR occurs */
+    public void cleanUpAfterScoDisconnection(BluetoothDevice device) {
+        if (mVoiceRecognitionStarted) {
+            if (!stopVoiceRecognitionByHeadset(device)) {
+                Log.w(
+                        TAG,
+                        "onAudioStateChangedFromStateMachine: failed to stop voice "
+                                + "recognition");
+                mNativeInterface.atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_ERROR, 0);
+            } else {
+                mNativeInterface.atResponseCode(device, HeadsetHalConstants.AT_RESPONSE_OK, 0);
             }
         }
     }
