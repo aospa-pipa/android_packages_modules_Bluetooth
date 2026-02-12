@@ -372,11 +372,6 @@ cc_test {
             shared_libs: ["libstatssocket"],
         },
     },
-    sanitize: {
-        address: true,
-        cfi: true,
-        misc_undefined: ["bounds"],
-    },
 }
 
 // btif hf client service tests for target
@@ -529,6 +524,7 @@ cc_test {
             ],
         },
     },
+    // Required or else the test doesn't build
     sanitize: {
         address: true,
         cfi: true,
@@ -650,6 +646,7 @@ cc_test {
             ],
         },
     },
+    // Required or else the test doesn't build
     sanitize: {
         address: true,
         cfi: true,
