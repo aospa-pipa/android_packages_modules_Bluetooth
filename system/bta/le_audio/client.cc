@@ -7665,9 +7665,12 @@ public:
               ackHalSuspendRequest(false);
             }
 
-            if (configuration_context_type_ == LeAudioContextType::GAME) {
+            if (configuration_context_type_ == LeAudioContextType::GAME ||
+                configuration_context_type_ == LeAudioContextType::LIVE) {
               log::info("clear source local_metadata_context_types_");
               local_metadata_context_types_.source.clear();
+              audioContextTypeManager_->OverrideContextTypes(
+                                          {AudioContexts(), AudioContexts()});
             }
 
             log::info("active_group_id_: {}", active_group_id_);
