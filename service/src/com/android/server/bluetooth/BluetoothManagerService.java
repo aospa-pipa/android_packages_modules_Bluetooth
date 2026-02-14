@@ -1014,6 +1014,13 @@ public class BluetoothManagerService {
     }
 
     boolean enableNoAutoConnect(String packageName) {
+        Log.d(
+                TAG,
+                ("enableNoAutoConnect(" + packageName + "):")
+                        + (" mAdapter=" + mAdapter)
+                        + (" isBinding=" + isBinding())
+                        + (" mState=" + mState));
+
         if (isSatelliteModeOn()) {
             Log.d(TAG, "enableNoAutoConnect(" + packageName + "): Blocked by satellite mode");
             return false;

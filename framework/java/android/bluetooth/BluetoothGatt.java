@@ -1873,13 +1873,11 @@ public final class BluetoothGatt implements BluetoothProfile {
         if (!mClientRegistered) return false;
 
         try {
-            mService.readRemoteRssi(mBluetoothGattCallback, mDevice, mAttributionSource);
+            return mService.readRemoteRssi(mBluetoothGattCallback, mDevice, mAttributionSource);
         } catch (RemoteException e) {
             Log.e(TAG, "", e);
             return false;
         }
-
-        return true;
     }
 
     /**
