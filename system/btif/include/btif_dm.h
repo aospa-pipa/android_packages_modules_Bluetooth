@@ -114,6 +114,7 @@ void btif_dm_allow_wake_by_hid(std::vector<RawAddress> classic_addrs,
 void btif_dm_restore_filter_accept_list(std::vector<std::pair<RawAddress, uint8_t>> le_devices);
 void btif_dm_set_default_event_mask_except(uint64_t mask, uint64_t le_mask);
 void btif_dm_set_event_filter_inquiry_result_all_devices();
+void btif_dm_set_suspend_state(bool suspend);
 void btif_dm_metadata_changed(const RawAddress& remote_bd_addr, int key,
                               std::vector<uint8_t> value);
 
@@ -155,9 +156,9 @@ void btif_update_remote_properties(const RawAddress& bd_addr, BD_NAME bd_name, D
                                    tBT_DEVICE_TYPE dev_type);
 bool btif_is_interesting_le_service(const bluetooth::Uuid& uuid);
 
-bool btif_check_cod_hid(const RawAddress& bd_addr);
-bool btif_check_cod_hid_major(const RawAddress& bd_addr, uint32_t cod);
-bool is_device_le_audio_capable(const RawAddress bd_addr);
+bool btif_check_cod_hid(RawAddress bd_addr);
+bool btif_check_cod_hid_major(RawAddress bd_addr, uint32_t cod);
+bool is_device_le_audio_capable(RawAddress bd_addr);
 bool is_le_audio_preferred(const RawAddress bd_addr);
 bool is_le_audio_capable_during_service_discovery(const RawAddress& bd_addr);
 

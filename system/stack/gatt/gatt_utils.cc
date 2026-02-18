@@ -792,11 +792,7 @@ void gatt_rsp_timeout(void* data) {
     EattExtension::GetInstance()->Disconnect(p_clcb->p_tcb->peer_bda, p_clcb->cid);
   } else {
     log::warn("conn_id: 0x{:04x} disconnecting GATT...", p_clcb->conn_id);
-    if (com_android_bluetooth_flags_disconnect_acl_on_gatt_timeout()) {
-      gatt_force_disconnect(p_clcb->p_tcb, "stack::gatt::gatt_utils::gatt_rsp_timeout");
-    } else {
-      gatt_disconnect(p_clcb->p_tcb);
-    }
+    gatt_force_disconnect(p_clcb->p_tcb, "stack::gatt::gatt_utils::gatt_rsp_timeout");
   }
 }
 
@@ -834,11 +830,7 @@ void gatt_indication_confirmation_timeout(void* data) {
   }
 
   log::warn("disconnecting... bda:{} transport:{}", p_tcb->peer_bda, p_tcb->transport);
-  if (com_android_bluetooth_flags_disconnect_acl_on_gatt_timeout()) {
-    gatt_force_disconnect(p_tcb, "stack::gatt::gatt_utils::gatt_indication_confirmation_timeout");
-  } else {
-    gatt_disconnect(p_tcb);
-  }
+  gatt_force_disconnect(p_tcb, "stack::gatt::gatt_utils::gatt_indication_confirmation_timeout");
 }
 
 /*******************************************************************************
@@ -894,12 +886,12 @@ std::list<tGATT_SRV_LIST_ELEM>::iterator gatt_sr_find_i_rcb_by_handle(uint16_t h
 void gatt_sr_get_sec_info(const RawAddress& rem_bda, tBT_TRANSPORT transport,
                           tGATT_SEC_FLAG* p_sec_flag, uint8_t* p_key_size) {
   tGATT_SEC_FLAG flags = {};
-  flags.is_link_key_known = BTM_IsBonded(rem_bda, transport);
-  flags.is_link_key_authed = BTM_IsLinkKeyAuthed(rem_bda, transport);
-  flags.is_encrypted = BTM_IsEncrypted(rem_bda, transport);
+  flags.is_link_key_known = get_btm_client_interface().security.BTM_IsBonded(rem_bda, transport);
+  flags.is_link_key_authed = btm_is_link_key_authed(rem_bda, transport);
+  flags.is_encrypted = get_btm_client_interface().security.BTM_IsEncrypted(rem_bda, transport);
   flags.can_read_discoverable_characteristics = BTM_CanReadDiscoverableCharacteristics(rem_bda);
 
-  *p_key_size = btm_ble_read_sec_key_size(rem_bda);
+  *p_key_size = get_btm_client_interface().security.BTM_BleReadSecKeySize(rem_bda);
   *p_sec_flag = flags;
 }
 /*******************************************************************************
@@ -978,7 +970,7 @@ uint32_t gatt_add_sdp_record(const Uuid& uuid, uint16_t start_hdl, uint16_t end_
 
   log::verbose("s_hdl=0x{:x}  s_hdl=0x{:x}", start_hdl, end_hdl);
 
-  uint32_t sdp_handle = get_legacy_stack_sdp_api()->handle.SDP_CreateRecord();
+  uint32_t sdp_handle = get_legacy_stack_sdp_api()->SDP_CreateRecord();
   if (sdp_handle == 0) {
     return 0;
   }
@@ -986,7 +978,7 @@ uint32_t gatt_add_sdp_record(const Uuid& uuid, uint16_t start_hdl, uint16_t end_
   switch (uuid.GetShortestRepresentationSize()) {
     case Uuid::kNumBytes16: {
       uint16_t tmp = uuid.As16Bit();
-      if (!get_legacy_stack_sdp_api()->handle.SDP_AddServiceClassIdList(sdp_handle, 1, &tmp)) {
+      if (!get_legacy_stack_sdp_api()->SDP_AddServiceClassIdList(sdp_handle, 1, &tmp)) {
         log::warn("Unable to add SDP attribute for 16 bit uuid");
       }
       break;
@@ -996,9 +988,9 @@ uint32_t gatt_add_sdp_record(const Uuid& uuid, uint16_t start_hdl, uint16_t end_
       UINT8_TO_BE_STREAM(p, (UUID_DESC_TYPE << 3) | SIZE_FOUR_BYTES);
       uint32_t tmp = uuid.As32Bit();
       UINT32_TO_BE_STREAM(p, tmp);
-      if (!get_legacy_stack_sdp_api()->handle.SDP_AddAttribute(
-                  sdp_handle, ATTR_ID_SERVICE_CLASS_ID_LIST, DATA_ELE_SEQ_DESC_TYPE,
-                  (uint32_t)(p - buff), buff)) {
+      if (!get_legacy_stack_sdp_api()->SDP_AddAttribute(sdp_handle, ATTR_ID_SERVICE_CLASS_ID_LIST,
+                                                        DATA_ELE_SEQ_DESC_TYPE,
+                                                        (uint32_t)(p - buff), buff)) {
         log::warn("Unable to add SDP attribute for 32 bit uuid handle:{}", sdp_handle);
       }
       break;
@@ -1007,9 +999,9 @@ uint32_t gatt_add_sdp_record(const Uuid& uuid, uint16_t start_hdl, uint16_t end_
     case Uuid::kNumBytes128:
       UINT8_TO_BE_STREAM(p, (UUID_DESC_TYPE << 3) | SIZE_SIXTEEN_BYTES);
       ARRAY_TO_BE_STREAM(p, uuid.To128BitBE().data(), (int)Uuid::kNumBytes128);
-      if (!get_legacy_stack_sdp_api()->handle.SDP_AddAttribute(
-                  sdp_handle, ATTR_ID_SERVICE_CLASS_ID_LIST, DATA_ELE_SEQ_DESC_TYPE,
-                  (uint32_t)(p - buff), buff)) {
+      if (!get_legacy_stack_sdp_api()->SDP_AddAttribute(sdp_handle, ATTR_ID_SERVICE_CLASS_ID_LIST,
+                                                        DATA_ELE_SEQ_DESC_TYPE,
+                                                        (uint32_t)(p - buff), buff)) {
         log::warn("Unable to add SDP attribute for 128 bit uuid handle:{}", sdp_handle);
       }
       break;
@@ -1025,14 +1017,14 @@ uint32_t gatt_add_sdp_record(const Uuid& uuid, uint16_t start_hdl, uint16_t end_
   proto_elem_list[1].params[0] = start_hdl;
   proto_elem_list[1].params[1] = end_hdl;
 
-  if (!get_legacy_stack_sdp_api()->handle.SDP_AddProtocolList(sdp_handle, 2, proto_elem_list)) {
+  if (!get_legacy_stack_sdp_api()->SDP_AddProtocolList(sdp_handle, 2, proto_elem_list)) {
     log::warn("Unable to add SDP protocol list for l2cap and att");
   }
 
   /* Make the service browseable */
   uint16_t list = UUID_SERVCLASS_PUBLIC_BROWSE_GROUP;
-  if (!get_legacy_stack_sdp_api()->handle.SDP_AddUuidSequence(sdp_handle, ATTR_ID_BROWSE_GROUP_LIST,
-                                                              1, &list)) {
+  if (!get_legacy_stack_sdp_api()->SDP_AddUuidSequence(sdp_handle, ATTR_ID_BROWSE_GROUP_LIST, 1,
+                                                       &list)) {
     log::warn("Unable to add SDP uuid sequence public browse group");
   }
 
@@ -1802,7 +1794,8 @@ void gatt_cleanup_upon_disc(const RawAddress& bda, tGATT_DISCONN_REASON reason,
 
   if (com::android::bluetooth::flags::gatt_offload_api()) {
     /* Notify disconnection to offload HAL */
-    gatt_offload_clear_sessions_by_acl_handle(gatt_get_acl_handle_by_tcb(p_tcb));
+    gatt_offload_clear_sessions_by_acl_handle(gatt_get_acl_handle_by_tcb(p_tcb),
+                                              bluetooth::hal::GATT_ERROR_NONE);
   }
 
   gatt_set_ch_state(p_tcb, GATT_CH_CLOSE);

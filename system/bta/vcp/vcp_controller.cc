@@ -52,6 +52,7 @@
 #include "osi/include/osi.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/bt_types.h"
+#include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_status.h"
 #include "vcp/vcp_controller_types.h"
 
@@ -61,11 +62,11 @@ using bluetooth::vcp::ConnectionState;
 using bluetooth::vcp::VolumeInputStatus;
 using bluetooth::vcp::VolumeInputType;
 using bluetooth::vcp::internal::kControlPointOpcodeMute;
+using bluetooth::vcp::internal::kControlPointOpcodeRelativeVolumeDown;
+using bluetooth::vcp::internal::kControlPointOpcodeRelativeVolumeUp;
 using bluetooth::vcp::internal::kControlPointOpcodeSetAbsoluteVolume;
 using bluetooth::vcp::internal::kControlPointOpcodeUnmute;
-using bluetooth::vcp::internal::kControlPointOpcodeVolumeDown;
-using bluetooth::vcp::internal::kControlPointOpcodeVolumeUp;
-using bluetooth::vcp::internal::kVolumeControlUuid;
+using bluetooth::vcp::internal::kVolumeControlServiceUuid;
 using bluetooth::vcp::internal::kVolumeInputControlPointOpcodeMute;
 using bluetooth::vcp::internal::kVolumeInputControlPointOpcodeSetAutoGainMode;
 using bluetooth::vcp::internal::kVolumeInputControlPointOpcodeSetGain;
@@ -149,7 +150,7 @@ public:
 
     auto device = volume_control_devices_.FindByAddress(address);
     if (!device) {
-      if (!BTM_IsBonded(address, BT_TRANSPORT_LE)) {
+      if (!get_btm_client_interface().security.BTM_IsBonded(address, BT_TRANSPORT_LE)) {
         bluetooth::log::error("Connecting  {} when not bonded", address);
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
         return;
@@ -248,7 +249,7 @@ public:
       device->EnqueueInitialRequests(gatt_if_, chrc_read_callback_static, OnGattWriteCccStatic);
 
     } else {
-      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlUuid);
+      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlServiceUuid);
     }
   }
 
@@ -272,7 +273,7 @@ public:
 
     device->ResetHandles();
     if (search_request) {
-      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlUuid);
+      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlServiceUuid);
     }
   }
 
@@ -303,7 +304,7 @@ public:
     }
 
     if (device->known_service_handles_ == false) {
-      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlUuid);
+      BTA_GATTC_ServiceSearchRequest(device->connection_id, kVolumeControlServiceUuid);
     }
   }
 
@@ -466,9 +467,10 @@ public:
     }
 
     if (!devices_for_volume_remove.empty()) {
-      RemoveNotStartedPendingOperations(devices_for_volume_remove, bluetooth::groups::kGroupUnknown,
-                                        {kControlPointOpcodeVolumeDown, kControlPointOpcodeVolumeUp,
-                                         kControlPointOpcodeSetAbsoluteVolume});
+      RemoveNotStartedPendingOperations(
+              devices_for_volume_remove, bluetooth::groups::kGroupUnknown,
+              {kControlPointOpcodeRelativeVolumeDown, kControlPointOpcodeRelativeVolumeUp,
+               kControlPointOpcodeSetAbsoluteVolume});
     }
 
     if (!devices_for_mute_remove.empty()) {
@@ -1297,7 +1299,7 @@ public:
         std::vector<RawAddress> devices = {dev->address};
         RemoveNotStartedPendingOperations(
                 devices, bluetooth::groups::kGroupUnknown,
-                {kControlPointOpcodeVolumeDown, kControlPointOpcodeVolumeUp,
+                {kControlPointOpcodeRelativeVolumeDown, kControlPointOpcodeRelativeVolumeUp,
                  kControlPointOpcodeSetAbsoluteVolume});
         if (IsSetAbsoluteVolumeRequired(dev, volume)) {
           PrepareVolumeControlOperation(devices, bluetooth::groups::kGroupUnknown, false, opcode,
@@ -1314,9 +1316,10 @@ public:
         return;
       }
 
-      RemoveNotStartedPendingOperations(devices, group_id,
-                                        {kControlPointOpcodeVolumeDown, kControlPointOpcodeVolumeUp,
-                                         kControlPointOpcodeSetAbsoluteVolume});
+      RemoveNotStartedPendingOperations(
+              devices, group_id,
+              {kControlPointOpcodeRelativeVolumeDown, kControlPointOpcodeRelativeVolumeUp,
+               kControlPointOpcodeSetAbsoluteVolume});
 
       bool volumeNotChanged = false;
       bool deviceNotReady = false;
@@ -1724,7 +1727,8 @@ private:
 
       case BTA_GATTC_ENC_CMPL_CB_EVT: {
         tBTM_STATUS encryption_status;
-        if (BTM_IsEncrypted(p_data->enc_cmpl.remote_bda, BT_TRANSPORT_LE)) {
+        if (get_btm_client_interface().security.BTM_IsEncrypted(p_data->enc_cmpl.remote_bda,
+                                                                BT_TRANSPORT_LE)) {
           encryption_status = tBTM_STATUS::BTM_SUCCESS;
         } else {
           encryption_status = tBTM_STATUS::BTM_FAILED_ON_SECURITY;

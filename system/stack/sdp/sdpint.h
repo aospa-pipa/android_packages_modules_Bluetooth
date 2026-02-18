@@ -37,8 +37,8 @@
 #include "osi/include/alarm.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/l2cap_interface.h"
-#include "stack/include/sdp_callback.h"
-#include "stack/sdp/sdp_discovery_db.h"
+#include "stack/include/sdp_api.h"
+#include "stack/include/sdp_discovery_db.h"
 
 /* Continuation length - we use a 2-byte offset */
 #define SDP_CONTINUATION_LEN 2
@@ -190,10 +190,10 @@ struct tCONN_CB {
   alarm_t* sdp_conn_timer;
   uint16_t rem_mtu_size;
   uint16_t connection_id;
-  uint16_t list_len;                   /* length of the response in the GKI buffer */
+  uint16_t list_len;                    /* length of the response in the GKI buffer */
   uint16_t pse_dynamic_attributes_len;  // length of the attributes need to be
                                         // added in final sdp response len
-  uint8_t* rsp_list;                   /* pointer to GKI buffer holding response */
+  uint8_t* rsp_list;                    /* pointer to GKI buffer holding response */
 
   tSDP_DISCOVERY_DB* p_db; /* Database to save info into   */
   tSDP_DISC_CMPL_CB* p_cb; /* Callback for discovery done  */
@@ -210,7 +210,7 @@ struct tCONN_CB {
   tSDP_DISC_WAIT disc_state{SDP_DISC_WAIT_CONN};
   bool is_attr_search{false};
 
-  uint16_t cont_offset;     /* Continuation state data in the server response */
+  uint16_t cont_offset;      /* Continuation state data in the server response */
   tSDP_CONT_INFO cont_info;  // structure to hold continuation information for
                              //   the server response
   tCONN_CB() = default;
@@ -245,16 +245,11 @@ struct tSDP_CB {
 extern tSDP_CB sdp_cb;
 
 /* Functions provided by sdp_main.cc */
-void sdp_init(void);
-void sdp_free(void);
 void sdp_disconnect(tCONN_CB* p_ccb, tSDP_REASON reason);
-
 void sdp_conn_timer_timeout(void* data);
-
 [[nodiscard]] tCONN_CB* sdp_conn_originate(const RawAddress& bd_addr);
 
-/* Functions provided by sdp_utils.cc
- */
+/* Functions provided by sdp_utils.cc */
 void sdpu_log_attribute_metrics(const RawAddress& bda, tSDP_DISCOVERY_DB* p_db);
 tCONN_CB* sdpu_find_ccb_by_cid(uint16_t cid);
 tCONN_CB* sdpu_find_ccb_by_db(const tSDP_DISCOVERY_DB* p_db);
@@ -283,11 +278,6 @@ uint16_t sdpu_get_attrib_seq_len(const tSDP_RECORD* p_rec, const tSDP_ATTR_SEQ* 
 uint16_t sdpu_get_attrib_entry_len(const tSDP_ATTRIBUTE* p_attr);
 uint8_t* sdpu_build_partial_attrib_entry(uint8_t* p_out, const tSDP_ATTRIBUTE* p_attr, uint16_t len,
                                          uint16_t* offset);
-bool SDP_AddAttributeToRecord(tSDP_RECORD* p_rec, uint16_t attr_id, uint8_t attr_type,
-                              uint32_t attr_len, uint8_t* p_val);
-bool SDP_AddProfileDescriptorListToRecord(tSDP_RECORD* p_rec, uint16_t profile_uuid,
-                                          uint16_t version);
-bool SDP_DeleteAttributeFromRecord(tSDP_RECORD* p_rec, uint16_t attr_id);
 uint16_t sdpu_is_avrcp_profile_description_list(const tSDP_ATTRIBUTE* p_attr);
 bool sdpu_is_service_id_avrc_target(const tSDP_ATTRIBUTE* p_attr);
 bool sdpu_is_service_id_a2dp_src(const tSDP_ATTRIBUTE* p_attr);
@@ -318,10 +308,10 @@ void sdp_disc_connected(tCONN_CB* p_ccb);
 void sdp_disc_server_rsp(tCONN_CB* p_ccb, BT_HDR* p_msg);
 
 void update_pce_entry_to_interop_database(RawAddress remote_addr);
-bool is_sdp_pbap_pce_disabled(RawAddress remote_addr);
-void sdp_save_local_pse_record_attributes(int32_t rfcomm_channel_number, int32_t l2cap_psm,
-                                          int32_t profile_version, uint32_t supported_features,
-                                          uint32_t supported_repositories);
 
 size_t sdp_get_num_records(const tSDP_DISCOVERY_DB& db);
 size_t sdp_get_num_attributes(const tSDP_DISC_REC& sdp_disc_rec);
+
+void sdp_save_local_pse_record_attributes(int32_t rfcomm_channel_number, int32_t l2cap_psm,
+                                          int32_t profile_version, uint32_t supported_features,
+                                          uint32_t supported_repositories);

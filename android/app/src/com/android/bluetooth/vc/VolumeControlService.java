@@ -52,6 +52,7 @@ import android.os.SystemProperties;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
@@ -256,7 +257,7 @@ public class VolumeControlService extends ConnectableProfile {
         }
 
         final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
-        if (!Utils.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
+        if (!Util.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
             Log.e(
                     TAG,
                     "Cannot connect to " + device + " : Remote does not have Volume Control UUID");
@@ -347,7 +348,7 @@ public class VolumeControlService extends ConnectableProfile {
         synchronized (mStateMachines) {
             for (BluetoothDevice device : bondedDevices) {
                 final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
-                if (!Utils.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
+                if (!Util.arrayContains(featureUuids, BluetoothUuid.VOLUME_CONTROL)) {
                     continue;
                 }
                 int connectionState = STATE_DISCONNECTED;
@@ -387,7 +388,14 @@ public class VolumeControlService extends ConnectableProfile {
             if (sm == null) {
                 return STATE_DISCONNECTED;
             }
-            return sm.getConnectionState();
+            try {
+                return sm.getConnectionState();
+            } catch (NullPointerException e) {
+                // State machine may be in transitional state with null current state
+                Log.e(TAG, "getConnectionState: NPE getting state for device " + device
+                        + ", returning DISCONNECTED", e);
+                return STATE_DISCONNECTED;
+            }
         }
     }
 

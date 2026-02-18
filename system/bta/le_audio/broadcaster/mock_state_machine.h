@@ -125,7 +125,7 @@ public:
   MOCK_METHOD((bluetooth::le_audio::broadcaster::BroadcastStateMachineConfig const&),
               GetStateMachineConfig, (), (const override));
   MOCK_METHOD((void), RequestOwnAddress,
-              (base::Callback<void(uint8_t /* address_type*/, RawAddress /*address*/)> cb),
+              (base::OnceCallback<void(uint8_t /* address_type*/, RawAddress /*address*/)> cb),
               (override));
   MOCK_METHOD((const bluetooth::le_audio::broadcaster::BroadcastConfiguration&), GetBroadcastConfig,
               (), (const override));
@@ -170,6 +170,10 @@ public:
   void SetExpectedResult(bool result) { result_ = result; }
   void SetExpectedBigConfig(std::optional<bluetooth::le_audio::broadcaster::BigConfig> big_cfg) {
     big_config_ = big_cfg;
+  }
+  void ForceStreamingState() {
+    SetState(State::STREAMING);
+    this->cb->OnStateMachineEvent(this->cfg.broadcast_id, GetState(), &this->cfg.config.subgroups);
   }
 
   static MockBroadcastStateMachine* last_instance_;

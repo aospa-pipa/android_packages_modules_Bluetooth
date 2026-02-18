@@ -40,11 +40,9 @@
 #include "btif_status.h"
 #include "common/time_util.h"
 #include "gd/os/rand.h"
-#include "include/hardware/bluetooth.h"
 #include "internal_include/bt_target.h"
 #include "lpp/lpp_offload_interface.h"
 #include "main/shim/entry.h"
-#include "os/system_properties.h"
 #include "osi/include/allocator.h"
 #include "osi/include/osi.h"
 #include "stack/include/bt_hdr.h"
@@ -648,12 +646,10 @@ static void on_l2cap_connect(tBTA_JV* p_data, uint32_t id) {
       }
     }
     // Update data length to get better throughput on CoC
-    if (com_android_bluetooth_flags_set_max_data_length_for_lecoc()) {
-      if (get_btm_client_interface().ble.BTM_SetBleDataLength(
-                  le_open->rem_bda, BTM_BLE_DATA_SIZE_MAX,
-                  /*is_privileged_client*/ false) != tBTM_STATUS::BTM_SUCCESS) {
-        log::info("Unable to set ble data length:{}", BTM_BLE_DATA_SIZE_MAX);
-      }
+    if (get_btm_client_interface().ble.BTM_SetBleDataLength(
+                le_open->rem_bda, BTM_BLE_DATA_SIZE_MAX,
+                /*is_privileged_client*/ false) != tBTM_STATUS::BTM_SUCCESS) {
+      log::info("Unable to set ble data length:{}", BTM_BLE_DATA_SIZE_MAX);
     }
   } else {
     log::error("Unable to open socket after receiving connection socket_id:{}", sock->id);

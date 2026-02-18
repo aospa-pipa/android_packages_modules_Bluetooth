@@ -762,7 +762,7 @@ public final class ScanRecord {
 
     @Override
     public String toString() {
-        return ("ScanRecord [mAdvertiseFlags=" + mAdvertiseFlags)
+        return ("ScanRecord[mAdvertiseFlags=" + mAdvertiseFlags)
                 + (", mServiceUuids=" + mServiceUuids)
                 + (", mServiceSolicitationUuids=" + mServiceSolicitationUuids)
                 + (", mManufacturerSpecificData="

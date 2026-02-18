@@ -57,7 +57,6 @@ java_library {
     installable: false,
     srcs: [
         ":Bluetooth-binder-aidl-for-service",
-        ":bluetooth-system-server-messenger",
         ":statslog-bluetooth-java-gen",
         "src/**/*.java",
         "src/ActiveLogs.kt",
@@ -73,11 +72,12 @@ java_library {
         "src/BluetoothRestriction.kt",
         "src/BluetoothService.kt",
         "src/BluetoothSupervisor.kt",
+        "src/ChangeIds.kt",
         "src/Log.kt",
         "src/PermissionChecker.kt",
         "src/RadioModeListener.kt",
         "src/RolePermissionListener.kt",
-        "src/ServiceMessenger.kt",
+        "src/ServerBinder.kt",
         "src/SharingRestriction.kt",
         "src/ShellCommand.kt",
         "src/airplane/AirplaneModeController.kt",
@@ -86,15 +86,16 @@ java_library {
     ],
 
     libs: [
+        "app-compat-annotations",
         "framework-annotations-lib",
         "framework-configinfrastructure.stubs.module_lib",
         "framework-permission-s.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
-        "service-bluetooth.change-ids",
     ],
 
     static_libs: [
         "PlatformProperties",
+        "android.bluetooth.platform.flags-aconfig-java-export",
         "androidx.annotation_annotation",
         "androidx.appcompat_appcompat",
         "bluetooth-common-java",
@@ -142,6 +143,11 @@ java_library {
     visibility: ["//packages/modules/Bluetooth/apex"],
 }
 
+platform_compat_config {
+    name: "bluetooth-compat-config",
+    src: ":service-bluetooth",
+}
+
 java_library {
     name: "bluetooth-nano-protos",
     srcs: [":system-messages-proto-src"],
@@ -173,7 +179,6 @@ android_robolectric_test {
 
     srcs: [
         ":Bluetooth-binder-aidl-for-service",
-        ":bluetooth-system-server-messenger",
         ":statslog-bluetooth-java-gen",
         "src/ActiveLogs.kt",
         "src/ActiveLogsTest.kt",
@@ -191,14 +196,17 @@ android_robolectric_test {
         "src/BluetoothManagerServiceApi.kt",
         "src/BluetoothRestriction.kt",
         "src/BluetoothRestrictionTest.kt",
+        "src/ChangeIds.kt",
         "src/Log.kt",
         "src/LogTest.kt",
         "src/PermissionChecker.kt",
+        "src/PermissionCheckerTest.kt",
         "src/RadioModeListener.kt",
         "src/RadioModeListenerTest.kt",
         "src/RolePermissionListener.kt",
         "src/RolePermissionListenerTest.kt",
-        "src/ServiceMessenger.kt",
+        "src/ServerBinder.kt",
+        "src/ServerBinderTest.kt",
         "src/SharingRestriction.kt",
         "src/SharingRestrictionTest.kt",
         "src/ShellCommand.kt",
@@ -212,6 +220,7 @@ android_robolectric_test {
     ],
 
     static_libs: [
+        "android.bluetooth.platform.flags-aconfig-java-export",
         "androidx.test.core",
         "androidx.test.ext.truth",
         "bluetooth-common-flagwrapper-tests",
@@ -222,11 +231,12 @@ android_robolectric_test {
         "flag-junit",
         "inline-mockito-robolectric-prebuilt",
         "kotlin-test",
-        "kotlinx_coroutines",
+        "kotlinx_coroutines_android",
         "kotlinx_coroutines_test",
         "mockito-kotlin-nodeps",
         "modules-utils-preconditions",
         "modules-utils-shell-command-handler",
+        "platform-compat-test-rules",
         "platform-test-annotations",
         "service-bluetooth-binder-aidl",
         "testng",
@@ -235,9 +245,9 @@ android_robolectric_test {
 
     libs: [
         "PlatformProperties",
+        "app-compat-annotations",
         "framework-annotations-lib",
         "framework-statsd.stubs.module_lib",
-        "service-bluetooth.change-ids",
     ],
 
     jacoco: {

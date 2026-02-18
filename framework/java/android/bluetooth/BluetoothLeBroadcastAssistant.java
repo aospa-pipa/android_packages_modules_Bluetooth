@@ -19,6 +19,7 @@ package android.bluetooth;
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.Manifest.permission.BLUETOOTH_SCAN;
+import static android.bluetooth.BluetoothUtils.enforcePermissionInFramework;
 
 import static java.util.Objects.requireNonNull;
 
@@ -487,6 +488,7 @@ public final class BluetoothLeBroadcastAssistant implements BluetoothProfile, Au
             "android.bluetooth.action.CONNECTION_STATE_CHANGED";
 
     private final CloseGuard mCloseGuard;
+    private final Context mContext;
     private final BluetoothAdapter mAdapter;
     private final AttributionSource mAttributionSource;
 
@@ -496,6 +498,7 @@ public final class BluetoothLeBroadcastAssistant implements BluetoothProfile, Au
     @Hide
     /*package*/ BluetoothLeBroadcastAssistant(
             @NonNull Context context, @NonNull BluetoothAdapter bluetoothAdapter) {
+        mContext = context;
         mAdapter = bluetoothAdapter;
         mAttributionSource = bluetoothAdapter.getAttributionSource();
         mService = null;
@@ -567,7 +570,6 @@ public final class BluetoothLeBroadcastAssistant implements BluetoothProfile, Au
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
     @Override
     public @BluetoothProfile.BtProfileState int getConnectionState(@NonNull BluetoothDevice sink) {
-        log("getConnectionState(" + sink + ")");
         requireNonNull(sink);
         final IBluetoothLeBroadcastAssistant service = getService();
         final int defaultValue = STATE_DISCONNECTED;
@@ -724,6 +726,8 @@ public final class BluetoothLeBroadcastAssistant implements BluetoothProfile, Au
         requireNonNull(callback);
         log("registerCallback");
 
+        enforcePermissionInFramework(mContext, BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED);
+
         synchronized (mCallbackExecutorMap) {
             // If the callback map is empty, we register the service-to-app callback
             if (mCallbackExecutorMap.isEmpty()) {
@@ -771,6 +775,8 @@ public final class BluetoothLeBroadcastAssistant implements BluetoothProfile, Au
     public void unregisterCallback(@NonNull Callback callback) {
         requireNonNull(callback);
         log("unregisterCallback");
+
+        enforcePermissionInFramework(mContext, BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED);
 
         synchronized (mCallbackExecutorMap) {
             if (mCallbackExecutorMap.remove(callback) == null) {

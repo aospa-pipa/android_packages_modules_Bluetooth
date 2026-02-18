@@ -35,7 +35,7 @@ import android.content.AttributionSource;
 import android.util.Log;
 
 import com.android.bluetooth.Util;
-import com.android.bluetooth.btservice.MetricsLogger;
+import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.bluetooth.profile.ProfileService.IProfileServiceBinder;
 
 import java.util.Collections;
@@ -294,7 +294,7 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
         }
 
         service.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
-        return service.setActiveDevice(device);
+        return service.setActiveDevice(device, true);
     }
 
     @Override
@@ -328,5 +328,14 @@ class HeadsetServiceBinder extends IBluetoothHeadset.Stub implements IProfileSer
     @SuppressLint("AndroidFrameworkRequiresPermission")
     public void clccResponseDsDa(int index, int direction, int status, int mode, boolean mpty,
 				  String number, int type, AttributionSource source) {
+    }
+
+    @Override
+    public int getCodecType(BluetoothDevice device, AttributionSource source) {
+        HeadsetService service = getService(source);
+        if (service == null) {
+            return BluetoothHeadset.CODEC_TYPE_UNSUPPORTED;
+        }
+        return service.getCodecType(device);
     }
 }

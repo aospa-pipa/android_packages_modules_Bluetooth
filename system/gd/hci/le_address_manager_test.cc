@@ -54,6 +54,10 @@ public:
     support_ble_extended_advertising_ = support;
   }
 
+  bool IsRpaGenerationSupported() const override { return rpa_generation_supported_; }
+
+  void SetRpaGenerationSupport(bool support) { rpa_generation_supported_ = support; }
+
   VendorCapabilities GetVendorCapabilities() const override { return vendor_capabilities_; }
 
   uint8_t num_advertisers_{0};
@@ -62,6 +66,7 @@ public:
 private:
   std::set<OpCode> supported_opcodes_{};
   bool support_ble_extended_advertising_ = false;
+  bool rpa_generation_supported_ = false;
 };
 
 class RotatorClient : public LeAddressManagerCallback {
@@ -190,6 +195,34 @@ TEST_F(LeAddressManagerTest, rotator_non_resolvable_address_for_single_client) {
 
   le_address_manager_->Register(clients[0].get());
   sync_handler(handler_);
+  hci_layer_->GetCommand(OpCode::LE_SET_RANDOM_ADDRESS);
+  hci_layer_->IncomingEvent(LeSetRandomAddressCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
+  clients[0].get()->WaitForResume();
+  le_address_manager_->Unregister(clients[0].get());
+  sync_handler(handler_);
+}
+
+TEST_F(LeAddressManagerTest, set_resolvable_address_with_rpa_offload) {
+  // This test verifies that when RPA offloading is supported, the initial
+  // random address is still set via LeSetRandomAddress.
+  controller_->SetRpaGenerationSupport(true);
+
+  Octet16 irk = {0xec, 0x02, 0x34, 0xa3, 0x57, 0xc8, 0xad, 0x05,
+                 0x34, 0x10, 0x10, 0xa6, 0x0a, 0x39, 0x7d, 0x9b};
+  auto minimum_rotation_time = std::chrono::milliseconds(1000);
+  auto maximum_rotation_time = std::chrono::milliseconds(3000);
+  AddressWithType remote_address(Address::kEmpty, AddressType::RANDOM_DEVICE_ADDRESS);
+  le_address_manager_->SetPrivacyPolicyForInitiatorAddress(
+          LeAddressManager::AddressPolicy::USE_RESOLVABLE_ADDRESS, remote_address, irk, false,
+          minimum_rotation_time, maximum_rotation_time);
+
+  le_address_manager_->Register(clients[0].get());
+  sync_handler(handler_);
+
+  // Verify that the RPA timeout is set for offloading.
+  hci_layer_->GetCommand(OpCode::LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_V2);
+
+  // Verify that the initial random address is set.
   hci_layer_->GetCommand(OpCode::LE_SET_RANDOM_ADDRESS);
   hci_layer_->IncomingEvent(LeSetRandomAddressCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
   clients[0].get()->WaitForResume();
@@ -579,6 +612,29 @@ TEST_F(LeAddressManagerWithSingleClientTest, register_during_command_complete) {
   le_address_manager_->Register(clients[1].get());
   clients[0].get()->WaitForResume();
   clients[1].get()->WaitForResume();
+}
+
+TEST_F(LeAddressManagerWithSingleClientTest, PrepareToRotateAddress) {
+  // At the start of the test, the client should be resumed.
+  ASSERT_FALSE(clients[0]->paused);
+
+  // Trigger the address rotation.
+  le_address_manager_->PrepareToRotateAddress();
+  sync_handler(handler_);
+
+  // The client should have been paused and should have acked the pause.
+  // This triggers the execution of the rotation command.
+  ASSERT_TRUE(clients[0]->paused);
+
+  // Verify that a new random address is set.
+  hci_layer_->GetCommand(OpCode::LE_SET_RANDOM_ADDRESS);
+
+  // Send the command complete event.
+  hci_layer_->IncomingEvent(LeSetRandomAddressCompleteBuilder::Create(0x01, ErrorCode::SUCCESS));
+
+  // After the command is complete, the client should be resumed.
+  clients[0]->WaitForResume();
+  ASSERT_FALSE(clients[0]->paused);
 }
 
 }  // namespace

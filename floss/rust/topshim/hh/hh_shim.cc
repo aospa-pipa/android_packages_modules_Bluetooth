@@ -73,13 +73,14 @@ tBT_STATUS_LEGACY HhIntf::init() const {
 }
 
 tBT_STATUS_LEGACY HhIntf::connect(RawAddress addr, tBLE_ADDR_TYPE addr_type,
-                                  tBT_TRANSPORT transport) const {
-  return toLegacyStatus(hh_intf_->connect(addr, addr_type, transport));
+                                  tBT_TRANSPORT transport, bool direct) const {
+  return toLegacyStatus(hh_intf_->connect(addr, addr_type, transport, direct));
 }
 
 tBT_STATUS_LEGACY HhIntf::disconnect(RawAddress addr, tBLE_ADDR_TYPE addr_type,
-                                     tBT_TRANSPORT transport, bool reconnect_allowed) const {
-  return toLegacyStatus(hh_intf_->disconnect(addr, addr_type, transport, reconnect_allowed));
+                                     tBT_TRANSPORT transport,
+                                     bthh_reconnect_policy_t reconnect_policy) const {
+  return toLegacyStatus(hh_intf_->disconnect(addr, addr_type, transport, reconnect_policy));
 }
 
 tBT_STATUS_LEGACY HhIntf::virtual_unplug(RawAddress addr, tBLE_ADDR_TYPE addr_type,
@@ -147,7 +148,7 @@ void HhIntf::configure_enabled_profiles(bool enable_hidp, bool enable_hogp) cons
   hh_intf_->configure_enabled_profiles(enable_hidp, enable_hogp);
 }
 
-std::unique_ptr<HhIntf> GetHhProfile(const bt_interface_t& intf) {
+std::unique_ptr<HhIntf> GetHhProfile(const BtIntf& intf) {
   if (internal::g_hh_if) {
     std::abort();
   }

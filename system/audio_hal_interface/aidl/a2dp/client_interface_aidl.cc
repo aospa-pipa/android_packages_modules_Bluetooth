@@ -39,15 +39,16 @@ namespace audio {
 namespace aidl {
 namespace a2dp {
 
-BluetoothAudioClientInterface::BluetoothAudioClientInterface(A2dpTransport* instance)
+BluetoothAudioClientInterface::BluetoothAudioClientInterface(
+        SessionType sessionType, StreamCallbacks const* stream_callbacks)
     : provider_(nullptr),
       provider_factory_(nullptr),
       session_started_(false),
       data_mq_(nullptr),
-      transport_(instance),
       latency_modes_({LatencyMode::FREE}) {
   death_recipient_ =
           ::ndk::ScopedAIBinder_DeathRecipient(AIBinder_DeathRecipient_new(binderDiedCallbackAidl));
+  transport_ = std::make_shared<A2dpTransport>(sessionType, stream_callbacks);
   FetchAudioProvider();
 }
 
@@ -569,6 +570,23 @@ size_t BluetoothAudioClientInterface::ReadAudioData(uint8_t* p_buf, size_t len) 
 
   log::warn("read underflow: buffer={} expected={}", fmq_buffer_size_, len);
   return 0;
+}
+
+void BluetoothAudioClientInterface::FlushAudioData() {
+  // Clear the FMQ buffer.
+  fmq_buffer_size_ = 0;
+
+  if (!data_mq_ || !data_mq_->isValid()) {
+    return;
+  }
+
+  // Clear data present in the FMQ itself.
+  size_t available = data_mq_->availableToRead();
+  while (available > 0) {
+    size_t read_size = std::min(available, sizeof(fmq_buffer_));
+    data_mq_->read(reinterpret_cast<MqDataType*>(fmq_buffer_), read_size);
+    available -= read_size;
+  }
 }
 
 void BluetoothAudioClientInterface::RenewAudioProviderAndSession() {

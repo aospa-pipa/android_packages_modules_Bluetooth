@@ -38,6 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.companion.CompanionDeviceManager;
 import android.content.Intent;
@@ -184,6 +185,7 @@ public class BondStateMachineTest {
                 BOND_NONE,
                 0,
                 0,
+                AbstractionLayer.BT_PAIRING_INITIATOR_APP,
                 0);
         syncHandler(BondStateMachine.MESSAGE_BOND_STATE_CHANGE);
         mStateMachine.bondStateChangeCallback(
@@ -193,6 +195,7 @@ public class BondStateMachineTest {
                 BOND_NONE,
                 0,
                 0,
+                AbstractionLayer.BT_PAIRING_INITIATOR_APP,
                 0);
         syncHandler(BondStateMachine.MESSAGE_BOND_STATE_CHANGE);
 
@@ -252,6 +255,7 @@ public class BondStateMachineTest {
                 BOND_BONDED,
                 0,
                 0,
+                AbstractionLayer.BT_PAIRING_INITIATOR_APP,
                 TEST_BOND_REASON);
 
         RemoteDevices.DeviceProperties testDeviceProperties =
@@ -589,6 +593,29 @@ public class BondStateMachineTest {
     }
 
     @Test
+    public void handleBondStateChanged_fromBondingToNone_resetsKeyMissingCount() {
+        // Set up a device and set its initial state to BONDING
+        mDeviceProperties = mRemoteDevices.addDeviceProperties(TEST_BT_ADDR_BYTES);
+        mDevice = mDeviceProperties.getDevice();
+        mDeviceProperties.mBondState = BOND_BONDING;
+
+        // Trigger the state change from BONDING to NONE
+        mStateMachine.handleBondStateChanged(
+                mDevice,
+                BluetoothDevice.TRANSPORT_BREDR,
+                BOND_NONE,
+                0, // pairingAlgorithm
+                0, // pairingVariant
+                AbstractionLayer.BT_PAIRING_INITIATOR_APP, // pairingInitiator
+                TEST_BOND_REASON);
+
+        // Verify that the key missing count is reset. This is crucial for scenarios like
+        // autonomous repair, where a failed pairing attempt (BONDING -> NONE) should clear
+        // the bond-loss state.
+        verify(mAdapterService).updateKeyMissingCount(eq(mDevice), eq(false));
+    }
+
+    @Test
     public void clearProfilePriority() {
         doReturn(Optional.of(mHidHostService)).when(mAdapterService).getHidHostService();
         doReturn(Optional.of(mA2dpService)).when(mAdapterService).getA2dpService();
@@ -661,7 +688,13 @@ public class BondStateMachineTest {
                 mStateMachine.handlePendingUuids(mDevice);
             } else {
                 mStateMachine.handleBondStateChanged(
-                        mDevice, BluetoothDevice.TRANSPORT_BREDR, newState, 0, 0, TEST_BOND_REASON);
+                        mDevice,
+                        BluetoothDevice.TRANSPORT_BREDR,
+                        newState,
+                        0,
+                        0,
+                        AbstractionLayer.BT_PAIRING_INITIATOR_APP,
+                        TEST_BOND_REASON);
             }
         } catch (IllegalArgumentException e) {
             // Do nothing.
@@ -723,6 +756,10 @@ public class BondStateMachineTest {
             ParcelUuid[] uuids) {
         for (int deviceType : DEVICE_TYPES) {
             resetRemoteDevice(deviceType);
+            if (deviceType == BluetoothDevice.DEVICE_TYPE_LE) {
+                // Add audio support to validate tests.
+                mDeviceProperties.setBluetoothClass(BluetoothClass.Service.LE_AUDIO);
+            }
             if (pendingBondedDevice != null) {
                 mStateMachine.mDevicesWaitingForUuids.add(mDevice);
             }

@@ -29,6 +29,7 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
+import android.bluetooth.State;
 import android.net.Uri;
 import com.android.bluetooth.Utils;
 import android.content.Context;
@@ -805,12 +806,17 @@ public class TbsGatt {
         if (entryExist
                 && (((mStatusFlagValue.get(device) & STATUS_FLAG_INBAND_RINGTONE_ENABLED) != 0)
                         == set)) {
-            Log.i(TAG, "Silent mode already set for " + device);
+            Log.i(TAG, "Inband ringtone mode already set for " + device);
             return false;
         }
 
         Integer valueInt = entryExist ? mStatusFlagValue.get(device) : 0;
-        valueInt ^= STATUS_FLAG_INBAND_RINGTONE_ENABLED;
+
+        if (set) {
+            valueInt |= STATUS_FLAG_INBAND_RINGTONE_ENABLED;
+        } else {
+            valueInt &= ~STATUS_FLAG_INBAND_RINGTONE_ENABLED;
+        }
 
         if (entryExist) {
             mStatusFlagValue.replace(device, valueInt);
@@ -1076,7 +1082,7 @@ public class TbsGatt {
                 Log.d(
                         TAG,
                         "onBluetoothStateChange: state=" + BluetoothAdapter.nameForState(newState));
-                if (newState == BluetoothAdapter.STATE_ON) {
+                if (newState == State.ON) {
                     restoreCccValuesForStoredDevices();
                 }
             };

@@ -34,6 +34,7 @@ import android.bluetooth.BluetoothSap;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
 import android.bluetooth.BluetoothUuid;
+import android.bluetooth.State;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -48,6 +49,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.bluetooth.R;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.profile.ConnectableProfile;
@@ -208,8 +210,7 @@ public class SapService extends ConnectableProfile
             if (!initSocketOK) {
                 // Need to break out of this loop if BT is being turned off.
                 int state = getAdapterService().getState();
-                if ((state != BluetoothAdapter.STATE_TURNING_ON)
-                        && (state != BluetoothAdapter.STATE_ON)) {
+                if ((state != State.TURNING_ON) && (state != State.ON)) {
                     Log.w(TAG, "initServerSocket failed as BT is (being) turned off");
                     break;
                 }
@@ -416,7 +417,7 @@ public class SapService extends ConnectableProfile
                         mIsWaitingAuthorization = true;
                         setUserTimeoutAlarm();
                         SapService.this.sendBroadcast(
-                                intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+                                intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
 
                         Log.v(
                                 TAG,
@@ -532,7 +533,7 @@ public class SapService extends ConnectableProfile
         intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, prevState);
         intent.putExtra(BluetoothProfile.EXTRA_STATE, mState);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, mRemoteDevice);
-        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
     }
 
     public int getState() {
@@ -660,10 +661,10 @@ public class SapService extends ConnectableProfile
 
     @Override
     public void onBluetoothStateChange(int prevState, int newState) {
-        if (newState == BluetoothAdapter.STATE_TURNING_OFF) {
+        if (newState == State.TURNING_OFF) {
             Log.d(TAG, "STATE_TURNING_OFF");
             sendShutdownMessage();
-        } else if (newState == BluetoothAdapter.STATE_ON) {
+        } else if (newState == State.ON) {
             Log.d(TAG, "STATE_ON");
             // start RFCOMM listener
             mSessionStatusHandler.sendMessage(mSessionStatusHandler.obtainMessage(START_LISTENER));

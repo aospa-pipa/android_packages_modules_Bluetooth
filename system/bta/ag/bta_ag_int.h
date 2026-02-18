@@ -38,8 +38,8 @@
 #include "internal_include/bt_target.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/btm_api_types.h"
+#include "stack/include/sdp_discovery_db.h"
 #include "stack/include/sdp_status.h"
-#include "stack/sdp/sdp_discovery_db.h"
 
 /*****************************************************************************
  *  Constants
@@ -288,14 +288,14 @@ typedef enum { BTA_AG_INIT_ST, BTA_AG_OPENING_ST, BTA_AG_OPEN_ST, BTA_AG_CLOSING
 /* type for each service control block */
 struct tBTA_AG_SCB {
   char clip[BTA_AG_AT_MAX_LEN + 1];     /* number string used for CLIP */
-  uint16_t serv_handle[BTA_AG_NUM_IDX]; /* RFCOMM server handles */
+  uint8_t serv_handle[BTA_AG_NUM_IDX];  /* RFCOMM server handles */
   tBTA_AG_AT_CB at_cb;                  /* AT command interpreter */
   RawAddress peer_addr;                 /* peer bd address */
   tSDP_DISCOVERY_DB* p_disc_db;         /* pointer to discovery database */
   tBTA_AG_SDP_METRICS_CB sdp_metrics;   /* SDP information for metrics */
   tBTA_SERVICE_MASK reg_services;       /* services specified in register API */
   tBTA_SERVICE_MASK open_services;      /* services specified in open API */
-  uint16_t conn_handle;                 /* RFCOMM handle of connected service */
+  uint8_t conn_handle;                  /* RFCOMM handle of connected service */
   tBTA_AG_FEAT features;                /* features registered by application */
   tBTA_AG_FEAT masked_features;         /* local BRSF features for this connection */
   tBTA_AG_PEER_FEAT peer_features;      /* peer device features */
@@ -355,6 +355,8 @@ struct tBTA_AG_SCB {
                                                                HF indicators */
   tBTA_AG_HF_IND local_hf_indicators[BTA_AG_MAX_NUM_LOCAL_HF_IND]; /* Local supported
                                                                HF indicators */
+  bool sendAcceptConnectionRsp = false;  /* whether to defer sending the accept rsp */
+  tBTM_ESCO_CONN_REQ_EVT_DATA conn_data; /* SCO data for pending conn request */
 
   std::string ToString() const {
     return std::format(

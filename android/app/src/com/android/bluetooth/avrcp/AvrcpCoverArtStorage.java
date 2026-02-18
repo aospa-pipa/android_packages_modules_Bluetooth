@@ -155,10 +155,10 @@ final class AvrcpCoverArtStorage {
 
     public void dump(StringBuilder sb) {
         int bytes = 0;
-        sb.append("\n\timages (").append(mImageHandles.size());
+        sb.append("\n  timages (").append(mImageHandles.size());
         if (mMaxImages > 0) sb.append(" / ").append(mMaxImages);
         sb.append("):");
-        sb.append("\n\t\tHandle   : Hash                              : CoverArt");
+        sb.append("\n    Handle   : Hash                              : CoverArt");
         synchronized (mImagesLock) {
             // Be sure to use entry set below or each access well count to the ordering
             for (Map.Entry<String, CoverArt> entry : mImages.entrySet()) {
@@ -171,11 +171,11 @@ final class AvrcpCoverArtStorage {
                         hash = key;
                     }
                 }
-                sb.append(String.format("\n\t\t%-8s : %-32s : %s", imageHandle, hash, coverArt));
+                sb.append(String.format("\n    %-8s : %-32s : %s", imageHandle, hash, coverArt));
                 bytes += coverArt.size();
             }
         }
-        sb.append("\n\tImage bytes: ").append(bytes);
+        sb.append("\n  Image bytes: ").append(bytes);
     }
 
     /** Print a message to DEBUG if debug output is enabled */

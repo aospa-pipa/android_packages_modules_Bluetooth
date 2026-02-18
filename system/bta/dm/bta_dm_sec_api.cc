@@ -34,17 +34,16 @@
 #include "bta/dm/bta_dm_sec_int.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/include/bt_device_type.h"
-#include "stack/include/btm_ble_sec_api.h"
 #include "stack/include/btm_client_interface.h"
+#include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/main_thread.h"
 
 using namespace bluetooth;
 
 /** This function initiates a bonding procedure with a peer device */
-void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                tBT_DEVICE_TYPE device_type) {
-  bta_dm_bond(bd_addr, addr_type, transport, device_type);
+void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
+  bta_dm_bond(bd_addr, addr_type, transport);
 }
 
 /** This function cancels the bonding procedure with a peer device
@@ -88,7 +87,7 @@ void BTA_DmPinReply(const RawAddress& bd_addr, bool accept, uint8_t pin_len, uin
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmLocalOob(void) { BTM_ReadLocalOobData(); }
+void BTA_DmLocalOob(void) { get_btm_client_interface().security.BTM_ReadLocalOobData(); }
 
 /*******************************************************************************
  *
@@ -112,12 +111,11 @@ void BTA_DmConfirm(const RawAddress& bd_addr, bool accept) { bta_dm_confirm(bd_a
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmAddDevice(RawAddress bd_addr, DEV_CLASS dev_class, LinkKey link_key, uint8_t key_type,
+void BTA_DmAddDevice(const RawAddress& bd_addr, const DEV_CLASS& dev_class,
+                     const PairingType& pairing_type, const LinkKey& link_key, uint8_t key_type,
                      uint8_t pin_length) {
-  auto closure = base::Bind(get_btm_client_interface().security.BTM_SecAddDevice, bd_addr,
-                            dev_class, link_key, key_type, pin_length);
-
-  closure.Run();
+  get_btm_client_interface().security.BTM_SecAddDevice(bd_addr, dev_class, pairing_type, link_key,
+                                                       key_type, pin_length);
 }
 
 /** This function removes a device from the security database list of peer
@@ -136,16 +134,14 @@ tBTA_STATUS BTA_DmRemoveDevice(const RawAddress& bd_addr) {
  *                  information stored in the NVRAM.
  *
  * Parameters:      bd_addr          - BD address of the peer
- *                  p_le_key         - LE key values.
- *                  key_type         - LE SMP key type.
- *
- * Returns          BTA_SUCCESS if successful
- *                  BTA_FAIL if operation failed.
+ *                  pairing_type     - Pairing type
+ *                  key_type         - Key type
+ *                  le_key           - Key value
  *
  ******************************************************************************/
-void BTA_DmAddBleKey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-                     tBTM_LE_KEY_TYPE key_type) {
-  bta_dm_add_blekey(bd_addr, *p_le_key, key_type);
+void BTA_DmAddBleKey(const RawAddress& bd_addr, const PairingType& pairing_type,
+                     tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& le_key) {
+  bta_dm_add_blekey(bd_addr, pairing_type, key_type, le_key);
 }
 
 /*******************************************************************************
@@ -240,7 +236,7 @@ void BTA_DmBleSecurityGrant(const RawAddress& bd_addr, tBTA_DM_BLE_SEC_GRANT res
     }
   }(res);
 
-  BTM_SecurityGrant(bd_addr, btm_status);
+  get_btm_client_interface().security.BTM_SecurityGrant(bd_addr, btm_status);
 }
 
 /*******************************************************************************

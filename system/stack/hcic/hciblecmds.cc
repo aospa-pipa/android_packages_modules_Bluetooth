@@ -103,7 +103,7 @@
 
 #define HCIC_PARAM_SIZE_BLE_SET_DATA_LENGTH_V2 7
 #define HCIC_PARAM_SIZE_BLE_START_ENC_V2 (6 + HCIC_BLE_RAND_DI_SIZE + HCIC_BLE_ENCRYPT_KEY_SIZE)
-#define HCIC_PARAM_SIZE_BLE_SET_HDT_DEFAULT_PARAMETERS 3
+#define HCIC_PARAM_SIZE_BLE_SET_HDT_DEFAULT_PARAMETERS 4
 #define HCIC_PARAM_SIZE_REFRESH_KEY_V2 2
 #define HCIC_PARAM_SIZE_BLE_SET_DEFAULT_PHY 3
 #define HCIC_PARAM_SIZE_BLE_READ_ENC_KEY_SCHED_DEBUG_MODE 0
@@ -657,7 +657,7 @@ void btsnd_hci_ble_set_default_phy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx
 
 void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
                                               uint8_t preferred_packet_format,
-                                              uint8_t preferred_acl_rates) {
+                                              uint16_t preferred_acl_rates) {
   BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
   uint8_t* pp = (uint8_t*)(p + 1);
 
@@ -669,7 +669,7 @@ void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
 
   UINT8_TO_STREAM(pp, preferred_mic_length);
   UINT8_TO_STREAM(pp, preferred_packet_format);
-  UINT8_TO_STREAM(pp, preferred_acl_rates);
+  UINT16_TO_STREAM(pp, preferred_acl_rates);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
 }
@@ -740,4 +740,27 @@ void btsnd_hcic_ble_read_enc_key_sched_debug_mode() {
   UINT8_TO_STREAM(pp, HCIC_PARAM_SIZE_BLE_READ_ENC_KEY_SCHED_DEBUG_MODE);
 
   btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
+}
+
+void btsnd_hcic_ble_accept_cis_req(uint16_t cis_conn_handle) {
+  BT_HDR* p = (BT_HDR*)osi_malloc(HCI_CMD_BUF_SIZE);
+  p->offset = 0;
+  p->len = HCIC_PREAMBLE_SIZE + sizeof(cis_conn_handle);
+
+  uint8_t* pp = (uint8_t*)(p + 1);
+  UINT16_TO_STREAM(pp, HCI_LE_ACCEPT_CIS_REQ);
+  UINT8_TO_STREAM(pp, sizeof(cis_conn_handle));
+  UINT16_TO_STREAM(pp, cis_conn_handle);
+
+  btu_hcif_send_cmd(LOCAL_BR_EDR_CONTROLLER_ID, p);
+}
+
+void btsnd_hcic_ble_reject_cis_req(uint16_t cis_conn_handle, uint8_t reason,
+                                   base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
+  uint8_t param[sizeof(cis_conn_handle) + sizeof(reason)];
+  uint8_t* pp = param;
+
+  UINT16_TO_STREAM(pp, cis_conn_handle);
+  UINT8_TO_STREAM(pp, reason);
+  btu_hcif_send_cmd_with_cb(HCI_LE_REJ_CIS_REQ, param, sizeof(param), std::move(cb));
 }

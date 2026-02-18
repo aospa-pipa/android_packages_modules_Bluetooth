@@ -48,7 +48,6 @@
 #include "bta_le_audio_uuids.h"
 #include "btif/include/btif_profile_storage.h"
 #include "btm_ble_api_types.h"
-#include "btm_sec.h"
 #include "btm_sec_api_types.h"
 #include "btm_status.h"
 #include "gap_api.h"
@@ -63,6 +62,7 @@
 #include "osi/include/properties.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/bt_types.h"
+#include "stack/include/btm_client_interface.h"
 
 using bluetooth::Uuid;
 using bluetooth::csis::CsisClient;
@@ -150,7 +150,7 @@ public:
   void Connect(const RawAddress& address) override {
     log::info("{}", address);
 
-    if (!BTM_IsBonded(address, BT_TRANSPORT_LE)) {
+    if (!get_btm_client_interface().security.BTM_IsBonded(address, BT_TRANSPORT_LE)) {
       log::error("Connecting  {} when not bonded", address);
       callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
       return;
@@ -199,7 +199,9 @@ public:
     auto is_connecting_actively = device->is_connecting_actively;
 
     DoDisconnectCleanUp(*device);
-    devices_.erase(device);
+    if (!com_android_bluetooth_flags_hap_keep_bonded_dev_in_ram()) {
+      devices_.erase(device);
+    }
 
     if (conn_id != GATT_INVALID_CONN_ID) {
       BTA_GATTC_Close(conn_id);
@@ -214,6 +216,21 @@ public:
         BTA_GATTC_CancelOpen(gatt_if_, address, false);
       }
     }
+  }
+
+  void RemoveDevice(const RawAddress& address) override {
+    log::debug("{}", address);
+    if (!com_android_bluetooth_flags_hap_keep_bonded_dev_in_ram()) {
+      return;
+    }
+    auto device = std::find_if(devices_.begin(), devices_.end(), HasDevice::MatchAddress(address));
+    if (device == devices_.end()) {
+      log::warn("Device not connected to profile{}", address);
+      return;
+    }
+
+    Disconnect(address);
+    devices_.erase(device);
   }
 
   void UpdateJournalOpEntryStatus(HasDevice& device, HasGattOpContext context,
@@ -956,7 +973,7 @@ public:
 
   void Dump(int fd) const {
     std::stringstream stream;
-    stream << " APP ID: " << +gatt_if_ << " \n";
+    stream << " APP ID: " << +gatt_if_ << "\n";
     if (devices_.size()) {
       stream << "  {\"Known HAS devices\": [";
       for (const auto& device : devices_) {
@@ -1892,7 +1909,8 @@ private:
 
       case BTA_GATTC_ENC_CMPL_CB_EVT:
         OnLeEncryptionComplete(p_data->enc_cmpl.remote_bda,
-                               BTM_IsEncrypted(p_data->enc_cmpl.remote_bda, BT_TRANSPORT_LE));
+                               get_btm_client_interface().security.BTM_IsEncrypted(
+                                       p_data->enc_cmpl.remote_bda, BT_TRANSPORT_LE));
         break;
 
       case BTA_GATTC_SRVC_CHG_EVT:
@@ -1941,7 +1959,7 @@ private:
 
     device->conn_id = evt.conn_id;
     BtaGattQueue::Clean(evt.conn_id);
-    if (BTM_SecIsLeSecurityPending(device->addr)) {
+    if (get_btm_client_interface().security.BTM_SecIsLeSecurityPending(device->addr)) {
       /* if security collision happened, wait for encryption done
        * (BTA_GATTC_ENC_CMPL_CB_EVT)
        */
@@ -1949,14 +1967,14 @@ private:
     }
 
     /* verify bond */
-    if (BTM_IsEncrypted(device->addr, BT_TRANSPORT_LE)) {
+    if (get_btm_client_interface().security.BTM_IsEncrypted(device->addr, BT_TRANSPORT_LE)) {
       /* if link has been encrypted */
       OnEncrypted(*device);
       return;
     }
 
-    tBTM_STATUS result =
-            BTM_SetEncryption(device->addr, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
+    tBTM_STATUS result = get_btm_client_interface().security.BTM_SetEncryption(
+            device->addr, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
 
     log::info("Encryption required for {}. Request result: 0x{:02x}", device->addr, result);
 
@@ -2000,7 +2018,7 @@ private:
     log::debug("");
 
     /* verify link is encrypted */
-    if (!BTM_IsEncrypted(device->addr, BT_TRANSPORT_LE)) {
+    if (!get_btm_client_interface().security.BTM_IsEncrypted(device->addr, BT_TRANSPORT_LE)) {
       log::warn("Device not yet bonded - waiting for encryption");
       return;
     }

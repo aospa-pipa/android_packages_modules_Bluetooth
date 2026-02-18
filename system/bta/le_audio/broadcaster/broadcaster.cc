@@ -903,29 +903,6 @@ public:
     }
   }
 
-  void IsValidBroadcast(uint32_t broadcast_id, uint8_t addr_type, RawAddress addr,
-                        base::Callback<void(uint8_t /* broadcast_id */, uint8_t /* addr_type */,
-                                            RawAddress /* addr */, bool /* is_local */)>
-                                cb) override {
-    if (broadcasts_.count(broadcast_id) == 0) {
-      log::error("No such broadcast_id={}", broadcast_id);
-      std::move(cb).Run(broadcast_id, addr_type, addr, false);
-      return;
-    }
-
-    broadcasts_[broadcast_id]->RequestOwnAddress(base::Bind(
-            [](uint32_t broadcast_id, uint8_t req_address_type, RawAddress req_address,
-               base::Callback<void(uint8_t /* broadcast_id */, uint8_t /* addr_type */,
-                                   RawAddress /* addr */, bool /* is_local */)>
-                       cb,
-               uint8_t rcv_address_type, RawAddress rcv_address) {
-              bool is_local =
-                      (req_address_type == rcv_address_type) && (req_address == rcv_address);
-              std::move(cb).Run(broadcast_id, req_address_type, req_address, is_local);
-            },
-            broadcast_id, addr_type, addr, std::move(cb)));
-  }
-
   void SetStreamingPhy(uint8_t phy) override { current_phy_ = phy; }
 
   uint8_t GetStreamingPhy(void) const override { return current_phy_; }
@@ -1193,6 +1170,10 @@ private:
               instance->UpdateAudioActiveStateInBroadcastAnnouncements();
             }
           }
+
+          if (com_android_bluetooth_flags_leaudio_fix_stream_confirm_datapath_race()) {
+            instance->le_audio_source_hal_client_->ConfirmStreamingRequest(false);
+          }
           break;
       };
 
@@ -1211,7 +1192,9 @@ private:
               std::bind(&LeAudioSourceAudioHalClient::UpdateBroadcastAudioConfigToHal,
                         instance->le_audio_source_hal_client_.get(), std::placeholders::_1));
 
-      instance->le_audio_source_hal_client_->ConfirmStreamingRequest(false);
+      if (!com_android_bluetooth_flags_leaudio_fix_stream_confirm_datapath_race()) {
+        instance->le_audio_source_hal_client_->ConfirmStreamingRequest(false);
+      }
     }
 
     void OnAnnouncementUpdated(uint32_t broadcast_id) {
@@ -1366,8 +1349,8 @@ private:
       for (uint8_t chan = 0; chan < encoders.size(); ++chan) {
         IsoManager::GetInstance()->SendIsoData(
                 config->connection_handles[chan],
-                (const uint8_t*)encoders[chan]->GetDecodedSamples().data(),
-                encoders[chan]->GetDecodedSamples().size() * 2);
+                (const uint8_t*)encoders[chan]->GetOutputBuffer().data(),
+                encoders[chan]->GetOutputBuffer().size() * 2);
       }
     }
 
@@ -1427,6 +1410,7 @@ private:
 
       if (instance->audio_state_ == AudioState::STOPPED) {
         log::warn("audio stopped, skip suspend request");
+        instance->le_audio_source_hal_client_->ConfirmSuspendRequest();
         return;
       }
 

@@ -264,9 +264,6 @@ void Device::VendorPacketHandler(uint8_t label, std::shared_ptr<VendorPacket> pk
       }
       case CommandPdu::SET_ABSOLUTE_VOLUME: {
         active_labels_.erase(label);
-        if (!com_android_bluetooth_flags_use_returned_absolute_volume()) {
-          break;
-        }
 
         set_vol_cmd_in_progress_ = false;
 
@@ -756,7 +753,7 @@ void Device::HandleVolumeChanged(uint8_t label,
 
   // Handle the first volume update.
   if (volume_ == VOL_NOT_SUPPORTED) {
-    log::info("Absolute voluem updated later in the DeviceConnected");
+    log::info("Absolute volume updated later in the DeviceConnected");
     volume_interface_->DeviceConnected(
             GetAddress(), base::Bind(&Device::SetVolume, weak_ptr_factory_.GetWeakPtr()));
 
@@ -773,9 +770,7 @@ void Device::HandleVolumeChanged(uint8_t label,
   int8_t vol = pkt->GetVolume();
   vol &= ~0x80;  // remove RFA bit
 
-  bool use_returned_volume_flag = com_android_bluetooth_flags_use_returned_absolute_volume();
-
-  if (!use_returned_volume_flag || (use_returned_volume_flag && volume_ != vol)) {
+  if (volume_ != vol) {
     volume_ = vol;
     log::info("Volume has changed to {}", (uint32_t)volume_);
     volume_interface_->SetVolume(volume_);
@@ -786,24 +781,20 @@ void Device::HandleVolumeChanged(uint8_t label,
 
 void Device::SetVolume(int8_t volume) {
   // TODO (apanicke): Implement logic for Multi-AVRCP
-  log::info("volume={}", (int)volume);
+  log::info("volume: {}", (int)volume);
   if (volume == volume_) {
     log::warn("{}: Ignoring volume change same as current volume level", address_);
     return;
   }
   volume_ = volume;
 
-  bool use_returned_volume_flag = com_android_bluetooth_flags_use_returned_absolute_volume();
-
-  if (use_returned_volume_flag) {
-    if (set_vol_cmd_in_progress_) {
-      log::info("There is already a volume command in progress");
-      pending_volume_ = std::make_optional(volume);
-      return;
-    }
-
-    set_vol_cmd_in_progress_ = true;
+  if (set_vol_cmd_in_progress_) {
+    log::info("There is already a volume command in progress");
+    pending_volume_ = std::make_optional(volume);
+    return;
   }
+
+  set_vol_cmd_in_progress_ = true;
 
   auto request = SetAbsoluteVolumeRequestBuilder::MakeBuilder(volume);
 
@@ -1656,14 +1647,20 @@ void Device::HandleChangePath(uint8_t label, std::shared_ptr<ChangePathRequest> 
 
   log::verbose("direction={} uid=0x{:x}", pkt->GetDirection(), pkt->GetUid());
 
-  if (pkt->GetDirection() == Direction::DOWN && vfs_ids_.get_media_id(pkt->GetUid()) == "") {
-    log::error("{}: No item found for UID={}", address_, pkt->GetUid());
-    auto builder = ChangePathResponseBuilder::MakeBuilder(Status::DOES_NOT_EXIST, 0);
-    send_message(label, true, std::move(builder));
-    return;
-  }
-
   if (pkt->GetDirection() == Direction::DOWN) {
+    std::string media_id = vfs_ids_.get_media_id(pkt->GetUid());
+    if (media_id.empty()) {
+      log::error("{}: No item found for UID={}", address_, pkt->GetUid());
+      auto builder = ChangePathResponseBuilder::MakeBuilder(Status::DOES_NOT_EXIST, 0);
+      send_message(label, true, std::move(builder));
+      return;
+    } else if (com_android_bluetooth_flags_fix_play_item_non_playable_folder() &&
+               non_playable_vfs_uids_.find(pkt->GetUid()) == non_playable_vfs_uids_.end()) {
+      log::error("invalid folder");
+      auto builder = ChangePathResponseBuilder::MakeBuilder(Status::NOT_A_DIRECTORY, 0);
+      send_message(label, true, std::move(builder));
+      return;
+    }
     current_path_.push(vfs_ids_.get_media_id(pkt->GetUid()));
     log::verbose("Pushing Path to stack: \"{}\"", CurrentFolder());
   } else {
@@ -1687,8 +1684,18 @@ void Device::HandleChangePath(uint8_t label, std::shared_ptr<ChangePathRequest> 
 
 void Device::ChangePathResponse(uint8_t label, std::shared_ptr<ChangePathRequest> /*pkt*/,
                                 std::vector<ListItem> list) {
-  // TODO (apanicke): Reconstruct the VFS ID's here. Right now it gets
-  // reconstructed in GetFolderItemsVFS
+  for (const auto& item : list) {
+    if (item.type == ListItem::FOLDER) {
+      uint64_t item_uid = vfs_ids_.insert(item.folder.media_id);
+      if (com_android_bluetooth_flags_fix_play_item_non_playable_folder() &&
+          !item.folder.is_playable) {
+        non_playable_vfs_uids_.insert(item_uid);
+      }
+    } else if (item.type == ListItem::SONG) {
+      vfs_ids_.insert(item.song.media_id);
+    }
+  }
+
   auto builder = ChangePathResponseBuilder::MakeBuilder(Status::NO_ERROR, list.size());
   send_message(label, true, std::move(builder));
 }
@@ -2047,8 +2054,10 @@ void Device::HandleSetBrowsedPlayer(uint8_t label, std::shared_ptr<SetBrowsedPla
     return;
   }
 
-  log::verbose("player_id={}", pkt->GetPlayerId());
-  media_interface_->SetBrowsedPlayer(pkt->GetPlayerId(), CurrentFolder(),
+  uint16_t player_id = pkt->GetPlayerId();
+  log::verbose("player_id={}", player_id);
+
+  media_interface_->SetBrowsedPlayer(player_id, CurrentFolder(),
                                      base::Bind(&Device::SetBrowsedPlayerResponse,
                                                 weak_ptr_factory_.GetWeakPtr(), label, pkt));
 }

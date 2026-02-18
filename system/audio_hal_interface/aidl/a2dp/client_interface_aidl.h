@@ -91,11 +91,11 @@ inline BluetoothAudioStatus StatusToHalStatus(Status ack) {
  ***/
 class BluetoothAudioClientInterface {
 public:
-  BluetoothAudioClientInterface(A2dpTransport* instance);
+  BluetoothAudioClientInterface(SessionType sessionType, StreamCallbacks const* stream_callbacks);
   virtual ~BluetoothAudioClientInterface();
 
   bool IsValid() const;
-  A2dpTransport* GetTransportInstance() const { return transport_; }
+  std::shared_ptr<A2dpTransport> GetTransportInstance() const { return transport_; }
 
   std::vector<AudioCapabilities> GetAudioCapabilities() const;
 
@@ -129,11 +129,12 @@ public:
 
   bool SetAllowedLatencyModes(std::vector<LatencyMode> latency_modes);
 
-  /***
-   * Read data from audio HAL through fmq
-   ***/
+  /** Read PCM data from audio FMQ. */
   size_t ReadAudioData(uint8_t* p_buf, size_t len);
   size_t ReadAudioDataExact(uint8_t* p_buf, size_t len);
+
+  /** Flush all the PCM data present in the audio FMQ. */
+  void FlushAudioData();
 
   static constexpr PcmConfiguration kInvalidPcmConfiguration = {};
 
@@ -169,7 +170,7 @@ protected:
           std::string() + IBluetoothAudioProviderFactory::descriptor + "/default";
 
 private:
-  A2dpTransport* transport_;
+  std::shared_ptr<A2dpTransport> transport_;
   std::vector<AudioCapabilities> capabilities_;
   std::vector<LatencyMode> latency_modes_;
 

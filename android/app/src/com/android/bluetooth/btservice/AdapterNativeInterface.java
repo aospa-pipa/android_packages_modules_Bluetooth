@@ -53,19 +53,20 @@ public class AdapterNativeInterface {
                 isCommonCriteriaMode,
                 configCompareResult,
                 isAtvDevice,
-                hciInstanceName);
+                hciInstanceName,
+                android.bluetooth.platform.flags.Flags.autonomousRepairingInitiation());
     }
 
     void cleanup() {
         cleanupNative();
     }
 
-    boolean enable(String localName) {
-        return enableNative(localName);
+    void enable(String localName) {
+        enableNative(localName);
     }
 
-    boolean disable() {
-        return disableNative();
+    void disable() {
+        disableNative();
     }
 
     boolean setScanMode(int mode) {
@@ -297,18 +298,23 @@ public class AdapterNativeInterface {
         return restoreFilterAcceptListNative();
     }
 
+    boolean setSuspendState(boolean suspend) {
+        return setSuspendStateNative(suspend);
+    }
+
     private native boolean initNative(
             boolean startRestricted,
             boolean isCommonCriteriaMode,
             int configCompareResult,
             boolean isAtvDevice,
-            String hciInstanceName);
+            String hciInstanceName,
+            boolean autonomousRepairingInitiation);
 
     private native void cleanupNative();
 
-    private native boolean enableNative(String localName);
+    private native void enableNative(String localName);
 
-    private native boolean disableNative();
+    private native void disableNative();
 
     private native boolean setScanModeNative(int mode);
 
@@ -424,4 +430,6 @@ public class AdapterNativeInterface {
     private native boolean allowWakeByHidNative();
 
     private native boolean restoreFilterAcceptListNative();
+
+    private native boolean setSuspendStateNative(boolean suspend);
 }

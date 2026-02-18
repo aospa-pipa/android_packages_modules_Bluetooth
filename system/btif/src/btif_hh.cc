@@ -43,7 +43,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <future>
 
 #include "bt_device_type.h"
 #include "bta_api.h"
@@ -94,7 +93,8 @@ static int btif_hh_keylockstates = 0;  // The current key state of each key
 typedef enum {
   BTIF_HH_CONNECT_REQ_EVT = 0,
   BTIF_HH_DISCONNECT_REQ_EVT,
-  BTIF_HH_VUP_REQ_EVT
+  BTIF_HH_VUP_REQ_EVT,
+  BTIF_HH_BG_CONNECT_REQ_EVT,
 } btif_hh_req_evt_t;
 
 /*******************************************************************************
@@ -1177,8 +1177,7 @@ BtStatus btif_hh_virtual_unplug_from_main(const AclLinkSpec& link_spec) {
  * Returns          int status
  *
  ******************************************************************************/
-
-BtStatus btif_hh_connect(const AclLinkSpec& link_spec) {
+BtStatus btif_hh_connect(const AclLinkSpec& link_spec, bool direct) {
   CHECK_BTHH_INIT();
   log::verbose("BTHH");
   btif_hh_device_t* p_dev = btif_hh_find_dev_by_link_spec(link_spec);
@@ -1207,6 +1206,17 @@ BtStatus btif_hh_connect(const AclLinkSpec& link_spec) {
     btif_storage_set_hid_connection_policy(link_spec, true);
   }
 
+  if (!direct) {
+    if (link_spec.transport != BT_TRANSPORT_LE) {
+      log::warn("Background connection not allowed for classic connection {}", link_spec);
+      return BtifStatus(PARM_INVALID);
+    }
+    if (!added_dev) {
+      log::warn("Background connection not allowed for non-added device {}", link_spec);
+      return BtifStatus(DEVICE_NOT_FOUND);
+    }
+  }
+
   if (p_dev && p_dev->state == BTHH_CONN_STATE_CONNECTED) {
     log::debug("HidHost profile already connected for {}", link_spec);
     return BtifStatus();
@@ -1220,8 +1230,13 @@ BtStatus btif_hh_connect(const AclLinkSpec& link_spec) {
     return BtifStatus();
   }
 
-  if (p_dev) {
-    p_dev->state = BTHH_CONN_STATE_CONNECTING;
+  // Don't update the state for indirect connection, that would make the UI be
+  // stuck displaying "connecting..."
+  if (direct) {
+    if (p_dev) {
+      p_dev->state = BTHH_CONN_STATE_CONNECTING;
+    }
+    BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_CONNECTING, BTHH_OK);
   }
 
   // Add the new connection to the pending list
@@ -1229,7 +1244,6 @@ BtStatus btif_hh_connect(const AclLinkSpec& link_spec) {
     btif_hh_cb.new_connection_requests.push_back(link_spec);
   }
 
-  BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_CONNECTING, BTHH_OK);
   if (btif_hh_cb.pending_incoming_connection.link_spec == link_spec) {
     log::info("Resume pending incoming connection {}", link_spec);
     tBTA_HH_CONN conn = btif_hh_cb.pending_incoming_connection;
@@ -1242,7 +1256,7 @@ BtStatus btif_hh_connect(const AclLinkSpec& link_spec) {
    sending this request from host, for subsequent user initiated connection.
    If the remote is not in pagescan mode, we will do 2 retries to connect before
    giving up */
-  BTA_HhOpen(link_spec, true);
+  BTA_HhOpen(link_spec, direct);
   return BtifStatus();
 }
 
@@ -1525,9 +1539,14 @@ static void btif_hh_handle_evt(uint16_t event, char* p_param) {
   switch (event) {
     case BTIF_HH_CONNECT_REQ_EVT: {
       log::debug("BTIF_HH_CONNECT_REQ_EVT: link spec:{}", link_spec);
-      if (!btif_hh_connect(link_spec)) {
+      if (!btif_hh_connect(link_spec, true)) {
         BTHH_STATE_UPDATE(link_spec, BTHH_CONN_STATE_DISCONNECTED, BTHH_ERR);
       }
+    } break;
+
+    case BTIF_HH_BG_CONNECT_REQ_EVT: {
+      log::debug("BTIF_HH_BG_CONNECT_REQ_EVT: link spec:{}", link_spec);
+      btif_hh_connect(link_spec, false);
     } break;
 
     case BTIF_HH_DISCONNECT_REQ_EVT: {
@@ -1618,10 +1637,8 @@ static void btif_hh_transport_select(AclLinkSpec& link_spec) {
   bool le_preferred = false;
   const RawAddress& bd_addr = link_spec.addrt.bda;
 
-  // Find the device type
-  tBT_DEVICE_TYPE dev_type;
-  tBLE_ADDR_TYPE addr_type;
-  get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr, &dev_type, &addr_type);
+  // Find the device info
+  auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(bd_addr);
 
   // Find which transports are already connected
   bool bredr_acl =
@@ -1658,7 +1675,7 @@ static void btif_hh_transport_select(AclLinkSpec& link_spec) {
     le_preferred = true;
   } else if (bredr_acl) {
     le_preferred = false;
-  } else if (le_acl || dev_type == BT_DEVICE_TYPE_BLE) {
+  } else if (le_acl || dev_info.device_type == BT_DEVICE_TYPE_BLE) {
     le_preferred = true;
   } else {
     le_preferred = false;
@@ -1670,7 +1687,7 @@ static void btif_hh_transport_select(AclLinkSpec& link_spec) {
           "hogp_available:{}, headtracker_available:{}, "
           "dev_type:{}, le_preferred:{}",
           link_spec, bredr_acl, hid_available, le_acl, hogp_available, headtracker_available,
-          dev_type, le_preferred);
+          dev_info.device_type, le_preferred);
 }
 /*******************************************************************************
  *
@@ -1681,7 +1698,8 @@ static void btif_hh_transport_select(AclLinkSpec& link_spec) {
  * Returns         BtStatus
  *
  ******************************************************************************/
-static BtStatus connect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
+static BtStatus connect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+                        bool direct) {
   AclLinkSpec link_spec = {};
   link_spec.addrt.bda = bd_addr;
   link_spec.addrt.type = addr_type;
@@ -1704,8 +1722,9 @@ static BtStatus connect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSP
     btif_hh_transport_select(link_spec);
   }
 
-  return btif_transfer_context(btif_hh_handle_evt, BTIF_HH_CONNECT_REQ_EVT, (char*)&link_spec,
-                               sizeof(AclLinkSpec), NULL);
+  btif_hh_req_evt_t event = direct ? BTIF_HH_CONNECT_REQ_EVT : BTIF_HH_BG_CONNECT_REQ_EVT;
+  return btif_transfer_context(btif_hh_handle_evt, event, (char*)&link_spec, sizeof(AclLinkSpec),
+                               NULL);
 }
 
 /*******************************************************************************
@@ -1718,7 +1737,7 @@ static BtStatus connect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSP
  *
  ******************************************************************************/
 static BtStatus disconnect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                           bool reconnect_allowed) {
+                           bthh_reconnect_policy_t reconnect_policy) {
   CHECK_BTHH_INIT();
   AclLinkSpec link_spec = {};
   link_spec.addrt.bda = bd_addr;
@@ -1733,12 +1752,16 @@ static BtStatus disconnect(RawAddress bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRA
   }
 
   btif_hh_device_t* p_dev = btif_hh_find_connected_dev_by_link_spec(link_spec);
-  if (!reconnect_allowed) {
+  if (reconnect_policy != RECONNECT_ALLOWED) {
     log::info("Incoming reconnections disabled for device {}", link_spec);
     btif_hh_added_device_t* added_dev = btif_hh_find_added_dev(link_spec);
     if (added_dev != nullptr) {
-      added_dev->reconnect_allowed = reconnect_allowed;
-      btif_storage_set_hid_connection_policy(added_dev->link_spec, reconnect_allowed);
+      added_dev->reconnect_allowed = false;
+      if (reconnect_policy == RECONNECT_NOT_ALLOWED) {
+        btif_storage_set_hid_connection_policy(added_dev->link_spec, false);
+      } else {
+        log::debug("Temporarily disable HoGP reconnection.");
+      }
       // If a bonded LE device is not currently connected, cancel the background connection.
       if (p_dev == nullptr && transport == BT_TRANSPORT_LE) {
         BTA_HhCancelOpen(link_spec);
@@ -2214,7 +2237,7 @@ static void cleanup(void) {
     return;
   }
 
-  get_jni_thread()->DoInThreadSynchronously(&cleanup_in_jni_thread);
+  do_in_jni_thread(base::BindOnce(cleanup_in_jni_thread));
 }
 
 /*******************************************************************************

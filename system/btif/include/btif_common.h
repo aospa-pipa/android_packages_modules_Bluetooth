@@ -112,10 +112,10 @@ void post_on_bt_jni(BtJniClosure closure);
  * thread
  */
 template <typename R, typename... Args>
-base::Callback<R(Args...)> jni_thread_wrapper(base::Callback<R(Args...)> cb) {
-  return base::Bind(
-          [](base::Callback<R(Args...)> cb, Args... args) {
-            do_in_jni_thread(base::BindOnce(cb, std::forward<Args>(args)...));
+base::OnceCallback<R(Args...)> jni_thread_wrapper(base::OnceCallback<R(Args...)> cb) {
+  return base::BindOnce(
+          [](base::OnceCallback<R(Args...)> cb, Args... args) {
+            do_in_jni_thread(base::BindOnce(std::move(cb), std::forward<Args>(args)...));
           },
           std::move(cb));
 }
@@ -123,7 +123,6 @@ base::Callback<R(Args...)> jni_thread_wrapper(base::Callback<R(Args...)> cb) {
 tBTA_SERVICE_MASK btif_get_enabled_services_mask(void);
 void btif_enable_service(tBTA_SERVICE_ID service_id);
 void btif_disable_service(tBTA_SERVICE_ID service_id);
-int btif_is_enabled(void);
 
 /**
  * BTIF_Events
@@ -149,12 +148,13 @@ void invoke_device_found_cb(int num_properties, bt_property_t* properties);
 void invoke_discovery_state_changed_cb(bt_discovery_state_t state);
 void invoke_pin_request_cb(RawAddress bd_addr, bt_bdname_t bd_name, uint32_t cod, bool min_16_digit,
                            int pairing_algorithm);
-void invoke_ssp_request_cb(RawAddress bd_addr, bt_ssp_variant_t pairing_variant, uint32_t pass_key,
-                           int pairing_algorithm);
+void invoke_ssp_request_cb(RawAddress bd_addr, int transport, PairingVariant pairing_variant,
+                           uint32_t pass_key, int pairing_algorithm);
 void invoke_oob_data_request_cb(tBT_TRANSPORT t, bool valid, Octet16 c, Octet16 r,
                                 RawAddress raw_address, uint8_t address_type);
 void invoke_bond_state_changed_cb(bt_status_t status, RawAddress bd_addr, tBT_TRANSPORT transport,
-                                  bt_bond_state_t state, PairingType pairing_type, int fail_reason);
+                                  bt_bond_state_t state, PairingType pairing_type, int fail_reason,
+                                  PairingInitiator pairing_initiator);
 void invoke_address_consolidate_cb(RawAddress main_bd_addr, RawAddress secondary_bd_addr);
 void invoke_le_address_associate_cb(RawAddress main_bd_addr, RawAddress secondary_bd_addr,
                                     uint8_t identity_address_type);

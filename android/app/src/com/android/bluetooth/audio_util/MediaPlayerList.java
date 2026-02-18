@@ -673,6 +673,10 @@ public class MediaPlayerList {
 
             // If the media controller we updated was the active player check if the media updated
             if (playerId == mActivePlayerId) {
+                // Also update the PlayerSettings with the new controller if it is instantiated.
+                if (mPlayerSettingsListener != null) {
+                    mPlayerSettingsListener.onActivePlayerChanged(player);
+                }
                 sendMediaUpdate(getActivePlayer().getCurrentMediaData());
             }
 
@@ -1181,6 +1185,13 @@ public class MediaPlayerList {
                     if (active_player_state == PlaybackState.STATE_PLAYING
                             && (data.state.getState() != PlaybackState.STATE_PLAYING)) {
                         Log.d(TAG, "Some audio playbacks are still active, drop it");
+                        return;
+                    }
+
+                    if (mAudioPlaybackIsActive &&
+                            (data.state.getState() == PlaybackState.STATE_PAUSED ||
+                            data.state.getState() == PlaybackState.STATE_STOPPED)) {
+                        Log.d(TAG, "Audio playback is still active, drop state=" + data.state);
                         return;
                     }
                     sendMediaUpdate(data);

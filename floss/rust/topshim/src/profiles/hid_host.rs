@@ -1,7 +1,7 @@
 use crate::bindings::root as bindings;
 use crate::btif::{
-    BluetoothInterface, BtAddrType, BtStatus, BtTransport, CxxBluetoothInterface, CxxBtAddrType,
-    CxxBtTransport, RawAddress, ToggleableProfile,
+    BluetoothInterface, BtAddrType, BtStatus, BtTransport, CxxBtAddrType, CxxBtTransport,
+    RawAddress, ToggleableProfile,
 };
 use crate::topstack::get_dispatchers;
 
@@ -47,7 +47,7 @@ impl From<bindings::bthh_connection_state_t> for BthhConnectionState {
             bindings::bthh_connection_state_t_BTHH_CONN_STATE_UNKNOWN => {
                 BthhConnectionState::Unknown
             }
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_connection_state_t {}", item),
         }
     }
 }
@@ -95,7 +95,7 @@ impl From<CxxBthhStatus> for BthhStatus {
             bindings::bthh_status_t_BTHH_ERR_HDL => BthhStatus::ErrHdl,
             bindings::bthh_status_t_BTHH_ERR_SEC => BthhStatus::ErrSec,
             bindings::bthh_status_t_BTHH_ERR_SERVICE_CHANGED => BthhStatus::ErrServiceChanged,
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_status_t {}", item.0),
         }
     }
 }
@@ -146,7 +146,7 @@ impl From<CxxBthhProtocolMode> for BthhProtocolMode {
             bindings::bthh_protocol_mode_t_BTHH_UNSUPPORTED_MODE => {
                 BthhProtocolMode::UnsupportedMode
             }
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_protocol_mode_t {}", item.0),
         }
     }
 }
@@ -181,7 +181,7 @@ impl From<CxxBthhReportType> for BthhReportType {
             bindings::bthh_report_type_t_BTHH_INPUT_REPORT => BthhReportType::InputReport,
             bindings::bthh_report_type_t_BTHH_OUTPUT_REPORT => BthhReportType::OutputReport,
             bindings::bthh_report_type_t_BTHH_FEATURE_REPORT => BthhReportType::FeatureReport,
-            _ => unreachable!(),
+            _ => panic!("Unsupported bthh_report_type_t {}", item.0),
         }
     }
 }
@@ -197,21 +197,60 @@ impl From<BthhReportType> for CxxBthhReportType {
     }
 }
 
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum BthhReconnectPolicy {
+    Allowed,
+    NotAllowedTemporary,
+    NotAllowed,
+}
+
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBthhReconnectPolicy(pub bindings::bthh_reconnect_policy_t);
+
+impl From<CxxBthhReconnectPolicy> for BthhReconnectPolicy {
+    fn from(item: CxxBthhReconnectPolicy) -> Self {
+        match item.0 {
+            bindings::bthh_reconnect_policy_t_RECONNECT_ALLOWED => BthhReconnectPolicy::Allowed,
+            bindings::bthh_reconnect_policy_t_RECONNECT_NOT_ALLOWED_TEMPORARY => {
+                BthhReconnectPolicy::NotAllowedTemporary
+            }
+            bindings::bthh_reconnect_policy_t_RECONNECT_NOT_ALLOWED => {
+                BthhReconnectPolicy::NotAllowed
+            }
+            _ => panic!("Unsupported bthh_reconnect_policy_t {}", item.0),
+        }
+    }
+}
+
+impl From<BthhReconnectPolicy> for CxxBthhReconnectPolicy {
+    fn from(item: BthhReconnectPolicy) -> Self {
+        let i = match item {
+            BthhReconnectPolicy::Allowed => bindings::bthh_reconnect_policy_t_RECONNECT_ALLOWED,
+            BthhReconnectPolicy::NotAllowedTemporary => {
+                bindings::bthh_reconnect_policy_t_RECONNECT_NOT_ALLOWED_TEMPORARY
+            }
+            BthhReconnectPolicy::NotAllowed => {
+                bindings::bthh_reconnect_policy_t_RECONNECT_NOT_ALLOWED
+            }
+        };
+        CxxBthhReconnectPolicy(i)
+    }
+}
+
 fn convert_report(count: i32, raw: *mut u8) -> Vec<u8> {
     let mut v: Vec<u8> = Vec::new();
     for i in 0..isize::from_i32(count).unwrap() {
         let p: *const u8 = unsafe { raw.offset(i) };
         v.push(unsafe { *p });
     }
-
-    return v;
+    v
 }
 
 #[derive(Debug)]
 pub enum HHCallbacks {
     ConnectionState(RawAddress, BtAddrType, BtTransport, BthhConnectionState, BthhStatus),
     VirtualUnplug(RawAddress, BtAddrType, BtTransport, BthhStatus),
-    HidInfo(RawAddress, BtAddrType, BtTransport, BthhHidInfo),
+    HidInfo(RawAddress, BtAddrType, BtTransport, Box<BthhHidInfo>),
     ProtocolMode(RawAddress, BtAddrType, BtTransport, BthhStatus, BthhProtocolMode),
     IdleTime(RawAddress, BtAddrType, BtTransport, BthhStatus, i32),
     GetReport(RawAddress, BtAddrType, BtTransport, BthhStatus, Vec<u8>, i32),
@@ -235,7 +274,7 @@ RawAddress, CxxBtAddrType -> BtAddrType, CxxBtTransport -> BtTransport, bindings
 cb_variant!(HHCb, virtual_unplug_cb -> HHCallbacks::VirtualUnplug,
 RawAddress, CxxBtAddrType -> BtAddrType, CxxBtTransport -> BtTransport, CxxBthhStatus -> BthhStatus);
 cb_variant!(HHCb, hid_info_cb -> HHCallbacks::HidInfo,
-RawAddress, CxxBtAddrType -> BtAddrType, CxxBtTransport -> BtTransport, bindings::bthh_hid_info_t -> BthhHidInfo);
+RawAddress, CxxBtAddrType -> BtAddrType, CxxBtTransport -> BtTransport, bindings::bthh_hid_info_t -> Box::<BthhHidInfo>);
 cb_variant!(HHCb, protocol_mode_cb -> HHCallbacks::ProtocolMode,
 RawAddress, CxxBtAddrType -> BtAddrType, CxxBtTransport -> BtTransport, CxxBthhStatus -> BthhStatus,
 CxxBthhProtocolMode -> BthhProtocolMode);
@@ -274,10 +313,6 @@ mod ffi {
         type BtTransport = super::CxxBtTransport;
 
         #[namespace = ""]
-        #[cxx_name = "bt_interface_t"]
-        type BluetoothInterface = super::CxxBluetoothInterface;
-
-        #[namespace = ""]
         #[cxx_name = "bthh_hid_info_t"]
         type BthhHidInfo = super::BthhHidInfo;
 
@@ -286,11 +321,17 @@ mod ffi {
         type BthhReportType = super::CxxBthhReportType;
 
         #[namespace = ""]
+        #[cxx_name = "bthh_reconnect_policy_t"]
+        type BthhReconnectPolicy = super::CxxBthhReconnectPolicy;
+
+        #[namespace = ""]
         type RawAddress = crate::btif::RawAddress;
+
+        type BtIntf = crate::btif::ffi::BtIntf;
 
         type HhIntf;
 
-        fn GetHhProfile(btif: &BluetoothInterface) -> UniquePtr<HhIntf>;
+        fn GetHhProfile(btif: &BtIntf) -> UniquePtr<HhIntf>;
 
         fn init(self: &HhIntf) -> u32;
         fn connect(
@@ -298,13 +339,14 @@ mod ffi {
             addr: RawAddress,
             addr_type: BtAddrType,
             transport: BtTransport,
+            direct: bool,
         ) -> u32;
         fn disconnect(
             self: &HhIntf,
             addr: RawAddress,
             addr_type: BtAddrType,
             transport: BtTransport,
-            reconnect_allowed: bool,
+            reconnect_policy: BthhReconnectPolicy,
         ) -> u32;
         fn virtual_unplug(
             self: &HhIntf,
@@ -476,7 +518,7 @@ impl ToggleableProfile for HidHost {
 impl HidHost {
     #[log_args]
     pub fn new(intf: &BluetoothInterface) -> HidHost {
-        let hh_intf: cxx::UniquePtr<ffi::HhIntf> = ffi::GetHhProfile(intf.as_raw_btif());
+        let hh_intf: cxx::UniquePtr<ffi::HhIntf> = ffi::GetHhProfile(intf.as_btif());
 
         HidHost {
             internal: hh_intf,
@@ -510,8 +552,9 @@ impl HidHost {
         addr: RawAddress,
         address_type: BtAddrType,
         transport: BtTransport,
+        direct: bool,
     ) -> BtStatus {
-        BtStatus::from(self.internal.connect(addr, address_type.into(), transport.into()))
+        BtStatus::from(self.internal.connect(addr, address_type.into(), transport.into(), direct))
     }
 
     #[log_args]
@@ -521,13 +564,13 @@ impl HidHost {
         addr: RawAddress,
         address_type: BtAddrType,
         transport: BtTransport,
-        reconnect_allowed: bool,
+        reconnect_policy: BthhReconnectPolicy,
     ) -> BtStatus {
         BtStatus::from(self.internal.disconnect(
             addr,
             address_type.into(),
             transport.into(),
-            reconnect_allowed,
+            reconnect_policy.into(),
         ))
     }
 

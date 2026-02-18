@@ -30,7 +30,7 @@
 #include "stack/btm/btm_device_record.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
-#include "stack/btm/btm_sec_cb.h"
+#include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/main_thread.h"
@@ -44,7 +44,7 @@ using ::testing::Return;
 using ::testing::Test;
 
 namespace {
-const RawAddress kRawAddress = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+const RawAddress kRawAddress = RawAddress("11:22:33:44:55:66");
 const uint8_t kBdName[] = "kBdName";
 constexpr char kTimeFormat[] = "%Y-%m-%d %H:%M:%S";
 }  // namespace
@@ -54,14 +54,12 @@ using bluetooth::legacy::testing::wipe_secrets_and_remove;
 constexpr size_t kBtmSecMaxDeviceRecords = static_cast<size_t>(BTM_SEC_MAX_DEVICE_RECORDS + 1);
 
 class StackBtmSecTest : public BtmWithMocksTest {
-public:
 protected:
   void SetUp() override { BtmWithMocksTest::SetUp(); }
   void TearDown() override { BtmWithMocksTest::TearDown(); }
 };
 
 class StackBtmSecWithQueuesTest : public StackBtmSecTest {
-public:
 protected:
   void SetUp() override {
     StackBtmSecTest::SetUp();
@@ -109,25 +107,25 @@ protected:
 };
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_encrypt_change) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
   // Check the collision conditionals
-  ::btm_sec_cb.collision_start_time = 0UL;
+  ::BtmSecurity::Get().collision_start_time_ = 0UL;
   btm_sec_encrypt_change(classic_handle, HCI_ERR_LMP_ERR_TRANS_COLLISION, 0x01, 0x10);
-  uint64_t collision_start_time = ::btm_sec_cb.collision_start_time;
+  uint64_t collision_start_time = ::BtmSecurity::Get().collision_start_time_;
   ASSERT_NE(0UL, collision_start_time);
 
-  ::btm_sec_cb.collision_start_time = 0UL;
+  ::BtmSecurity::Get().collision_start_time_ = 0UL;
   btm_sec_encrypt_change(classic_handle, HCI_ERR_DIFF_TRANSACTION_COLLISION, 0x01, 0x10);
-  collision_start_time = ::btm_sec_cb.collision_start_time;
+  collision_start_time = ::BtmSecurity::Get().collision_start_time_;
   ASSERT_NE(0UL, collision_start_time);
 
   // No device
-  ::btm_sec_cb.collision_start_time = 0;
+  ::BtmSecurity::Get().collision_start_time_ = 0;
   btm_sec_encrypt_change(classic_handle, HCI_SUCCESS, 0x01, 0x10);
-  ASSERT_EQ(0UL, ::btm_sec_cb.collision_start_time);
+  ASSERT_EQ(0UL, ::BtmSecurity::Get().collision_start_time_);
 
   // Setup device
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
@@ -159,7 +157,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_encrypt_change) {
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, BTM_SetEncryption) {
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
   const tBT_TRANSPORT transport{BT_TRANSPORT_LE};
   tBTM_SEC_CALLBACK* p_callback{nullptr};
   tBTM_BLE_SEC_ACT sec_act{BTM_BLE_SEC_ENCRYPT};
@@ -188,12 +186,12 @@ TEST_F(StackBtmSecTest, btm_ble_sec_req_act_text) {
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_allocate_dev_rec__all) {
   BtmDevice* p_devices[kBtmSecMaxDeviceRecords];
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
 
   // Fill up the records
   if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
     for (size_t i = 0; i < kBtmSecMaxDeviceRecords; i++) {
-      ASSERT_EQ(i, list_length(::btm_sec_cb.sec_dev_rec));
+      ASSERT_EQ(i, list_length(::BtmSecurity::Get().sec_dev_rec_));
       p_devices[i] = btm_sec_allocate_dev_rec(bd_addr);
       ASSERT_NE(nullptr, p_devices[i]);
     }
@@ -206,17 +204,17 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_allocate_dev_rec__all) {
   // Second pass up the records
   if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
     for (size_t i = 0; i < kBtmSecMaxDeviceRecords; i++) {
-      ASSERT_EQ(kBtmSecMaxDeviceRecords, list_length(::btm_sec_cb.sec_dev_rec));
+      ASSERT_EQ(kBtmSecMaxDeviceRecords, list_length(::BtmSecurity::Get().sec_dev_rec_));
       p_devices[i] = btm_sec_allocate_dev_rec(bd_addr);
       ASSERT_NE(nullptr, p_devices[i]);
     }
   } else {
     for (size_t i = 0; i < kBtmSecMaxDeviceRecords; i++) {
       /**
-       * Since we are now using btm_sec_cb.device_records as static array, so there will be no
-       * deletion/creation of records, and hence the addresses will be the same. So, need to store
-       * the timestamp, before the second allocation of record (or clean and re-allocate in this
-       * case) and then see whether the timestamp has changed.
+       * Since we are now using BtmSecurity::Get().device_records_ as static array, so
+       * there will be no deletion/creation of records, and hence the addresses will be the same.
+       * So, need to store the timestamp, before the second allocation of record (or clean and
+       * re-allocate in this case) and then see whether the timestamp has changed.
        */
       auto timestamp = p_devices[i]->timestamp;
 
@@ -267,7 +265,7 @@ TEST_F(StackBtmSecTest, bond_type_text) {
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, wipe_secrets_and_remove) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -306,7 +304,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_rmt_name_request_complete) {
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_temporary) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -318,8 +316,8 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_tempora
   p_device->sec_rec.sec_flags |= BTM_SEC_NAME_KNOWN;
   p_device->sec_rec.bond_type = BOND_TYPE_TEMPORARY;
 
-  btm_sec_cb.security_mode = BTM_SEC_MODE_SERVICE;
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().security_mode_ = BTM_SEC_MODE_SERVICE;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
 
   uint16_t sec_req = BTM_SEC_IN_AUTHENTICATE;
   tBTM_STATUS status = tBTM_STATUS::BTM_UNDEFINED;
@@ -330,7 +328,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_tempora
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_non_authenticated_temporary) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -342,8 +340,8 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_non_authenticated_tem
   p_device->sec_rec.sec_flags |= BTM_SEC_NAME_KNOWN;
   p_device->sec_rec.bond_type = BOND_TYPE_TEMPORARY;
 
-  btm_sec_cb.security_mode = BTM_SEC_MODE_SERVICE;
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().security_mode_ = BTM_SEC_MODE_SERVICE;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
 
   uint16_t sec_req = BTM_SEC_IN_AUTHENTICATE;
   tBTM_STATUS status = tBTM_STATUS::BTM_UNDEFINED;
@@ -356,7 +354,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_non_authenticated_tem
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_persistent) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -368,8 +366,8 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_persist
   p_device->sec_rec.sec_flags |= BTM_SEC_NAME_KNOWN;
   p_device->sec_rec.bond_type = BOND_TYPE_PERSISTENT;
 
-  btm_sec_cb.security_mode = BTM_SEC_MODE_SERVICE;
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().security_mode_ = BTM_SEC_MODE_SERVICE;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
 
   uint16_t sec_req = BTM_SEC_IN_AUTHENTICATE;
   tBTM_STATUS status = tBTM_STATUS::BTM_UNDEFINED;
@@ -382,7 +380,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_authenticated_persist
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_upgrade_needed) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -394,8 +392,8 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_upgrade_needed) {
   p_device->sec_rec.sec_flags |= BTM_SEC_LINK_KEY_KNOWN;
   p_device->sec_rec.bond_type = BOND_TYPE_PERSISTENT;
 
-  btm_sec_cb.security_mode = BTM_SEC_MODE_SERVICE;
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().security_mode_ = BTM_SEC_MODE_SERVICE;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
 
   uint16_t sec_req = BTM_SEC_IN_AUTHENTICATE | BTM_SEC_IN_MIN_16_DIGIT_PIN;
   tBTM_STATUS status = tBTM_STATUS::BTM_UNDEFINED;
@@ -413,7 +411,7 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_upgrade_needed) {
 }
 
 TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_encryption_required) {
-  RawAddress bd_addr = RawAddress({0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6});
+  RawAddress bd_addr = RawAddress("A1:A2:A3:A4:A5:A6");
   const uint16_t classic_handle = 0x1234;
   const uint16_t ble_handle = 0x9876;
 
@@ -425,8 +423,8 @@ TEST_F(StackBtmSecWithInitFreeTest, btm_sec_temp_bond_auth_encryption_required) 
   p_device->sec_rec.sec_flags |= BTM_SEC_NAME_KNOWN;
   p_device->sec_rec.bond_type = BOND_TYPE_PERSISTENT;
 
-  btm_sec_cb.security_mode = BTM_SEC_MODE_SERVICE;
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().security_mode_ = BTM_SEC_MODE_SERVICE;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
 
   uint16_t sec_req = BTM_SEC_IN_AUTHENTICATE | BTM_SEC_OUT_ENCRYPT;
   tBTM_STATUS status = tBTM_STATUS::BTM_UNDEFINED;
@@ -449,7 +447,7 @@ protected:
     p_device_->hci_handle = 0x1;  // Needed for btm_sec_service_access_request
     p_device_->sec_rec.sec_flags |= BTM_SEC_NAME_KNOWN;  // Avoid RNR
     p_device_->sm4 = BTM_SM4_TRUE;                       // Enable SM4 path
-    btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;      // Ensure not busy
+    BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;  // Ensure not busy
   }
 
   void TearDown() override {
@@ -501,7 +499,6 @@ TEST_F(StackBtmSecSecurityUpgradeTest, MitmUpgradePossible) {
   p_device_->sec_rec.link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB;
   p_device_->sec_rec.bond_type = BOND_TYPE_PERSISTENT;
   p_device_->sec_rec.rmt_io_caps = BtIoCap::KEYBOARD_ONLY;
-  btm_sec_cb.devcb.loc_io_caps = BtIoCap::DISPLAY_YES_NO;
 
   // Action: Request access for a service that requires MITM.
   btm_sec_service_access_request(kRawAddress, true /* outgoing */, BTM_SEC_OUT_MITM, NULL, NULL);
@@ -519,7 +516,6 @@ TEST_F(StackBtmSecSecurityUpgradeTest, MitmUpgradeNotPossible) {
   p_device_->sec_rec.link_key_type = BTM_LKEY_TYPE_UNAUTH_COMB;
   p_device_->sec_rec.bond_type = BOND_TYPE_PERSISTENT;
   p_device_->sec_rec.rmt_io_caps = BtIoCap::NO_INPUT_NO_OUTPUT;
-  btm_sec_cb.devcb.loc_io_caps = BtIoCap::NO_INPUT_NO_OUTPUT;
   uint16_t initial_sec_flags = p_device_->sec_rec.sec_flags;
   uint8_t initial_sm4 = p_device_->sm4;
 

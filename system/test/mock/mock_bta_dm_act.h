@@ -63,10 +63,11 @@ extern struct BTA_dm_acl_down BTA_dm_acl_down;
 // Params: const AclLinkSpec& link_spec, uint16_t acl_handle
 // Return: void
 struct BTA_dm_acl_up {
-  std::function<void(const AclLinkSpec& link_spec, uint16_t acl_handle)> body{
-          [](const AclLinkSpec& /* link_spec */, uint16_t /* acl_handle */) {}};
-  void operator()(const AclLinkSpec& link_spec, uint16_t acl_handle) {
-    body(link_spec, acl_handle);
+  std::function<void(const AclLinkSpec& link_spec, uint16_t acl_handle, bool locally_initiated)>
+          body{[](const AclLinkSpec& /* link_spec */, uint16_t /* acl_handle */,
+                  bool /* locally_initiated */) {}};
+  void operator()(const AclLinkSpec& link_spec, uint16_t acl_handle, bool locally_initiated) {
+    body(link_spec, acl_handle, locally_initiated);
   }
 };
 extern struct BTA_dm_acl_up BTA_dm_acl_up;
@@ -75,10 +76,11 @@ extern struct BTA_dm_acl_up BTA_dm_acl_up;
 // Params: const AclLinkSpec& link_spec, tHCI_STATUS
 // hci_status Return: void
 struct BTA_dm_acl_up_failed {
-  std::function<void(const AclLinkSpec& link_spec, tHCI_STATUS hci_status)> body{
-          [](const AclLinkSpec& /* link_spec */, tHCI_STATUS /* hci_status */) {}};
-  void operator()(const AclLinkSpec& link_spec, tHCI_STATUS hci_status) {
-    body(link_spec, hci_status);
+  std::function<void(const AclLinkSpec& link_spec, tHCI_STATUS hci_status, bool locally_initiated)>
+          body{[](const AclLinkSpec& /* link_spec */, tHCI_STATUS /* hci_status */,
+                  bool /* locally_initiated */) {}};
+  void operator()(const AclLinkSpec& link_spec, tHCI_STATUS hci_status, bool locally_initiated) {
+    body(link_spec, hci_status, locally_initiated);
   }
 };
 extern struct BTA_dm_acl_up_failed BTA_dm_acl_up_failed;
@@ -110,6 +112,18 @@ struct BTA_dm_on_hw_on {
 };
 extern struct BTA_dm_on_hw_on BTA_dm_on_hw_on;
 
+// Name: BTA_dm_remove_on_disconnect
+// Params: const tAclLinkSpec& link_spec
+// Return: void
+struct BTA_dm_remove_on_disconnect {
+  std::function<void(const AclLinkSpec& link_spec)> body{
+          [](const AclLinkSpec& /* link_spec */) {}};
+  void operator()(const AclLinkSpec& link_spec) {
+    body(link_spec);
+  }
+};
+extern struct BTA_dm_remove_on_disconnect BTA_dm_remove_on_disconnect;
+
 // Name: BTA_dm_report_role_change
 // Params: const RawAddress bd_addr, tHCI_ROLE new_role, tHCI_STATUS hci_status
 // Return: void
@@ -137,15 +151,17 @@ struct bta_dm_add_ble_device {
 extern struct bta_dm_add_ble_device bta_dm_add_ble_device;
 
 // Name: bta_dm_add_blekey
-// Params: const RawAddress& bd_addr, tBTA_LE_KEY_VALUE blekey, tBTM_LE_KEY_TYPE
-// key_type Return: void
+// Params: const RawAddress& bd_addr, const PairingType& pairing_type, tBTM_LE_KEY_TYPE key_type,
+// const tBTA_LE_KEY_VALUE& key
+// Return: void
 struct bta_dm_add_blekey {
-  std::function<void(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE blekey,
-                     tBTM_LE_KEY_TYPE key_type)>
-          body{[](const RawAddress& /* bd_addr */, tBTA_LE_KEY_VALUE /* blekey */,
-                  tBTM_LE_KEY_TYPE /* key_type */) {}};
-  void operator()(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE blekey, tBTM_LE_KEY_TYPE key_type) {
-    body(bd_addr, blekey, key_type);
+  std::function<void(const RawAddress& bd_addr, const PairingType& pairing_type,
+                     tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& key)>
+          body{[](const RawAddress& /* bd_addr */, const PairingType& /* pairing_type */,
+                  tBTM_LE_KEY_TYPE /* key_type */, const tBTA_LE_KEY_VALUE& /* key */) {}};
+  void operator()(const RawAddress& bd_addr, const PairingType& pairing_type,
+                  tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& key) {
+    body(bd_addr, pairing_type, key_type, key);
   }
 };
 extern struct bta_dm_add_blekey bta_dm_add_blekey;
@@ -273,16 +289,14 @@ struct bta_dm_ble_update_conn_params {
 extern struct bta_dm_ble_update_conn_params bta_dm_ble_update_conn_params;
 
 // Name: bta_dm_bond
-// Params: const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT
-// transport, tBT_DEVICE_TYPE device_type Return: void
+// Params: const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport
+// Return: void
 struct bta_dm_bond {
-  std::function<void(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                     tBT_DEVICE_TYPE device_type)>
+  std::function<void(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport)>
           body{[](const RawAddress& /* bd_addr */, tBLE_ADDR_TYPE /* addr_type */,
-                  tBT_TRANSPORT /* transport */, tBT_DEVICE_TYPE /* device_type */) {}};
-  void operator()(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                  tBT_DEVICE_TYPE device_type) {
-    body(bd_addr, addr_type, transport, device_type);
+                  tBT_TRANSPORT /* transport */) {}};
+  void operator()(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
+    body(bd_addr, addr_type, transport);
   }
 };
 extern struct bta_dm_bond bta_dm_bond;

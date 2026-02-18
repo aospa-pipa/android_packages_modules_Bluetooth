@@ -423,6 +423,8 @@ typedef struct {
   int uid;
   // Optional attribution tag from the calling Android app for fine-grained usage tracking.
   std::string attribution_tag;
+  uint64_t creation_timestamp_ms{0};
+  bluetooth::hal::GattError stop_reason{bluetooth::hal::GattError::GATT_ERROR_NONE};
 } tGATT_OFFLOAD_SESSION;
 
 typedef struct {
@@ -600,10 +602,15 @@ static constexpr uint16_t kDefaultSubrateLowModeContNum = 6;
 /* from gatt_main.cc */
 void gatt_force_disconnect(tGATT_TCB* p_tcb, std::string comment);
 bool gatt_disconnect(tGATT_TCB* p_tcb);
+bool gatt_disconnect_br(tGATT_TCB* p_tcb);
+void gatt_channel_congestion(tGATT_TCB* p_tcb, bool congested);
+bool gatt_connect(const RawAddress& rem_bda, tBLE_ADDR_TYPE addr_type, tGATT_TCB* p_tcb,
+                  tBT_TRANSPORT transport, tGATT_IF gatt_if);
 bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBT_TRANSPORT transport);
 bool gatt_act_connect(tGATT_REG* p_reg, const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
                       tBT_TRANSPORT transport);
 void gatt_data_process(tGATT_TCB& p_tcb, uint16_t cid, BT_HDR* p_buf);
+void gatt_send_conn_cback(tGATT_TCB* p_tcb);
 void gatt_update_app_use_link_flag(tGATT_IF gatt_if, tGATT_TCB* p_tcb, bool is_add,
                                    bool check_acl_link);
 
@@ -611,6 +618,8 @@ void gatt_profile_db_init(void);
 void gatt_set_ch_state(tGATT_TCB* p_tcb, tGATT_CH_STATE ch_state);
 tGATT_CH_STATE gatt_get_ch_state(tGATT_TCB* p_tcb);
 void gatt_init_srv_chg(void);
+void gatt_init_le(void);
+void gatt_init_br();
 void gatt_proc_srv_chg(uint16_t start_handle);
 void gatt_send_srv_chg_ind(const RawAddress& peer_bda, uint16_t start_handle);
 void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt);
@@ -817,7 +826,8 @@ void gatt_offload_characteristics(tCONN_ID conn_id, bool is_server, btgatt_db_el
                                   size_t elements_count, uint64_t endpoint_id, uint64_t hub_id,
                                   int uid, std::string attribution_tag,
                                   std::promise<btgatt_offload_result_t> promise);
-bool gatt_offload_clear_sessions_by_acl_handle(uint16_t acl_connection_handle);
+bool gatt_offload_clear_sessions_by_acl_handle(uint16_t acl_connection_handle,
+                                               bluetooth::hal::GattError reason);
 void gatt_offload_clear_sessions_by_conn_id(tCONN_ID conn_id);
 void gatt_unoffload_session(tCONN_ID conn_id, uint16_t session_id,
                             tGATT_STATUS status = tGATT_STATUS::GATT_SUCCESS);
@@ -827,6 +837,10 @@ void gattc_offload_handle_service_changed_indication(tGATT_TCB* p_tcb);
 namespace bluetooth {
 namespace legacy {
 namespace testing {
+// Override value for the system property bluetooth.gatt.load_bonded.value
+// TODO(b/414824853) Replace by mocking of system properties.
+extern std::optional<bool> OVERRIDE_GATT_LOAD_BONDED;
+
 BT_HDR* attp_build_value_cmd(uint16_t payload_size, uint8_t op_code, uint16_t handle,
                              uint16_t offset, uint16_t len, uint8_t* p_data);
 }  // namespace testing

@@ -288,14 +288,6 @@ struct btm_get_acl_disc_reason_code {
   tHCI_REASON operator()(void) { return body(); }
 };
 extern struct btm_get_acl_disc_reason_code btm_get_acl_disc_reason_code;
-// Name: btm_is_acl_locally_initiated
-// Params: void
-// Returns: bool
-struct btm_is_acl_locally_initiated {
-  std::function<bool(void)> body{[](void) { return true; }};
-  bool operator()(void) { return body(); }
-};
-extern struct btm_is_acl_locally_initiated btm_is_acl_locally_initiated;
 // Name: BTM_GetNumAclLinks
 // Params: void
 // Returns: uint16_t
@@ -429,17 +421,6 @@ struct acl_set_disconnect_reason {
   void operator()(tHCI_STATUS acl_disc_reason) { body(acl_disc_reason); }
 };
 extern struct acl_set_disconnect_reason acl_set_disconnect_reason;
-// Name: acl_write_automatic_flush_timeout
-// Params: const RawAddress& bd_addr, uint16_t flush_timeout_in_ticks
-// Returns: void
-struct acl_write_automatic_flush_timeout {
-  std::function<void(const RawAddress& bd_addr, uint16_t flush_timeout_in_ticks)> body{
-          [](const RawAddress& /* bd_addr */, uint16_t /* flush_timeout_in_ticks */) { ; }};
-  void operator()(const RawAddress& bd_addr, uint16_t flush_timeout_in_ticks) {
-    body(bd_addr, flush_timeout_in_ticks);
-  }
-};
-extern struct acl_write_automatic_flush_timeout acl_write_automatic_flush_timeout;
 // Name: btm_connection_request
 // Params: const RawAddress& bda, const bluetooth::hci::ClassOfDevice& cod
 // Returns: void
@@ -452,14 +433,16 @@ struct btm_connection_request {
 };
 extern struct btm_connection_request btm_connection_request;
 // Name: btm_acl_created
-// Params: const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role,
-// Returns: void
+// Params: const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role, bool
+// locally_initiated Returns: void
 struct btm_acl_created {
-  std::function<void(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role)> body{
-          [](const AclLinkSpec& /* link_spec */, uint16_t /* hci_handle */,
-             tHCI_ROLE /* link_role */) { ; }};
-  void operator()(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role) {
-    body(link_spec, hci_handle, link_role);
+  std::function<void(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role,
+                     bool locally_initiated)>
+          body{[](const AclLinkSpec& /* link_spec */, uint16_t /* hci_handle */,
+                  tHCI_ROLE /* link_role */, bool /*locally_initiated*/) { ; }};
+  void operator()(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROLE link_role,
+                  bool locally_initiated) {
+    body(link_spec, hci_handle, link_role, locally_initiated);
   }
 };
 extern struct btm_acl_created btm_acl_created;

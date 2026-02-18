@@ -20,15 +20,12 @@ import static android.Manifest.permission.BLUETOOTH_PRIVILEGED;
 import static android.bluetooth.BluetoothUtils.RemoteExceptionIgnoringRunnable;
 import static android.bluetooth.BluetoothUtils.USER_HANDLE_NULL;
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
-import static android.os.PowerExemptionManager.TEMPORARY_ALLOW_LIST_TYPE_FOREGROUND_SERVICE_ALLOWED;
 
 import static java.util.Objects.requireNonNull;
 
 import android.annotation.NonNull;
-import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.app.Activity;
-import android.app.BroadcastOptions;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.companion.AssociationInfo;
@@ -38,13 +35,10 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Bundle;
 import android.os.Looper;
 import android.os.ParcelUuid;
-import android.os.PowerExemptionManager;
 import android.os.SystemClock;
 import android.os.SystemProperties;
-import android.provider.DeviceConfig;
 import android.provider.Telephony;
 import android.util.Log;
 
@@ -64,7 +58,6 @@ import java.nio.charset.CharsetDecoder;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -90,14 +83,15 @@ public final class Utils {
     private static final String TBS_PTS_MODE_PROPERTY = "persist.bluetooth.tbs.pts";
     private static final String ENABLE_DUAL_MODE_AUDIO = "persist.bluetooth.enable_dual_mode_audio";
 
+    private static final String MAX_TX_POWER_DBM_PROPERTY = "bluetooth.ble.max_tx_power_dbm.config";
+    private static final int DEFAULT_MAX_TX_POWER_DBM = 10;
+    private static final int MAX_SUPPORTED_TX_POWER_DBM = 10;
+
     // See https://en.wikipedia.org/wiki/Initialization-on-demand_holder_idiom
     private static class DualModeAudioSetting {
         private static boolean sEnabled =
                 SystemProperties.getBoolean(ENABLE_DUAL_MODE_AUDIO, false);
     }
-
-    private static final String KEY_TEMP_ALLOW_LIST_DURATION_MS = "temp_allow_list_duration_ms";
-    private static final long DEFAULT_TEMP_ALLOW_LIST_DURATION_MS = 20_000;
 
     private static int sSystemUiUid = USER_HANDLE_NULL.getIdentifier();
 
@@ -141,14 +135,6 @@ public final class Utils {
     public static void setDualModeAudioStateForTesting(boolean enabled) {
         Log.i(TAG, "Updating dual mode audio state for testing to: " + enabled);
         DualModeAudioSetting.sEnabled = enabled;
-    }
-
-    public static String getLoggableAddress(@Nullable BluetoothDevice device) {
-        if (device == null) {
-            return "00:00:00:00:00:00";
-        } else {
-            return "xx:xx:xx:xx:" + device.toString().substring(12);
-        }
     }
 
     public static String getAddressStringFromByte(byte[] address) {
@@ -491,47 +477,6 @@ public final class Utils {
                                 context.getContentResolver(), uri, values, null, null);
     }
 
-    /** Returns broadcast options. */
-    public static @NonNull BroadcastOptions getTempBroadcastOptions() {
-        final BroadcastOptions bOptions = BroadcastOptions.makeBasic();
-        // Use the Bluetooth process identity to pass permission check when reading DeviceConfig
-        final long ident = Binder.clearCallingIdentity();
-        try {
-            final long durationMs =
-                    DeviceConfig.getLong(
-                            DeviceConfig.NAMESPACE_BLUETOOTH,
-                            KEY_TEMP_ALLOW_LIST_DURATION_MS,
-                            DEFAULT_TEMP_ALLOW_LIST_DURATION_MS);
-            bOptions.setTemporaryAppAllowlist(
-                    durationMs,
-                    TEMPORARY_ALLOW_LIST_TYPE_FOREGROUND_SERVICE_ALLOWED,
-                    PowerExemptionManager.REASON_BLUETOOTH_BROADCAST,
-                    "");
-        } finally {
-            Binder.restoreCallingIdentity(ident);
-        }
-        return bOptions;
-    }
-
-    public static @NonNull Bundle getTempBroadcastBundle() {
-        return getTempBroadcastOptions().toBundle();
-    }
-
-    /**
-     * Checks that value is present as at least one of the elements of the array.
-     *
-     * @param array the array to check in
-     * @param value the value to check for
-     * @return true if the value is present in the array
-     */
-    public static <T> boolean arrayContains(@Nullable T[] array, T value) {
-        if (array == null) return false;
-        for (T element : array) {
-            if (Objects.equals(element, value)) return true;
-        }
-        return false;
-    }
-
     /**
      * CCC descriptor short integer value to string.
      *
@@ -644,5 +589,15 @@ public final class Utils {
     public static boolean isBluetoothPairingHardeningSupported() {
         return com.android.bluetooth.flags.Flags.apairing26q2PermissionImprovements()
                 && android.bluetooth.platform.flags.Flags.bluetoothPairingHardening();
+    }
+
+    /** Determines the maximum TX power (in dBm) that's allowed for the system. */
+    public static int getMaxTxPowerDbm() {
+        if (!com.android.bluetooth.flags.Flags.allowMoreTxPower()) {
+            return 1;
+        }
+        return Math.min(
+                SystemProperties.getInt(MAX_TX_POWER_DBM_PROPERTY, DEFAULT_MAX_TX_POWER_DBM),
+                MAX_SUPPORTED_TX_POWER_DBM);
     }
 }

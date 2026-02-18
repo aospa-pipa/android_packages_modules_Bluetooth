@@ -17,7 +17,7 @@ use std::mem::ManuallyDrop;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 #[allow(non_camel_case_types)]
-pub type HANDLE_LHDC_BT = *const lhdc_cb_t;
+pub type HANDLE_LHDC_BT = *const Context;
 
 #[allow(non_camel_case_types)]
 pub type STATUS_LHDC_BT = i32;
@@ -25,6 +25,15 @@ pub type STATUS_LHDC_BT = i32;
 #[no_mangle]
 pub extern "C" fn lhdcv5_enc_ffi_init() {
     crate::init_logging();
+}
+
+fn to_lhdc_fret<T>(res: Result<T>) -> STATUS_LHDC_BT {
+    match res {
+        Ok(_) => LHDC_FRET_SUCCESS,
+        Err(Error::InvalidInputParam) => LHDC_FRET_INVALID_INPUT_PARAM,
+        Err(Error::InvalidCodec) => LHDC_FRET_INVALID_CODEC,
+        Err(Error::Internal(_)) => LHDC_FRET_ERROR,
+    }
 }
 
 /// # Safety
@@ -36,7 +45,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_get_handle(
     handle: *mut HANDLE_LHDC_BT,
 ) -> STATUS_LHDC_BT {
     assert!(!handle.is_null());
-    let cb = Box::new(lhdc_cb_t::new(version).unwrap());
+    let cb = Box::new(Context::new(version).unwrap());
     // SAFETY: `handle` has been checked non-null.
     unsafe {
         *handle = Box::into_raw(cb);
@@ -76,15 +85,14 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_init_encoder(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    lhdcv5_enc_util_init_encoder(
-        &mut cb,
+    to_lhdc_fret(cb.init_encoder(
         sampling_freq,
         bits_per_sample,
         bitrate_inx,
         LHDC_FRAME_5MS,
         mtu,
         interval,
-    )
+    ))
 }
 
 /// Returns current quality status
@@ -108,7 +116,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_get_quality_mode(
     );
     // SAFETY: `quality_status` has been checked non-null.
     unsafe {
-        *quality_status = cb.enc.quality_status;
+        *quality_status = cb.quality_status();
     }
     0
 }
@@ -134,7 +142,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_get_last_bitrate(
     );
     // SAFETY: `bitrate` has been checked non-null.
     unsafe {
-        *bitrate = cb.enc.last_bitrate;
+        *bitrate = cb.last_bitrate();
     }
     0
 }
@@ -152,17 +160,19 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_get_bitrate_index(
 ) -> STATUS_LHDC_BT {
     assert!(!handle.is_null());
     assert!(!bitrate_inx.is_null());
-    let mut cb = ManuallyDrop::new(
+    let cb = ManuallyDrop::new(
         // SAFETY: `handle` has been checked non-null; the caller is responsible for
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    lhdcv5_enc_util_get_target_bitrate_inx(
-        &mut cb,
-        bitrate,
+    let ret = cb.get_target_bitrate_inx(bitrate);
+    if let Ok(inx) = ret {
         // SAFETY: `bitrate_inx` has been checked non-null.
-        unsafe { bitrate_inx.as_mut().unwrap() },
-    )
+        unsafe {
+            *bitrate_inx = inx;
+        }
+    }
+    to_lhdc_fret(ret)
 }
 
 /// # Safety
@@ -181,8 +191,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_set_bitrate_index(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    let mut actual_inx = bitrate_inx;
-    lhdcv5_enc_util_set_target_bitrate_inx(&mut cb, bitrate_inx, &mut actual_inx, upd_qual_status)
+    to_lhdc_fret(cb.set_target_bitrate_inx(bitrate_inx, upd_qual_status))
 }
 
 /// # Safety
@@ -200,8 +209,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_set_max_bitrate(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    let mut actual_inx = max_bitrate_inx;
-    lhdcv5_enc_util_set_max_bitrate_inx(&mut cb, max_bitrate_inx, &mut actual_inx)
+    to_lhdc_fret(cb.set_max_bitrate_inx(max_bitrate_inx))
 }
 
 /// # Safety
@@ -219,8 +227,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_set_min_bitrate(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    let mut actual_inx = min_bitrate_inx;
-    lhdcv5_enc_util_set_min_bitrate_inx(&mut cb, min_bitrate_inx, &mut actual_inx)
+    to_lhdc_fret(cb.set_min_bitrate_inx(min_bitrate_inx))
 }
 
 /// # Safety
@@ -240,11 +247,14 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_get_block_size(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    lhdcv5_enc_util_get_block_Size(
-        &cb,
+    let ret = cb.get_block_size();
+    if let Ok(block_size) = ret {
         // SAFETY: `samples_per_frame` has been checked non-null.
-        unsafe { samples_per_frame.as_mut().unwrap() },
-    )
+        unsafe {
+            *samples_per_frame = block_size;
+        }
+    }
+    to_lhdc_fret(ret)
 }
 
 /// # Safety
@@ -274,8 +284,7 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_encode(
         // invoking the method with a valid handle.
         unsafe { Box::from_raw(handle.cast_mut()) },
     );
-    lhdcv5_enc_util_enc_process(
-        &mut cb,
+    to_lhdc_fret(cb.enc_process(
         // SAFETY: `in_pcm` has been checked non-null; the caller is responsible
         // for ensuring it points to a memory zone of sufficient size.
         unsafe { from_raw_parts(in_pcm, in_pcm_len) },
@@ -286,5 +295,5 @@ pub unsafe extern "C" fn lhdcv5_enc_ffi_encode(
         unsafe { written_bytes.as_mut().unwrap() },
         // SAFETY: `written_frames` has been checked non-null.
         unsafe { written_frames.as_mut().unwrap() },
-    )
+    ))
 }

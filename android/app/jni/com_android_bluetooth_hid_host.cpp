@@ -20,7 +20,6 @@
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/bt_transport.h>
-#include <com_android_bluetooth_flags.h>
 #include <jni.h>
 #include <nativehelper/scoped_local_ref.h>
 
@@ -183,19 +182,9 @@ static void initializeNative(JNIEnv* env, jobject object) {
   }
 
   if (sBluetoothHidInterface != NULL) {
-    if (com::android::bluetooth::flags::hidh_close_in_jni_thread()) {
-      // `unlock`, as the cleanup() is a synchronous call internally, and may cause deadlock.
-      lock.unlock();
-    }
-
     log::warn("Cleaning up Bluetooth HID Interface before initializing...");
     sBluetoothHidInterface->cleanup();
     sBluetoothHidInterface = NULL;
-
-    if (com::android::bluetooth::flags::hidh_close_in_jni_thread()) {
-      // `lock` again to keep the behavior intact.
-      lock.lock();
-    }
   }
 
   if (mCallbacksObj != NULL) {
@@ -233,19 +222,9 @@ static void cleanupNative(JNIEnv* env, jobject /* object */) {
   }
 
   if (sBluetoothHidInterface != NULL) {
-    if (com::android::bluetooth::flags::hidh_close_in_jni_thread()) {
-      // `unlock`, as the cleanup() is a synchronous call internally, and may cause deadlock.
-      lock.unlock();
-    }
-
     log::warn("Cleaning up Bluetooth HID Interface...");
     sBluetoothHidInterface->cleanup();
     sBluetoothHidInterface = NULL;
-
-    if (com::android::bluetooth::flags::hidh_close_in_jni_thread()) {
-      // `lock` again to keep the behavior intact.
-      lock.lock();
-    }
   }
 
   if (mCallbacksObj != NULL) {
@@ -256,7 +235,7 @@ static void cleanupNative(JNIEnv* env, jobject /* object */) {
 }
 
 static jboolean connectHidNative(JNIEnv* env, jobject /* object */, jbyteArray address,
-                                 jint address_type, jint transport) {
+                                 jint address_type, jint transport, jboolean direct) {
   if (!sBluetoothHidInterface) {
     return JNI_FALSE;
   }
@@ -264,7 +243,7 @@ static jboolean connectHidNative(JNIEnv* env, jobject /* object */, jbyteArray a
   RawAddress bd_addr = addressFromJByteArray(env, address);
   jboolean ret = JNI_TRUE;
   BtStatus status = sBluetoothHidInterface->connect(bd_addr, (tBLE_ADDR_TYPE)address_type,
-                                                    (tBT_TRANSPORT)transport);
+                                                    (tBT_TRANSPORT)transport, direct);
   if (!status && status != BtifStatus(BUSY)) {
     log::error("Failed HID channel connection, status: {}", status);
     ret = JNI_FALSE;
@@ -274,15 +253,16 @@ static jboolean connectHidNative(JNIEnv* env, jobject /* object */, jbyteArray a
 }
 
 static jboolean disconnectHidNative(JNIEnv* env, jobject /* object */, jbyteArray address,
-                                    jint address_type, jint transport, jboolean reconnect_allowed) {
+                                    jint address_type, jint transport, jint reconnect_policy) {
   jboolean ret = JNI_TRUE;
   if (!sBluetoothHidInterface) {
     return JNI_FALSE;
   }
 
   RawAddress bd_addr = addressFromJByteArray(env, address);
-  BtStatus status = sBluetoothHidInterface->disconnect(bd_addr, (tBLE_ADDR_TYPE)address_type,
-                                                       (tBT_TRANSPORT)transport, reconnect_allowed);
+  BtStatus status = sBluetoothHidInterface->disconnect(
+          bd_addr, (tBLE_ADDR_TYPE)address_type, (tBT_TRANSPORT)transport,
+          static_cast<bthh_reconnect_policy_t>(reconnect_policy));
   if (!status) {
     log::error("Failed disconnect hid channel, status: {}", status);
     ret = JNI_FALSE;
@@ -471,8 +451,8 @@ int register_com_android_bluetooth_hid_host(JNIEnv* env) {
   const JNINativeMethod methods[] = {
           {"initializeNative", "()V", (void*)initializeNative},
           {"cleanupNative", "()V", (void*)cleanupNative},
-          {"connectHidNative", "([BII)Z", (void*)connectHidNative},
-          {"disconnectHidNative", "([BIIZ)Z", (void*)disconnectHidNative},
+          {"connectHidNative", "([BIIZ)Z", (void*)connectHidNative},
+          {"disconnectHidNative", "([BIII)Z", (void*)disconnectHidNative},
           {"getProtocolModeNative", "([BII)Z", (void*)getProtocolModeNative},
           {"virtualUnPlugNative", "([BII)Z", (void*)virtualUnPlugNative},
           {"setProtocolModeNative", "([BIIB)Z", (void*)setProtocolModeNative},

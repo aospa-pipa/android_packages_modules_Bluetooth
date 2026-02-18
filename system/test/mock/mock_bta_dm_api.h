@@ -61,31 +61,36 @@ struct BTA_DmAddBleDevice {
 extern struct BTA_DmAddBleDevice BTA_DmAddBleDevice;
 
 // Name: BTA_DmAddBleKey
-// Params: const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-// tBTM_LE_KEY_TYPE key_type Return: void
+// Params: const RawAddress& bd_addr, const PairingType& pairing_type, tBTM_LE_KEY_TYPE key_type,
+// const tBTA_LE_KEY_VALUE& le_key
+// Return: void
 struct BTA_DmAddBleKey {
-  std::function<void(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-                     tBTM_LE_KEY_TYPE key_type)>
-          body{[](const RawAddress& /* bd_addr */, tBTA_LE_KEY_VALUE* /* p_le_key */,
-                  tBTM_LE_KEY_TYPE /* key_type */) {}};
-  void operator()(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-                  tBTM_LE_KEY_TYPE key_type) {
-    body(bd_addr, p_le_key, key_type);
+  std::function<void(const RawAddress& bd_addr, const PairingType& pairing_type,
+                     tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& le_key)>
+          body{[](const RawAddress& /* bd_addr */, const PairingType& /* pairing_type */,
+                  tBTM_LE_KEY_TYPE /* key_type */, const tBTA_LE_KEY_VALUE& /* le_key */) {}};
+  void operator()(const RawAddress& bd_addr, const PairingType& pairing_type,
+                  tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& le_key) {
+    body(bd_addr, pairing_type, key_type, le_key);
   }
 };
 extern struct BTA_DmAddBleKey BTA_DmAddBleKey;
 
 // Name: BTA_DmAddDevice
-// Params: const RawAddress& bd_addr, DEV_CLASS dev_class, const LinkKey&
-// link_key, uint8_t key_type, uint8_t pin_length Return: void
+// Params: const RawAddress& bd_addr, const DEV_CLASS& dev_class, const LinkKey&, const PairingType&
+// pairing_type, link_key, uint8_t key_type, uint8_t pin_length
+// Return: void
 struct BTA_DmAddDevice {
-  std::function<void(RawAddress bd_addr, DEV_CLASS dev_class, LinkKey link_key, uint8_t key_type,
+  std::function<void(const RawAddress& bd_addr, const DEV_CLASS& dev_class,
+                     const PairingType& pairing_type, const LinkKey& link_key, uint8_t key_type,
                      uint8_t pin_length)>
-          body{[](RawAddress /* bd_addr */, DEV_CLASS /* dev_class */, LinkKey /* link_key */,
+          body{[](const RawAddress& /* bd_addr */, const DEV_CLASS& /* dev_class */,
+                  const PairingType& /* pairing_type */, const LinkKey& /* link_key */,
                   uint8_t /* key_type */, uint8_t /* pin_length */) {}};
-  void operator()(RawAddress bd_addr, DEV_CLASS dev_class, LinkKey link_key, uint8_t key_type,
+  void operator()(const RawAddress& bd_addr, const DEV_CLASS dev_class,
+                  const PairingType& pairing_type, const LinkKey& link_key, uint8_t key_type,
                   uint8_t pin_length) {
-    body(bd_addr, dev_class, link_key, key_type, pin_length);
+    body(bd_addr, dev_class, pairing_type, link_key, key_type, pin_length);
   }
 };
 extern struct BTA_DmAddDevice BTA_DmAddDevice;
@@ -230,16 +235,14 @@ struct BTA_DmBleUpdateConnectionParams {
 extern struct BTA_DmBleUpdateConnectionParams BTA_DmBleUpdateConnectionParams;
 
 // Name: BTA_DmBond
-// Params: const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT
-// transport, tBT_DEVICE_TYPE device_type Return: void
+// Params: const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport
+// Return: void
 struct BTA_DmBond {
-  std::function<void(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                     tBT_DEVICE_TYPE device_type)>
+  std::function<void(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport)>
           body{[](const RawAddress& /* bd_addr */, tBLE_ADDR_TYPE /* addr_type */,
-                  tBT_TRANSPORT /* transport */, tBT_DEVICE_TYPE /* device_type */) {}};
-  void operator()(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                  tBT_DEVICE_TYPE device_type) {
-    body(bd_addr, addr_type, transport, device_type);
+                  tBT_TRANSPORT /* transport */) {}};
+  void operator()(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
+    body(bd_addr, addr_type, transport);
   }
 };
 extern struct BTA_DmBond BTA_DmBond;

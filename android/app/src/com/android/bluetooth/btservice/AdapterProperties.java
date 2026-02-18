@@ -56,6 +56,7 @@ import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.bluetooth.util.Text;
 
 import java.io.PrintWriter;
@@ -575,10 +576,10 @@ public class AdapterProperties {
                     .logProfileConnectionStateChange(device, profile, newState, prevState);
             debugLog("updateOnProfileConnectionChanged: " + logInfo);
             if (Flags.onlyBroadcastToLocalUser()) {
-                mService.sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+                mService.sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
             } else {
                 mService.sendBroadcastAsUser(
-                        intent, UserHandle.ALL, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+                        intent, UserHandle.ALL, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
             }
         }
     }
@@ -984,7 +985,7 @@ public class AdapterProperties {
                 mNativeDiscovering = true;
                 mDiscoveryEndMs = System.currentTimeMillis() + DEFAULT_DISCOVERY_TIMEOUT_MS;
                 intent = new Intent(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-                mService.sendBroadcast(intent, BLUETOOTH_SCAN, Utils.getTempBroadcastBundle());
+                mService.sendBroadcast(intent, BLUETOOTH_SCAN, Util.getTempBroadcastBundle());
             }
         }
     }
@@ -993,7 +994,7 @@ public class AdapterProperties {
      * @return broadcast options for ACTION_DISCOVERY_FINISHED broadcast
      */
     private static @NonNull Bundle getBroadcastOptionsForDiscoveryFinished() {
-        final BroadcastOptions options = Utils.getTempBroadcastOptions();
+        final BroadcastOptions options = Util.getTempBroadcastOptions();
         options.setDeliveryGroupPolicy(BroadcastOptions.DELIVERY_GROUP_POLICY_MOST_RECENT);
         options.setDeferralPolicy(BroadcastOptions.DEFERRAL_POLICY_UNTIL_ACTIVE);
         return options.toBundle();

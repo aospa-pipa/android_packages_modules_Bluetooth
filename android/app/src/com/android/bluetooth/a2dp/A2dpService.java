@@ -54,6 +54,7 @@ import android.sysprop.BluetoothProperties;
 import android.util.Log;
 
 import com.android.bluetooth.BluetoothStatsLog;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
@@ -229,13 +230,13 @@ public class A2dpService extends ConnectableProfile {
             return false;
         }
 
-        if (!Utils.arrayContains(
+        if (!Util.arrayContains(
                 getAdapterService().getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
             Log.e(TAG, "Cannot connect to " + device + " : Remote does not have A2DP Sink UUID");
             return false;
         }
 
-        boolean isCsipSupported = Utils.arrayContains(getAdapterService().getRemoteUuids(device),
+        boolean isCsipSupported = Util.arrayContains(getAdapterService().getRemoteUuids(device),
                                                       BluetoothUuid.COORDINATED_SET);
         final var csipClient = getAdapterService().getCsipSetCoordinatorService();
         int CsipGroupSize = 1;
@@ -421,7 +422,7 @@ public class A2dpService extends ConnectableProfile {
         final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
         synchronized (mStateMachines) {
             for (BluetoothDevice device : bondedDevices) {
-                if (!Utils.arrayContains(
+                if (!Util.arrayContains(
                         getAdapterService().getRemoteUuids(device), BluetoothUuid.A2DP_SINK)) {
                     continue;
                 }
@@ -1238,7 +1239,7 @@ public class A2dpService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
     }
 
     private void broadcastCodecConfig(BluetoothDevice device, BluetoothCodecStatus codecStatus) {
@@ -1249,7 +1250,7 @@ public class A2dpService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
     }
 
     @Override
@@ -1495,6 +1496,9 @@ public class A2dpService extends ConnectableProfile {
     }
 
     public void switchCodecByBufferSize(BluetoothDevice device, boolean isLowLatency) {
+        if (Flags.a2dpHandleSaReconfigInNative()) {
+            throw new IllegalStateException("Reconfig is in native");
+        }
         if (getOptionalCodecsEnabled(device) != BluetoothA2dp.OPTIONAL_CODECS_PREF_ENABLED) {
             return;
         }

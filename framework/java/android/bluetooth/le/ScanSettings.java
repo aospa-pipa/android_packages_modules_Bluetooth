@@ -16,7 +16,6 @@
 
 package android.bluetooth.le;
 
-import android.annotation.FlaggedApi;
 import android.annotation.Hide;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -29,8 +28,6 @@ import android.compat.annotation.EnabledSince;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
-
-import com.android.bluetooth.flags.Flags;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -174,15 +171,12 @@ public final class ScanSettings implements Parcelable {
     public static final int PHY_LE_ALL_SUPPORTED = 255;
 
     /** Scan type is unknown. */
-    @FlaggedApi(Flags.FLAG_SUPPORT_PASSIVE_SCANNING)
     public static final int SCAN_TYPE_UNKNOWN = 0;
 
     /** Does passive scanning, scan responses are ignored. */
-    @FlaggedApi(Flags.FLAG_SUPPORT_PASSIVE_SCANNING)
     public static final int SCAN_TYPE_PASSIVE = 1;
 
     /** Does active scanning, scan results are delivered upon scan responses arrive. */
-    @FlaggedApi(Flags.FLAG_SUPPORT_PASSIVE_SCANNING)
     public static final int SCAN_TYPE_ACTIVE = 2;
 
     @Hide
@@ -277,13 +271,11 @@ public final class ScanSettings implements Parcelable {
         return mPhy;
     }
 
-    @FlaggedApi(Flags.FLAG_RSSI_SCAN_FILTER)
     @RequiresNoPermission
     public int getRssiThreshold() {
         return mRssiThreshold;
     }
 
-    @FlaggedApi(Flags.FLAG_SUPPORT_PASSIVE_SCANNING)
     @RequiresNoPermission
     public @ScanType int getScanType() {
         return mScanType;
@@ -368,7 +360,7 @@ public final class ScanSettings implements Parcelable {
         private boolean mLegacy = true;
         private int mPhy = BluetoothDevice.PHY_LE_1M;
         private int mRssiThreshold = Byte.MIN_VALUE;
-        private int mScanType = Flags.supportPassiveScanning() ? SCAN_TYPE_ACTIVE : 2;
+        private int mScanType = SCAN_TYPE_ACTIVE;
 
         // Instance initializer for mNumOfMatchesPerFilter
         {
@@ -540,7 +532,6 @@ public final class ScanSettings implements Parcelable {
          * @param rssiThreshold the high threshold of RSSI value. The valid range is [-127, 126].
          * @return this builder
          */
-        @FlaggedApi(Flags.FLAG_RSSI_SCAN_FILTER)
         @RequiresNoPermission
         public @NonNull Builder setRssiThreshold(int rssiThreshold) {
             mRssiThreshold = rssiThreshold;
@@ -556,7 +547,6 @@ public final class ScanSettings implements Parcelable {
          *     receiving an advertising report, without waiting for scan responses.
          * @throws IllegalArgumentException if invalid scan type is given.
          */
-        @FlaggedApi(Flags.FLAG_SUPPORT_PASSIVE_SCANNING)
         @RequiresNoPermission
         public @NonNull Builder setScanType(@ScanType int scanType) {
             if (scanType != SCAN_TYPE_PASSIVE && scanType != SCAN_TYPE_ACTIVE) {

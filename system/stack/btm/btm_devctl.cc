@@ -33,8 +33,8 @@
 #include <string.h>
 
 #include "acl_api_types.h"
-#include "btm_sec_cb.h"
 #include "btm_sec_int_types.h"
+#include "btm_security.h"
 #include "hci/controller.h"
 #include "main/shim/btm_api.h"
 #include "main/shim/entry.h"
@@ -132,9 +132,9 @@ void BTM_reset_complete() {
 
   /* Clear current security state */
   if (!com::android::bluetooth::flags::use_array_instead_list_in_sec_dev_rec()) {
-    list_foreach(btm_sec_cb.sec_dev_rec, set_sec_state_idle, NULL);
+    list_foreach(BtmSecurity::Get().sec_dev_rec_, set_sec_state_idle, NULL);
   } else {
-    btm_sec_cb.for_each_dev_rec(set_sec_state_idle, NULL);
+    BtmSecurity::Get().for_each_dev_rec(set_sec_state_idle, NULL);
   }
 
   /* After the reset controller should restore all parameters to defaults. */
@@ -161,8 +161,14 @@ void BTM_reset_complete() {
       bluetooth::shim::GetController()->SupportsBlePrivacy() &&
       bluetooth::shim::GetController()->GetLeResolvingListSize() > 0) {
     btm_ble_resolving_list_init(bluetooth::shim::GetController()->GetLeResolvingListSize());
-    /* set the default random private address timeout */
-    btsnd_hcic_ble_set_rand_priv_addr_timeout(btm_get_next_private_address_interval_ms() / 1000);
+
+    // If HCI_LE_Set_Resolvable_Private_Address_Timeout [v2] is supported, RPA generation will be
+    // completely offloaded to the controller by LE Address Manager. In that we don't need to use
+    // the HCI_LE_Set_Resolvable_Private_Address_Timeout [v1] here.
+    if (!bluetooth::shim::GetController()->IsRpaGenerationSupported()) {
+      /* Set the default random private address timeout */
+      btsnd_hcic_ble_set_rand_priv_addr_timeout(btm_get_next_private_address_interval_ms() / 1000);
+    }
   } else {
     log::info("Le Address Resolving list disabled due to lack of controller support");
   }
@@ -173,7 +179,9 @@ void BTM_reset_complete() {
   }
 
   if (!com_android_bluetooth_flags_local_pin_key_type()) {
-    BTM_SetPinType(btm_sec_cb.cfg.pin_type, btm_sec_cb.cfg.pin_code, btm_sec_cb.cfg.pin_code_len);
+    get_security_client_interface().BTM_SetPinType(BtmSecurity::Get().cfg_.pin_type,
+                                                   BtmSecurity::Get().cfg_.pin_code,
+                                                   BtmSecurity::Get().cfg_.pin_code_len);
   }
 
   decode_controller_support();
@@ -282,7 +290,7 @@ tBTM_STATUS BTM_SetLocalDeviceName(const char* p_name) {
   }
   /* Save the device name if local storage is enabled */
 
-  bd_name_from_char_pointer(btm_sec_cb.cfg.bd_name, p_name);
+  bd_name_from_char_pointer(BtmSecurity::Get().cfg_.bd_name, p_name);
 
   bluetooth::shim::GetController()->WriteLocalName(p_name);
   return tBTM_STATUS::BTM_CMD_STARTED;
@@ -302,7 +310,7 @@ tBTM_STATUS BTM_SetLocalDeviceName(const char* p_name) {
  *
  ******************************************************************************/
 tBTM_STATUS BTM_ReadLocalDeviceName(const char** p_name) {
-  *p_name = (const char*)btm_sec_cb.cfg.bd_name;
+  *p_name = (const char*)BtmSecurity::Get().cfg_.bd_name;
   return tBTM_STATUS::BTM_SUCCESS;
 }
 

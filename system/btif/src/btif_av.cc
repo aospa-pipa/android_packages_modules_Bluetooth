@@ -58,9 +58,7 @@
 #include "btif/include/stack_manager_t.h"
 #include "btif_status.h"
 #include "common/state_machine.h"
-#include "device/include/device_iot_conf_defs.h"
 #include "device/include/device_iot_config.h"
-#include "hardware/bluetooth.h"
 #include "hardware/bt_av.h"
 #include "include/hardware/bt_rc.h"
 #include "os/system_properties.h"
@@ -932,6 +930,56 @@ static BtifAvPeer* btif_av_find_active_peer(const A2dpType local_a2dp_type) {
     return btif_av_sink_find_peer(btif_av_sink.ActivePeer());
   }
   return nullptr;
+}
+
+static void btif_av_source_set_low_latency_codec_handler_delayed(bool is_low_latency) {
+  BtifAvPeer* peer = btif_av_find_active_peer(A2dpType::kSource);
+  if (peer == nullptr) {
+    log::warn("No active peer found");
+    return;
+  }
+
+  A2dpCodecConfig* active_codec_config = bta_av_get_a2dp_peer_current_codec(peer->PeerAddress());
+  if (active_codec_config == nullptr) {
+    log::warn("No active codec config found for peer: {}", peer->PeerAddress());
+    return;
+  }
+
+  if (peer->IsMandatoryCodecPreferred() ||
+      (active_codec_config->codecIndex() == BTAV_A2DP_CODEC_INDEX_SOURCE_SBC &&
+       active_codec_config->codecPriority() == BTAV_A2DP_CODEC_PRIORITY_HIGHEST)) {
+    log::warn("Optional codecs disabled for peer: {}", peer->PeerAddress());
+    return;
+  }
+
+  if (is_low_latency && active_codec_config->codecIndex() == BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS) {
+    log::debug("Low latency codec already set for peer: {}", peer->PeerAddress());
+    return;
+  }
+
+  if (!is_low_latency && active_codec_config->codecIndex() != BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS) {
+    log::debug("Low latency codec not required.", peer->PeerAddress());
+    return;
+  }
+
+  btav_a2dp_codec_config_t codec_config{
+          .codec_type = BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS,
+          .codec_priority = is_low_latency ? BTAV_A2DP_CODEC_PRIORITY_HIGHEST
+                                           : BTAV_A2DP_CODEC_PRIORITY_DISABLED,
+  };
+
+  const std::vector<btav_a2dp_codec_config_t> codec_preferences = {codec_config};
+  std::promise<void> peer_ready_promise;
+
+  BtStatus status = btif_av_source.SetPeerReconfigureStreamData(
+          peer->PeerAddress(), codec_preferences, std::move(peer_ready_promise));
+  if (!status) {
+    log::error("SetPeerReconfigureStreamData failed, status: {}", status);
+    return;
+  }
+
+  BtifAvEvent btif_av_event(BTIF_AV_RECONFIGURE_REQ_EVT, nullptr, 0);
+  btif_av_handle_event(AVDT_TSEP_SNK, peer->PeerAddress(), kBtaHandleUnknown, btif_av_event);
 }
 
 const RawAddress& btif_av_find_by_handle(tBTA_AV_HNDL bta_handle) {
@@ -3874,6 +3922,13 @@ static void set_stream_mode(bool isGamingEnabled, bool isLowLatency) {
   }
 }
 
+void btif_av_source_set_low_latency_codec(bool is_low_latency) {
+  log::info("is_low_latency: {}", is_low_latency);
+
+  do_in_main_thread(
+          base::BindOnce(&btif_av_source_set_low_latency_codec_handler_delayed, is_low_latency));
+}
+
 void btif_av_source_cleanup(void) {
   log::info("");
   do_in_main_thread(base::BindOnce(&BtifAvSource::Cleanup, base::Unretained(&btif_av_source)));
@@ -3939,7 +3994,7 @@ void btif_av_stream_start_offload(void) {
 
 bool btif_av_stream_ready(const A2dpType local_a2dp_type) {
   // Make sure the main adapter is enabled
-  if (btif_is_enabled() == 0) {
+  if (!stack_is_running()) {
     log::verbose("Main adapter is not enabled");
     return false;
   }
@@ -3963,7 +4018,7 @@ bool btif_av_stream_ready(const A2dpType local_a2dp_type) {
 
 bool btif_av_check_flag(const A2dpType local_a2dp_type, uint8_t flag) {
   // Make sure the main adapter is enabled
-  if (btif_is_enabled() == 0) {
+  if (!stack_is_running()) {
     log::verbose("Main adapter is not enabled");
     return false;
   }
@@ -4227,7 +4282,7 @@ static void btif_debug_av_peer_dump(int fd, const BtifAvPeer& peer) {
   dprintf(fd, "    Support 3Mbps: %s\n", peer.Is3Mbps() ? "true" : "false");
   dprintf(fd, "    Self Initiated Connection: %s\n",
           peer.SelfInitiatedConnection() ? "true" : "false");
-  dprintf(fd, "    Delay Reporting: %u (in 1/10 milliseconds) \n", peer.GetDelayReport());
+  dprintf(fd, "    Delay Reporting: %u (in 1/10 milliseconds)\n", peer.GetDelayReport());
   dprintf(fd, "    Codec Preferred: %s\n",
           peer.IsMandatoryCodecPreferred() ? "Mandatory" : "Optional");
 }

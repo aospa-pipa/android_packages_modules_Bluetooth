@@ -71,9 +71,9 @@ import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.InteropUtil;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
-import com.android.bluetooth.btservice.MetricsLogger;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.hfpclient.HeadsetClientStateMachine;
+import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.bluetooth.storage.BluetoothStorageManager;
@@ -632,7 +632,7 @@ public class HeadsetService extends ConnectableProfile {
             return false;
         }
 
-        boolean isCsipSupported = Utils.arrayContains(getAdapterService().getRemoteUuids(device),
+        boolean isCsipSupported = Util.arrayContains(getAdapterService().getRemoteUuids(device),
                                                       BluetoothUuid.COORDINATED_SET);
         final var csipClient = getAdapterService().getCsipSetCoordinatorService();
         int CsipGroupSize = 1;
@@ -1194,6 +1194,18 @@ public class HeadsetService extends ConnectableProfile {
      * @return true on success, otherwise false
      */
     public boolean setActiveDevice(BluetoothDevice device) {
+        return setActiveDevice(device, false);
+    }
+
+    /**
+     * Set the active device.
+     *
+     * @param device the active device
+     * @param isCallerFromHeadsetServiceBinder whether the caller is from HeadsetServiceBinder
+     * @return true on success, otherwise false
+     */
+    public boolean setActiveDevice(
+            BluetoothDevice device, boolean isCallerFromHeadsetServiceBinder) {
         boolean deferConnectAudio = false;
         Log.i(TAG, "setActiveDevice: device=" + device + ", " + Util.getUidPidString());
         if (device == null) {
@@ -1203,6 +1215,14 @@ public class HeadsetService extends ConnectableProfile {
         synchronized (mStateMachines) {
             if (device.equals(mActiveDevice)) {
                 Log.i(TAG, "setActiveDevice: device " + device + " is already active");
+                // Adding a workaround for AMSCO when the watch is the active device but doesn't
+                // have audio control for backward compatibility.
+                if (mSystemInterface.isScoManagedByAudioEnabled()
+                        && isCallerFromHeadsetServiceBinder
+                        && Util.remoteDeviceIsWatch(getAdapterService(), device)) {
+                    Log.i(TAG, "requesting audio for the watch");
+                    mSystemInterface.requestBluetoothAudio(device);
+                }
                 return true;
             }
             if (getConnectionState(device) != STATE_CONNECTED) {
@@ -1211,12 +1231,6 @@ public class HeadsetService extends ConnectableProfile {
                         "setActiveDevice: Cannot set "
                                 + device
                                 + " as active, device is not connected");
-                return false;
-            }
-            if (mSystemInterface.isScoManagedByAudioEnabled()
-                    && mActiveDevice != null
-                    && !mActiveDevice.equals(mExposedActiveDevice)) {
-                Log.e(TAG, "Already processing an active device change");
                 return false;
             }
             if (!mNativeInterface.setActiveDevice(device)) {
@@ -2534,10 +2548,10 @@ public class HeadsetService extends ConnectableProfile {
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
         if (Flags.onlyBroadcastToLocalUser()) {
-            sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+            sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
         } else {
             sendBroadcastAsUser(
-                    intent, UserHandle.ALL, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+                    intent, UserHandle.ALL, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
         }
     }
 
@@ -2898,6 +2912,23 @@ public class HeadsetService extends ConnectableProfile {
                         sb, "==== StateMachine for " + stateMachine.getDevice() + " ====");
                 stateMachine.dump(sb);
             }
+        }
+    }
+
+    /**
+     * Get the name of the device's headset codec. The codec name of this device can only be
+     * obtained after being hfp connected and the codec negotiation process is completed. Returns
+     * {@link BluetoothHeadset#CODEC_TYPE_UNSUPPORTED} if the device is not connected or an error
+     * occurs.
+     */
+    public int getCodecType(BluetoothDevice device) {
+        synchronized (mStateMachines) {
+            HeadsetStateMachine stateMachine = mStateMachines.get(device);
+            if (stateMachine == null) {
+                Log.w(TAG, "getCodecType(), " + device + " does not have a state machine");
+                return BluetoothHeadset.CODEC_TYPE_UNSUPPORTED;
+            }
+            return stateMachine.getCodecType();
         }
     }
 

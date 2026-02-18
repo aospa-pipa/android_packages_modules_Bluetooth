@@ -238,8 +238,8 @@ pub struct BtSdpMpsRecord {
     pub supported_dependencies: SupportedDependencies, // LibBluetooth expects big endian data
 }
 
-impl BtSdpMpsRecord {
-    pub fn default() -> Self {
+impl Default for BtSdpMpsRecord {
+    fn default() -> Self {
         let empty_uuid = Uuid::try_from(vec![0x0, 0x0]).unwrap();
         BtSdpMpsRecord {
             hdr: BtSdpHeaderOverlay {
@@ -263,7 +263,7 @@ impl BtSdpMpsRecord {
             // - 8 Press Play on Audio Player during active call (HFP-AG_A2DP-SRC)
             // - 10 Start Audio Streaming after AVRCP Play Command (HFP-AG_A2DP-SRC)
             // - 12 Suspend Audio Streaming after AVRCP Pause/Stop (HFP-AG_A2DP-SRC)
-            supported_scenarios_mpsd: [0, 0, 0, 0, 0, 0, 0b_1_0101, 0b_0101_0101],
+            supported_scenarios_mpsd: [0, 0, 0, 0, 0, 0, 0b_0001_0101, 0b_0101_0101],
             supported_scenarios_mpmd: [0; 8],
             // LibBluetooth accepts big endian data. CrOS supports:
             // - 1 Sniff Mode During Streaming
@@ -328,15 +328,9 @@ impl From<CxxBtSdpRecord> for BtSdpRecord {
     }
 }
 
-impl From<BtSdpRecord> for CxxBtSdpRecord {
-    fn from(item: BtSdpRecord) -> Self {
-        let i = item.clone().get_unsafe_record();
-        CxxBtSdpRecord(i)
-    }
-}
-
 impl BtSdpRecord {
-    fn convert_header<'a>(hdr: &'a mut BtSdpHeaderOverlay) -> bindings::bluetooth_sdp_hdr_overlay {
+    // TODO(b/446827362): Do not directly returns structures containing pointers, which is unsafe.
+    fn convert_header(hdr: &mut BtSdpHeaderOverlay) -> bindings::bluetooth_sdp_hdr_overlay {
         let srv_name_ptr = LTCheckedPtrMut::from(&mut hdr.service_name);
         let user1_ptr = LTCheckedPtr::from(&hdr.user1_data);
         let user2_ptr = LTCheckedPtr::from(&hdr.user2_data);
@@ -356,7 +350,8 @@ impl BtSdpRecord {
     }
 
     // Get sdp record with lifetime tied to self
-    fn get_unsafe_record<'a>(&'a mut self) -> bindings::bluetooth_sdp_record {
+    // TODO(b/446827362): Do not directly returns structures containing pointers, which is unsafe.
+    fn get_unsafe_record(&mut self) -> bindings::bluetooth_sdp_record {
         match self {
             BtSdpRecord::HeaderOverlay(ref mut hdr) => {
                 bindings::bluetooth_sdp_record { hdr: BtSdpRecord::convert_header(hdr) }
@@ -454,10 +449,6 @@ mod ffi {
         include!("topshim/sdp/sdp_shim.h");
 
         #[namespace = ""]
-        #[cxx_name = "bt_interface_t"]
-        type BluetoothInterface = crate::btif::CxxBluetoothInterface;
-
-        #[namespace = ""]
         #[cxx_name = "bluetooth_sdp_record"]
         type BtSdpRecord = super::CxxBtSdpRecord;
 
@@ -467,9 +458,11 @@ mod ffi {
         #[namespace = "bluetooth"]
         type Uuid = crate::btif::Uuid;
 
+        type BtIntf = crate::btif::ffi::BtIntf;
+
         type SdpIntf;
 
-        fn GetSdpProfile(btif: &BluetoothInterface) -> UniquePtr<SdpIntf>;
+        fn GetSdpProfile(btif: &BtIntf) -> UniquePtr<SdpIntf>;
 
         fn init(self: &SdpIntf) -> u32;
         #[allow(dead_code)]
@@ -503,7 +496,7 @@ unsafe impl Send for Sdp {}
 impl Sdp {
     #[log_args]
     pub fn new(intf: &BluetoothInterface) -> Sdp {
-        let sdp_intf: cxx::UniquePtr<ffi::SdpIntf> = ffi::GetSdpProfile(intf.as_raw_btif());
+        let sdp_intf: cxx::UniquePtr<ffi::SdpIntf> = ffi::GetSdpProfile(intf.as_btif());
 
         Sdp { internal: sdp_intf, is_init: false }
     }
@@ -530,8 +523,8 @@ impl Sdp {
     }
 
     #[log_args]
-    pub fn create_sdp_record(&self, record: BtSdpRecord, handle: &mut i32) -> BtStatus {
-        self.internal.create_sdp_record(record.into(), handle).into()
+    pub fn create_sdp_record(&self, mut record: BtSdpRecord, handle: &mut i32) -> BtStatus {
+        self.internal.create_sdp_record(CxxBtSdpRecord(record.get_unsafe_record()), handle).into()
     }
 
     #[log_args]

@@ -55,8 +55,8 @@ import java.util.function.Consumer;
  * This class provides the public APIs to control the Bluetooth LE Audio Peripheral profile.
  *
  * <p>An LE Audio Peripheral is a device that acts as a sink of audio for an LE Audio Central
- * device, such as a headset or speaker. This profile is defined by the Bluetooth Special
- * Interest Group (SIG) in the LE Audio specifications.
+ * device, such as a headset or speaker. This profile is defined by the Bluetooth Special Interest
+ * Group (SIG) in the LE Audio specifications.
  */
 @Hide
 @SystemApi
@@ -227,7 +227,6 @@ public final class BluetoothLeAudioPeripheral implements BluetoothProfile, AutoC
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
     public @BtProfileState int getConnectionState(@Nullable BluetoothDevice device) {
-        Log.d(TAG, "getConnectionState(" + device + ")");
         int defaultValue = STATE_DISCONNECTED;
 
         return callServiceIfEnabled(

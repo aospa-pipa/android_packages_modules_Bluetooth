@@ -495,14 +495,22 @@ struct HciLayer::impl {
     le_event_handlers_.erase(it);
   }
 
-  void register_hdt_event(SubeventCode event, ContextualCallback<void(HdtEventView)> handler) {
-    log::assert_that(hdt_event_handlers_.count(event) == 0,
-                     "Can not register a second handler for {}", SubeventCodeText(event));
-    hdt_event_handlers_[event] = handler;
+  void register_development_event(DevelopmentSubeventCode event,
+                                  ContextualCallback<void(DevelopmentEventView)> handler) {
+    log::assert_that(development_event_handlers_.count(event) == 0,
+                     "Can not register a second handler for {}",
+                     DevelopmentSubeventCodeText(event));
+    development_event_handlers_[event] = handler;
   }
 
-  void unregister_hdt_event(SubeventCode event) {
-    hdt_event_handlers_.erase(hdt_event_handlers_.find(event));
+  void unregister_development_event(DevelopmentSubeventCode event) {
+    auto it = development_event_handlers_.find(event);
+    if (it == development_event_handlers_.end()) {
+      log::warn("Can not unregister a non-existent handler for {}",
+                DevelopmentSubeventCodeText(event));
+      return;
+    }
+    development_event_handlers_.erase(it);
   }
 
   void register_vs_event(VseSubeventCode event,
@@ -621,11 +629,11 @@ struct HciLayer::impl {
       case EventCode::LE_META_EVENT:
         on_le_meta_event(event);
         break;
-      case EventCode::HDT_EVENT:
-        on_hdt_event(event);
-        break;
       case EventCode::HARDWARE_ERROR:
         on_hardware_error(event);
+        break;
+      case EventCode::DEVELOPMENT:
+        on_development_event(event);
         break;
       case EventCode::VENDOR_SPECIFIC:
         on_vs_event(event);
@@ -666,15 +674,17 @@ struct HciLayer::impl {
     le_event_handlers_[subevent_code](meta_event_view);
   }
 
-  void on_hdt_event(EventView event) {
-    HdtEventView hdt_event_view = HdtEventView::Create(event);
-    log::assert_that(hdt_event_view.IsValid(), "assert failed: hdt_event_view.IsValid()");
-    SubeventCode subevent_code = hdt_event_view.GetSubeventCode();
-    if (hdt_event_handlers_.find(subevent_code) == hdt_event_handlers_.end()) {
-      log::warn("Unhandled hdt subevent of type {}", SubeventCodeText(subevent_code));
+  void on_development_event(EventView event) {
+    DevelopmentEventView development_event_view = DevelopmentEventView::Create(event);
+    log::assert_that(development_event_view.IsValid(),
+                     "assert failed: development_event_view.IsValid()");
+    DevelopmentSubeventCode subevent_code = development_event_view.GetSubeventCode();
+    if (development_event_handlers_.find(subevent_code) == development_event_handlers_.end()) {
+      log::warn("Unhandled development event of type {}",
+                DevelopmentSubeventCodeText(subevent_code));
       return;
     }
-    hdt_event_handlers_[subevent_code](hdt_event_view);
+    development_event_handlers_[subevent_code](development_event_view);
   }
 
   void on_vs_event(EventView event) {
@@ -701,7 +711,8 @@ struct HciLayer::impl {
 
   std::map<EventCode, ContextualCallback<void(EventView)>> event_handlers_;
   std::map<SubeventCode, ContextualCallback<void(LeMetaEventView)>> le_event_handlers_;
-  std::map<SubeventCode, ContextualCallback<void(HdtEventView)>> hdt_event_handlers_;
+  std::map<DevelopmentSubeventCode, ContextualCallback<void(DevelopmentEventView)>>
+          development_event_handlers_;
   std::map<VseSubeventCode, ContextualCallback<void(VendorSpecificEventView)>> vs_event_handlers_;
   std::optional<ContextualCallback<void(VendorSpecificEventView)>> vs_event_default_handler_;
 
@@ -758,6 +769,7 @@ struct HciLayer::hal_callbacks : public hal::HciHalCallbacks {
 
     if (com::android::bluetooth::flags::report_vendor_events_from_acl() &&
         module_.impl_->vendor_connection_handle_min_ > 0) {
+      log::assert_that(acl_view.IsValid(), "invalid acl packet");
       uint16_t handle = acl_view.GetHandle();
       if (handle >= module_.impl_->vendor_connection_handle_min_ &&
           handle <= module_.impl_->vendor_connection_handle_max_) {
@@ -857,6 +869,10 @@ void HciLayer::EnqueueCommand(unique_ptr<CommandBuilder> command,
 void HciLayer::EnqueueCommand(
         unique_ptr<CommandBuilder> command,
         ContextualOnceCallback<void(CommandStatusOrCompleteView)> on_status_or_complete) {
+  std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
+  if (life_cycle_stopped) {
+    return;
+  }
   impl_->handler_->CallOn(impl_, &impl::enqueue_command<CommandStatusOrCompleteView>,
                           std::move(command), std::move(on_status_or_complete));
 }
@@ -894,21 +910,21 @@ void HciLayer::UnregisterLeEventHandler(SubeventCode event) {
   impl_->handler_->CallOn(impl_, &impl::unregister_le_event, event);
 }
 
-void HciLayer::RegisterHdtEventHandler(SubeventCode event,
-                                      ContextualCallback<void(HdtEventView)> handler) {
+void HciLayer::RegisterDevelopmentEventHandler(
+        DevelopmentSubeventCode event, ContextualCallback<void(DevelopmentEventView)> handler) {
   std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
   if (life_cycle_stopped) {
     return;
   }
-  impl_->handler_->CallOn(impl_, &impl::register_hdt_event, event, handler);
+  impl_->handler_->CallOn(impl_, &impl::register_development_event, event, handler);
 }
 
-void HciLayer::UnregisterHdtEventHandler(SubeventCode event) {
+void HciLayer::UnregisterDevelopmentEventHandler(DevelopmentSubeventCode event) {
   std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
   if (life_cycle_stopped) {
     return;
   }
-  impl_->handler_->CallOn(impl_, &impl::unregister_hdt_event, event);
+  impl_->handler_->CallOn(impl_, &impl::unregister_development_event, event);
 }
 
 void HciLayer::RegisterVendorSpecificEventHandler(
@@ -1228,10 +1244,12 @@ void HciLayer::StopWithNoHalDependencies() {
 HciLayer::~HciLayer() {
   std::unique_lock<std::recursive_mutex> lock(life_cycle_guard);
   life_cycle_stopped = true;
+
   if (!impl_) {
     return;
   }
 
+  impl_->command_queue_.clear();
   impl_->hal_->unregisterIncomingPacketCallback();
   delete hal_callbacks_;
 

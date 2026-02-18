@@ -29,7 +29,7 @@ impl From<CxxSocketType> for SocketType {
             bindings::btsock_type_t_BTSOCK_SCO => SocketType::Sco,
             bindings::btsock_type_t_BTSOCK_L2CAP => SocketType::L2cap,
             bindings::btsock_type_t_BTSOCK_L2CAP_LE => SocketType::L2capLe,
-            _ => unreachable!(),
+            _ => panic!("Unsupported btsock_type_t {}", item.0),
         }
     }
 }
@@ -63,7 +63,7 @@ impl From<CxxSocketDataPath> for SocketDataPath {
             bindings::btsock_data_path_t_BTSOCK_DATA_PATH_HARDWARE_OFFLOAD => {
                 SocketDataPath::HardwareOffload
             }
-            _ => unreachable!(),
+            _ => panic!("Unsupported btsock_data_path_t {}", item.0),
         }
     }
 }
@@ -166,10 +166,6 @@ mod ffi {
         #[namespace = ""]
         type RawAddress = crate::btif::RawAddress;
 
-        #[namespace = ""]
-        #[cxx_name = "bt_interface_t"]
-        type BluetoothInterface = crate::btif::CxxBluetoothInterface;
-
         #[namespace = "bluetooth"]
         type Uuid = crate::btif::Uuid;
 
@@ -181,10 +177,13 @@ mod ffi {
         #[cxx_name = "btsock_data_path_t"]
         type SocketDataPath = super::CxxSocketDataPath;
 
+        type BtIntf = crate::btif::ffi::BtIntf;
+
         type SocketIntf;
 
-        fn GetSocketProfile(btif: &BluetoothInterface) -> UniquePtr<SocketIntf>;
+        fn GetSocketProfile(btif: &BtIntf) -> UniquePtr<SocketIntf>;
 
+        #[allow(clippy::too_many_arguments)]
         fn listen(
             self: &SocketIntf,
             socket_type: SocketType,
@@ -200,6 +199,7 @@ mod ffi {
             endpoint_id: u64,
             max_rx_packet_size: i32,
         ) -> u32;
+        #[allow(clippy::too_many_arguments)]
         fn connect(
             self: &SocketIntf,
             bd_addr: RawAddress,
@@ -216,6 +216,7 @@ mod ffi {
             max_rx_packet_size: i32,
         ) -> u32;
         fn request_max_tx_data_length(self: &SocketIntf, bd_addr: RawAddress);
+        #[allow(clippy::too_many_arguments)]
         fn control_req(
             self: &SocketIntf,
             dlci: u8,
@@ -257,7 +258,7 @@ pub fn try_from_fd(fd: i32) -> Result<File, FdError> {
 impl BtSocket {
     #[log_args]
     pub fn new(intf: &BluetoothInterface) -> Self {
-        let sock_intf: cxx::UniquePtr<ffi::SocketIntf> = ffi::GetSocketProfile(intf.as_raw_btif());
+        let sock_intf: cxx::UniquePtr<ffi::SocketIntf> = ffi::GetSocketProfile(intf.as_btif());
         BtSocket { internal: sock_intf }
     }
 
@@ -273,7 +274,7 @@ impl BtSocket {
     ) -> (BtStatus, Result<File, FdError>) {
         let mut sockfd: i32 = -1;
 
-        let uuid = service_uuid.or(Some(Uuid::from([0; 16]))).unwrap();
+        let uuid = service_uuid.unwrap_or(Uuid::from([0; 16]));
 
         let name = CString::new(service_name).expect("Service name has null in it.");
 
@@ -315,7 +316,7 @@ impl BtSocket {
         calling_uid: i32,
     ) -> (BtStatus, Result<File, FdError>) {
         let mut sockfd: i32 = -1;
-        let uuid = service_uuid.or(Some(Uuid::from([0; 16]))).unwrap();
+        let uuid = service_uuid.unwrap_or(Uuid::from([0; 16]));
 
         let data_path = SocketDataPath::NoOffload;
         let sock_name = CString::new("test").expect("Socket name has null in it");

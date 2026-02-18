@@ -773,23 +773,6 @@ public:
                         rx_phy);
   }
 
-  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
-                            uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
-                            uint8_t key_sched_debug_flag) {
-    TRY_POSTING_ON_MAIN(interface_.on_encryption_change_v3, handle_,
-                        ToLegacyHciErrorCode(hci_status), encr_enable, key_size, mic_length, 
-                        key_sched_enabled, key_sched_debug_flag);
-  }
-
-  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status,
-                                        uint8_t mic_length,
-                                        uint8_t key_sched_enabled,
-                                        uint8_t key_sched_debug_flag) override {
-    TRY_POSTING_ON_MAIN(interface_.on_encryption_key_refresh_complete_v2, handle_,
-                        ToLegacyHciErrorCode(hci_status), mic_length, key_sched_enabled,
-                        key_sched_debug_flag);
-  }
-
   void OnDisconnection(hci::ErrorCode reason) {
     Disconnect();
     on_disconnect_(handle_, reason);
@@ -877,16 +860,18 @@ struct shim::Acl::impl {
     }
 
 #ifndef TARGET_FLOSS
-    // Since this is a suspend disconnect, we immediately also call
-    // |OnClassicSuspendInitiatedDisconnect| without waiting for it to happen.
-    // We want the stack to clean up ahead of the link layer (since we will mask
-    // away that event). The reason we do this in a separate loop is that this
-    // will also remove the handle from the connection map.
-    for (auto& handle : disconnect_handles) {
-      auto found = handle_to_classic_connection_map_.find(handle);
-      if (found != handle_to_classic_connection_map_.end()) {
-        GetAclManagerClassic()->OnClassicSuspendInitiatedDisconnect(
-                found->first, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+    if (!com::android::bluetooth::flags::le_hid_connection_policy_suspend()) {
+      // Since this is a suspend disconnect, we immediately also call
+      // |OnClassicSuspendInitiatedDisconnect| without waiting for it to happen.
+      // We want the stack to clean up ahead of the link layer (since we will mask
+      // away that event). The reason we do this in a separate loop is that this
+      // will also remove the handle from the connection map.
+      for (auto& handle : disconnect_handles) {
+        auto found = handle_to_classic_connection_map_.find(handle);
+        if (found != handle_to_classic_connection_map_.end()) {
+          GetAclManagerClassic()->OnClassicSuspendInitiatedDisconnect(
+                  found->first, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+        }
       }
     }
 #endif
@@ -911,16 +896,18 @@ struct shim::Acl::impl {
     }
 
 #ifndef TARGET_FLOSS
-    // Since this is a suspend disconnect, we immediately also call
-    // |OnLeSuspendInitiatedDisconnect| without waiting for it to happen. We
-    // want the stack to clean up ahead of the link layer (since we will mask
-    // away that event). The reason we do this in a separate loop is that this
-    // will also remove the handle from the connection map.
-    for (auto& handle : disconnect_handles) {
-      auto found = handle_to_le_connection_map_.find(handle);
-      if (found != handle_to_le_connection_map_.end()) {
-        GetAclManagerLe()->OnLeSuspendInitiatedDisconnect(
-                found->first, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+    if (!com::android::bluetooth::flags::le_hid_connection_policy_suspend()) {
+      // Since this is a suspend disconnect, we immediately also call
+      // |OnLeSuspendInitiatedDisconnect| without waiting for it to happen. We
+      // want the stack to clean up ahead of the link layer (since we will mask
+      // away that event). The reason we do this in a separate loop is that this
+      // will also remove the handle from the connection map.
+      for (auto& handle : disconnect_handles) {
+        auto found = handle_to_le_connection_map_.find(handle);
+        if (found != handle_to_le_connection_map_.end()) {
+          GetAclManagerLe()->OnLeSuspendInitiatedDisconnect(
+                  found->first, hci::ErrorCode::CONNECTION_TERMINATED_BY_LOCAL_HOST);
+        }
       }
     }
 #endif
@@ -1018,14 +1005,9 @@ struct shim::Acl::impl {
     }
 
     auto remote_address_with_type = connection->second->GetRemoteAddressWithType();
-    if (com_android_bluetooth_flags_disconnect_acl_on_gatt_timeout() ||
-        !com_android_bluetooth_flags_remove_device_with_connection_manager()) {
-      GetAclManagerLe()->RemoveFromBackgroundList(remote_address_with_type);
-      connection_manager::on_removed_from_accept_list(
-              ToRawAddress(remote_address_with_type.GetAddress()));
-    } else {
-      connection_manager::remove_unconditional(ToRawAddress(remote_address_with_type.GetAddress()));
-    }
+    GetAclManagerLe()->RemoveFromBackgroundList(remote_address_with_type);
+    connection_manager::on_removed_from_accept_list(
+            ToRawAddress(remote_address_with_type.GetAddress()));
     connection->second->InitiateDisconnect(ToDisconnectReasonFromLegacy(reason));
     log::debug("Disconnection initiated le remote:{} handle:{}", remote_address_with_type, handle);
     BTM_LogHistory(kBtmLogTag, ToLegacyAddressWithType(remote_address_with_type),

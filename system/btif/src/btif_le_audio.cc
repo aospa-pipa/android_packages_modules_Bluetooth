@@ -148,7 +148,7 @@ class LeAudioClientInterfaceImpl : public LeAudioClientInterface, public LeAudio
 
     do_in_main_thread(
             BindOnce(&LeAudioClient::Initialize, this,
-                     jni_thread_wrapper(base::Bind(&btif_storage_load_bonded_leaudio)),
+                     jni_thread_wrapper(base::BindOnce(&btif_storage_load_bonded_leaudio)),
                      base::Bind([]() -> bool { return LeAudioHalVerifier::SupportsLeAudio(); }),
                      offloading_preference));
 
@@ -293,6 +293,18 @@ class LeAudioClientInterfaceImpl : public LeAudioClientInterface, public LeAudio
 
     do_in_main_thread(
             BindOnce(&LeAudioClient::SetInCall, Unretained(LeAudioClient::Get()), in_call));
+  }
+
+  void SetAllowlistFlag(const RawAddress& address, bool allowed) override {
+    if (!initialized || !LeAudioClient::IsLeAudioClientRunning()) {
+      log::verbose(
+              "call ignored, due to already started cleanup procedure or service "
+              "being not read");
+      return;
+    }
+
+    do_in_main_thread(BindOnce(&LeAudioClient::SetAllowlistFlag, Unretained(LeAudioClient::Get()),
+                               address, allowed));
   }
 
   void SetUnicastMonitorMode(uint8_t local_directions, bool enable) {

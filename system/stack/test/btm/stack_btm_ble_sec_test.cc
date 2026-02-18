@@ -22,8 +22,9 @@
 
 #include "stack/btm/btm_ble_sec.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec_cb.h"
+#include "stack/btm/btm_security.h"
 #include "stack/include/btm_ble_sec_api_types.h"
+#include "stack/include/btm_sec_api.h"
 #include "stack/include/main_thread.h"
 #include "stack/include/smp_api_types.h"
 #include "stack/test/btm/btm_test_fixtures.h"
@@ -55,11 +56,11 @@ protected:
     BtmWithMocksTest::SetUp();
     BTM_Sec_Init();
     p_mock_le_callback = &mock_le_callback_;
-    btm_sec_cb.api.p_le_callback = StaticLeCallback;
+    BtmSecurity::Get().api_.p_le_callback = StaticLeCallback;
   }
 
   void TearDown() override {
-    btm_sec_cb.api.p_le_callback = nullptr;
+    BtmSecurity::Get().api_.p_le_callback = nullptr;
     p_mock_le_callback = nullptr;
     BTM_Sec_Free();
     BtmWithMocksTest::TearDown();
@@ -72,12 +73,12 @@ protected:
 TEST_F(StackBtmBleSecTest, btm_ble_user_confirmation_req_pairing_state_busy_without_flag) {
   set_com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing(false);
 
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_GET_REM_NAME;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_GET_REM_NAME;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   tSMP_EVT_DATA smp_data;
   smp_data.passkey = 123456;
@@ -90,18 +91,18 @@ TEST_F(StackBtmBleSecTest, btm_ble_user_confirmation_req_pairing_state_busy_with
 
   EXPECT_TRUE(p_device->sec_rec.sec_flags & BTM_SEC_LE_AUTHENTICATED);
   EXPECT_EQ(tSECURITY_STATE::AUTHENTICATING, p_device->sec_rec.le_link);
-  EXPECT_EQ(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-  EXPECT_EQ(BT_TRANSPORT_LE, btm_sec_cb.link_spec.transport);
-  EXPECT_TRUE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+  EXPECT_EQ(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+  EXPECT_EQ(BT_TRANSPORT_LE, BtmSecurity::Get().link_spec_.transport);
+  EXPECT_TRUE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
 }
 
 TEST_F(StackBtmBleSecTest, btm_ble_sec_req_pairing_state_idle) {
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_IDLE;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   tSMP_EVT_DATA smp_data;
 
@@ -112,18 +113,18 @@ TEST_F(StackBtmBleSecTest, btm_ble_sec_req_pairing_state_idle) {
   btm_proc_smp_cback(SMP_SEC_REQUEST_EVT, bd_addr, &smp_data);
 
   EXPECT_EQ(tSECURITY_STATE::AUTHENTICATING, p_device->sec_rec.le_link);
-  EXPECT_EQ(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-  EXPECT_EQ(BT_TRANSPORT_LE, btm_sec_cb.link_spec.transport);
-  EXPECT_TRUE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+  EXPECT_EQ(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+  EXPECT_EQ(BT_TRANSPORT_LE, BtmSecurity::Get().link_spec_.transport);
+  EXPECT_TRUE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
 }
 
 TEST_F(StackBtmBleSecTest, btm_ble_sec_req_pairing_state_busy) {
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_GET_REM_NAME;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_GET_REM_NAME;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   tSMP_EVT_DATA smp_data;
 
@@ -135,19 +136,19 @@ TEST_F(StackBtmBleSecTest, btm_ble_sec_req_pairing_state_busy) {
 
   // Ensure link_spec was NOT updated to the new device
   EXPECT_NE(tSECURITY_STATE::AUTHENTICATING, p_device->sec_rec.le_link);
-  EXPECT_NE(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-  EXPECT_FALSE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+  EXPECT_NE(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+  EXPECT_FALSE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
 }
 
 TEST_F(StackBtmBleSecTest, btm_ble_consent_req_pairing_state_busy_without_flag) {
   set_com_android_bluetooth_flags_prevent_btm_sec_cb_overwrite_during_pairing(false);
 
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = BTM_PAIR_STATE_GET_REM_NAME;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_GET_REM_NAME;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   tSMP_EVT_DATA smp_data;
 
@@ -157,9 +158,9 @@ TEST_F(StackBtmBleSecTest, btm_ble_consent_req_pairing_state_busy_without_flag) 
 
   btm_proc_smp_cback(SMP_CONSENT_REQ_EVT, bd_addr, &smp_data);
 
-  EXPECT_EQ(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-  EXPECT_EQ(BT_TRANSPORT_LE, btm_sec_cb.link_spec.transport);
-  EXPECT_TRUE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+  EXPECT_EQ(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+  EXPECT_EQ(BT_TRANSPORT_LE, BtmSecurity::Get().link_spec_.transport);
+  EXPECT_TRUE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
 }
 
 class StackBtmBleSecParamTest
@@ -175,16 +176,16 @@ protected:
 TEST_P(StackBtmBleSecParamTest, btm_ble_user_confirmation_req) {
   auto [pairing_state, is_same_addr, transport] = GetParam();
 
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
-  const RawAddress other_addr = RawAddress({0x66, 0x55, 0x44, 0x33, 0x22, 0x11});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
+  const RawAddress other_addr = RawAddress("66:55:44:33:22:11");
 
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = pairing_state;
-  btm_sec_cb.link_spec.addrt.bda = is_same_addr ? bd_addr : other_addr;
-  btm_sec_cb.link_spec.transport = transport;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = pairing_state;
+  BtmSecurity::Get().link_spec_.addrt.bda = is_same_addr ? bd_addr : other_addr;
+  BtmSecurity::Get().link_spec_.transport = transport;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   bool expect_processed = true;
   if (pairing_state != BTM_PAIR_STATE_IDLE) {
@@ -211,9 +212,9 @@ TEST_P(StackBtmBleSecParamTest, btm_ble_user_confirmation_req) {
   if (expect_processed) {
     EXPECT_TRUE(p_device->sec_rec.sec_flags & BTM_SEC_LE_AUTHENTICATED);
     EXPECT_EQ(tSECURITY_STATE::AUTHENTICATING, p_device->sec_rec.le_link);
-    EXPECT_EQ(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-    EXPECT_EQ(BT_TRANSPORT_LE, btm_sec_cb.link_spec.transport);
-    EXPECT_TRUE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+    EXPECT_EQ(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+    EXPECT_EQ(BT_TRANSPORT_LE, BtmSecurity::Get().link_spec_.transport);
+    EXPECT_TRUE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
   } else {
     EXPECT_FALSE(p_device->sec_rec.sec_flags & BTM_SEC_LE_AUTHENTICATED);
     EXPECT_NE(tSECURITY_STATE::AUTHENTICATING, p_device->sec_rec.le_link);
@@ -223,16 +224,16 @@ TEST_P(StackBtmBleSecParamTest, btm_ble_user_confirmation_req) {
 TEST_P(StackBtmBleSecParamTest, btm_ble_consent_req) {
   auto [pairing_state, is_same_addr, transport] = GetParam();
 
-  const RawAddress bd_addr = RawAddress({0x11, 0x22, 0x33, 0x44, 0x55, 0x66});
-  const RawAddress other_addr = RawAddress({0x66, 0x55, 0x44, 0x33, 0x22, 0x11});
+  const RawAddress bd_addr = RawAddress("11:22:33:44:55:66");
+  const RawAddress other_addr = RawAddress("66:55:44:33:22:11");
 
   BtmDevice* p_device = btm_sec_allocate_dev_rec(bd_addr);
   ASSERT_NE(nullptr, p_device);
 
-  btm_sec_cb.pairing_state = pairing_state;
-  btm_sec_cb.link_spec.addrt.bda = is_same_addr ? bd_addr : other_addr;
-  btm_sec_cb.link_spec.transport = transport;
-  btm_sec_cb.pairing_flags = 0;
+  BtmSecurity::Get().pairing_state_ = pairing_state;
+  BtmSecurity::Get().link_spec_.addrt.bda = is_same_addr ? bd_addr : other_addr;
+  BtmSecurity::Get().link_spec_.transport = transport;
+  BtmSecurity::Get().pairing_flags_ = 0;
 
   bool expect_processed = true;
   if (pairing_state != BTM_PAIR_STATE_IDLE) {
@@ -256,9 +257,9 @@ TEST_P(StackBtmBleSecParamTest, btm_ble_consent_req) {
   btm_proc_smp_cback(SMP_CONSENT_REQ_EVT, bd_addr, &smp_data);
 
   if (expect_processed) {
-    EXPECT_EQ(bd_addr, btm_sec_cb.link_spec.addrt.bda);
-    EXPECT_EQ(BT_TRANSPORT_LE, btm_sec_cb.link_spec.transport);
-    EXPECT_TRUE(btm_sec_cb.pairing_flags & BTM_PAIR_FLAGS_LE_ACTIVE);
+    EXPECT_EQ(bd_addr, BtmSecurity::Get().link_spec_.addrt.bda);
+    EXPECT_EQ(BT_TRANSPORT_LE, BtmSecurity::Get().link_spec_.transport);
+    EXPECT_TRUE(BtmSecurity::Get().pairing_flags_ & BTM_PAIR_FLAGS_LE_ACTIVE);
   } else {
     // If ignored, verify no unexpected state changes to current device logic
   }

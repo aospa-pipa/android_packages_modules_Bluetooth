@@ -35,7 +35,6 @@
 #include <cstdint>
 #include <cstring>
 #include <future>
-#include <iomanip>
 #include <string>
 #include <utility>
 #include <vector>
@@ -63,11 +62,8 @@
 #include "stack/include/a2dp_sbc_constants.h"
 #include "stack/include/a2dp_vendor_ldac_constants.h"
 #include "stack/include/acl_api.h"
-#include "stack/include/acl_api_types.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/btm_ble_api.h"
-#include "stack/include/btm_client_interface.h"
-#include "stack/include/btm_status.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
 
@@ -368,8 +364,14 @@ class A2dpStreamCallbacks : public bluetooth::audio::a2dp::StreamCallbacks {
       return Status::FAILURE;
     }
 
-    // Check if codec needs to be switched prior to stream start.
-    invoke_switch_codec_cb(low_latency);
+    // TODO: Remove the entire invoke_switch_codec_cb code path (Native -> JNI -> Java)
+    //  when removing the flag a2dp_handle_sa_reconfig_in_native
+    if (com::android::bluetooth::flags::a2dp_handle_sa_reconfig_in_native()) {
+      btif_av_source_set_low_latency_codec(low_latency);
+    } else {
+      // Check if codec needs to be switched prior to stream start.
+      invoke_switch_codec_cb(low_latency);
+    }
 
     // Post start event. The start request is pending, completion will be
     // notified to bluetooth::audio::a2dp::ack_stream_started.
@@ -971,16 +973,21 @@ static void btif_a2dp_source_audio_tx_stop_event(void) {
     return;
   }
 
-  /* Stop the timer first */
+  if (com_android_bluetooth_flags_flush_a2dp_fmq_on_stop()) {
+    // Flush the audio data left in the FMQ.
+    bluetooth::audio::a2dp::flush_source();
+  }
+
+  // Stop the timer first.
   btif_a2dp_source_cb.media_alarm.CancelAndWait();
   wakelock_release();
 
   bluetooth::audio::a2dp::ack_stream_suspended(Status::SUCCESS);
 
-  /* audio engine stopped, reset tx suspended flag */
+  // audio engine stopped, reset tx suspended flag.
   btif_a2dp_source_cb.tx_flush = false;
 
-  /* Reset the media feeding state */
+  // Reset the media feeding state.
   if (btif_a2dp_source_cb.encoder_interface != nullptr) {
     btif_a2dp_source_cb.encoder_interface->feeding_reset();
   }

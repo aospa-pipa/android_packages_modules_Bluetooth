@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "rust/cxx.h"
+#include "topshim/btif/btif_shim.h"
 #include "topshim/common/bt_status_helper.h"
 
 namespace bluetooth {
@@ -38,10 +39,10 @@ public:
   ~HhIntf() = default;
 
   tBT_STATUS_LEGACY init() const;
-  tBT_STATUS_LEGACY connect(RawAddress addr, tBLE_ADDR_TYPE addr_type,
-                            tBT_TRANSPORT transport) const;
+  tBT_STATUS_LEGACY connect(RawAddress addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
+                            bool direct) const;
   tBT_STATUS_LEGACY disconnect(RawAddress addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                               bool reconnect_allowed) const;
+                               bthh_reconnect_policy_t reconnect_policy) const;
   tBT_STATUS_LEGACY virtual_unplug(RawAddress addr, tBLE_ADDR_TYPE addr_type,
                                    tBT_TRANSPORT transport) const;
   tBT_STATUS_LEGACY get_idle_time(RawAddress addr, tBLE_ADDR_TYPE addr_type,
@@ -71,7 +72,7 @@ private:
   const bthh_interface_t* hh_intf_;
 };
 
-std::unique_ptr<HhIntf> GetHhProfile(const bt_interface_t& intf);
+std::unique_ptr<HhIntf> GetHhProfile(const BtIntf& intf);
 
 }  // namespace rust
 }  // namespace topshim

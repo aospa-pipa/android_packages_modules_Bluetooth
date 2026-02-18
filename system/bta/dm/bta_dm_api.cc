@@ -113,8 +113,8 @@ void BTA_DmDiscover(const RawAddress& bd_addr, service_discovery_callbacks cback
  *
  ******************************************************************************/
 bool BTA_DmGetConnectionState(const RawAddress& bd_addr) {
-  tBTA_DM_PEER_DEVICE* p_dev = bta_dm_find_peer_device(bd_addr);
-  return p_dev && p_dev->is_connected();
+  BtaDmLink* p_link = bta_dm_find_link(bd_addr);
+  return p_link && p_link->is_active();
 }
 
 /*******************************************************************************
@@ -134,7 +134,7 @@ bool BTA_DmSetLocalDiRecord(tSDP_DI_RECORD* p_device_info) {
 
   if (bta_dm_di_cb.di_num < BTA_DI_NUM_MAX) {
     uint32_t handle = 0;
-    if (get_legacy_stack_sdp_api()->device_id.SDP_SetLocalDiRecord(p_device_info, &handle) ==
+    if (get_legacy_stack_sdp_api()->SDP_SetLocalDiRecord(p_device_info, &handle) ==
         tSDP_STATUS::SDP_SUCCESS) {
       if (!p_device_info->primary_record) {
         bta_dm_di_cb.di_handle[bta_dm_di_cb.di_num] = handle;
@@ -281,7 +281,7 @@ void BTA_DmBleCsisObserve(bool observe, tBTA_DM_SEARCH_CBACK* p_results_cb) {
  *
  ******************************************************************************/
 void BTA_DmClearEventFilter(void) {
-  log::verbose("BTA_DmClearEventFilter");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_clear_event_filter));
 }
 
@@ -295,7 +295,7 @@ void BTA_DmClearEventFilter(void) {
  *
  ******************************************************************************/
 void BTA_DmClearEventMask(void) {
-  log::verbose("BTA_DmClearEventMask");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_clear_event_mask));
 }
 
@@ -309,7 +309,7 @@ void BTA_DmClearEventMask(void) {
  *
  ******************************************************************************/
 void BTA_DmClearFilterAcceptList(void) {
-  log::verbose("BTA_DmClearFilterAcceptList");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_clear_filter_accept_list));
 }
 
@@ -323,7 +323,7 @@ void BTA_DmClearFilterAcceptList(void) {
  *
  ******************************************************************************/
 void BTA_DmLeRand(bluetooth::hci::LeRandCallback cb) {
-  log::verbose("BTA_DmLeRand");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_le_rand, std::move(cb)));
 }
 
@@ -337,35 +337,40 @@ void BTA_DmLeRand(bluetooth::hci::LeRandCallback cb) {
  *
  ******************************************************************************/
 void BTA_DmDisconnectAllAcls() {
-  log::verbose("BTA_DmLeRand");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_disconnect_all_acls));
 }
 
 void BTA_DmSetEventFilterConnectionSetupAllDevices() {
-  log::verbose("BTA_DmSetEventFilterConnectionSetupAllDevices");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_set_event_filter_connection_setup_all_devices));
 }
 
 void BTA_DmAllowWakeByHid(std::vector<RawAddress> classic_hid_devices,
                           std::vector<std::pair<RawAddress, uint8_t>> le_hid_devices) {
-  log::verbose("BTA_DmAllowWakeByHid");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_allow_wake_by_hid, std::move(classic_hid_devices),
                                    std::move(le_hid_devices)));
 }
 
 void BTA_DmRestoreFilterAcceptList(std::vector<std::pair<RawAddress, uint8_t>> le_devices) {
-  log::verbose("BTA_DmRestoreFilterAcceptList");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_restore_filter_accept_list, std::move(le_devices)));
 }
 
 void BTA_DmSetDefaultEventMaskExcept(uint64_t mask, uint64_t le_mask) {
-  log::verbose("BTA_DmSetDefaultEventMaskExcept");
+  log::verbose("mask = {}, le_mask = {} ", mask, le_mask);
   do_in_main_thread(base::BindOnce(bta_dm_set_default_event_mask_except, mask, le_mask));
 }
 
 void BTA_DmSetEventFilterInquiryResultAllDevices() {
-  log::verbose("BTA_DmSetEventFilterInquiryResultAllDevices");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_set_event_filter_inquiry_result_all_devices));
+}
+
+void BTA_DmSetSuspendState(bool suspend) {
+  log::verbose("suspend = {}", suspend);
+  do_in_main_thread(base::BindOnce(bta_dm_set_suspend_state, suspend));
 }
 
 /*******************************************************************************
@@ -378,7 +383,7 @@ void BTA_DmSetEventFilterInquiryResultAllDevices() {
  *
  ******************************************************************************/
 void BTA_DmBleResetId(void) {
-  log::verbose("BTA_DmBleResetId");
+  log::verbose("");
   do_in_main_thread(base::BindOnce(bta_dm_ble_reset_id));
 }
 

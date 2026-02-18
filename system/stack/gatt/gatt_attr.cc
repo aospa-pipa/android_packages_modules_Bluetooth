@@ -49,7 +49,7 @@
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_ble_addr.h"
-#include "stack/include/btm_sec_api.h"
+#include "stack/include/btm_client_interface.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -153,7 +153,7 @@ tCONN_ID gatt_profile_find_conn_id_by_bd_addr(const RawAddress& remote_bda) {
  *
  * Description      find clcb by Connection ID
  *
- * Returns          Pointer to the found link conenction control block.
+ * Returns          Pointer to the found link connection control block.
  *
  ******************************************************************************/
 static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_conn_id(tCONN_ID conn_id) {
@@ -175,7 +175,7 @@ static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_conn_id(tCONN_ID conn_id) {
  *
  * Description      The function searches all LCBs with macthing bd address.
  *
- * Returns          Pointer to the found link conenction control block.
+ * Returns          Pointer to the found link connection control block.
  *
  ******************************************************************************/
 static tGATT_PROFILE_CLCB* gatt_profile_find_clcb_by_bd_addr(const RawAddress& bda,
@@ -408,7 +408,7 @@ static void gatt_connect_cback(tGATT_IF /* gatt_if */, const RawAddress& bda, tC
   log::verbose("from {} connected: {}, conn_id: 0x{:x}", bda, connected, conn_id);
 
   // if the device is not trusted, remove data when the link is disconnected
-  if (!connected && !BTM_IsBonded(bda)) {
+  if (!connected && !get_btm_client_interface().security.BTM_IsBonded(bda, BT_TRANSPORT_AUTO)) {
     log::info("remove untrusted client status, bda={}", bda);
     btif_storage_remove_gatt_cl_supp_feat(bda);
     btif_storage_remove_gatt_cl_db_hash(bda);

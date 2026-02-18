@@ -12,6 +12,16 @@ flag {
 }
 
 flag {
+    name: "storage_prevent_custom_metadata_on_unbonded_device"
+    namespace: "bluetooth"
+    description: "If the device is unbonded and unknown, do not write custom metadata in the database"
+    bug: "476474347"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
     name: "unify_timeout_property"
     namespace: "bluetooth"
     description: "Unify the various timeout in the stack to allow slower hardware to still boot"
@@ -69,24 +79,6 @@ flag {
 }
 
 flag {
-    name: "prioritized_in_ear_routing"
-    namespace: "bluetooth"
-    description: "Prioritized routing by checking in-ear state when multiple devices connected"
-    bug: "420509925"
-    is_exported: true
-}
-
-flag {
-    name: "ignore_multiple_connect_request_in_bt_services"
-    namespace: "bluetooth"
-    description: "Ignore multiple connect request in BT Services"
-    bug: "429143534"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "consistent_battery_level"
     namespace: "bluetooth"
     description: "Do not reset battey level from BAS to prevent battey level fluctuation"
@@ -104,3 +96,32 @@ flag {
   is_exported: true
 }
 
+flag {
+    name: "remove_adapter_dependency"
+    namespace: "bluetooth"
+    description: "Stop depending on the adapter system Service from withing the app"
+    bug: "473091034"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+  name: "check_set_event_mask_p2_support_before_writing"
+  namespace: "bluetooth"
+  description: "Some controllers might not support the command Set event mask page 2. Check the local capabilities before sending."
+  bug: "475438075"
+  metadata {
+        purpose: PURPOSE_BUGFIX
+  }
+}
+
+flag {
+    name : "send_class_change_intent_for_bonded_devices_only"
+    namespace: "bluetooth"
+    description: "Send the ACTION_CLASS_CHANGED intent only for bonded devices only"
+    bug: "479480553"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

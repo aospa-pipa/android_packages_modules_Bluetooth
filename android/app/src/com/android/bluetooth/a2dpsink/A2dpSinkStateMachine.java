@@ -33,7 +33,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
-import com.android.bluetooth.Utils;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -135,7 +135,7 @@ class A2dpSinkStateMachine extends StateMachine {
         intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT);
         mService.connectionStateChanged(mDevice, mMostRecentState, currentState);
         mMostRecentState = currentState;
-        mService.sendBroadcast(intent, BLUETOOTH_CONNECT, Utils.getTempBroadcastBundle());
+        mService.sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
     }
 
     /** Get current audio config */
@@ -144,7 +144,7 @@ class A2dpSinkStateMachine extends StateMachine {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Comamnds and Events
+    // Commands and Events
     // ---------------------------------------------------------------------------------------------
 
     /** Send the Connect command */
@@ -310,8 +310,9 @@ class A2dpSinkStateMachine extends StateMachine {
         }
 
         void processAudioStateEvent(int event) {
-            debug("Audio state changed, event="
-                    + A2dpSinkNativeInterface.audioStateToString(event));
+            debug(
+                    "Audio state changed, event="
+                            + A2dpSinkNativeInterface.audioStateToString(event));
         }
 
         void processAudioConfigEvent(int rate, int channels) {
@@ -374,7 +375,7 @@ class A2dpSinkStateMachine extends StateMachine {
     }
 
     private static final String messageToString(int what) {
-        return switch(what) {
+        return switch (what) {
             case -1 /* SM_QUIT_CMD */ -> "SM_QUIT_CMD";
             case -2 /* SM_INIT_CMD */ -> "SM_INIT_CMD";
             case MESSAGE_CONNECT -> "MESSAGE_CONNECT";

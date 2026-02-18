@@ -23,7 +23,10 @@
 #include <memory>
 
 #include "rust/cxx.h"
+#include "topshim/btif/btif_shim.h"
 #include "topshim/common/bt_status_helper.h"
+#include "topshim/gatt/gatt_ble_advertiser_shim.h"
+#include "topshim/gatt/gatt_ble_scanner_shim.h"
 
 namespace bluetooth {
 namespace topshim {
@@ -42,6 +45,7 @@ public:
   tBT_STATUS_LEGACY disconnect(int client_if, RawAddress bd_addr, int conn_id) const;
   tBT_STATUS_LEGACY refresh(int client_if, RawAddress bd_addr) const;
   tBT_STATUS_LEGACY search_service(int conn_id, Uuid filter_uuid) const;
+  tBT_STATUS_LEGACY search_service_all(int conn_id) const;
   void btif_gattc_discover_service_by_uuid(int conn_id, Uuid uuid) const;
   tBT_STATUS_LEGACY read_characteristic(int conn_id, uint16_t handle, int auth_req) const;
   tBT_STATUS_LEGACY read_using_characteristic_uuid(int conn_id, Uuid uuid, uint16_t s_handle,
@@ -78,7 +82,7 @@ private:
   const btgatt_client_interface_t* client_intf_;
 };
 
-std::unique_ptr<GattClientIntf> GetGattClientProfile(const bt_interface_t& intf);
+std::unique_ptr<GattClientIntf> GetGattClientProfile(const BtIntf& intf);
 
 class GattServerIntf {
 public:
@@ -110,7 +114,7 @@ private:
   const btgatt_server_interface_t* server_intf_;
 };
 
-std::unique_ptr<GattServerIntf> GetGattServerProfile(const bt_interface_t& intf);
+std::unique_ptr<GattServerIntf> GetGattServerProfile(const BtIntf& intf);
 
 class GattIntf {
 public:
@@ -120,11 +124,14 @@ public:
   tBT_STATUS_LEGACY init() const;
   void cleanup() const;
 
+  std::unique_ptr<BleAdvertiserIntf> GetBleAdvertiserIntf() const;
+  std::unique_ptr<BleScannerIntf> GetBleScannerIntf() const;
+
 private:
   const btgatt_interface_t* gatt_intf_;
 };
 
-std::unique_ptr<GattIntf> GetGattProfile(const bt_interface_t& intf);
+std::unique_ptr<GattIntf> GetGattProfile(const BtIntf& intf);
 
 }  // namespace rust
 }  // namespace topshim

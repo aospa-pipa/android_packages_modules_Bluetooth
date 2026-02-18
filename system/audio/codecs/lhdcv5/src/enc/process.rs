@@ -118,7 +118,7 @@ fn lhdc_enc_symbol_generation_step_2(
             let mut stop = 0;
             if tmp != 0 {
                 loop {
-                    if if size2 as i32 >= lossy_symbol_size_top - 3 { 1 } else { 0 } != 0 {
+                    if size2 as i32 >= lossy_symbol_size_top - 3 {
                         return -1;
                     }
                     if tmp < (1 << 2) {
@@ -134,8 +134,7 @@ fn lhdc_enc_symbol_generation_step_2(
                     tmp >>= 2;
                 }
                 tmp = if stop != 0 { tmp - 1 } else { tmp };
-                if if (size2 + tmp as usize) >= lossy_symbol_size_top as usize { 1 } else { 0 } != 0
-                {
+                if (size2 + tmp as usize) >= lossy_symbol_size_top as usize {
                     return -1;
                 }
                 if tmp != 0 {
@@ -161,7 +160,7 @@ fn lhdc_enc_symbol_generation_step_2(
                     }
                 }
             }
-            if if size2 >= lossy_symbol_size_top as usize { 1 } else { 0 } != 0 {
+            if size2 >= lossy_symbol_size_top as usize {
                 return -1;
             }
             if tmp <= 2 {
@@ -195,7 +194,7 @@ fn coef_calc(level: &mut fdata_buffer_struct, init_bn: i32, enc_pixel_size_byte:
     let mut diff7 = 0;
     if enc_pixel_size_byte < 200 {
         for i in 1..level.valid as usize {
-            coef3[i] = (coef3[i - 1] * 3 + bits_num[i] * 5 as libc::c_int) >> 3;
+            coef3[i] = (coef3[i - 1] * 3 + bits_num[i] * 5) >> 3;
             let diff_3_bits = coef3[i] - bits_num[i + 1];
             diff3 += diff_3_bits ^ (diff_3_bits >> 31);
             coef7[i] = (coef7[i - 1] * 7 + bits_num[i]) >> 3;
@@ -207,7 +206,7 @@ fn coef_calc(level: &mut fdata_buffer_struct, init_bn: i32, enc_pixel_size_byte:
         for i in 1..level.valid as usize {
             coef7[i] = (coef7[i - 1] * 7 + bits_num[i]) >> 3;
         }
-        level.symbol_flag = 1 as libc::c_int;
+        level.symbol_flag = 1;
     }
 }
 fn lhdc_enc_symbol_generation(
@@ -272,7 +271,7 @@ fn lhdc_enc_nbyte_esti(enc_text: &mut fdata_all_buffer_struct) -> i32 {
     let real_data: &[u32] = &<[u32]>::ref_from_bytes(level.fdata_q_quant.as_bytes()).unwrap()
         [enc_text.pixel_num as usize - level.valid as usize..];
 
-    let mut total = 0_i32 as u32;
+    let mut total: u32 = 0;
     if level.symbol_flag == 1 {
         // coef7, doesn't alias rb, but does alias queue1
         let coef = <[i32]>::mut_from_bytes(level.fdata_q_quant_2_symbol.as_mut_bytes()).unwrap();
@@ -385,77 +384,71 @@ pub fn lhdc_enc_freq_shift(
     }
     data_sft[segment.segment_num - 2] = (((644245094_i32 as libc::c_longlong
         * se[segment.segment_num - 1] as libc::c_longlong)
-        >> 31_i32)
+        >> 31)
         + ((858993459_i32 as libc::c_longlong * se[segment.segment_num - 2] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((429496729_i32 as libc::c_longlong * se[segment.segment_num - 3] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((214748364_i32 as libc::c_longlong * se[segment.segment_num - 4] as libc::c_longlong)
-            >> 31_i32)) as libc::c_int;
+            >> 31)) as libc::c_int;
     data_sft[segment.segment_num - 1] = (((1503238553_i32 as libc::c_longlong
         * se[segment.segment_num - 1] as libc::c_longlong)
-        >> 31_i32)
+        >> 31)
         + ((429496729_i32 as libc::c_longlong * se[segment.segment_num - 2] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((214748364_i32 as libc::c_longlong * se[segment.segment_num - 3] as libc::c_longlong)
-            >> 31_i32)) as libc::c_int;
-    data_sft[0] = (((1503238553_i32 as libc::c_longlong * se[0] as libc::c_longlong) >> 31_i32)
-        + ((429496729_i32 as libc::c_longlong * se[1] as libc::c_longlong) >> 31_i32)
-        + ((214748364_i32 as libc::c_longlong * se[2_i32 as usize] as libc::c_longlong) >> 31_i32))
+            >> 31)) as libc::c_int;
+    data_sft[0] = (((1503238553_i32 as libc::c_longlong * se[0] as libc::c_longlong) >> 31)
+        + ((429496729_i32 as libc::c_longlong * se[1] as libc::c_longlong) >> 31)
+        + ((214748364_i32 as libc::c_longlong * se[2] as libc::c_longlong) >> 31))
         as libc::c_int;
-    data_sft[1] = (((644245094_i32 as libc::c_longlong * se[0_i32 as usize] as libc::c_longlong)
-        >> 31_i32)
-        + ((858993459_i32 as libc::c_longlong * se[1_i32 as usize] as libc::c_longlong) >> 31_i32)
-        + ((429496729_i32 as libc::c_longlong * se[2_i32 as usize] as libc::c_longlong) >> 31_i32)
-        + ((214748364_i32 as libc::c_longlong * se[3_i32 as usize] as libc::c_longlong) >> 31_i32))
+    data_sft[1] = (((644245094_i32 as libc::c_longlong * se[0] as libc::c_longlong) >> 31)
+        + ((858993459_i32 as libc::c_longlong * se[1] as libc::c_longlong) >> 31)
+        + ((429496729_i32 as libc::c_longlong * se[2] as libc::c_longlong) >> 31)
+        + ((214748364_i32 as libc::c_longlong * se[3] as libc::c_longlong) >> 31))
         as libc::c_int;
     for i in 2..(segment.segment_num - 2) {
         data_sft[i] = (((214748364_i32 as libc::c_longlong
             * (se[i - 2] as libc::c_longlong + se[i + 2] as libc::c_longlong))
-            >> 31_i32)
-            + ((858993459_i32 as libc::c_longlong * se[i] as libc::c_longlong) >> 31_i32)
+            >> 31)
+            + ((858993459_i32 as libc::c_longlong * se[i] as libc::c_longlong) >> 31)
             + ((429496729_i32 as libc::c_longlong
                 * (se[i - 1] as libc::c_longlong + se[i + 1] as libc::c_longlong))
-                >> 31_i32)) as libc::c_int;
+                >> 31)) as libc::c_int;
     }
     dirty_bottom = ((dirty_bottom as libc::c_longlong
         * segment.segment_num_inv as libc::c_longlong)
-        >> 31_i32) as libc::c_int;
-    dirty_bottom = ((dirty_bottom as libc::c_longlong * 214748_i32 as libc::c_longlong) >> 31_i32)
-        as libc::c_int;
+        >> 31) as libc::c_int;
+    dirty_bottom =
+        ((dirty_bottom as libc::c_longlong * 214748_i32 as libc::c_longlong) >> 31) as libc::c_int;
     dirty_bottom = if dirty_bottom < 1_i32 { 1 as libc::c_int } else { dirty_bottom };
+
     let mut val = dirty_bottom as u32;
-    let i = if val < 64_i32 as u32 { 0 } else { 1 };
     let mut tmp;
-    match i {
-        0 => {
-            tmp = logarithm_by_2_tbl_0[val as usize] as _;
-        }
-        _ => {
-            tmp = log_2(val) as _;
-            val >>= tmp - 6_i32;
-            tmp = (logarithm_by_2_tbl_0[val as usize])
-                .wrapping_add(((tmp - 1_i32) << 8 as libc::c_int) as u32) as i32;
-        }
+
+    if val < 64 {
+        tmp = logarithm_by_2_tbl_0[val as usize] as _;
+    } else {
+        tmp = log_2(val) as _;
+        val >>= tmp - 6;
+        tmp = (logarithm_by_2_tbl_0[val as usize]).wrapping_add(((tmp - 1) << 8) as u32) as i32;
     }
+
     let log_dirty_bottom =
         (tmp + 31_i32 * ((1 as libc::c_int) << 8 as libc::c_int)) >> 1 as libc::c_int;
     let mut avg = 0_i32;
     for s in 0..segment.segment_num {
         val = data_sft[s] as u32;
-        let i = if val < 64_i32 as u32 { 0 } else { 1 };
-        match i {
-            0 => {
-                tmp = logarithm_by_2_tbl_0[val as usize] as i32;
-            }
-            _ => {
-                tmp = log_2(val) as _;
-                val >>= tmp - 6_i32;
-                tmp = logarithm_by_2_tbl_0[val as usize]
-                    .wrapping_add(((tmp - 1_i32) << 8 as libc::c_int) as u32)
-                    as i32;
-            }
+
+        if val < 64 {
+            tmp = logarithm_by_2_tbl_0[val as usize] as i32;
+        } else {
+            tmp = log_2(val) as _;
+            val >>= tmp - 6_i32;
+            tmp = logarithm_by_2_tbl_0[val as usize]
+                .wrapping_add(((tmp - 1) << 8 as libc::c_int) as u32) as i32;
         }
+
         se[s] = if data_sft[s] < dirty_bottom {
             log_dirty_bottom
         } else {
@@ -463,63 +456,60 @@ pub fn lhdc_enc_freq_shift(
         };
         avg += se[s];
     }
-    avg = ((avg as libc::c_longlong * segment.segment_num_inv as libc::c_longlong) >> 31_i32)
+    avg = ((avg as libc::c_longlong * segment.segment_num_inv as libc::c_longlong) >> 31)
         as libc::c_int;
     data_sft[segment.segment_num - 2] = (((644245094_i32 as libc::c_longlong
         * se[segment.segment_num - 1] as libc::c_longlong)
-        >> 31_i32)
+        >> 31)
         + ((858993459_i32 as libc::c_longlong * se[segment.segment_num - 2] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((429496729_i32 as libc::c_longlong * se[segment.segment_num - 3] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((214748364_i32 as libc::c_longlong * se[segment.segment_num - 4] as libc::c_longlong)
-            >> 31_i32)) as libc::c_int;
+            >> 31)) as libc::c_int;
     data_sft[segment.segment_num - 1] = (((1503238553_i32 as libc::c_longlong
         * se[segment.segment_num - 1] as libc::c_longlong)
-        >> 31_i32)
+        >> 31)
         + ((429496729_i32 as libc::c_longlong * se[segment.segment_num - 2] as libc::c_longlong)
-            >> 31_i32)
+            >> 31)
         + ((214748364_i32 as libc::c_longlong * se[segment.segment_num - 3] as libc::c_longlong)
-            >> 31_i32)) as libc::c_int;
-    data_sft[0_i32 as usize] = (((1503238553 as libc::c_int as libc::c_longlong
-        * se[0_i32 as usize] as libc::c_longlong)
-        >> 31_i32)
-        + ((429496729_i32 as libc::c_longlong * se[1_i32 as usize] as libc::c_longlong) >> 31_i32)
-        + ((214748364_i32 as libc::c_longlong * se[2_i32 as usize] as libc::c_longlong) >> 31_i32))
+            >> 31)) as libc::c_int;
+    data_sft[0] = (((1503238553 as libc::c_int as libc::c_longlong * se[0] as libc::c_longlong)
+        >> 31)
+        + ((429496729_i32 as libc::c_longlong * se[1] as libc::c_longlong) >> 31)
+        + ((214748364_i32 as libc::c_longlong * se[2] as libc::c_longlong) >> 31))
         as libc::c_int;
-    data_sft[1_i32 as usize] = (((644245094 as libc::c_int as libc::c_longlong
-        * se[0_i32 as usize] as libc::c_longlong)
-        >> 31_i32)
-        + ((858993459_i32 as libc::c_longlong * se[1_i32 as usize] as libc::c_longlong) >> 31_i32)
-        + ((429496729_i32 as libc::c_longlong * se[2_i32 as usize] as libc::c_longlong) >> 31_i32)
-        + ((214748364_i32 as libc::c_longlong * se[3_i32 as usize] as libc::c_longlong) >> 31_i32))
+    data_sft[1] = (((644245094 as libc::c_int as libc::c_longlong * se[0] as libc::c_longlong)
+        >> 31)
+        + ((858993459_i32 as libc::c_longlong * se[1] as libc::c_longlong) >> 31)
+        + ((429496729_i32 as libc::c_longlong * se[2] as libc::c_longlong) >> 31)
+        + ((214748364_i32 as libc::c_longlong * se[3] as libc::c_longlong) >> 31))
         as libc::c_int;
     for i in 2..(segment.segment_num - 2) {
         data_sft[i] = (((214748364_i32 as libc::c_longlong
             * (se[i - 2] as libc::c_longlong + se[i + 2] as libc::c_longlong))
-            >> 31_i32)
-            + ((858993459_i32 as libc::c_longlong * se[i] as libc::c_longlong) >> 31_i32)
+            >> 31)
+            + ((858993459_i32 as libc::c_longlong * se[i] as libc::c_longlong) >> 31)
             + ((429496729_i32 as libc::c_longlong
                 * (se[i - 1] as libc::c_longlong + se[i + 1] as libc::c_longlong))
-                >> 31_i32)) as libc::c_int;
+                >> 31)) as libc::c_int;
     }
     if 4250_i32 > avg && (480 as libc::c_int) < cutoff {
         jump[0..(segment.segment_num - 1)].fill(0);
         *first_idx = 8_i32 + ((1 as libc::c_int) << 4 as libc::c_int) - 2 as libc::c_int + 1_i32;
         return avg;
     }
-    data_sft[0_i32 as usize] = (((data_sft[0_i32 as usize] as libc::c_longlong
-        - avg as libc::c_longlong)
+    data_sft[0] = (((data_sft[0] as libc::c_longlong - avg as libc::c_longlong)
         * segment.segment_scale_level as libc::c_longlong)
-        >> 31_i32) as libc::c_int;
+        >> 31) as libc::c_int;
     for s in 1..segment.segment_num {
         data_sft[s] = (((data_sft[s] as libc::c_longlong - avg as libc::c_longlong)
             * segment.segment_scale_level as libc::c_longlong)
-            >> 31_i32) as libc::c_int;
-        data_sft[s] -= data_sft[0_i32 as usize];
+            >> 31) as libc::c_int;
+        data_sft[s] -= data_sft[0];
     }
-    data_sft[0_i32 as usize] = 0 as libc::c_int;
-    *first_idx = 8_i32;
+    data_sft[0] = 0;
+    *first_idx = 8;
     lhdc_enc_lossy_jump_adust_process(
         data_sft,
         se,
@@ -529,13 +519,12 @@ pub fn lhdc_enc_freq_shift(
         8_i32 + ((1 as libc::c_int) << 4 as libc::c_int) - 2 as libc::c_int,
     );
     for i in 1..segment.segment_num {
-        se[0_i32 as usize] += se[i];
+        se[0] += se[i];
     }
-    se[0_i32 as usize] = ((-se[0 as libc::c_int as usize] as libc::c_longlong
-        * segment.segment_num_inv as libc::c_longlong)
-        >> 31_i32) as libc::c_int;
+    se[0] = ((-se[0] as libc::c_longlong * segment.segment_num_inv as libc::c_longlong) >> 31)
+        as libc::c_int;
     for i in 1..segment.segment_num {
-        se[i] += se[0_i32 as usize];
+        se[i] += se[0];
     }
     moving_average(se, data_sft);
     for sft in &mut data_sft[..segment.segment_num] {
@@ -559,23 +548,23 @@ pub fn lhdc_freq_shift_apply_encode(
     size: i32,
 ) {
     let mut s: usize = 0;
-    let mut power2: libc::c_float;
+    let mut power2: f32;
     let mut fixed_power2;
     let mut index_top;
     let mut index_bottom;
     let mut swath = 0;
     while s < segment.segment_num && swath < size {
         power2 = if data_sft[s] >= 0_i32 {
-            power_of_2_tbl[(data_sft[s] >> (8_i32 - 4 as libc::c_int)) as usize] as libc::c_float
+            power_of_2_tbl[(data_sft[s] >> (8_i32 - 4 as libc::c_int)) as usize] as f32
                 * 0.000_000_953_674_3_f32
         } else {
             power_of_2_tbl[(((1_i32 << 8 as libc::c_int) * 10 as libc::c_int
                 + 15_i32
                 + data_sft[s])
-                >> (8_i32 - 4 as libc::c_int)) as usize] as libc::c_float
+                >> (8_i32 - 4 as libc::c_int)) as usize] as f32
                 * 0.000_000_000_931_322_6_f32
         };
-        fixed_power2 = (power2 * ((1 as libc::c_longlong) << 26_i32) as libc::c_float) as i32;
+        fixed_power2 = (power2 * ((1 as libc::c_longlong) << 26_i32) as f32) as i32;
         index_top = if segment.segment_offset[s + 1] as i32 >= size {
             size
         } else {
@@ -871,9 +860,7 @@ fn lhdc_enc_lossy_freq_process(fdata_all_buffer: &mut fdata_all_buffer_struct, c
             index = 0_i32;
             loop {
                 let level = fdata_all_buffer.level_table.level(index);
-                if pixel_num_top as libc::c_float * level
-                    <= (1_i32 << 30 as libc::c_int) as libc::c_float
-                {
+                if pixel_num_top as f32 * level <= (1_i32 << 30 as libc::c_int) as f32 {
                     break;
                 }
                 index += 1;
@@ -882,17 +869,14 @@ fn lhdc_enc_lossy_freq_process(fdata_all_buffer: &mut fdata_all_buffer_struct, c
         }
     }
 }
-fn lhdc_enc_lossy_freq_level(
-    fdata_all_buffer: &mut fdata_all_buffer_struct,
-    level: libc::c_float,
-) -> i32 {
+fn lhdc_enc_lossy_freq_level(fdata_all_buffer: &mut fdata_all_buffer_struct, level: f32) -> i32 {
     let in_0 = &mut fdata_all_buffer.fdata_enc_buffer.lossy_fdata_buf;
     let cutoff = fdata_all_buffer.segment_cutoff;
     let out = &mut fdata_all_buffer.fdata_enc_buffer.level.fdata_q_quant;
     let fdata_q_len = &mut fdata_all_buffer.fdata_enc_buffer.level.fdata_q_len;
 
     let mut index: i32;
-    let level_ = (level * (1_i32 << 30 as libc::c_int) as libc::c_float) as libc::c_int;
+    let level_ = (level * (1_i32 << 30 as libc::c_int) as f32) as libc::c_int;
     let n_level_ = -level_;
     let out05_multiply_2 = (2.0f32 * 0.5f32 / level) as libc::c_longlong;
     let n_out05_multiply_2 = -out05_multiply_2;
@@ -923,19 +907,19 @@ fn lhdc_enc_lossy_freq_level(
     fdata_all_buffer.pixel_num - index + (index & 1_i32)
 }
 fn fast_calc_step(
-    jump: libc::c_float,
+    jump: f32,
     per_pixel_number: i32,
     pixel_number: i32,
     offset_size: i32,
     per_offset_size: i32,
-) -> libc::c_float {
-    let tmp: libc::c_float = jump * 0.8f32;
+) -> f32 {
+    let tmp: f32 = jump * 0.8f32;
     let sign_tmp1: i32 = per_pixel_number - pixel_number;
     let sign_tmp2: i32 = offset_size - per_offset_size;
     (if sign_tmp2 > 0_i32 {
-        (sign_tmp1 / sign_tmp2) as libc::c_float * 0.2f32
+        (sign_tmp1 / sign_tmp2) as f32 * 0.2f32
     } else {
-        (-sign_tmp1 / -sign_tmp2) as libc::c_float * 0.2f32
+        (-sign_tmp1 / -sign_tmp2) as f32 * 0.2f32
     }) + tmp
 }
 fn lhdc_enc_lossy_nbyte_estimation(
@@ -1007,7 +991,7 @@ fn lhdc_enc_lossy_nbyte_estimation(
             );
         }
         per_offset_size = offset_size;
-        offset_size += ((pixel_number - target_range) as libc::c_float / offset) as i32;
+        offset_size += ((pixel_number - target_range) as f32 / offset) as i32;
         if offset_size == per_offset_size {
             offset_size = if pixel_number < target_range {
                 offset_size -= 1;
@@ -1043,25 +1027,19 @@ fn bit_write_uint(
 ) -> Result<()> {
     let fdata_buffer = &mut fdata_enc_buffer.level;
     let result: i32 = 0 as libc::c_int;
-    nbyte_program.write_bits(0_i32 as u32, 1 as libc::c_int as libc::c_uint)?;
-    nbyte_program.write_bits(data_offset as u32, 9_i32 as libc::c_uint)?;
-    nbyte_program.write_bits(
-        (fdata_enc_buffer.lossy_jump_adus_num as u32).wrapping_sub(8_i32 as u32),
-        4_i32 as u32,
-    )?;
+    nbyte_program.write_bits(0, 1)?;
+    nbyte_program.write_bits(data_offset as u32, 9)?;
+    nbyte_program.write_bits((fdata_enc_buffer.lossy_jump_adus_num as u32).wrapping_sub(8), 4)?;
     if segment_num - 1_i32 != 0 {
         let mut index: i32 = 0 as libc::c_int;
-        while index < segment_num - 1_i32 && result == 0 as libc::c_int {
-            nbyte_program.write_bits(
-                fdata_enc_buffer.lossy_jump_adus_parameter[index as usize] as u32,
-                1_i32 as u32,
-            )?;
+        while index < segment_num - 1 && result == 0 {
+            nbyte_program
+                .write_bits(fdata_enc_buffer.lossy_jump_adus_parameter[index as usize] as u32, 1)?;
             index += 1;
         }
     }
-    nbyte_program
-        .write_bits(((fdata_buffer.valid >> 1_i32) - 1 as libc::c_int) as u32, valid_num as u32)?;
-    nbyte_program.write_bits(fdata_buffer.symbol_flag as u32, 1_i32 as libc::c_uint)?;
+    nbyte_program.write_bits(((fdata_buffer.valid >> 1) - 1) as u32, valid_num as u32)?;
+    nbyte_program.write_bits(fdata_buffer.symbol_flag as u32, 1)?;
     nbyte_program
         .write_bits(fdata_buffer.fdata_q_quant_rem[0] as u32, fdata_quant_rem_data_size as u32)?;
     Ok(())
@@ -1091,8 +1069,8 @@ fn lhdc_enc_lossy_nbyte_out(
 
     let fdata_buffer: &mut fdata_buffer_struct = &mut fdata_enc_buffer.level;
     let mut nbyte = fdata_buffer.fdata_q_true_len;
-    let mut word = 0_i32 as u32;
-    let mut bit_len = 32_i32 as u32;
+    let mut word = 0;
+    let mut bit_len = 32;
     let non_zero_counter = fdata_buffer.valid;
     let mut index = 0_i32;
     let mut read_byte_number = index;
@@ -1124,10 +1102,10 @@ fn lhdc_enc_lossy_nbyte_out(
             }
         }
     }
-    nbyte_program.write_bits(word, (32_i32 as u32).wrapping_sub(bit_len))?;
+    nbyte_program.write_bits(word, 32_u32.wrapping_sub(bit_len))?;
     read_byte_number += fdata_buffer.fdata_q_len;
     if read_byte_number < 24_i32 {
-        nbyte_program.write_bits(0_i32 as u32, (24_i32 - read_byte_number) as u32)?;
+        nbyte_program.write_bits(0, (24_i32 - read_byte_number) as u32)?;
         read_byte_number = 24_i32;
     }
     nbyte += read_byte_number;
@@ -1135,9 +1113,9 @@ fn lhdc_enc_lossy_nbyte_out(
         return Err(Error::TargetRange);
     }
     let level = (fdata_all_buffer.level_table.level(fdata_ch_buffer.offset_size)
-        * (1_i32 << 30 as libc::c_int) as libc::c_float) as libc::c_int;
+        * (1_i32 << 30) as f32) as libc::c_int;
     let n_level = -level;
-    index = fdata_all_buffer.pixel_num - 1_i32;
+    index = fdata_all_buffer.pixel_num - 1;
     while nbyte < fdata_all_buffer.target_range
         && index >= fdata_all_buffer.pixel_num - fdata_buffer.valid
     {
@@ -1145,13 +1123,13 @@ fn lhdc_enc_lossy_nbyte_out(
             let lossy_fdata =
                 fdata_enc_buffer.lossy_fdata_buf[(fdata_all_buffer.pixel_num - 1 - index) as usize];
             let read_data_count = if lossy_fdata >= 0_i32 {
-                (lossy_fdata as libc::c_longlong * level as libc::c_longlong) as i32 >> 30_i32
+                (lossy_fdata as libc::c_longlong * level as libc::c_longlong) as i32 >> 30
             } else {
-                (lossy_fdata as libc::c_longlong * n_level as libc::c_longlong) as i32 >> 30_i32
+                (lossy_fdata as libc::c_longlong * n_level as libc::c_longlong) as i32 >> 30
             };
             nbyte_program.write_bits(
                 (fdata_buffer.fdata_q_quant[index as usize] - read_data_count) as u32,
-                1_i32 as u32,
+                1,
             )?;
             nbyte += 1;
         }
@@ -1159,7 +1137,7 @@ fn lhdc_enc_lossy_nbyte_out(
     }
     nbyte += fdata_all_buffer.header_data_size;
     while (nbyte + 8_i32) < fdata_all_buffer.enc_pixel_size_bits {
-        nbyte_program.write_bits(0_i32 as u32, 8 as libc::c_int as libc::c_uint)?;
+        nbyte_program.write_bits(0, 8)?;
         nbyte += 8_i32;
     }
     nbyte_program.zero_pad()?;
@@ -1240,9 +1218,9 @@ pub fn lhdc_enc_top(
     fdata_all_buffer.frame_count += 1;
 }
 fn lhdc_enc_lossy_nbyte_num_read(channel: i32, khz: i32, ms: i32, bitrate: i32) -> i32 {
-    let mut frame_len = bitrate * ms / (8_i32 * 1000 as libc::c_int * 10 as libc::c_int * channel);
+    let mut frame_len = bitrate * ms / (8_i32 * 1000 * 10 * channel);
     if khz == 44100_i32 {
-        frame_len = bitrate * ms / (735_i32 * 100 as libc::c_int * channel);
+        frame_len = bitrate * ms / (735_i32 * 100 * channel);
     }
     frame_len
 }
@@ -1256,17 +1234,17 @@ pub fn lhdc_enc_init(
     ctx: &mut Context,
 ) -> Result<()> {
     if !(1_i32..=8_i32).contains(&channel)
-        || resolution != 16_i32 && resolution != 24 as libc::c_int
-        || khz != 8000_i32
-            && khz != 16000_i32
-            && khz != 24000_i32
-            && khz != 32000_i32
-            && khz != 44100_i32
-            && khz != 48000_i32
-            && khz != 96000_i32
-            && khz != 192000_i32
-        || ms != 50_i32
-        || (bitrate < 0_i32 || bitrate > 1000000 as libc::c_int)
+        || resolution != 16 && resolution != 24
+        || khz != 8000
+            && khz != 16000
+            && khz != 24000
+            && khz != 32000
+            && khz != 44100
+            && khz != 48000
+            && khz != 96000
+            && khz != 192000
+        || ms != 50
+        || (bitrate < 0 || bitrate > 1000000)
     {
         return Err(Error::Encoder);
     }
@@ -1283,7 +1261,7 @@ pub fn lhdc_enc_get_samples_per_frame(s_fps: &mut i32, ctx: &mut Context) {
 }
 
 pub fn lhdc_enc_set_bitrate(bitrate: i32, ctx: &mut Context) -> Result<()> {
-    if bitrate < 0_i32 || bitrate > 1000000 as libc::c_int {
+    if bitrate < 0 || bitrate > 1000000 {
         return Err(Error::BadParams);
     }
     let fdata_all_buffer: &mut fdata_all_buffer_struct = ctx.ebuffer();
@@ -1293,8 +1271,8 @@ pub fn lhdc_enc_set_bitrate(bitrate: i32, ctx: &mut Context) -> Result<()> {
     let header: &mut Header = ctx.hdr_s();
     let frame_len: i32 = lhdc_enc_lossy_nbyte_num_read(channel, khz, ms, bitrate);
     header.enc_frm_len_provided = frame_len;
-    header.enc_frm_len_need_update = 1_i32 as libc::c_uchar;
-    if lhdc_enc_lossy_frame_length_program(frame_len, ctx.ebuffer()) < 0_i32 {
+    header.enc_frm_len_need_update = 1;
+    if lhdc_enc_lossy_frame_length_program(frame_len, ctx.ebuffer()) < 0 {
         return Err(Error::BadParams);
     }
     Ok(())
@@ -1305,15 +1283,15 @@ static SCRAMBLE_ORDER: [[u8; 8]; 2] = [[4, 0, 1, 5, 7, 3, 2, 6], [6, 3, 7, 0, 2,
 fn encoded_data_encrypt(encoded_data: &mut [u32]) {
     let mut index: i32;
     let byte = encoded_data.as_mut_bytes();
-    let mut tmp_byte: [libc::c_uchar; 8] = [0_i32 as libc::c_uchar, 0, 0, 0, 0, 0, 0, 0];
+    let mut tmp_byte: [libc::c_uchar; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
     let scramble_index = byte[8] & 0x1;
-    index = 0_i32;
-    while index < 8_i32 {
+    index = 0;
+    while index < 8 {
         tmp_byte[index as usize] = byte[index as usize] ^ XOR_MASK[index as usize];
         index += 1;
     }
-    index = 0_i32;
-    while index < 8_i32 {
+    index = 0;
+    while index < 8 {
         byte[index as usize] =
             tmp_byte[SCRAMBLE_ORDER[scramble_index as usize][index as usize] as i32 as usize];
         index += 1;
@@ -1326,13 +1304,13 @@ pub fn lhdc_enc_encode(
     output_frame_size: &mut i32,
     ctx: &mut Context,
 ) {
-    let mut input_buffer_size_ch0: i32 = 0 as libc::c_int;
-    let mut input_buffer_size_ch1: i32 = 1 as libc::c_int;
-    let mut density_size_workable: i32 = 0 as libc::c_int;
+    let mut input_buffer_size_ch0: i32 = 0;
+    let mut input_buffer_size_ch1: i32 = 1;
+    let mut density_size_workable: i32 = 0;
     let mut fdata_all_buffer = &mut ctx.ebuffer;
     let header = &mut ctx.hdr_s;
-    if fdata_all_buffer.frame_cnt < 960_i32 {
-        fdata_all_buffer.frame_cnt += 1_i32;
+    if fdata_all_buffer.frame_cnt < 960 {
+        fdata_all_buffer.frame_cnt += 1;
     }
     let header_size = enc_process_header(
         &mut *header,
@@ -1343,7 +1321,7 @@ pub fn lhdc_enc_encode(
     output_buffer_top = &mut output_buffer_top[header_size as usize..];
     if header.enc_frm_len_need_update != 0 {
         lhdc_enc_lossy_frame_length_program(density_size_workable, fdata_all_buffer);
-        header.enc_frm_len_need_update = 0_i32 as libc::c_uchar;
+        header.enc_frm_len_need_update = 0;
     }
     lhdc_enc_top(input_buffer_top, &mut input_buffer_size_ch0, &mut input_buffer_size_ch1, ctx);
     let ch0 = &mut ctx.encoded_data_ch0;

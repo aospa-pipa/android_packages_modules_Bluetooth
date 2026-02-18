@@ -32,20 +32,20 @@
 #include "stack/include/btm_status.h"
 #include "stack/include/hcimsgs.h"
 
-enum btm_acl_encrypt_state_t {
-  BTM_ACL_ENCRYPT_STATE_IDLE = 0,
-  BTM_ACL_ENCRYPT_STATE_ENCRYPT_OFF = 1,
-  BTM_ACL_ENCRYPT_STATE_TEMP_FUNC = 2,
-  BTM_ACL_ENCRYPT_STATE_ENCRYPT_ON = 3,
+enum class BtmAclEncryptState : uint8_t {
+  kIdle = 0,
+  kEncryptOff,
+  kTemporaryOff,
+  kEncryptOn,
 };
 
-enum btm_acl_swkey_state_t {
-  BTM_ACL_SWKEY_STATE_IDLE = 0,
-  BTM_ACL_SWKEY_STATE_MODE_CHANGE = 1,
-  BTM_ACL_SWKEY_STATE_ENCRYPTION_OFF = 2,
-  BTM_ACL_SWKEY_STATE_SWITCHING = 3,
-  BTM_ACL_SWKEY_STATE_ENCRYPTION_ON = 4,
-  BTM_ACL_SWKEY_STATE_IN_PROGRESS = 5,
+enum class BtmAclSwitchKeyState : uint8_t {
+  kIdle = 0,
+  kModeChange,
+  kEncryptionOff,
+  kSwitching,
+  kEncryptionOn,
+  kInProgress,
 };
 
 /* Policy settings status */
@@ -207,27 +207,10 @@ public:
   uint16_t pkt_types_mask;
   uint8_t disconnect_reason;
 
-private:
-  btm_acl_encrypt_state_t encrypt_state_;
-
 public:
-  void set_encryption_off() {
-    if (encrypt_state_ != BTM_ACL_ENCRYPT_STATE_ENCRYPT_OFF) {
-      btsnd_hcic_set_conn_encrypt(hci_handle, false);
-      encrypt_state_ = BTM_ACL_ENCRYPT_STATE_ENCRYPT_OFF;
-    }
-  }
-  void set_encryption_on() {
-    if (encrypt_state_ != BTM_ACL_ENCRYPT_STATE_ENCRYPT_ON) {
-      btsnd_hcic_set_conn_encrypt(hci_handle, true);
-      encrypt_state_ = BTM_ACL_ENCRYPT_STATE_ENCRYPT_ON;
-    }
-  }
-  void set_encryption_idle() { encrypt_state_ = BTM_ACL_ENCRYPT_STATE_IDLE; }
+  BtmAclEncryptState encrypt_state_ = BtmAclEncryptState::kIdle;
 
-  void set_encryption_switching() { encrypt_state_ = BTM_ACL_ENCRYPT_STATE_TEMP_FUNC; }
-
-  bool is_encryption_switching() const { return encrypt_state_ == BTM_ACL_ENCRYPT_STATE_TEMP_FUNC;}
+  bool is_encryption_switching() const { return encrypt_state_ == BtmAclEncryptState::kTemporaryOff;}
 
 
 public:
@@ -255,36 +238,8 @@ public:
   bool is_disconnect_pending() const { return rs_disc_pending == BTM_SEC_DISC_PENDING; }
   bool is_role_switch_pending() const { return rs_disc_pending == BTM_SEC_RS_PENDING; }
 
-private:
-  uint8_t switch_role_state_;
-
 public:
-  void reset_switch_role() { switch_role_state_ = BTM_ACL_SWKEY_STATE_IDLE; }
-  void set_switch_role_changing() { switch_role_state_ = BTM_ACL_SWKEY_STATE_MODE_CHANGE; }
-  void set_switch_role_encryption_off() { switch_role_state_ = BTM_ACL_SWKEY_STATE_ENCRYPTION_OFF; }
-  void set_switch_role_encryption_on() { switch_role_state_ = BTM_ACL_SWKEY_STATE_ENCRYPTION_ON; }
-  void set_switch_role_in_progress() { switch_role_state_ = BTM_ACL_SWKEY_STATE_IN_PROGRESS; }
-  void set_switch_role_switching() { switch_role_state_ = BTM_ACL_SWKEY_STATE_SWITCHING; }
-
-  bool is_switch_role_idle() const { return switch_role_state_ == BTM_ACL_SWKEY_STATE_IDLE; }
-  bool is_switch_role_encryption_off() const {
-    return switch_role_state_ == BTM_ACL_SWKEY_STATE_ENCRYPTION_OFF;
-  }
-  bool is_switch_role_encryption_on() const {
-    return switch_role_state_ == BTM_ACL_SWKEY_STATE_ENCRYPTION_ON;
-  }
-  bool is_switch_role_switching() const {
-    return switch_role_state_ == BTM_ACL_SWKEY_STATE_SWITCHING;
-  }
-  bool is_switch_role_in_progress() const {
-    return switch_role_state_ == BTM_ACL_SWKEY_STATE_IN_PROGRESS;
-  }
-  bool is_switch_role_mode_change() const {
-    return switch_role_state_ == BTM_ACL_SWKEY_STATE_MODE_CHANGE;
-  }
-  bool is_switch_role_switching_or_in_progress() const {
-    return is_switch_role_switching() || is_switch_role_in_progress();
-  }
+  BtmAclSwitchKeyState switch_role_state_ = BtmAclSwitchKeyState::kIdle;
 
 public:
   uint8_t sca; /* Sleep clock accuracy */
@@ -313,7 +268,6 @@ private:
   uint16_t btm_acl_pkt_types_supported = kDefaultPacketTypeMask;
   uint16_t btm_def_link_policy;
   tHCI_STATUS acl_disc_reason = HCI_ERR_UNDEFINED;
-  bool locally_initiated;
 
 public:
   void SetDefaultPacketTypeMask(uint16_t packet_type_mask) {
@@ -322,8 +276,6 @@ public:
 
   tHCI_STATUS get_disconnect_reason() const { return acl_disc_reason; }
   void set_disconnect_reason(tHCI_STATUS reason) { acl_disc_reason = reason; }
-  bool is_locally_initiated() const { return locally_initiated; }
-  void set_locally_initiated(bool value) { locally_initiated = value; }
   uint16_t DefaultPacketTypes() const { return btm_acl_pkt_types_supported; }
   uint16_t DefaultLinkPolicy() const { return btm_def_link_policy; }
 

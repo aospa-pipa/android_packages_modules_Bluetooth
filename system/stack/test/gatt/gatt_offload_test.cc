@@ -29,20 +29,27 @@
 #include "hal/gatt_hal.h"
 #include "hardware/bt_gatt_types.h"
 #include "lpp/lpp_offload_interface_mock.h"
+#include "metrics/mock/metrics_mock.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/gatt_api.h"
 #include "stack/include/main_thread.h"
+#include "test/mock/mock_stack_btm_interface.h"
+#include "test/mock/mock_stack_security_client_interface.h"
 
 // To override the mock function to return a specific handle.
 extern struct btm_client_interface_t mock_btm_client_interface;
 extern void reset_mock_btm_client_interface();
 
+using android::bluetooth::gatt::GattOffloadErrorEnum;
+using android::bluetooth::gatt::GattOffloadSessionStateEnum;
+using android::bluetooth::gatt::GattRoleEnum;
 using bluetooth::hal::GattHalCallback;
 using bluetooth::hal::GattSession;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::MockFunction;
+using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SaveArg;
 
@@ -122,6 +129,10 @@ protected:
     GattOffloadTest::SetUp();
     mock_ = std::make_unique<bluetooth::lpp::testing::MockLppOffloadInterface>();
     bluetooth::lpp::testing::mock_lpp_offload_interface_ = mock_.get();
+    mock_metrics_logger_ = std::make_shared<bluetooth::metrics::MockMetrics>();
+    bluetooth::metrics::MockMetrics::SetInstance(mock_metrics_logger_);
+    set_security_client_interface(mock_btm_security_);
+    set_mock_btm_client_interface_security(mock_btm_security_);
 
     EXPECT_CALL(*mock_, InitializeGattHal(_))
             .WillOnce(DoAll(SaveArg<0>(&gatt_hal_callback_), Return(true)));
@@ -137,13 +148,18 @@ protected:
   }
 
   void TearDown() override {
+    reset_mock_btm_client_interface();
     bluetooth::lpp::testing::mock_lpp_offload_interface_ = nullptr;
+    bluetooth::metrics::MockMetrics::SetInstance(nullptr);
+    mock_metrics_logger_ = nullptr;
     GattOffloadTest::TearDown();
     cleanup_message_loop_thread();
   }
 
   std::unique_ptr<bluetooth::lpp::testing::MockLppOffloadInterface> mock_;
   GattHalCallback* gatt_hal_callback_ = nullptr;
+  NiceMock<MockSecurityClientInterface> mock_btm_security_;
+  std::shared_ptr<bluetooth::metrics::MockMetrics> mock_metrics_logger_;
 };
 
 TEST_F(GattOffloadTest, init_success) {
@@ -206,6 +222,12 @@ TEST_F(GattOffloadCharacteristicsTest, offload_characteristics_success) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, GattRoleEnum::GATT_ROLE_CLIENT,
+                      GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _, 0,
+                      GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -298,13 +320,8 @@ TEST_P(GattOffloadPermissionTest, OffloadCharacteristicsPermissionFail) {
            .properties = params.properties,
            .permissions = params.permissions}};
 
-  mock_btm_client_interface.security.BTM_IsEncrypted = [](const RawAddress& /* bd_addr */,
-                                                          tBT_TRANSPORT /* transport */) {
-    return mock_is_encrypted_;
-  };
-  mock_btm_client_interface.security.BTM_IsBonded = [](const RawAddress&, tBT_TRANSPORT) {
-    return mock_is_bonded_;
-  };
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(_, _)).WillByDefault(Return(mock_is_encrypted_));
+  ON_CALL(mock_btm_security_, BTM_IsBonded(_, _)).WillByDefault(Return(mock_is_bonded_));
 
   std::promise<btgatt_offload_result_t> promise;
   auto future = promise.get_future();
@@ -357,12 +374,8 @@ TEST_F(GattOffloadPermissionTest, offload_characteristics_invalid_db_element_typ
            .type = BTGATT_DB_INCLUDED_SERVICE,
            .attribute_handle = 2}};
 
-  mock_btm_client_interface.security.BTM_IsEncrypted = [](const RawAddress&, tBT_TRANSPORT) {
-    return true;
-  };
-  mock_btm_client_interface.security.BTM_IsBonded = [](const RawAddress&, tBT_TRANSPORT) {
-    return true;
-  };
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(_, _)).WillByDefault(Return(true));
+  ON_CALL(mock_btm_security_, BTM_IsBonded(_, _)).WillByDefault(Return(true));
 
   std::promise<btgatt_offload_result_t> promise;
   auto future = promise.get_future();
@@ -443,6 +456,16 @@ TEST_F(GattOffloadCharacteristicsTest, offload_characteristics_hal_callback_fail
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_FAILED, _, _,
+                      GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_HAL_FAILURE, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -496,6 +519,11 @@ TEST_F(GattOffloadCharacteristicsTest, offload_characteristics_duplicate_session
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service1.data(), std::size(service1),
                                /*endpoint_id=*/0, /*hub_id*/ 0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise1));
@@ -530,6 +558,11 @@ TEST_F(GattOffloadCharacteristicsTest, unoffload_session) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -559,6 +592,12 @@ TEST_F(GattOffloadCharacteristicsTest, gattc_inform_notification_handle_gatt_ser
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, GattRoleEnum::GATT_ROLE_SERVER,
+                      GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _, 0,
+                      GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id, /*is_server=*/true, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise));
@@ -586,6 +625,11 @@ TEST_F(GattOffloadCharacteristicsTest, gattc_inform_notification_handle_gatt_cli
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -613,6 +657,12 @@ TEST_F(GattOffloadCharacteristicsTest, gattc_handle_service_changed_indication_g
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, GattRoleEnum::GATT_ROLE_SERVER,
+                      GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _, 0,
+                      GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/true, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -640,6 +690,11 @@ TEST_F(GattOffloadCharacteristicsTest, gattc_handle_service_changed_indication_g
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -666,6 +721,11 @@ TEST_F(GattOffloadCharacteristicsTest, clear_session_by_handle) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise));
@@ -683,12 +743,13 @@ TEST_F(GattOffloadCharacteristicsTest, clear_session_by_handle) {
     return true;
   });
 
-  gatt_offload_clear_sessions_by_acl_handle(acl_handle);
+  gatt_offload_clear_sessions_by_acl_handle(acl_handle, bluetooth::hal::GattError::GATT_ERROR_NONE);
 }
 
 TEST_F(GattOffloadCharacteristicsTest, clear_session_by_handle_failure) {
   // Case 1: Handle not found
-  EXPECT_FALSE(gatt_offload_clear_sessions_by_acl_handle(0x1234));
+  EXPECT_FALSE(gatt_offload_clear_sessions_by_acl_handle(
+          0x1234, bluetooth::hal::GattError::GATT_ERROR_NONE));
 
   // Case 2: Unoffload already in progress
   const tCONN_ID conn_id = 0;
@@ -701,6 +762,11 @@ TEST_F(GattOffloadCharacteristicsTest, clear_session_by_handle_failure) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   mock_btm_client_interface.peer.BTM_GetHCIConnHandle =
           [](const RawAddress& /* remote_bda */, tBT_TRANSPORT /* transport */) -> uint16_t {
     return 0x1234;
@@ -719,10 +785,12 @@ TEST_F(GattOffloadCharacteristicsTest, clear_session_by_handle_failure) {
   EXPECT_NE(result.session_id, BTGATT_OFFLOAD_SESSION_ID_UNKNOWN);
 
   EXPECT_CALL(*mock_, ClearGattServices(acl_handle)).Times(1);
-  EXPECT_TRUE(gatt_offload_clear_sessions_by_acl_handle(acl_handle));
+  EXPECT_TRUE(gatt_offload_clear_sessions_by_acl_handle(
+          acl_handle, bluetooth::hal::GattError::GATT_ERROR_NONE));
 
   // Second call should fail
-  EXPECT_FALSE(gatt_offload_clear_sessions_by_acl_handle(acl_handle));
+  EXPECT_FALSE(gatt_offload_clear_sessions_by_acl_handle(
+          acl_handle, bluetooth::hal::GattError::GATT_ERROR_NONE));
 }
 
 TEST_F(GattOffloadCharacteristicsTest, clear_session_by_conn_id) {
@@ -736,6 +804,11 @@ TEST_F(GattOffloadCharacteristicsTest, clear_session_by_conn_id) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), std::size(service),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise));
@@ -777,6 +850,11 @@ TEST_F(GattOffloadCharacteristicsTest, clear_multiple_sessions_by_conn_id_failur
     session_id1 = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id1, /*is_server=*/false, service1.data(), std::size(service1),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise1));
@@ -794,6 +872,11 @@ TEST_F(GattOffloadCharacteristicsTest, clear_multiple_sessions_by_conn_id_failur
     session_id2 = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id2, /*is_server=*/false, service2.data(), std::size(service2),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise2));
@@ -848,6 +931,11 @@ TEST_F(GattOffloadCharacteristicsTest, dump_one_session) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
                                std::move(promise));
@@ -888,6 +976,11 @@ TEST_F(GattOffloadHalCallbackTest, register_service_complete_success) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -912,6 +1005,11 @@ TEST_F(GattOffloadHalCallbackTest, unregister_service_complete) {
     session_id = session.id;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -925,6 +1023,11 @@ TEST_F(GattOffloadHalCallbackTest, unregister_service_complete) {
   EXPECT_EQ(result.status, tGATT_STATUS::GATT_SUCCESS);
 
   EXPECT_CALL(*mock_, UnregisterGattService(session_id)).Times(1);
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STOPPED, _,
+                      _, GattOffloadErrorEnum::GATT_OFFLOAD_ERROR_NONE, _, _))
+          .Times(1);
   gatt_unoffload_session(conn_id, session_id, tGATT_STATUS::GATT_SUCCESS);
   gatt_hal_callback_->unregisterServiceComplete(session_id);
   SyncOnMainLoop();
@@ -959,6 +1062,11 @@ TEST_F(GattOffloadHalCallbackTest, error_report_out_of_sync) {
     acl_handle = session.acl_connection_handle;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -999,6 +1107,11 @@ TEST_F(GattOffloadHalCallbackTest, error_report_err_rsp_timeout) {
     acl_handle = session.acl_connection_handle;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -1037,6 +1150,11 @@ TEST_F(GattOffloadHalCallbackTest, error_report_err_protocol_violation) {
     acl_handle = session.acl_connection_handle;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",
@@ -1095,6 +1213,11 @@ TEST_F(GattOffloadHalCallbackTest, error_report_out_of_sync_with_callback) {
     acl_handle = session.acl_connection_handle;
     return true;
   });
+  EXPECT_CALL(*mock_metrics_logger_,
+              LogGattOffloadSessionStateChanged(
+                      _, _, _, GattOffloadSessionStateEnum::GATT_OFFLOAD_SESSION_STATE_STARTED, _,
+                      0, _, _, _))
+          .Times(1);
 
   gatt_offload_characteristics(conn_id, /*is_server=*/false, service.data(), service.size(),
                                /*endpoint_id=*/0, /*hub_id=*/0, /*uid=*/0, /*attribution_tag=*/"",

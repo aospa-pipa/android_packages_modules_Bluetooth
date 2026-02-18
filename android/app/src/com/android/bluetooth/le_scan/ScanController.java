@@ -428,11 +428,9 @@ public class ScanController {
                             && !isScanResponse
                             && !mIsMsftAdvMonitorEnabled;
 
-            if (Flags.supportPassiveScanning()
-                    && ((settings.getScanType() == ScanSettings.SCAN_TYPE_ACTIVE
-                                    && requiresScanResponse)
-                            || (settings.getScanType() == ScanSettings.SCAN_TYPE_PASSIVE
-                                    && isScanResponse))) {
+            if ((settings.getScanType() == ScanSettings.SCAN_TYPE_ACTIVE && requiresScanResponse)
+                    || (settings.getScanType() == ScanSettings.SCAN_TYPE_PASSIVE
+                            && isScanResponse)) {
                 scanTypeMismatch.add(client);
                 continue;
             }
@@ -515,7 +513,7 @@ public class ScanController {
                             app.getInfo(), results, ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
                 }
             } catch (RemoteException | PendingIntent.CanceledException e) {
-                Log.e(TAG, "Exception: " + e);
+                Log.e(TAG, "onScanResult(): Exception: " + e);
                 handleDeadScanClient(client);
             }
         }
@@ -628,11 +626,9 @@ public class ScanController {
     @VisibleForTesting
     static boolean matchesFilters(
             ScanClient client, ScanResult scanResult, String originalAddress) {
-        if (Flags.rssiScanFilter()) {
-            ScanSettings settings = client.getSettings();
-            if (scanResult.getRssi() < settings.getRssiThreshold()) {
-                return false;
-            }
+        ScanSettings settings = client.getSettings();
+        if (scanResult.getRssi() < settings.getRssiThreshold()) {
+            return false;
         }
         if (!client.isFiltered()) {
             // TODO: Do we really wanna return true here?
@@ -643,17 +639,10 @@ public class ScanController {
             if (filter.matches(scanResult)) {
                 return true;
             }
-            if (Flags.originalAddressFilterMatch()) {
-                if (originalAddress != null
-                        && originalAddress.equalsIgnoreCase(filter.getDeviceAddress())
-                        && filter.matchesWithoutAddress(scanResult)) {
-                    return true;
-                }
-            } else {
-                if (originalAddress != null
-                        && originalAddress.equalsIgnoreCase(filter.getDeviceAddress())) {
-                    return true;
-                }
+            if (originalAddress != null
+                    && originalAddress.equalsIgnoreCase(filter.getDeviceAddress())
+                    && filter.matchesWithoutAddress(scanResult)) {
+                return true;
             }
         }
         return false;
@@ -786,7 +775,7 @@ public class ScanController {
                         app.getInfo(), results, ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
             }
         } catch (RemoteException | PendingIntent.CanceledException e) {
-            Log.e(TAG, "Exception: " + e);
+            Log.e(TAG, "sendBatchScanResults(): Exception: " + e);
             handleDeadScanClient(client);
         }
         mScanManager.batchScanResultDelivered();
@@ -960,7 +949,7 @@ public class ScanController {
             try {
                 callback.onScannerRegistered(ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY, -1);
             } catch (RemoteException e) {
-                Log.e(TAG, "Exception: " + e);
+                Log.e(TAG, "registerScanner(): Exception: " + e);
             }
             return;
         }
@@ -984,7 +973,7 @@ public class ScanController {
             try {
                 callback.onScannerRegistered(ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY, -1);
             } catch (RemoteException e) {
-                Log.e(TAG, "Exception: " + e);
+                Log.e(TAG, "registerAndStartScan(): Exception: " + e);
             }
             return;
         }

@@ -40,6 +40,7 @@
 #include "stack/btm/btm_sec.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/bt_types.h"
+#include "stack/include/btm_client_interface.h"
 #include "stack/include/gatt_api.h"
 #include "vcp/vcp_controller_types.h"
 
@@ -108,7 +109,7 @@ bool VolumeControllerDevice::set_volume_control_service_handles(const gatt::Serv
            flags_ccc_handle = 0;
 
   for (const gatt::Characteristic& chrc : service.characteristics) {
-    if (chrc.uuid == kVolumeControlStateUuid) {
+    if (chrc.uuid == kVolumeStateUuid) {
       state_handle = chrc.value_handle;
       state_ccc_handle = find_ccc_handle(chrc.value_handle);
     } else if (chrc.uuid == kVolumeControlPointUuid) {
@@ -252,7 +253,7 @@ bool VolumeControllerDevice::UpdateHandles(void) {
   }
 
   for (auto const& service : *services) {
-    if (service.uuid == kVolumeControlUuid) {
+    if (service.uuid == kVolumeControlServiceUuid) {
       log::info("{}, found VCS, handle={:#x}", address, service.handle);
       vcs_found = set_volume_control_service_handles(service);
       if (!vcs_found) {
@@ -457,7 +458,7 @@ void VolumeControllerDevice::EnqueueRemainingRequests(tGATT_IF /*gatt_if*/,
   log::debug("{}, number of variable-size attribute handles={}", address,
              handles_to_read_variable_length.size());
 
-  if (is_eatt_supported) {
+  if (/*is_eatt_supported*/ true) {
     const size_t payload_limit = this->mtu_ - 1;
 
     auto pair_it = handles_to_read.begin();
@@ -693,12 +694,12 @@ bool VolumeControllerDevice::ExtAudioInControlPointOperation(uint8_t ext_input_i
 }
 
 bool VolumeControllerDevice::IsEncryptionEnabled() {
-  return BTM_IsEncrypted(address, BT_TRANSPORT_LE);
+  return get_btm_client_interface().security.BTM_IsEncrypted(address, BT_TRANSPORT_LE);
 }
 
 bool VolumeControllerDevice::EnableEncryption() {
-  tBTM_STATUS result =
-          BTM_SetEncryption(address, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
+  tBTM_STATUS result = get_btm_client_interface().security.BTM_SetEncryption(
+          address, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
   log::info("{}: result=0x{:02x}", address, result);
 
   return result != tBTM_STATUS::BTM_ERR_KEY_MISSING;

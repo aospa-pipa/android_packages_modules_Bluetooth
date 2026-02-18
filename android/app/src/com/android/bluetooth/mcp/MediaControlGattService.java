@@ -40,6 +40,7 @@ import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.State;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
@@ -854,7 +855,7 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
                 Log.d(
                         TAG,
                         "onBluetoothStateChange: state=" + BluetoothAdapter.nameForState(newState));
-                if (newState == BluetoothAdapter.STATE_ON) {
+                if (newState == State.ON) {
                     restoreCccValuesForStoredDevices();
                 }
             };
@@ -2470,24 +2471,24 @@ public class MediaControlGattService implements MediaControlGattServiceInterface
     }
 
     public void dump(StringBuilder sb) {
-        sb.append("\tMediaControlService instance current state:");
-        sb.append("\n\t\tCcid = ").append(mCcid);
-        sb.append("\n\t\tFeatures:").append(ServiceFeature.featuresToString(mFeatures));
+        sb.append("  MediaControlService instance current state:");
+        sb.append("\n    Ccid = ").append(mCcid);
+        sb.append("\n    Features:").append(ServiceFeature.featuresToString(mFeatures));
 
         BluetoothGattCharacteristic characteristic = mCharacteristics.get(CharId.PLAYER_NAME);
         if (characteristic == null) {
-            sb.append("\n\t\tPlayer name: <No Player>");
+            sb.append("\n    Player name: <No Player>");
         } else {
-            sb.append("\n\t\tPlayer name: ").append(characteristic.getStringValue(0));
+            sb.append("\n    Player name: <").append(characteristic.getStringValue(0)).append(">");
         }
 
-        sb.append("\n\t\tCurrentPlaybackState = ").append(mCurrentMediaState);
+        sb.append("\n    CurrentPlaybackState = ").append(mCurrentMediaState);
         for (Map.Entry<String, Map<UUID, Short>> deviceEntry : mCccDescriptorValues.entrySet()) {
-            sb.append("\n\t\tCCC states for device: ")
+            sb.append("\n    CCC states for device: ")
                     .append("xx:xx:xx:xx:")
                     .append(deviceEntry.getKey().substring(12));
             for (Map.Entry<UUID, Short> entry : deviceEntry.getValue().entrySet()) {
-                sb.append("\n\t\t\tCharacteristic: ")
+                sb.append("\n      Characteristic: ")
                         .append(mcsUuidToString(entry.getKey()))
                         .append(", value: ")
                         .append(Utils.cccIntToStr(entry.getValue()));

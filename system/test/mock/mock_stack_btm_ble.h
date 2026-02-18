@@ -113,7 +113,7 @@ struct BTM_BlePasskeyReply {
 extern struct BTM_BlePasskeyReply BTM_BlePasskeyReply;
 
 // Name: BTM_BleReadPhy
-// Params: const RawAddress& bd_addr, base::Callback<void(uint8_t tx_phy,
+// Params: const RawAddress& bd_addr, base::OnceCallback<void(uint8_t tx_phy,
 // uint8_t rx_phy, uint8_t status Return: void
 struct BTM_BleReadPhy {
   std::function<void(
@@ -256,16 +256,16 @@ struct BTM_GetRemoteDeviceName {
 extern struct BTM_GetRemoteDeviceName BTM_GetRemoteDeviceName;
 
 // Name: BTM_SecAddBleKey
-// Params: const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
-// tBTM_LE_KEY_TYPE key_type Return: void
+// Params: const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type, const tBTM_LE_KEY_VALUE& key
+// Return: void
 struct BTM_SecAddBleKey {
-  std::function<void(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
-                     tBTM_LE_KEY_TYPE key_type)>
-          body{[](const RawAddress& /* bd_addr */, tBTM_LE_KEY_VALUE* /* p_le_key */,
-                  tBTM_LE_KEY_TYPE /* key_type */) {}};
-  void operator()(const RawAddress& bd_addr, tBTM_LE_KEY_VALUE* p_le_key,
-                  tBTM_LE_KEY_TYPE key_type) {
-    body(bd_addr, p_le_key, key_type);
+  std::function<void(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
+                     const tBTM_LE_KEY_VALUE& key)>
+          body{[](const RawAddress& /* bd_addr */, tBTM_LE_KEY_TYPE /* key_type */,
+                  const tBTM_LE_KEY_VALUE& /* key */) {}};
+  void operator()(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
+                  const tBTM_LE_KEY_VALUE& key) {
+    body(bd_addr, key_type, key);
   }
 };
 extern struct BTM_SecAddBleKey BTM_SecAddBleKey;
@@ -379,16 +379,16 @@ struct btm_ble_ltk_request_reply {
 };
 extern struct btm_ble_ltk_request_reply btm_ble_ltk_request_reply;
 
-// Name: btm_ble_read_sec_key_size
+// Name: BTM_BleReadSecKeySize
 // Params: const RawAddress& bd_addr
 // Return: uint8_t
-struct btm_ble_read_sec_key_size {
+struct BTM_BleReadSecKeySize {
   static uint8_t return_value;
   std::function<uint8_t(const RawAddress& bd_addr)> body{
           [](const RawAddress& /* bd_addr */) { return return_value; }};
   uint8_t operator()(const RawAddress& bd_addr) { return body(bd_addr); }
 };
-extern struct btm_ble_read_sec_key_size btm_ble_read_sec_key_size;
+extern struct BTM_BleReadSecKeySize BTM_BleReadSecKeySize;
 
 // Name: btm_ble_reset_id
 // Params: void
@@ -491,15 +491,16 @@ extern struct btm_proc_smp_cback btm_proc_smp_cback;
 
 // Name: btm_sec_save_le_key
 // Params: const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
-// tBTM_LE_KEY_VALUE* p_keys, bool pass_to_application Return: void
+// const tBTM_LE_KEY_VALUE& key, bool pass_to_application
+// Return: void
 struct btm_sec_save_le_key {
   std::function<void(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
-                     tBTM_LE_KEY_VALUE* p_keys, bool pass_to_application)>
+                     const tBTM_LE_KEY_VALUE& key, bool pass_to_application)>
           body{[](const RawAddress& /* bd_addr */, tBTM_LE_KEY_TYPE /* key_type */,
-                  tBTM_LE_KEY_VALUE* /* p_keys */, bool /* pass_to_application */) {}};
-  void operator()(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type, tBTM_LE_KEY_VALUE* p_keys,
-                  bool pass_to_application) {
-    body(bd_addr, key_type, p_keys, pass_to_application);
+                  const tBTM_LE_KEY_VALUE& /* key */, bool /* pass_to_application */) {}};
+  void operator()(const RawAddress& bd_addr, tBTM_LE_KEY_TYPE key_type,
+                  const tBTM_LE_KEY_VALUE& key, bool pass_to_application) {
+    body(bd_addr, key_type, key, pass_to_application);
   }
 };
 extern struct btm_sec_save_le_key btm_sec_save_le_key;

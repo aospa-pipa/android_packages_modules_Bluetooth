@@ -40,11 +40,18 @@ class AdapterNativeCallback(
 
     fun sspRequestCallback(
         address: ByteArray,
+        transport: Int,
         pairingVariant: Int,
         passkey: Int,
         pairingAlgorithm: Int,
     ) {
-        bondStateMachine?.sspRequestCallback(address, pairingVariant, passkey, pairingAlgorithm)
+        bondStateMachine?.sspRequestCallback(
+            address,
+            transport,
+            pairingVariant,
+            passkey,
+            pairingAlgorithm,
+        )
     }
 
     fun devicePropertyChangedCallback(
@@ -77,6 +84,7 @@ class AdapterNativeCallback(
         newState: Int,
         pairingAlgorithm: Int,
         pairingVariant: Int,
+        pairingInitiator: Int,
         hciReason: Int,
     ) {
         bondStateMachine?.bondStateChangeCallback(
@@ -86,6 +94,7 @@ class AdapterNativeCallback(
             newState,
             pairingAlgorithm,
             pairingVariant,
+            pairingInitiator,
             hciReason,
         )
     }

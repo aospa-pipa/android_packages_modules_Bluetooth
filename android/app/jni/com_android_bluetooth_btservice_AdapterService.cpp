@@ -21,6 +21,7 @@
 #include <bluetooth/log.h>
 #include <bluetooth/types/ble_address_with_type.h>
 #include <bluetooth/types/uuid.h>
+#include <com_android_bluetooth_flags.h>
 #include <jni.h>
 #include <nativehelper/JNIHelp.h>
 #include <nativehelper/JNIPlatformHelp.h>
@@ -318,7 +319,8 @@ static void device_found_callback(int num_properties, bt_property_t* properties)
 
 static void bond_state_changed_callback(bt_status_t status, RawAddress bd_addr,
                                         tBT_TRANSPORT transport, bt_bond_state_t state,
-                                        PairingType pairing_type, int fail_reason) {
+                                        PairingType pairing_type, int fail_reason,
+                                        PairingInitiator pairing_initiator) {
   std::shared_lock<std::shared_timed_mutex> lock(jniObjMutex);
   if (!sJniCallbacksObj) {
     log::error("JNI obj is null. Failed to call JNI callback");
@@ -335,7 +337,7 @@ static void bond_state_changed_callback(bt_status_t status, RawAddress bd_addr,
   sCallbackEnv->CallVoidMethod(sJniCallbacksObj, method_bondStateChangeCallback, (jint)status,
                                jaddr.get(), (jint)transport, (jint)state,
                                (jint)pairing_type.algorithm, (jint)pairing_type.variant,
-                               (jint)fail_reason);
+                               (jint)pairing_initiator, (jint)fail_reason);
 }
 
 static void address_consolidate_callback(RawAddress main_bd_addr, RawAddress secondary_bd_addr) {
@@ -439,7 +441,7 @@ static void pin_request_callback(RawAddress bd_addr, bt_bdname_t* bdname, uint32
                                devname.get(), cod, min_16_digits, pairing_algorithm);
 }
 
-static void ssp_request_callback(RawAddress bd_addr, bt_ssp_variant_t pairing_variant,
+static void ssp_request_callback(RawAddress bd_addr, int transport, PairingVariant pairing_variant,
                                  uint32_t pass_key, int pairing_algorithm) {
   std::shared_lock<std::shared_timed_mutex> lock(jniObjMutex);
   if (!sJniCallbacksObj) {
@@ -454,7 +456,7 @@ static void ssp_request_callback(RawAddress bd_addr, bt_ssp_variant_t pairing_va
 
   ScopedLocalRef<jbyteArray> addr = addressToJByteArray(sCallbackEnv.get(), bd_addr);
 
-  sCallbackEnv->CallVoidMethod(sJniCallbacksObj, method_sspRequestCallback, addr.get(),
+  sCallbackEnv->CallVoidMethod(sJniCallbacksObj, method_sspRequestCallback, addr.get(), transport,
                                (jint)pairing_variant, pass_key, pairing_algorithm);
 }
 
@@ -640,6 +642,8 @@ static void switch_buffer_size_callback(bool is_low_latency_buffer_size) {
 }
 
 static void switch_codec_callback(bool is_low_latency_buffer_size) {
+  log::assert_that(!com::android::bluetooth::flags::a2dp_handle_sa_reconfig_in_native(),
+                   "Reconfig is in native");
   std::shared_lock<std::shared_timed_mutex> lock(jniObjMutex);
   if (!sJniCallbacksObj) {
     log::error("JNI obj is null. Failed to call JNI callback");
@@ -910,7 +914,8 @@ static bt_os_callouts_t sBluetoothOsCallouts = {
 };
 
 static bool initNative(JNIEnv* env, jobject obj, jboolean isGuest, jboolean isCommonCriteriaMode,
-                       int configCompareResult, jboolean isAtvDevice, jstring jHciInstanceName) {
+                       int configCompareResult, jboolean isAtvDevice, jstring jHciInstanceName,
+                       jboolean platformSupportAutonomousRepairingInitiation) {
   std::unique_lock<std::shared_timed_mutex> lock(jniObjMutex);
 
   log::verbose("");
@@ -929,7 +934,7 @@ static bool initNative(JNIEnv* env, jobject obj, jboolean isGuest, jboolean isCo
 
   bluetooth_init(&sBluetoothCallbacks, isGuest == JNI_TRUE, isCommonCriteriaMode == JNI_TRUE,
                  configCompareResult, isAtvDevice == JNI_TRUE, std::move(hci_instance_name),
-                 &sBluetoothOsCallouts);
+                 &sBluetoothOsCallouts, platformSupportAutonomousRepairingInitiation == JNI_TRUE);
 
   sBluetoothSocketInterface = reinterpret_cast<const btsock_interface_t*>(
           sBluetoothInterface->get_profile_interface(BT_PROFILE_SOCKETS_ID));
@@ -945,11 +950,7 @@ static bool cleanupNative(JNIEnv* env, jobject /* obj */) {
 
   log::verbose("");
 
-  if (!sBluetoothInterface) {
-    return JNI_FALSE;
-  }
-
-  sBluetoothInterface->cleanup();
+  bluetooth_cleanup();
   log::info("return from cleanup");
 
   if (sJniCallbacksObj) {
@@ -969,33 +970,17 @@ static bool cleanupNative(JNIEnv* env, jobject /* obj */) {
   return JNI_TRUE;
 }
 
-static jboolean enableNative(JNIEnv* env, jobject /* obj */, jstring jLocalName) {
-  log::verbose("");
-
-  if (!sBluetoothInterface) {
-    return JNI_FALSE;
-  }
-
+static void enableNative(JNIEnv* env, jobject /* obj */, jstring jLocalName) {
   const std::string local_name = stringFromJstring(env, jLocalName);
+  log::verbose("lock_name={}", local_name);
 
-  int ret = sBluetoothInterface->enable(std::move(local_name));
-
-  return (ret == BT_STATUS_SUCCESS || ret == BT_STATUS_DONE) ? JNI_TRUE : JNI_FALSE;
+  bluetooth_enable(std::move(local_name));
 }
 
-static jboolean disableNative(JNIEnv* /* env */, jobject /* obj */) {
+static void disableNative(JNIEnv* /* env */, jobject /* obj */) {
   log::verbose("");
 
-  if (!sBluetoothInterface) {
-    return JNI_FALSE;
-  }
-
-  int ret = sBluetoothInterface->disable();
-  /* Retrun JNI_FALSE only when BTIF explicitly reports
-     BT_STATUS_FAIL. It is fine for the BT_STATUS_NOT_READY
-     case which indicates that stack had not been enabled.
-  */
-  return (ret == BT_STATUS_FAIL) ? JNI_FALSE : JNI_TRUE;
+  bluetooth_disable();
 }
 
 static jboolean startDiscoveryNative(JNIEnv* /* env */, jobject /* obj */) {
@@ -1360,7 +1345,7 @@ static jboolean sspReplyNative(JNIEnv* env, jobject /* obj */, jbyteArray addres
   }
 
   RawAddress bd_addr = addressFromJByteArray(env, address);
-  int ret = sBluetoothInterface->ssp_reply(bd_addr, (bt_ssp_variant_t)type, accept, passkey);
+  int ret = sBluetoothInterface->ssp_reply(bd_addr, (PairingVariant)type, accept, passkey);
 
   return (ret == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
 }
@@ -1982,12 +1967,23 @@ static jboolean restoreFilterAcceptListNative(JNIEnv* /* env */, jobject /* obj 
   return (ret == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
 }
 
+static jboolean setSuspendStateNative(JNIEnv* /* env */, jobject /* obj */, jboolean suspend) {
+  log::verbose("");
+
+  if (!sBluetoothInterface) {
+    return JNI_FALSE;
+  }
+
+  int ret = sBluetoothInterface->set_suspend_state(suspend);
+  return (ret == BT_STATUS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
+}
+
 static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) {
   const JNINativeMethod methods[] = {
-          {"initNative", "(ZZIZLjava/lang/String;)Z", reinterpret_cast<void*>(initNative)},
+          {"initNative", "(ZZIZLjava/lang/String;Z)Z", reinterpret_cast<void*>(initNative)},
           {"cleanupNative", "()V", reinterpret_cast<void*>(cleanupNative)},
-          {"enableNative", "(Ljava/lang/String;)Z", reinterpret_cast<void*>(enableNative)},
-          {"disableNative", "()Z", reinterpret_cast<void*>(disableNative)},
+          {"enableNative", "(Ljava/lang/String;)V", reinterpret_cast<void*>(enableNative)},
+          {"disableNative", "()V", reinterpret_cast<void*>(disableNative)},
           {"setScanModeNative", "(I)Z", reinterpret_cast<void*>(setScanModeNative)},
           {"setLocalNameNative", "(Ljava/lang/String;)V",
            reinterpret_cast<void*>(setLocalNameNative)},
@@ -2052,6 +2048,7 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) 
           {"allowWakeByHidNative", "()Z", reinterpret_cast<void*>(allowWakeByHidNative)},
           {"restoreFilterAcceptListNative", "()Z",
            reinterpret_cast<void*>(restoreFilterAcceptListNative)},
+          {"setSuspendStateNative", "(Z)Z", reinterpret_cast<void*>(setSuspendStateNative)},
   };
   const int result = REGISTER_NATIVE_METHODS(
           env, "com/android/bluetooth/btservice/AdapterNativeInterface", methods);
@@ -2074,8 +2071,8 @@ static int register_com_android_bluetooth_btservice_AdapterService(JNIEnv* env) 
           {"devicePropertyChangedCallback", "([BI[I[[B)V", &method_devicePropertyChangedCallback},
           {"deviceFoundCallback", "([B)V", &method_deviceFoundCallback},
           {"pinRequestCallback", "([B[BIZI)V", &method_pinRequestCallback},
-          {"sspRequestCallback", "([BIII)V", &method_sspRequestCallback},
-          {"bondStateChangeCallback", "(I[BIIIII)V", &method_bondStateChangeCallback},
+          {"sspRequestCallback", "([BIIII)V", &method_sspRequestCallback},
+          {"bondStateChangeCallback", "(I[BIIIIII)V", &method_bondStateChangeCallback},
           {"addressConsolidateCallback", "([B[B)V", &method_addressConsolidateCallback},
           {"leAddressAssociateCallback", "([B[BI)V", &method_leAddressAssociateCallback},
           {"aclStateChangeCallback", "(I[BIIIII)V", &method_aclStateChangeCallback},
@@ -2244,6 +2241,18 @@ jint JNI_OnLoad(JavaVM* jvm, void* /* reserved */) {
     return JNI_ERR;
   }
 
+  status = android::register_com_android_bluetooth_le_audio_broadcaster(e);
+  if (status < 0) {
+    log::error("jni le_audio broadcaster registration failure: {}", status);
+    return JNI_ERR;
+  }
+
+  status = android::register_com_android_bluetooth_le_audio_peripheral(e);
+  if (status < 0) {
+    log::error("jni le_audio_peripheral registration failure: {}", status);
+    return JNI_ERR;
+  }
+
   status = android::register_com_android_bluetooth_vc(e);
   if (status < 0) {
     log::error("jni vc registration failure: {}", status);
@@ -2256,9 +2265,9 @@ jint JNI_OnLoad(JavaVM* jvm, void* /* reserved */) {
     return JNI_ERR;
   }
 
-  status = android::register_com_android_bluetooth_vaps_server(e);
+  status = android::register_com_android_bluetooth_vap_server(e);
   if (status < 0) {
-    log::error("jni le audio vaps server registration failure: {}", status);
+    log::error("jni le audio vap server registration failure: {}", status);
     return JNI_ERR;
   }
 

@@ -23,10 +23,10 @@
 
 bool concurrentPeerAuthIsEnabled();
 bool handleUnexpectedEncryptionChange();
-void btm_sec_store_device_sc_support(uint16_t hci_handle, bool host_secure_connections_supported,
-                                     bool controller_secure_connections_supported);
-bool btm_sec_is_enc_algo_downgrade(uint16_t hci_handle, bool host_secure_connections_supported,
-                                   bool controller_secure_connections_supported);
+void btm_sec_store_device_sc_support(uint16_t hci_handle, bool host_sc_supported,
+                                     bool controller_sc_supported);
+bool btm_sec_is_enc_algo_downgrade(uint16_t hci_handle, bool host_sc_supported,
+                                   bool controller_sc_supported);
 bool btm_sec_is_session_key_size_downgrade(uint16_t hci_handle, uint8_t key_size);
 void btm_sec_update_session_key_size(uint16_t hci_handle, uint8_t key_size);
 
@@ -48,3 +48,4 @@ void BTM_update_version_info(const RawAddress& bd_addr,
 const char* btm_pair_state_descr(tBTM_PAIRING_STATE state);
 
 bool is_autonomous_repairing_supported();
+void set_autonomous_repairing_supported(bool platform_support_autonomous_repairing_initiation);

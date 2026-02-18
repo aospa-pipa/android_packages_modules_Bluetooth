@@ -67,6 +67,7 @@ import android.bluetooth.IBluetoothQualityReportReadyCallback;
 import android.bluetooth.IBluetoothSocketManager;
 import android.bluetooth.IncomingRfcommSocketInfo;
 import android.bluetooth.OobData;
+import android.bluetooth.State;
 import android.content.AttributionSource;
 import android.os.Binder;
 import android.os.Bundle;
@@ -82,6 +83,7 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_scan.ScanUtil;
+import com.android.bluetooth.metrics.MetricsLogger;
 
 import libcore.util.SneakyThrow;
 
@@ -111,7 +113,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         mService = svc;
     }
 
-    public AdapterService getService() {
+    private AdapterService getService() {
         if (!mService.isAvailable()) {
             return null;
         }
@@ -257,7 +259,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
                 .post(
                         () ->
                                 future.complete(
-                                        service.getState() == BluetoothAdapter.STATE_ON
+                                        service.getState() == State.ON
                                                 && service.setScanMode(mode, logCaller)));
         return future.join() ? BluetoothStatusCodes.SUCCESS : BluetoothStatusCodes.ERROR_UNKNOWN;
     }
@@ -476,7 +478,8 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
         DeviceProperties deviceProp = service.getRemoteDevices().getDeviceProperties(device);
 
-        if (!Utils.isBluetoothPairingHardeningSupported() || !bondingInitiator(deviceProp, source)) {
+        if (!Utils.isBluetoothPairingHardeningSupported()
+                || !bondingInitiator(deviceProp, source)) {
             service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         }
 
@@ -672,7 +675,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     }
 
     @Override
-    //TODO: remove SuppressWarnings as part of gattConnSettings flag removal
+    // TODO: remove SuppressWarnings as part of gattConnSettings flag removal
     @SuppressWarnings("MissingOrMismatchedRequiresPermissionAnnotation")
     public int connectAllEnabledProfiles(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
@@ -768,6 +771,40 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             SneakyThrow.sneakyThrow(e);
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public int disconnectAllAcl(BluetoothDevice device, AttributionSource source) {
+        requireNonNull(device);
+        AdapterService service = getService();
+        if (service == null) {
+            return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED;
+        }
+        if (!callerIsSystemOrActiveOrManagedUser(service, TAG, "disconnectAllAcl")) {
+            return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED;
+        }
+        if (!enforceConnectPermissionForDataDelivery(service, source, TAG, "disconnectAllAcl")) {
+            return BluetoothStatusCodes.ERROR_MISSING_BLUETOOTH_CONNECT_PERMISSION;
+        }
+
+        if (!Flags.gattConnSettings()) {
+            service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
+        } else {
+            Utils.enforceCdmAssociationIfNotBluetoothPrivileged(
+                    service, service.getCompanionDeviceManager(), source, device);
+        }
+
+        Log.i(
+                TAG,
+                "disconnectAllAcl: device="
+                        + device
+                        + ", from "
+                        + getUidPidString()
+                        + " packageName:"
+                        + source.getPackageName());
+
+        return service.disconnectAllAcl(
+                device, BluetoothStatusCodes.ERROR_DISCONNECT_REASON_USER_REQUEST);
     }
 
     @Override
@@ -994,7 +1031,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         return service.getNative()
                 .sspReply(
                         getBytesFromAddress(device.getAddress()),
-                        AbstractionLayer.BT_SSP_VARIANT_PASSKEY_CONFIRMATION,
+                        AbstractionLayer.BT_PAIRING_VARIANT_PASSKEY_CONFIRMATION,
                         accept,
                         0);
     }
@@ -1881,7 +1918,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
 
         if (Flags.mainlineBetaStorage()) {
-            if (!Utils.arrayContains(service.getBondedDevices(), device)) {
+            if (!Util.arrayContains(service.getBondedDevices(), device)) {
                 return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
             }
             service.setActiveAudioPolicy(device, policy);
@@ -1932,7 +1969,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
 
         if (Flags.mainlineBetaStorage()) {
-            if (!Utils.arrayContains(service.getBondedDevices(), device)) {
+            if (!Util.arrayContains(service.getBondedDevices(), device)) {
                 return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
             }
             service.setMicrophonePreferredForCalls(device, enabled);

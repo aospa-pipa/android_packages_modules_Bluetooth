@@ -102,20 +102,6 @@ public:
                  continuation_number, supervision_timeout);
   }
 
-  void OnEncryptionChangeV3(hci::ErrorCode hci_status, uint8_t encr_enable,
-                                    uint8_t key_size, uint8_t mic_length, uint8_t key_sched_enabled,
-                                    uint8_t key_sched_debug_flag) override {
-    SAVE_OR_CALL(OnEncryptionChangeV3, hci_status, encr_enable, key_size, mic_length,
-                 key_sched_enabled, key_sched_debug_flag);
-  }
-
-  void OnEncryptionKeyRefreshCompleteV2(hci::ErrorCode hci_status, uint8_t mic_length,
-                                        uint8_t key_sched_enabled,
-                                        uint8_t key_sched_debug_flag) override {
-    SAVE_OR_CALL(OnEncryptionKeyRefreshCompleteV2, hci_status, mic_length, key_sched_enabled,
-                key_sched_debug_flag);
-  }
-
   void OnDisconnection(ErrorCode reason) override { SAVE_OR_CALL(OnDisconnection, reason); }
 #undef SAVE_OR_CALL
 
@@ -137,7 +123,10 @@ struct LeAclConnection::impl {
     invalidate_callbacks_ = std::move(invalidate_callbacks);
     return &tracker;
   }
-  void ClearEventCallbacks() { invalidate_callbacks_ = nullptr; }
+  void ClearEventCallbacks() {
+    invalidate_callbacks_ = nullptr;
+    tracker.queued_callbacks_.clear();
+  }
   void PutEventCallbacks() {
     if (invalidate_callbacks_) {
       invalidate_callbacks_(tracker.connection_handle_);
@@ -239,6 +228,10 @@ void LeAclConnection::OnLeSubrateRequestStatus(CommandStatusView status) {
   auto hci_status = subrate_request_status.GetStatus();
   if (hci_status != ErrorCode::SUCCESS) {
     log::info("LeSubrateRequest status {}", ErrorCodeText(hci_status));
+    if (hci_status == ErrorCode::UNKNOWN_CONNECTION) {
+      log::warn("Link has not existed");
+      return;
+    }
     pimpl_->tracker.OnLeSubrateChange(hci_status, 0, 0, 0, 0);
   }
 }

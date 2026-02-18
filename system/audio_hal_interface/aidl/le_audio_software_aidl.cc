@@ -391,7 +391,9 @@ static void flush_broadcast_sink() {
 
 static bool is_broadcaster_session(SessionType session_type) {
   return session_type == SessionType::LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_ENCODING_DATAPATH ||
-         session_type == SessionType::LE_AUDIO_BROADCAST_SOFTWARE_ENCODING_DATAPATH;
+         session_type == SessionType::LE_AUDIO_BROADCAST_SOFTWARE_ENCODING_DATAPATH ||
+         session_type == SessionType::LE_AUDIO_BROADCAST_HARDWARE_OFFLOAD_DECODING_DATAPATH ||
+         session_type == SessionType::LE_AUDIO_BROADCAST_SOFTWARE_DECODING_DATAPATH;
 }
 
 bool is_aidl_v4plus() {
@@ -490,7 +492,7 @@ void LeAudioSinkTransport::SetBluetoothRequestStateUnsafe(BluetoothRequest reque
   transport_->SetBluetoothRequestStateUnsafe(request, state);
 }
 
-void flush_source() {
+static void flush_unicast_source() {
   if (LeAudioSourceTransport::interface_unicast_ == nullptr) {
     return;
   }
@@ -498,10 +500,19 @@ void flush_source() {
   LeAudioSourceTransport::interface_unicast_->FlushAudioData();
 }
 
+static void flush_broadcast_source() {
+  if (LeAudioSourceTransport::interface_broadcast_ == nullptr) {
+    return;
+  }
+
+  LeAudioSourceTransport::interface_broadcast_->FlushAudioData();
+}
+
 LeAudioSourceTransport::LeAudioSourceTransport(SessionType session_type, StreamCallbacks stream_cb)
     : IBluetoothSourceTransportInstance(session_type, (AudioConfiguration){}) {
-  transport_ = new LeAudioTransport(flush_source, std::move(stream_cb),
-                                    {16000, ChannelMode::STEREO, 16, 0});
+  transport_ = new LeAudioTransport(
+          is_broadcaster_session(session_type) ? flush_broadcast_source : flush_unicast_source,
+          std::move(stream_cb), {16000, ChannelMode::STEREO, 16, 0});
 }
 
 LeAudioSourceTransport::~LeAudioSourceTransport() { delete transport_; }
@@ -559,6 +570,15 @@ void LeAudioSourceTransport::LeAudioSetSelectedHalPcmConfig(uint32_t sample_rate
                                                             uint32_t data_interval) {
   transport_->LeAudioSetSelectedHalPcmConfig(sample_rate_hz, bit_rate, channels_count,
                                              data_interval);
+}
+
+void LeAudioSourceTransport::LeAudioSetBroadcastConfig(
+        const ::bluetooth::le_audio::broadcast_offload_config& offload_config) {
+  transport_->LeAudioSetBroadcastConfig(offload_config);
+}
+
+const LeAudioBroadcastConfiguration& LeAudioSourceTransport::LeAudioGetBroadcastConfig() {
+  return transport_->LeAudioGetBroadcastConfig();
 }
 
 bool LeAudioSourceTransport::IsRequestCompletedAfterUpdate(

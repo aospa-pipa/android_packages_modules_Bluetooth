@@ -225,10 +225,8 @@ void bta_dm_sdp_callback(const RawAddress& /* bd_addr */, tSDP_STATUS sdp_status
 
   if (bta_dm_discovery_get_state() == BTA_DM_DISCOVER_IDLE || !sdp_pending ||
       !bta_dm_discovery_cb.sdp_state) {
-    if (com_android_bluetooth_flags_sdp_reset_transport_status_if_disconnect()) {
-      log::info("Clearing transport mask (was: 0x{:02x})", bta_dm_discovery_cb.transports);
-      bta_dm_discovery_cb.transports &= ~BT_TRANSPORT_BR_EDR;
-    }
+    log::info("Clearing transport mask (was: 0x{:02x})", bta_dm_discovery_cb.transports);
+    bta_dm_discovery_cb.transports &= ~BT_TRANSPORT_BR_EDR;
     return;
   }
 
@@ -299,8 +297,7 @@ static void bta_dm_disc_result(tBTA_DM_SVC_RES& disc_result) {
       // Some devices provide PPCP values that are incompatible with the device-side firmware.
       log::info("disable PPCP read: interop matched name {} address {}", remote_name,
                 bta_dm_discovery_cb.peer_bdaddr);
-    } else if (!com_android_bluetooth_flags_read_ppcp_only_for_success() ||
-               disc_result.result == BTA_SUCCESS) {
+    } else if (disc_result.result == BTA_SUCCESS) {
       log::info("reading PPCP");
       GAP_BleReadPeerPrefConnParams(bta_dm_discovery_cb.peer_bdaddr);
     }
@@ -366,13 +363,10 @@ static void bta_dm_execute_queued_discovery_request() {
  *
  ******************************************************************************/
 static tBT_TRANSPORT bta_dm_determine_discovery_transport(const RawAddress& remote_bd_addr) {
-  tBT_DEVICE_TYPE dev_type;
-  tBLE_ADDR_TYPE addr_type;
-
-  get_btm_client_interface().peer.BTM_ReadDevInfo(remote_bd_addr, &dev_type, &addr_type);
-  if (dev_type == BT_DEVICE_TYPE_BLE || addr_type == BLE_ADDR_RANDOM) {
+  auto dev_info = get_btm_client_interface().peer.BTM_ReadDevInfo(remote_bd_addr);
+  if (dev_info.device_type == BT_DEVICE_TYPE_BLE || dev_info.addr_type == BLE_ADDR_RANDOM) {
     return BT_TRANSPORT_LE;
-  } else if (dev_type == BT_DEVICE_TYPE_DUMO) {
+  } else if (dev_info.device_type == BT_DEVICE_TYPE_DUMO) {
     if (get_btm_client_interface().peer.BTM_IsAclConnectionUp(remote_bd_addr,
                                                               BT_TRANSPORT_BR_EDR)) {
       return BT_TRANSPORT_BR_EDR;
@@ -638,29 +632,10 @@ static void bta_dm_start_gatt_discovery(const RawAddress& bd_addr) {
     return;
   }
 
-  if (com_android_bluetooth_flags_gatt_discovery_is_non_opportunistic_client()) {
-    /* GATT Discovery always uses non oportunistic direct connected */
-    log::debug(" {} , transport:{}", bd_addr, bt_transport_text(BT_TRANSPORT_LE));
-    get_gatt_interface().BTA_GATTC_Open(bta_dm_discovery_cb.client_if, bd_addr,
-                                        BTM_BLE_DIRECT_CONNECTION, false, 0, false);
-  } else {
-    bool kUseOpportunistic = true;
-    if (get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
-      log::debug(
-              "Use existing gatt client connection for discovery peer:{} "
-              "transport:{} opportunistic:{:c}",
-              bd_addr, bt_transport_text(BT_TRANSPORT_LE), (kUseOpportunistic) ? 'T' : 'F');
-      get_gatt_interface().BTA_GATTC_Open(bta_dm_discovery_cb.client_if, bd_addr,
-                                          BTM_BLE_DIRECT_CONNECTION, kUseOpportunistic, 0, false);
-    } else {
-      log::debug(
-              "Opening new gatt client connection for discovery peer:{} "
-              "transport:{} opportunistic:{:c}",
-              bd_addr, bt_transport_text(BT_TRANSPORT_LE), (!kUseOpportunistic) ? 'T' : 'F');
-      get_gatt_interface().BTA_GATTC_Open(bta_dm_discovery_cb.client_if, bd_addr,
-                                          BTM_BLE_DIRECT_CONNECTION, !kUseOpportunistic, 0, false);
-    }
-  }
+  /* GATT Discovery always uses non oportunistic direct connected */
+  log::debug(" {} , transport:{}", bd_addr, bt_transport_text(BT_TRANSPORT_LE));
+  get_gatt_interface().BTA_GATTC_Open(bta_dm_discovery_cb.client_if, bd_addr,
+                                      BTM_BLE_DIRECT_CONNECTION, false, 0, false);
 }
 
 /*******************************************************************************

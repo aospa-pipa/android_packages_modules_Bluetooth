@@ -12,10 +12,10 @@ flag {
 }
 
 flag {
-    name: "ble_rnr_when_connected"
+    name: "gd_conn_mgr_one_timeout"
     namespace: "bluetooth"
-    description: "If non-connectable, still read remote name if already connected"
-    bug: "411705040"
+    description: "Have just one timer for connection manager direct connections"
+    bug: "481287758"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

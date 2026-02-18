@@ -742,7 +742,7 @@ public final class ScanFilter implements Parcelable {
 
     @Override
     public String toString() {
-        return ("BluetoothLeScanFilter [mDeviceName=" + mDeviceName)
+        return ("BluetoothLeScanFilter[mDeviceName=" + mDeviceName)
                 + (", mDeviceAddress=" + mDeviceAddress)
                 + (", mUuid=" + mServiceUuid)
                 + (", mUuidMask=" + mServiceUuidMask)

@@ -62,7 +62,7 @@
 #include "os/thread.h"
 #include "packet/packet_view.h"
 #include "stack/btm/btm_int_types.h"
-#include "stack/btm/btm_sec_cb.h"
+#include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
@@ -83,7 +83,7 @@ namespace test = bluetooth::hci::testing;
 
 tL2C_CB l2cb;
 tBTM_CB btm_cb;
-tBTM_SEC_CB btm_sec_cb;
+BtmSecurity btm_sec_cb;
 btif_hh_cb_t btif_hh_cb;
 
 namespace {
@@ -195,8 +195,6 @@ shim::acl_interface_t acl_interface{
         .link.le.on_parameter_update_request = nullptr,
         .link.le.on_data_length_change = nullptr,
         .link.le.on_read_remote_version_information_complete = nullptr,
-        .link.le.on_encryption_change_v3 = nullptr,
-        .link.le.on_encryption_key_refresh_complete_v2 = nullptr,
         .link.le.read_tx_data_length = nullptr,
 };
 

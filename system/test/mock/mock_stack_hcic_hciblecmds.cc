@@ -62,6 +62,8 @@ struct btsnd_hcic_ble_set_big_channel_map_classification_vsc
         btsnd_hcic_ble_set_big_channel_map_classification_vsc;
 struct btsnd_hcic_ble_big_create_sync btsnd_hcic_ble_big_create_sync;
 struct btsnd_hcic_ble_big_terminate_sync btsnd_hcic_ble_big_terminate_sync;
+struct btsnd_hcic_ble_accept_cis_req btsnd_hcic_ble_accept_cis_req;
+struct btsnd_hcic_ble_reject_cis_req btsnd_hcic_ble_reject_cis_req;
 struct btsnd_hci_ble_set_default_phy btsnd_hci_ble_set_default_phy;
 struct btsnd_hcic_le_set_hdt_default_parameters btsnd_hcic_le_set_hdt_default_parameters;
 struct btsnd_hcic_ble_start_enc_v2 btsnd_hcic_ble_start_enc_v2;
@@ -240,13 +242,25 @@ void btsnd_hcic_ble_big_terminate_sync(uint8_t big_handle,
   test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_big_terminate_sync(big_handle, std::move(cb));
 }
 
+void btsnd_hcic_ble_accept_cis_req(uint16_t cis_conn_handle) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_accept_cis_req(cis_conn_handle);
+}
+
+void btsnd_hcic_ble_reject_cis_req(uint16_t cis_conn_handle, uint8_t reason,
+                                   base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
+  inc_func_call_count(__func__);
+  test::mock::stack_hcic_hciblecmds::btsnd_hcic_ble_reject_cis_req(cis_conn_handle, reason,
+                                                                   std::move(cb));
+}
+
 void btsnd_hci_ble_set_default_phy(uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys) {
   inc_func_call_count(__func__);
   test::mock::stack_hcic_hciblecmds::btsnd_hci_ble_set_default_phy(all_phys, tx_phys, rx_phys);
 }
 void btsnd_hcic_le_set_hdt_default_parameters(uint8_t preferred_mic_length,
                                               uint8_t preferred_packet_format,
-                                              uint8_t preferred_acl_rates) {
+                                              uint16_t preferred_acl_rates) {
   inc_func_call_count(__func__);
   test::mock::stack_hcic_hciblecmds::btsnd_hcic_le_set_hdt_default_parameters(
           preferred_mic_length, preferred_packet_format, preferred_acl_rates);

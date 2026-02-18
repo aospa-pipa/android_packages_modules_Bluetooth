@@ -384,8 +384,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
       break;
     // RFCOMM connected or failed to connect
     case BTA_AG_OPEN_EVT:
-      if (com_android_bluetooth_flags_fix_hfp_rfcomm_collision_state_machine_error() &&
-          p_data->open.status != BTA_AG_SUCCESS) {
+      if (p_data->open.status != BTA_AG_SUCCESS) {
         RawAddress current_bda = p_data->open.bd_addr;  // Get address from event data
 
         // Check if another connection to the same device is already established, both sides may
@@ -517,7 +516,7 @@ static void btif_hf_upstreams_evt(uint16_t event, char* p_param) {
 
         bluetooth::metrics::Counter(bluetooth::metrics::CounterKey::HFP_SELF_INITIATED_AG_FAILED);
         btif_queue_advance();
-        if (BTM_IsBonded(connected_bda)) {
+        if (get_btm_client_interface().security.BTM_IsBonded(connected_bda, BT_TRANSPORT_AUTO)) {
           DEVICE_IOT_CONFIG_ADDR_INT_ADD_ONE(connected_bda, IOT_CONF_KEY_HFP_SLC_CONN_FAIL_COUNT);
         }
       }

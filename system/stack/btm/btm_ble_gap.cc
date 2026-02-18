@@ -58,7 +58,7 @@
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
-#include "stack/btm/btm_sec_cb.h"
+#include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/acl_api.h"
@@ -834,7 +834,7 @@ tBTM_STATUS btm_ble_start_inquiry(uint8_t duration) {
  ******************************************************************************/
 static void btm_ble_read_remote_name_cmpl(bool status, const RawAddress& bda, uint16_t length,
                                           char* p_name) {
-  if (!stack_manager_get_interface()->get_stack_is_running()) {
+  if (!stack_is_running()) {
     log::warn("stack is not running");
     return;
   }
@@ -870,8 +870,7 @@ tBTM_STATUS btm_ble_read_remote_name(const RawAddress& remote_bda, tBTM_NAME_CMP
 
   tINQ_DB_ENT* p_i = btm_inq_db_find(remote_bda);
   if (p_i && !ble_evt_type_is_connectable(p_i->inq_info.results.ble_evt_type)) {
-    if (com_android_bluetooth_flags_ble_rnr_when_connected() &&
-        BTM_IsAclConnectionUp(remote_bda, BT_TRANSPORT_LE)) {
+    if (BTM_IsAclConnectionUp(remote_bda, BT_TRANSPORT_LE)) {
       log::verbose("name request to non-connectable device, but already connected");
     } else {
       log::verbose("name request to non-connectable device failed.");
@@ -1149,7 +1148,8 @@ static void btm_ble_update_inq_result(tINQ_DB_ENT* p_i, uint8_t addr_type,
       local_flag = 0;
     }
     if (has_advertising_flags && (local_flag & BTM_BLE_BREDR_NOT_SPT) == 0) {
-      if (p_cur->ble_addr_type != BLE_ADDR_RANDOM) {
+      if (com_android_bluetooth_flags_unify_device_type_verification_logic() ||
+          p_cur->ble_addr_type != BLE_ADDR_RANDOM) {
         log::verbose("NOT_BR_EDR support bit not set, treat device as DUMO");
         p_cur->device_type |= BT_DEVICE_TYPE_DUMO;
       } else {
@@ -1525,15 +1525,20 @@ void btm_ble_process_adv_pkt_cont_for_inquiry(uint16_t evt_type, tBLE_ADDR_TYPE 
                                               uint16_t periodic_adv_int,
                                               std::vector<uint8_t> advertising_data) {
   bool update = true;
-
   bool include_rsi = false;
+
   uint8_t len;
+  const uint8_t* p_flag =
+          AdvertiseDataParser::GetFieldByType(advertising_data, BTM_BLE_AD_TYPE_FLAG, &len);
+
+  if (len != 1) {
+    log::warn("Dropping bad advertising packet from {}: len={}", bda, len);
+    return;
+  }
+
   if (AdvertiseDataParser::GetFieldByType(advertising_data, BTM_BLE_AD_TYPE_RSI, &len)) {
     include_rsi = true;
   }
-
-  const uint8_t* p_flag =
-          AdvertiseDataParser::GetFieldByType(advertising_data, BTM_BLE_AD_TYPE_FLAG, &len);
 
   tINQ_DB_ENT* p_i = btm_inq_db_find(bda);
 

@@ -106,15 +106,17 @@ void BTA_DmAddBleDevice(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
   inc_func_call_count(__func__);
   test::mock::bta_dm_api::BTA_DmAddBleDevice(bd_addr, addr_type, dev_type);
 }
-void BTA_DmAddBleKey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-                     tBTM_LE_KEY_TYPE key_type) {
+void BTA_DmAddBleKey(const RawAddress& bd_addr, const PairingType& pairing_type,
+                     tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& le_key) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_api::BTA_DmAddBleKey(bd_addr, p_le_key, key_type);
+  test::mock::bta_dm_api::BTA_DmAddBleKey(bd_addr, pairing_type, key_type, le_key);
 }
-void BTA_DmAddDevice(RawAddress bd_addr, DEV_CLASS dev_class, LinkKey link_key, uint8_t key_type,
+void BTA_DmAddDevice(const RawAddress& bd_addr, const DEV_CLASS& dev_class,
+                     const PairingType& pairing_type, const LinkKey& link_key, uint8_t key_type,
                      uint8_t pin_length) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_api::BTA_DmAddDevice(bd_addr, dev_class, link_key, key_type, pin_length);
+  test::mock::bta_dm_api::BTA_DmAddDevice(bd_addr, dev_class, pairing_type, link_key, key_type,
+                                          pin_length);
 }
 void BTA_DmAllowWakeByHid(std::vector<RawAddress> classic_hid_devices,
                           std::vector<std::pair<RawAddress, uint8_t>> le_hid_devices) {
@@ -170,10 +172,9 @@ void BTA_DmBleUpdateConnectionParams(const RawAddress& bd_addr, uint16_t min_int
   test::mock::bta_dm_api::BTA_DmBleUpdateConnectionParams(bd_addr, min_int, max_int, latency,
                                                           timeout, min_ce_len, max_ce_len);
 }
-void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                tBT_DEVICE_TYPE device_type) {
+void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_api::BTA_DmBond(bd_addr, addr_type, transport, device_type);
+  test::mock::bta_dm_api::BTA_DmBond(bd_addr, addr_type, transport);
 }
 void BTA_DmBondCancel(const RawAddress& bd_addr) {
   inc_func_call_count(__func__);

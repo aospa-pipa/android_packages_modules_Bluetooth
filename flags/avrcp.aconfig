@@ -29,16 +29,6 @@ flag {
 }
 
 flag {
-    name: "implement_get_image_from_descriptor_for_cover_art"
-    namespace: "bluetooth"
-    description: "Implement getImage from descriptor for cover art in AVRCP for IOP, some devices request image not 200*200"
-    bug: "427472266"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "use_returned_absolute_volume"
     namespace: "bluetooth"
     description: "Use the volume returned in an accepted SetAbsoluteVolume command"
@@ -83,4 +73,21 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "impl_avrcp_bip_obex_abort"
+    namespace: "bluetooth"
+    description: "Implemented mandatory abort command for AvrcpBipObexServer"
+    bug: "475741322"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "no_avrcp_connection_delay"
+    namespace: "bluetooth"
+    description: "Remove the fixed delay for AVRCP connection"
+    bug: "475410182"
 }

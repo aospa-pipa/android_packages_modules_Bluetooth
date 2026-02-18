@@ -43,7 +43,6 @@
 #include "main/shim/entry.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_ble_sec.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_int_types.h"
@@ -55,6 +54,7 @@
 #include "stack/include/btm_ble_api_types.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_log_history.h"
+#include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/l2cap_acl_interface.h"
 #include "stack/include/l2cap_controller_interface.h"
@@ -216,20 +216,18 @@ bool l2cble_conn_comp(uint16_t handle, tHCI_ROLE role, const RawAddress& bda,
   p_lcb->latency = conn_latency;
   p_lcb->SetPeriphLatency(conn_latency);
   p_lcb->conn_update_mask = L2C_BLE_NOT_DEFAULT_PARAM;
-  if (com_android_bluetooth_flags_initial_conn_params_p1()) {
-    uint16_t min_conn_interval_aggressive = LeConnectionParameters::GetMinConnIntervalAggressive();
-    uint16_t max_conn_interval_aggressive = LeConnectionParameters::GetMaxConnIntervalAggressive();
+  uint16_t min_conn_interval_aggressive = LeConnectionParameters::GetMinConnIntervalAggressive();
+  uint16_t max_conn_interval_aggressive = LeConnectionParameters::GetMaxConnIntervalAggressive();
 
-    stack::l2cap::get_interface().L2CA_AdjustConnectionIntervals(
-            &min_conn_interval_aggressive, &max_conn_interval_aggressive, BTM_BLE_CONN_INT_MIN);
+  stack::l2cap::get_interface().L2CA_AdjustConnectionIntervals(
+          &min_conn_interval_aggressive, &max_conn_interval_aggressive, BTM_BLE_CONN_INT_MIN);
 
-    bool is_aggressive_initial_param = conn_interval <= max_conn_interval_aggressive;
-    log::info("conn_interval={}, max_conn_interval_aggressive={}, is_aggressive_initial_param={}",
-              conn_interval, max_conn_interval_aggressive, is_aggressive_initial_param);
+  bool is_aggressive_initial_param = conn_interval <= max_conn_interval_aggressive;
+  log::info("conn_interval={}, max_conn_interval_aggressive={}, is_aggressive_initial_param={}",
+            conn_interval, max_conn_interval_aggressive, is_aggressive_initial_param);
 
-    if (is_aggressive_initial_param) {
-      p_lcb->conn_update_mask |= L2C_BLE_AGGRESSIVE_INITIAL_PARAM;
-    }
+  if (is_aggressive_initial_param) {
+    p_lcb->conn_update_mask |= L2C_BLE_AGGRESSIVE_INITIAL_PARAM;
   }
 
   p_lcb->conn_update_blocked_by_profile_connection = false;
@@ -413,9 +411,7 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
             p_lcb->latency = latency;
             p_lcb->timeout = timeout;
             p_lcb->conn_update_mask |= L2C_BLE_NEW_CONN_PARAM;
-            if (com::android::bluetooth::flags::initial_conn_params_p1()) {
-              p_lcb->conn_update_mask &= ~L2C_BLE_AGGRESSIVE_INITIAL_PARAM;
-            }
+            p_lcb->conn_update_mask &= ~L2C_BLE_AGGRESSIVE_INITIAL_PARAM;
             l2cble_start_conn_update(p_lcb);
           }
         }
@@ -912,50 +908,24 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
                 p_ccb->remote_cid, p_ccb->peer_conn_cfg.mtu, p_ccb->peer_conn_cfg.mps,
                 p_ccb->peer_conn_cfg.credits, con_info.l2cap_result);
 
-        if (com_android_bluetooth_flags_check_l2c_conn_status_before_param_validation()) {
-          if (con_info.l2cap_result ==
-              static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_CONN_OK)) {
-            if (validate_l2cap_params(p_ccb->peer_conn_cfg.mtu, p_ccb->peer_conn_cfg.mps)) {
-              p_ccb->tx_mps = p_ccb->peer_conn_cfg.mps;
-              p_ccb->ble_sdu = NULL;
-              p_ccb->ble_sdu_length = 0;
-              p_ccb->is_first_seg = true;
-              p_ccb->peer_cfg.fcr.mode = L2CAP_FCR_LE_COC_MODE;
-              l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP, &con_info);
-            } else {
-              con_info.l2cap_result =
-                      static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_NO_RESOURCES);
-              l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP_NEG, &con_info);
-              break;
-            }
+        if (con_info.l2cap_result ==
+            static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_CONN_OK)) {
+          if (validate_l2cap_params(p_ccb->peer_conn_cfg.mtu, p_ccb->peer_conn_cfg.mps)) {
+            p_ccb->tx_mps = p_ccb->peer_conn_cfg.mps;
+            p_ccb->ble_sdu = NULL;
+            p_ccb->ble_sdu_length = 0;
+            p_ccb->is_first_seg = true;
+            p_ccb->peer_cfg.fcr.mode = L2CAP_FCR_LE_COC_MODE;
+            l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP, &con_info);
           } else {
-            l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP_NEG, &con_info);
-            break;
-          }
-        } else {
-          /* validate the parameters */
-          if (p_ccb->peer_conn_cfg.mtu < L2CAP_LE_MIN_MTU ||
-              p_ccb->peer_conn_cfg.mps < L2CAP_LE_MIN_MPS ||
-              p_ccb->peer_conn_cfg.mps > L2CAP_LE_MAX_MPS) {
-            log::error("L2CAP invalid params");
             con_info.l2cap_result =
                     static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_NO_RESOURCES);
             l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP_NEG, &con_info);
             break;
           }
-
-          p_ccb->tx_mps = p_ccb->peer_conn_cfg.mps;
-          p_ccb->ble_sdu = NULL;
-          p_ccb->ble_sdu_length = 0;
-          p_ccb->is_first_seg = true;
-          p_ccb->peer_cfg.fcr.mode = L2CAP_FCR_LE_COC_MODE;
-
-          if (con_info.l2cap_result ==
-              static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_CONN_OK)) {
-            l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP, &con_info);
-          } else {
-            l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP_NEG, &con_info);
-          }
+        } else {
+          l2c_csm_execute(p_ccb, L2CEVT_L2CAP_CONNECT_RSP_NEG, &con_info);
+          break;
         }
       } else {
         log::verbose("I DO NOT remember the connection req");
@@ -1427,7 +1397,7 @@ static void l2cble_sec_comp(RawAddress bda, tBT_TRANSPORT transport, void* /* p_
       osi_free(p_buf);
     } else {
       if (sec_act == BTM_SEC_ENCRYPT_MITM) {
-        if (BTM_IsLinkKeyAuthed(bda, transport)) {
+        if (btm_is_link_key_authed(bda, transport)) {
           (*(p_buf->p_callback))(bda, BT_TRANSPORT_LE, p_buf->p_ref_data, btm_status);
         } else {
           log::verbose("MITM Protection Not present");
@@ -1502,8 +1472,8 @@ tL2CAP_LE_RESULT_CODE l2ble_sec_access_req(const RawAddress& bd_addr, uint16_t p
   p_buf->p_callback = p_callback;
   p_buf->p_ref_data = p_ref_data;
   fixed_queue_enqueue(p_lcb->le_sec_pending_q, p_buf);
-  tBTM_STATUS result =
-          btm_ble_start_sec_check(bd_addr, psm, is_originator, &l2cble_sec_comp, p_ref_data);
+  tBTM_STATUS result = get_btm_client_interface().security.BTM_BleStartSecCheck(
+          bd_addr, psm, is_originator, &l2cble_sec_comp, p_ref_data);
 
   switch (result) {
     case tBTM_STATUS::BTM_SUCCESS:

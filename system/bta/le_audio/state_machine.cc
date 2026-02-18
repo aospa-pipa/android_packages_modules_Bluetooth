@@ -536,7 +536,16 @@ public:
         if (group->IsConfiguredForContext(context_type)) {
           if (group->Activate(context_type, metadata_context_types, ccid_lists)) {
             SetTargetState(group, AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING);
-
+            if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+              if (group->cig.GetState() == CigState::CREATED) {
+                if (PrepareAndSendQoSToTheGroup(group)) {
+                  return true;
+                }
+                ClearGroup(group, true);
+                return false;
+              }
+              group->cig.GenerateCisIds(context_type);
+            }
             if (CigCreate(group)) {
               return true;
             }
@@ -554,7 +563,7 @@ public:
         /* We are going to reconfigure whole group. Clear Cises.*/
         ReleaseCisIds(group);
 
-        /* If configuration is needed */
+        /* If configuration is needed but for sure CIG does not exist at this moment */
         [[fallthrough]];
 
       case AseState::BTA_LE_AUDIO_ASE_STATE_IDLE:
@@ -563,7 +572,16 @@ public:
           return false;
         }
 
-        group->cig.GenerateCisIds(context_type);
+        /* We are here only when CIG exists in idle state which might be due to controller
+         * misbehavior */
+        if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig() &&
+            group->cig.GetState() == CigState::CREATED) {
+          log::warn("Cig is created for group_id: {}", group->group_id_);
+          group->cig.PrintCigState();
+        } else {
+          group->cig.GenerateCisIds(context_type);
+        }
+
         /* All ASEs should aim to achieve target state */
         SetTargetState(group, AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING);
         if (!PrepareAndSendCodecConfigToTheGroup(group)) {
@@ -611,7 +629,9 @@ public:
             log::info("Need to reconfigure CIG as something has changed.");
 
             ReleaseCisIds(group);
-            group->cig.GenerateCisIds(context_type);
+            if (!com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+              group->cig.GenerateCisIds(context_type);
+            }
 
             wait_for_cig_removal = true;
 
@@ -1057,7 +1077,7 @@ public:
     /* Above flags to ensure HCI Config data path sent only once for Tx only
      * OR Rx only OR Tx/Rx both based on cis type direction
      */
-    for (struct bluetooth::le_audio::types::cis& cis : group->cig.cises) {
+    for (const struct bluetooth::le_audio::types::cis& cis : group->cig.GetCises()) {
       if (!CodecManager::GetInstance()->IsUsingCodecExtensibility()) {
         if (cis.type == bluetooth::le_audio::types::CisType::CIS_TYPE_BIDIRECTIONAL) {
           if (!config_host_to_controller_sent) {
@@ -1132,8 +1152,10 @@ public:
     }
     if (!osi_property_get_bool("persist.vendor.qcom.bluetooth.vsc_enabled", false)) {
       send_vs_cmd(static_cast<uint16_t>(group->GetConfigurationContextType()),
-        cig_id, group->cig.cises.size(), conn_handles, group->IsLeXDevice());
+        cig_id, group->cig.GetCises().size(), conn_handles, group->IsLeXDevice());
     }
+    /* No need to handle return here. If QoS fails, PrepareAndSendQoSToTheGroup will handle the
+     * error path. */
     PrepareAndSendQoSToTheGroup(group);
   }
 
@@ -1149,8 +1171,14 @@ public:
               group->group_id_, StateMachineInvalidStatus::FAILED_TO_CREATE_CIG);
       return;
     }
+
     log::info("Succeed on CIG Recover - back to creating CIG");
     if (!CigCreate(group)) {
+      if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+        /* If CIG recovery did not succeed let's clear cig.cises. */
+        group->cig.ClearCisIds();
+      }
+
       log::error("Could not create CIG. Stop the stream for group {}", group->group_id_);
       state_machine_callbacks_->OnStateMachineInvalidStatusCb(
               group->group_id_, StateMachineInvalidStatus::FAILED_TO_CREATE_CIG);
@@ -1165,6 +1193,9 @@ public:
                  group->group_id_, status, ToString(group->cig.GetState()));
       return;
     }
+    if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+      group->cig.ClearCisIds();
+    }
     group->cig.SetState(CigState::NONE);
   }
 
@@ -1176,6 +1207,11 @@ public:
       state_machine_callbacks_->OnStateMachineInvalidStatusCb(
               group->group_id_, StateMachineInvalidStatus::FAILED_TO_REMOVE_CIG);
       return;
+    }
+
+    if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+      group->cig.ClearCisIds();
+      group->cig.GenerateCisIds(group->GetConfigurationContextType());
     }
 
     group->cig.SetState(CigState::NONE);
@@ -1361,6 +1397,10 @@ public:
       for (auto& ase : leAudioDevice->ases_) {
         ase.cis_id = bluetooth::le_audio::kInvalidCisId;
         ase.cis_conn_hdl = bluetooth::le_audio::kInvalidCisConnHandle;
+        if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+          ase.cis_state = CisState::IDLE;
+          ase.data_path_state = DataPathState::IDLE;
+        }
       }
       leAudioDevice = group->GetNextDevice(leAudioDevice);
     }
@@ -1545,9 +1585,7 @@ public:
                  common::ToString(codec));
 
     } else {
-      if (com_android_bluetooth_flags_dsa_use_codec_extensibility()) {
-        log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
-      }
+      log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
       switch (group->dsa_.mode) {
         case DsaMode::ISO_HW:
           data_path_id = bluetooth::hci::iso_manager::kIsoDataPathPlatformDefault;
@@ -1908,7 +1946,9 @@ public:
         }
 
         log::info("Lost all members from the group {}", group->group_id_);
-        group->cig.cises.clear();
+        if (!com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+          group->cig.ClearCisIds();
+        }
         RemoveCigForGroup(group);
 
         group->SetState(AseState::BTA_LE_AUDIO_ASE_STATE_IDLE);
@@ -2202,9 +2242,7 @@ private:
                     param.sdu_itv_stom, param.max_trans_lat_stom, it->max_sdu_size_stom,
                     it->rtn_stom);
           } else {
-            if (com_android_bluetooth_flags_dsa_use_codec_extensibility()) {
-              log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
-            }
+            log::warn("Fallback to static DSA configuration for group: {}", group->group_id_);
             param.sdu_itv_stom = bluetooth::le_audio::types::kLeAudioHeadtrackerSduItv;
             param.max_trans_lat_stom = bluetooth::le_audio::types::kLeAudioHeadtrackerMaxTransLat;
             it->max_sdu_size_stom = bluetooth::le_audio::types::kLeAudioHeadtrackerMaxSduSize;
@@ -2289,7 +2327,8 @@ private:
      * later, with active device/ASE(s), check if current configuration is
      * supported or not, if not, reconfigure CIG.
      */
-    for (struct bluetooth::le_audio::types::cis& cis : group->cig.cises) {
+    auto& cises = group->cig.GetCises();
+    for (const struct bluetooth::le_audio::types::cis& cis : cises) {
       uint16_t max_sdu_size_mtos_temp =
               group->GetMaxSduSize(bluetooth::le_audio::types::kLeAudioDirectionSink, cis.id);
       uint16_t max_sdu_size_stom_temp =
@@ -2305,7 +2344,7 @@ private:
       rtn_stom = rtn_stom_temp ? rtn_stom_temp : rtn_stom;
     }
 
-    for (struct bluetooth::le_audio::types::cis& cis : group->cig.cises) {
+    for (const struct bluetooth::le_audio::types::cis& cis : cises) {
       EXT_CIS_CFG cis_cfg = {};
 
       cis_cfg.cis_id = cis.id;
@@ -2357,10 +2396,30 @@ private:
                  sdu_interval_mtos, sdu_interval_stom, max_trans_lat_mtos, max_trans_lat_stom,
                  max_sdu_size_mtos, max_sdu_size_stom);
 
-    if ((sdu_interval_mtos == 0 && sdu_interval_stom == 0) ||
-        (max_trans_lat_mtos == bluetooth::le_audio::types::kMaxTransportLatencyMin &&
-         max_trans_lat_stom == bluetooth::le_audio::types::kMaxTransportLatencyMin) ||
-        (max_sdu_size_mtos == 0 && max_sdu_size_stom == 0)) {
+    /* Make sure, the parameters makes sense and CIG which is about to be created is useful in any
+     * sense. e.g. Any direction is enabled, there is no logical mistakes in the parameters.
+     */
+    bool no_direction_enabled_due_to_sdu_interval =
+            (sdu_interval_mtos == 0 && sdu_interval_stom == 0);
+    bool no_direction_enabled_due_max_latencies_setting =
+            (max_trans_lat_mtos == bluetooth::le_audio::types::kMaxTransportLatencyMin &&
+             max_trans_lat_stom == bluetooth::le_audio::types::kMaxTransportLatencyMin);
+    bool no_direction_enabled_due_max_sdu_sizes_zero =
+            (max_sdu_size_mtos == 0 && max_sdu_size_stom == 0);
+
+    /* The mismatch where one of the sdu size or sdu interval is 0 while the other parameter is 0 is
+     * a non-sense configuration. We should catch that and avoid creating such a CIG.
+     */
+    bool is_sdu_config_mismatch_fix_enabled =
+            com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig();
+    bool is_mtos_sdu_config_mismatched = ((max_sdu_size_mtos == 0) != (sdu_interval_mtos == 0));
+    bool is_stom_sdu_config_mismatched = ((max_sdu_size_stom == 0) != (sdu_interval_stom == 0));
+
+    if (no_direction_enabled_due_to_sdu_interval ||
+        no_direction_enabled_due_max_latencies_setting ||
+        no_direction_enabled_due_max_sdu_sizes_zero ||
+        (is_sdu_config_mismatch_fix_enabled &&
+         (is_mtos_sdu_config_mismatched || is_stom_sdu_config_mismatched))) {
       log::error("Trying to create invalid group");
       group->PrintDebugState();
       return false;
@@ -2564,11 +2623,6 @@ private:
   static void PrepareDataPath(int group_id, struct ase* ase) {
     if (!ase) {
       log::error("Invalid ASE");
-      return;
-    }
-
-    if (!com_android_bluetooth_flags_leaudio_dynamic_data_path_change()) {
-      log::debug("Skipped due to leaudio_dynamic_data_path_change flag not being set.");
       return;
     }
 
@@ -2874,18 +2928,24 @@ private:
     }
   }
 
-  void PrepareAndSendQoSToTheGroup(LeAudioDeviceGroup* group) {
+  bool PrepareAndSendQoSToTheGroup(LeAudioDeviceGroup* group) {
     LeAudioDevice* leAudioDevice = group->GetFirstActiveDevice();
     if (!leAudioDevice) {
       log::error("No active device for the group");
       group->PrintDebugState();
       ClearGroup(group, true);
-      return;
+      return false;
     }
 
     for (; leAudioDevice; leAudioDevice = group->GetNextActiveDevice(leAudioDevice)) {
-      PrepareAndSendConfigQos(group, leAudioDevice);
+      if (!PrepareAndSendConfigQos(group, leAudioDevice)) {
+        log::warn("Could not trigger QoS configured state for group_id: {} device: {}",
+                  group->group_id_, leAudioDevice->address_);
+        return false;
+      }
     }
+
+    return true;
   }
 
   bool PrepareAndSendCodecConfigToTheGroup(LeAudioDeviceGroup* group) {
@@ -3053,15 +3113,16 @@ private:
           return;
         }
 
-        uint16_t cig_curr_max_trans_lat_mtos = group->GetMaxTransportLatencyMtos();
-        uint16_t cig_curr_max_trans_lat_stom = group->GetMaxTransportLatencyStom();
-
         if (group->GetState() == AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
           /* We are here because of the reconnection of the single device.
            * Reconfigure CIG if current CIG supported Max Transport Latency for
            * a direction, cannot be supported by the newly connected member
            * device's ASE for the direction.
            */
+
+          uint16_t cig_curr_max_trans_lat_mtos = group->GetMaxTransportLatencyMtos();
+          uint16_t cig_curr_max_trans_lat_stom = group->GetMaxTransportLatencyStom();
+
           if ((ase->direction == bluetooth::le_audio::types::kLeAudioDirectionSink &&
                cig_curr_max_trans_lat_mtos > rsp.max_transport_latency) ||
               (ase->direction == bluetooth::le_audio::types::kLeAudioDirectionSource &&
@@ -3103,7 +3164,11 @@ private:
            * stream */
           if (leAudioDevice->GetConnectionState() ==
               bluetooth::le_audio::DeviceConnectState::CONNECTED) {
-            PrepareAndSendConfigQos(group, leAudioDevice);
+            if (!PrepareAndSendConfigQos(group, leAudioDevice)) {
+              log::warn("Could not trigger QoS configured state for group_id: {} device: {}",
+                        group->group_id_, leAudioDevice->address_);
+              return;
+            }
           } else {
             log::debug(
                     "Device {} initiated configured state but it is not yet ready to be configured",
@@ -3131,7 +3196,17 @@ private:
              * state. In this case, state machine will keep CIG but will send Codec Config to all
              * the set members and when ASEs will move to Codec Configured State, we would like a
              * whole group to move to QoS Configure.*/
-            PrepareAndSendQoSToTheGroup(group);
+            if (!PrepareAndSendQoSToTheGroup(group)) {
+              /* We are here only in case there is no Active devices from some reason.
+               * PrepareAndSendQoSToTheGroup already removed the CIG and moved the state machine to
+               * Idle.
+               */
+              if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+                log::error("Could not trigger QoS configured state for group_id: {}",
+                           group->group_id_);
+                return;
+              }
+            }
           } else if (!CigCreate(group)) {
             log::error("Could not create CIG. Stop the stream for group {}", group->group_id_);
             state_machine_callbacks_->OnStateMachineInvalidStatusCb(
@@ -3206,7 +3281,11 @@ private:
            * stream */
           if (leAudioDevice->GetConnectionState() ==
               bluetooth::le_audio::DeviceConnectState::CONNECTED) {
-            PrepareAndSendConfigQos(group, leAudioDevice);
+            if (!PrepareAndSendConfigQos(group, leAudioDevice)) {
+              log::warn("Could not trigger QoS configured state for group_id: {} device: {}",
+                        group->group_id_, leAudioDevice->address_);
+              return;
+            }
           } else {
             log::debug(
                     "Device {} initiated configured state but it is not yet ready to be configured",
@@ -3233,7 +3312,11 @@ private:
              * Also it can happen, when second set member is adding while the other is in
              * Streaming or QoS Configured state.
              */
-            PrepareAndSendConfigQos(group, leAudioDevice);
+            if (!PrepareAndSendConfigQos(group, leAudioDevice)) {
+              log::warn("Could not trigger QoS configured state for group_id: {} device: {}",
+                        group->group_id_, leAudioDevice->address_);
+              return;
+            }
           } else if (!CigCreate(group)) {
             log::error("Could not create CIG. Stop the stream for group {}", group->group_id_);
             state_machine_callbacks_->OnStateMachineInvalidStatusCb(
@@ -3743,7 +3826,8 @@ private:
       }
     } while ((ase = leAudioDevice->GetNextActiveAse(ase)));
 
-    if (ids.empty()) {
+    std::vector<uint8_t> value;
+    if (!bluetooth::le_audio::client_parser::ascs::PrepareAseCtpRelease(ids, value)) {
       log::info("Nothing to send to {}", leAudioDevice->address_);
       return false;
     }
@@ -3751,8 +3835,6 @@ private:
     leAudioDevice->last_ase_ctp_command_sent =
             bluetooth::le_audio::client_parser::ascs::kCtpOpcodeRelease;
 
-    std::vector<uint8_t> value;
-    bluetooth::le_audio::client_parser::ascs::PrepareAseCtpRelease(ids, value);
     WriteToControlPoint(leAudioDevice, value);
 
     log::info("group_id: {}, {}", leAudioDevice->group_id_, leAudioDevice->address_);
@@ -3761,7 +3843,7 @@ private:
     return true;
   }
 
-  void PrepareAndSendConfigQos(LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice) {
+  bool PrepareAndSendConfigQos(LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice) {
     std::vector<struct bluetooth::le_audio::client_parser::ascs::ctp_qos_conf> confs;
 
     bool validate_transport_latency = false;
@@ -3794,8 +3876,11 @@ private:
         log::error("inconsistent presentation delay for group");
         group->PrintDebugState();
         state_machine_callbacks_->OnStateMachineInvalidStatusCb(
-                group->group_id_, StateMachineInvalidStatus::INVALID_ASE_STATE_PARAMETERS);
-        return;
+                group->group_id_, StateMachineInvalidStatus::INVALID_DEVICE_CONFIGURATION);
+        if (!com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+          return true;
+        }
+        return false;
       }
       ase->qos_config.framing = group->GetFraming();
 
@@ -3810,12 +3895,16 @@ private:
       conf.pres_delay = ase->qos_config.presentation_delay;
       conf.sdu_interval = ase->qos_config.sdu_interval;
 
-      if (!conf.sdu_interval) {
-        log::error("unsupported SDU interval for group");
+      if (conf.sdu_interval == 0) {
+        log::error("Invalid SDU interval for group {}", group->group_id_);
         group->PrintDebugState();
-        state_machine_callbacks_->OnStateMachineInvalidStatusCb(
-                group->group_id_, StateMachineInvalidStatus::INVALID_ASE_STATE_PARAMETERS);
-        return;
+        if (!com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+          state_machine_callbacks_->OnStateMachineInvalidStatusCb(
+                  group->group_id_, StateMachineInvalidStatus::INVALID_ASE_STATE_PARAMETERS);
+          return true;
+        }
+        log::assert_that(false, "SDU is 0 which shall be already catched when CIG is created.");
+        return false;
       }
 
       msg_stream << "ASE " << +conf.ase_id << ",";
@@ -3843,14 +3932,14 @@ private:
 
      if (number_of_streaming_ases > 0 && number_of_streaming_ases == number_of_active_ases) {
        log::debug("Device {} is already streaming", leAudioDevice->address_);
-       return;
+       return true;
      }
 
      if (confs.size() == 0 || !validate_transport_latency || !validate_max_sdu_size) {
        log::error("Invalid configuration or latency or sdu size");
        group->PrintDebugState();
        StopStream(group);
-       return;
+       return false;
      }
      if (osi_property_get_bool("persist.bluetooth.leaudio.tmap_vrc_05_08", false)) {
         std::vector<uint8_t> value;
@@ -3862,7 +3951,7 @@ private:
       }
     }
 
-     leAudioDevice->last_ase_ctp_command_sent =
+    leAudioDevice->last_ase_ctp_command_sent =
              bluetooth::le_audio::client_parser::ascs::kCtpOpcodeQosConfiguration;
     if (!mFlagGattWriteUpdated) {
        std::vector<uint8_t> value;
@@ -3872,6 +3961,8 @@ private:
     log::info("group_id: {}, {}", leAudioDevice->group_id_, leAudioDevice->address_);
     log_history_->AddLogHistory(kLogControlPointCmd, group->group_id_, leAudioDevice->address_,
                                 msg_stream.str(), extra_stream.str());
+
+    return true;
   }
 
   void PrepareAndSendUpdateMetadata(LeAudioDeviceGroup* group, LeAudioDevice* leAudioDevice,
@@ -3907,8 +3998,7 @@ private:
         continue;
       }
 
-      if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening() &&
-          ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
+      if (ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) {
         log::info(
                 "Metadata for ase_id {} cannot be updated due to invalid ase state - see log above",
                 ase->id);
@@ -3982,10 +4072,8 @@ private:
 
     do {
       if (ase->direction == bluetooth::le_audio::types::kLeAudioDirectionSource) {
-        if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-          if (ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_ENABLING) {
-            continue;
-          }
+        if (ase->expected_state != AseState::BTA_LE_AUDIO_ASE_STATE_ENABLING) {
+          continue;
         }
         stream << "ASE_ID " << +ase->id << ",";
         ids.push_back(ase->id);
@@ -4155,16 +4243,8 @@ private:
              rsp.cis_id, ase);
         }
 
-        if (com_android_bluetooth_flags_leaudio_dynamic_direction_opening()) {
-          if (!group->HasAllRequiredStreamingAses()) {
-            log::info("More Ases to get in streaming state for group_id: {}", group->group_id_);
-            return;
-          }
-
-        } else if (!group->HaveAllActiveDevicesAsesTheSameState(
-                AseState::BTA_LE_AUDIO_ASE_STATE_STREAMING) && !flag_sendenableLater) {
-          /* More ASEs notification form this device has to come for this group
-           */
+        if (!group->HasAllRequiredStreamingAses()) {
+          log::info("More Ases to get in streaming state for group_id: {}", group->group_id_);
           return;
         }
 
@@ -4460,7 +4540,7 @@ private:
     if (!CisCreate(group)) {
       log::debug("cis creation got the group");
       state_machine_callbacks_->OnStateMachineInvalidStatusCb(
-              group->group_id_, StateMachineInvalidStatus::FAILED_TO_CREATE_CIG);
+              group->group_id_, StateMachineInvalidStatus::FAILED_TO_CREATE_CIS);
     }
   }
 

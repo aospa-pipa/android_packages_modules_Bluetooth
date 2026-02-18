@@ -211,7 +211,7 @@ static void ble_start_enc_v2_wrapper(uint16_t handle, Octet8 rand,
 
 static void le_set_hdt_default_parameters_wrapper(uint8_t preferred_mic_length,
                                                   uint8_t preferred_packet_format,
-                                                  uint8_t preferred_acl_rates) {
+                                                  uint16_t preferred_acl_rates) {
   btsnd_hcic_le_set_hdt_default_parameters(preferred_mic_length, preferred_packet_format,
                                             preferred_acl_rates);
   log::info("Sent btsnd_hcic_le_set_hdt_default_parameters command from wrapper.");

@@ -212,7 +212,7 @@ bool interop_match_name(const interop_feature_t feature, const char* name) {
 }
 
 bool interop_match_addr_or_name(const interop_feature_t feature, RawAddress addr,
-                                bt_status_t (*get_remote_device_property)(RawAddress,
+                                bt_status_t (*get_remote_device_property)(const RawAddress&,
                                                                           bt_property_t*)) {
   log::assert_that(get_remote_device_property != nullptr,
                    "assert failed: get_remote_device_property != nullptr");
@@ -402,6 +402,7 @@ static const char* interop_feature_string_(const interop_feature_t feature) {
     CASE_RETURN_STR(INTEROP_DISABLE_PROFILE_FALLBACK);
     CASE_RETURN_STR(INTEROP_ENABLE_REMOTE_NOTIFICATIONS);
     CASE_RETURN_STR(INTEROP_SKIP_WAIT_FOR_LE_SERVICE_SEARCH);
+    CASE_RETURN_STR(INTEROP_SKIP_GATT_DISCOVERY_OVER_LE);
   }
   return UNKNOWN_INTEROP_FEATURE;
 }

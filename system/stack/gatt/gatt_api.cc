@@ -462,7 +462,7 @@ void GATTS_StopService(uint16_t service_handle) {
   }
 
   if (it->sdp_handle) {
-    if (!get_legacy_stack_sdp_api()->handle.SDP_DeleteRecord(it->sdp_handle)) {
+    if (!get_legacy_stack_sdp_api()->SDP_DeleteRecord(it->sdp_handle)) {
       log::warn("Unable to delete record handle:{}", it->sdp_handle);
     }
   }
@@ -1870,13 +1870,15 @@ static void gatt_bonded_check_add_address(const RawAddress& bda) {
   }
 }
 
+namespace bluetooth::legacy::testing {
 std::optional<bool> OVERRIDE_GATT_LOAD_BONDED = std::nullopt;
+}  // namespace bluetooth::legacy::testing
 
 static bool gatt_load_bonded_is_enabled() {
   static const bool sGATT_LOAD_BONDED =
           bluetooth::os::GetSystemPropertyBool("bluetooth.gatt.load_bonded.enabled", false);
-  if (OVERRIDE_GATT_LOAD_BONDED.has_value()) {
-    return OVERRIDE_GATT_LOAD_BONDED.value();
+  if (bluetooth::legacy::testing::OVERRIDE_GATT_LOAD_BONDED.has_value()) {
+    return bluetooth::legacy::testing::OVERRIDE_GATT_LOAD_BONDED.value();
   }
   return sGATT_LOAD_BONDED;
 }

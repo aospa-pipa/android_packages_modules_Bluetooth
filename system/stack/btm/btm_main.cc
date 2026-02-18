@@ -83,7 +83,7 @@ constexpr size_t kMaxLogHistoryMsgLength = 25;
 
 static void btm_log_history(const std::string& tag, const char* addr, const std::string& msg,
                             const std::string& extra) {
-  if (!stack_manager_get_interface()->get_stack_is_running()) {
+  if (!stack_is_running()) {
     log::warn("stack is not running");
     return;
   }

@@ -96,10 +96,10 @@ types::CodecConfigSetting kVendorCodecOneSwb = {
         .channel_count_per_iso_stream = 1,
 };
 
-RawAddress GetTestAddress(int index) {
+static RawAddress GetTestAddress(uint8_t index) {
   EXPECT_LT(index, UINT8_MAX);
-  RawAddress result = {{0xC0, 0xDE, 0xC0, 0xDE, 0x00, static_cast<uint8_t>(index)}};
-  return result;
+  std::array<uint8_t, 6> bytes{0xC0, 0xDE, 0xC0, 0xDE, 0x00, index};
+  return RawAddress(bytes);
 }
 
 class LeAudioDevicesTest : public Test {
@@ -212,6 +212,7 @@ TEST_F(LeAudioDevicesTest, test_find_by_conn_id_failed) {
   ASSERT_EQ(nullptr, devices_->FindByConnId(0x0006));
 }
 
+// TODO: will remove when Flags.leaudioAllowlistRefactor() publish
 TEST_F(LeAudioDevicesTest, test_get_device_model_name_success) {
   RawAddress test_address_0 = GetTestAddress(0);
   devices_->Add(test_address_0, DeviceConnectState::CONNECTING_BY_USER);
@@ -224,6 +225,7 @@ TEST_F(LeAudioDevicesTest, test_get_device_model_name_success) {
   ASSERT_EQ("", device->model_name_);
 }
 
+// TODO: will remove when Flags.leaudioAllowlistRefactor() publish
 TEST_F(LeAudioDevicesTest, test_get_device_model_name_failed) {
   RawAddress test_address_0 = GetTestAddress(0);
   devices_->Add(test_address_0, DeviceConnectState::CONNECTING_BY_USER);
@@ -2436,15 +2438,16 @@ TEST_P(LeAudioAseConfigurationTest, test_reactivation_conversational) {
   group_->Activate(LeAudioContextType::CONVERSATIONAL, audio_contexts, ccid_lists);
 
   TestActiveAses();
-  ASSERT_NE(this->group_->cig.cises.size(), 0lu);
+  auto& cises = this->group_->cig.GetCises();
+  ASSERT_NE(cises.size(), 0lu);
 
   /* Verify ASEs assigned CISes by counting assigned to bi-directional CISes */
   int bi_dir_ases_count =
-          std::count_if(tws_headset->ases_.begin(), tws_headset->ases_.end(), [this](auto& ase) {
+          std::count_if(tws_headset->ases_.begin(), tws_headset->ases_.end(), [cises](auto& ase) {
             if (ase.cis_id == kInvalidCisId) {
               return false;
             }
-            return this->group_->cig.cises[ase.cis_id].type == CisType::CIS_TYPE_BIDIRECTIONAL;
+            return cises[ase.cis_id].type == CisType::CIS_TYPE_BIDIRECTIONAL;
           });
 
   /* Only two ASEs can be bonded to one bi-directional CIS */
@@ -2526,9 +2529,10 @@ TEST_P(LeAudioAseConfigurationTest, test_getting_cis_count) {
   group_->cig.GenerateCisIds(LeAudioContextType::MEDIA);
 
   /* Verify prepared CISes by counting generated entries */
-  int snk_cis_count = std::count_if(
-          this->group_->cig.cises.begin(), this->group_->cig.cises.end(),
-          [](auto& cis) { return cis.type == CisType::CIS_TYPE_UNIDIRECTIONAL_SINK; });
+  auto& cises = group_->cig.GetCises();
+  int snk_cis_count = std::count_if(cises.begin(), cises.end(), [](auto& cis) {
+    return cis.type == CisType::CIS_TYPE_UNIDIRECTIONAL_SINK;
+  });
 
   /* Two CIS should be prepared for dual dev expected set */
   ASSERT_EQ(snk_cis_count, 2);

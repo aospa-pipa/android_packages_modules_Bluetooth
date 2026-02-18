@@ -53,8 +53,6 @@ namespace audio {
 namespace hidl {
 namespace a2dp {
 
-using ::bluetooth::audio::a2dp::ahal_codec_configuration;
-
 static bluetooth::audio::a2dp::StreamCallbacks null_stream_callbacks;
 static bluetooth::audio::a2dp::StreamCallbacks const* stream_callbacks_ = &null_stream_callbacks;
 
@@ -420,6 +418,20 @@ size_t read(uint8_t* p_buf, uint32_t len) {
     return 0;
   }
   return active_hal_interface->ReadAudioData(p_buf, len);
+}
+
+// Read from the FMQ of BluetoothAudio HAL
+void flush_source() {
+  if (!is_hal_2_0_enabled()) {
+    log::error("BluetoothAudio HAL is not enabled");
+    return;
+  }
+  if (is_hal_2_0_offloading()) {
+    log::error("session_type={} is not A2DP_SOFTWARE_ENCODING_DATAPATH",
+               toString(active_hal_interface->GetTransportInstance()->GetSessionType()));
+    return;
+  }
+  return active_hal_interface->FlushAudioData();
 }
 
 // Update A2DP delay report to BluetoothAudio HAL

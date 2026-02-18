@@ -52,6 +52,7 @@
 package com.android.bluetooth.gatt;
 
 import static android.bluetooth.BluetoothDevice.TRANSPORT_BREDR;
+import static android.bluetooth.BluetoothProfile.CONNECTION_POLICY_ALLOWED;
 import static android.bluetooth.BluetoothProfile.STATE_CONNECTED;
 import static android.bluetooth.BluetoothProfile.STATE_DISCONNECTED;
 
@@ -103,6 +104,7 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.CompanionManager;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.profile.ProfileService;
+import com.android.bluetooth.util.Text;
 import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -140,20 +142,20 @@ public class GattService extends ProfileService {
     private static final int GATT_SUBRATE_LATENCY_INDEX = 2;
     private static final int GATT_SUBRATE_CONT_NUM_INDEX = 3;
 
-    private static final int SUBRATE_LOW_MODE_SUBRATE_MIN_DEFAULT = 2;
-    private static final int SUBRATE_LOW_MODE_SUBRATE_MAX_DEFAULT = 4;
-    private static final int SUBRATE_LOW_MODE_LATENCY_DEFAULT = 0;
-    private static final int SUBRATE_LOW_MODE_CONT_NUM_DEFAULT = 1;
+    private static final int SUBRATE_HIGH_MODE_SUBRATE_MIN_DEFAULT = 2;
+    private static final int SUBRATE_HIGH_MODE_SUBRATE_MAX_DEFAULT = 4;
+    private static final int SUBRATE_HIGH_MODE_LATENCY_DEFAULT = 0;
+    private static final int SUBRATE_HIGH_MODE_CONT_NUM_DEFAULT = 1;
 
     private static final int SUBRATE_BALANCED_MODE_SUBRATE_MIN_DEFAULT = 5;
     private static final int SUBRATE_BALANCED_MODE_SUBRATE_MAX_DEFAULT = 7;
     private static final int SUBRATE_BALANCED_MODE_LATENCY_DEFAULT = 0;
     private static final int SUBRATE_BALANCED_MODE_CONT_NUM_DEFAULT = 4;
 
-    private static final int SUBRATE_HIGH_MODE_SUBRATE_MIN_DEFAULT = 8;
-    private static final int SUBRATE_HIGH_MODE_SUBRATE_MAX_DEFAULT = 10;
-    private static final int SUBRATE_HIGH_MODE_LATENCY_DEFAULT = 0;
-    private static final int SUBRATE_HIGH_MODE_CONT_NUM_DEFAULT = 6;
+    private static final int SUBRATE_LOW_MODE_SUBRATE_MIN_DEFAULT = 8;
+    private static final int SUBRATE_LOW_MODE_SUBRATE_MAX_DEFAULT = 10;
+    private static final int SUBRATE_LOW_MODE_LATENCY_DEFAULT = 0;
+    private static final int SUBRATE_LOW_MODE_CONT_NUM_DEFAULT = 6;
 
     private static final Integer GATT_MTU_MAX = 517;
     private static final Map<String, Integer> EARLY_MTU_EXCHANGE_PACKAGES =
@@ -383,7 +385,7 @@ public class GattService extends ProfileService {
     @Override
     public void dump(StringBuilder sb) {
         super.dump(sb);
-        sb.append(GattUtil.dump(mAdvertiseManager, mClientMap, mServerManager).indent(2));
+        sb.append(Text.indent(GattUtil.dump(mAdvertiseManager, mClientMap, mServerManager), "  "));
     }
 
     public IBinder getBluetoothAdvertise() {
@@ -856,7 +858,7 @@ public class GattService extends ProfileService {
             return;
         }
 
-        if (Flags.readRssiThrottling() && status == BluetoothGatt.GATT_SUCCESS) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
             Log.d(TAG, "onReadRemoteRssi(): Putting timestamp and rssi into cache");
             mRssiCache.put(
                     device.getAddress(), new RssiCacheEntry(mTimeProvider.elapsedRealtime(), rssi));
@@ -873,23 +875,11 @@ public class GattService extends ProfileService {
                 ("onConfigureMTU(): device=" + device)
                         + (", status=" + statusToString(status) + ", mtu=" + mtu));
 
-        if (!Flags.gattConnSettings()) {
-            var app = mClientMap.getByConnId(connId);
-            if (app == null) {
-                return;
-            }
-            callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
-        } else {
-            Log.d(TAG, "pushing callback to all registered clients");
-            final Map<Integer, BluetoothDevice> connMap = mClientMap.getConnectedMap();
-            for (Map.Entry<Integer, BluetoothDevice> entry : connMap.entrySet()) {
-                var app = mClientMap.getById(entry.getKey());
-                if (app == null) {
-                    continue;
-                }
-                callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
-            }
+        var app = mClientMap.getByConnId(connId);
+        if (app == null) {
+            return;
         }
+        callbackToApp(() -> app.getCallback().onConfigureMTU(device, mtu, status));
     }
 
     void onClientCongestionFromNative(int connId, boolean congested) {
@@ -1448,7 +1438,7 @@ public class GattService extends ProfileService {
         }
         final var clientIf = clientApp.getId();
         Log.d(TAG, "readRemoteRssi(): device=" + device);
-        if (Flags.readRssiThrottling() && mRssiReadThrottleMs > 0) {
+        if (mRssiReadThrottleMs > 0) {
             final var entry = mRssiCache.get(device.getAddress());
             if (entry != null
                     && (mTimeProvider.elapsedRealtime() - entry.readTimeStamp)
@@ -1599,15 +1589,30 @@ public class GattService extends ProfileService {
         }
     }
 
+    private boolean shouldBlockMessaging(BluetoothDevice device) {
+        // This flag implies reverting the change made by Flags.gattMessagingPermissions
+        if (Flags.checkMapclientConnectionPolicyForAncs()) {
+            return getAdapterService()
+                    .getMapClientService()
+                    .map(
+                            mapClientService ->
+                                    mapClientService.getConnectionPolicy(device)
+                                            != CONNECTION_POLICY_ALLOWED)
+                    .orElse(false);
+        } else if (Flags.gattMessagingPermissions()) {
+            return getAdapterService().getMessageAccessPermission(device)
+                    != BluetoothDevice.ACCESS_ALLOWED;
+        } else {
+            return false;
+        }
+    }
+
     private boolean isRestrictedSrvcUuid(final UUID uuid, BluetoothDevice device) {
         return isFidoSrvcUuid(uuid)
                 || isAndroidTvRemoteSrvcUuid(uuid)
                 || isLeAudioSrvcUuid(uuid)
                 || isAndroidHeadtrackerSrvcUuid(uuid)
-                || (Flags.gattMessagingPermissions()
-                        && isAppleNotificationCenterSrvcUuid(uuid)
-                        && getAdapterService().getMessageAccessPermission(device)
-                                != BluetoothDevice.ACCESS_ALLOWED);
+                || (isAppleNotificationCenterSrvcUuid(uuid) && shouldBlockMessaging(device));
     }
 
     private int getDeviceType(BluetoothDevice device) {

@@ -21,6 +21,7 @@
 #include <com_android_bluetooth_flags.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <log/log.h>
 
 #include <vector>
 
@@ -36,8 +37,11 @@
 #include "gatt/database_builder.h"
 #include "hardware/bt_gatt_types.h"
 #include "stack/gatt/gatt_int.h"
+#include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
 #include "test/common/mock_functions.h"
+#include "test/mock/mock_stack_btm_interface.h"
+#include "test/mock/mock_stack_security_client_interface.h"
 
 bool gatt_cl_read_sirk_req(const RawAddress& /*peer_bda*/,
                            base::OnceCallback<void(tGATT_STATUS status, const RawAddress&,
@@ -66,6 +70,7 @@ using testing::DoAll;
 using testing::DoDefault;
 using testing::Invoke;
 using testing::Mock;
+using testing::NiceMock;
 using testing::NotNull;
 using testing::Return;
 using testing::SaveArg;
@@ -76,10 +81,10 @@ using testing::WithArg;
 extern "C" const char* __asan_default_options();
 extern "C" const char* __asan_default_options() { return "detect_container_overflow=0"; }
 
-RawAddress GetTestAddress(int index) {
+static RawAddress GetTestAddress(uint8_t index) {
   EXPECT_LT(index, UINT8_MAX);
-  RawAddress result = {{0xC0, 0xDE, 0xC0, 0xDE, 0x00, static_cast<uint8_t>(index)}};
-  return result;
+  std::array<uint8_t, 6> bytes{0xC0, 0xDE, 0xC0, 0xDE, 0x00, index};
+  return RawAddress(bytes);
 }
 
 /* Csis lock callback */
@@ -118,6 +123,56 @@ public:
   MOCK_METHOD((void), OnGattCsisWriteLockRsp,
               (uint16_t conn_id, tGATT_STATUS status, uint16_t handle, void* data));
 };
+
+// This is used to test storage behavior
+static const uint8_t magic_v10 = 0x10;
+static const uint8_t storage_entry_size_v10 = sizeof(uint8_t) /* set_id */ +
+                                              sizeof(uint8_t) /* desired_size */ +
+                                              sizeof(uint8_t) /* rank */ + Octet16().size();
+static const uint8_t magic_v11 = 0x11;
+static const uint8_t storage_entry_size_v11 =
+        storage_entry_size_v10 + 1;  // 1 octet for is_unsafe flag
+
+typedef struct {
+  uint8_t group_id;
+  uint8_t group_size;
+  uint8_t rank;
+  Octet16 sirk;
+  bool is_unsafe;
+} __attribute__((packed)) test_storage_entry_t;
+
+std::vector<uint8_t> prepare_test_storage(uint8_t magic,
+                                          std::vector<test_storage_entry_t>& entries) {
+  uint8_t num_sets = entries.size();
+  uint8_t header_size = 2;  // sizeof(magic) + sizeof (num_sets)
+  uint8_t entry_size = sizeof(test_storage_entry_t);
+
+  if (magic == magic_v10) {
+    entry_size = entry_size - 1;  // 1 octet for is_unsafe flag less
+  }
+
+  std::vector<uint8_t> out(header_size + (num_sets * entry_size));
+
+  auto* ptr = out.data();
+
+  /* header */
+  UINT8_TO_STREAM(ptr, magic);
+  UINT8_TO_STREAM(ptr, num_sets);
+
+  for (auto& entry : entries) {
+    UINT8_TO_STREAM(ptr, entry.group_id);
+    UINT8_TO_STREAM(ptr, entry.group_size);
+    UINT8_TO_STREAM(ptr, entry.rank);
+    memcpy(ptr, entry.sirk.data(), entry.sirk.size());
+    ptr += entry.sirk.size();
+
+    if (magic == magic_v11) {
+      UINT8_TO_STREAM(ptr, entry.is_unsafe);
+    }
+  }
+
+  return out;
+}
 
 class CsisClientTest : public ::testing::Test {
 private:
@@ -238,6 +293,7 @@ private:
                   break;
                 case 0x0024:
                   value.resize(1);
+                  value.assign(1, 1);
                   break;
                 case 0x0027:
                   value.resize(1);
@@ -362,9 +418,11 @@ private:
 protected:
   void SetUp(void) override {
     reset_mock_function_count_map();
+    __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
     com::android::bluetooth::flags::provider_->reset_flags();
     com::android::bluetooth::flags::provider_->csis_quirk_for_single_device_with_sirk_all_zeros(
             true);
+    com::android::bluetooth::flags::provider_->leaudio_csis_handle_misconfigured_sets(true);
     bluetooth::manager::SetMockBtmInterface(&btm_interface);
     dm::SetMockBtaDmInterface(&dm_interface);
     gatt::SetMockBtaGattInterface(&gatt_interface);
@@ -372,9 +430,12 @@ protected:
     SetMockCsisLockCallback(&csis_lock_cb);
     callbacks.reset(new MockCsisCallbacks());
 
-    ON_CALL(btm_interface, IsDeviceBonded(_, _)).WillByDefault(DoAll(Return(true)));
+    set_security_client_interface(mock_btm_security_);
+    set_mock_btm_client_interface_security(mock_btm_security_);
 
-    ON_CALL(btm_interface, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(true)));
+    ON_CALL(mock_btm_security_, BTM_IsBonded(_, _)).WillByDefault(DoAll(Return(true)));
+
+    ON_CALL(mock_btm_security_, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(true)));
 
     ON_CALL(gatt_interface, GetCharacteristic(_, _))
             .WillByDefault(
@@ -431,6 +492,7 @@ protected:
 
   void TearDown(void) override {
     services_map.clear();
+    reset_mock_btm_client_interface();
     callbacks.reset();
     CsisClient::CleanUp();
     gatt::SetMockBtaGattInterface(nullptr);
@@ -454,6 +516,13 @@ protected:
     CsisClient::CleanUp();
     ASSERT_FALSE(CsisClient::IsCsisClientRunning());
     gatt_callback = nullptr;
+  }
+
+  void TestNoConnection(const RawAddress& address) {
+    // by default indicate link as encrypted
+    EXPECT_CALL(gatt_interface, Open(gatt_if, address, _, _)).Times(0);
+    CsisClient::Get()->Connect(address);
+    Mock::VerifyAndClearExpectations(&gatt_interface);
   }
 
   void TestConnect(const RawAddress& address, bool encrypted = true, bool opportunistic = false) {
@@ -625,6 +694,7 @@ protected:
   gatt::MockBtaGattInterface gatt_interface;
   gatt::MockBtaGattQueue gatt_queue;
   MockCsisLockCallback csis_lock_cb;
+  NiceMock<MockSecurityClientInterface> mock_btm_security_;
   tBTA_GATTC_CBACK* gatt_callback;
   const uint8_t gatt_if = 0xff;
   std::map<uint16_t, std::list<gatt::Service>> services_map;
@@ -689,17 +759,57 @@ TEST_F(CsisClientTest, test_verify_opportunistic_connect_active_after_connect_ti
 
 TEST_F(CsisClientTest, test_verify_opportunistic_connect_active_for_known_devices) {
   TestAppRegister();
-
   std::vector<uint8_t> no_set_info;
-
   DeviceGroups::AddFromStorage(test_address, no_set_info);
-  CsisClient::AddFromStorage(test_address, no_set_info);
+
+  test_storage_entry_t dev_1{
+          .group_id = 1,
+          .group_size = 1,
+          .rank = 1,
+          .sirk = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                   0x0e, 0x0f, 0x10},
+          .is_unsafe = false,
+  };
+  std::vector<test_storage_entry_t> csis_storage{dev_1};
+  CsisClient::AddFromStorage(test_address, prepare_test_storage(magic_v11, csis_storage));
 
   Mock::VerifyAndClearExpectations(&gatt_interface);
   Mock::VerifyAndClearExpectations(callbacks.get());
 
   TestConnect(test_address, true, true /* opportunistic */);
   Mock::VerifyAndClearExpectations(callbacks.get());
+  TestAppUnregister();
+}
+
+TEST_F(CsisClientTest, test_no_connect_for_unsafe_device) {
+  TestAppRegister();
+
+  std::vector<uint8_t> no_set_info;
+  DeviceGroups::AddFromStorage(test_address, no_set_info);
+
+  test_storage_entry_t entry_group_1{
+          .group_id = 1,
+          .group_size = 1,
+          .rank = 1,
+          .sirk = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                   0x0e, 0x0f, 0x10},
+          .is_unsafe = false,
+  };
+
+  test_storage_entry_t entry_group_2{
+          .group_id = 2,
+          .group_size = 2,
+          .rank = 2,
+          .sirk = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+                   0x0e, 0x0f, 0x10},
+          .is_unsafe = true,
+  };
+  std::vector<test_storage_entry_t> csis_storage{entry_group_1, entry_group_2};
+  CsisClient::AddFromStorage(test_address, prepare_test_storage(magic_v11, csis_storage));
+  TestNoConnection(test_address);
+
+  ASSERT_FALSE(CsisClient::Get()->ShallCsisBeUsedForTheDevice(test_address));
+
   TestAppUnregister();
 }
 
@@ -736,7 +846,7 @@ TEST_F(CsisClientTest, test_connect_after_remove) {
   CsisClient::Get()->RemoveDevice(test_address);
 
   EXPECT_CALL(*callbacks, OnConnectionState(test_address, ConnectionState::DISCONNECTED));
-  ON_CALL(btm_interface, IsDeviceBonded(_, _)).WillByDefault(Return(false));
+  ON_CALL(mock_btm_security_, BTM_IsBonded(_, _)).WillByDefault(Return(false));
   CsisClient::Get()->Connect(test_address);
   Mock::VerifyAndClearExpectations(callbacks.get());
 
@@ -863,7 +973,7 @@ TEST_F(CsisClientTest, test_search_complete_before_encryption) {
   EXPECT_CALL(*callbacks, OnConnectionState(test_address, ConnectionState::CONNECTED)).Times(0);
   EXPECT_CALL(*callbacks, OnDeviceAvailable(test_address, _, _, _, _)).Times(0);
 
-  ON_CALL(btm_interface, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(false)));
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(false)));
 
   InjectConnectedEvent(test_address, 1);
   GetSearchCompleteEvent(1);
@@ -873,7 +983,7 @@ TEST_F(CsisClientTest, test_search_complete_before_encryption) {
   EXPECT_CALL(*callbacks, OnConnectionState(test_address, ConnectionState::CONNECTED)).Times(1);
   EXPECT_CALL(*callbacks, OnDeviceAvailable(test_address, _, _, _, _)).Times(1);
 
-  ON_CALL(btm_interface, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(true)));
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(true)));
   EXPECT_CALL(gatt_interface, ServiceSearchRequest(_, _)).Times(1);
 
   InjectEncryptionEvent(test_address, 1);
@@ -891,8 +1001,8 @@ TEST_F(CsisClientTest, test_disconnect_when_link_key_is_gone) {
   TestConnect(test_address, false);
   EXPECT_CALL(*callbacks, OnConnectionState(test_address, ConnectionState::CONNECTED)).Times(0);
 
-  ON_CALL(btm_interface, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(false)));
-  ON_CALL(btm_interface, SetEncryption(test_address, _, _, _, _))
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(test_address, _)).WillByDefault(DoAll(Return(false)));
+  ON_CALL(mock_btm_security_, BTM_SetEncryption(test_address, _, _, _, _))
           .WillByDefault(Return(tBTM_STATUS::BTM_ERR_KEY_MISSING));
 
   EXPECT_CALL(gatt_interface, Close(1));
@@ -1244,7 +1354,8 @@ TEST_F(CsisClientTest, test_not_open_duplicate_active_scan_while_bonding_set_mem
   result.inq_res.eir_len = 8;
   result.inq_res.bd_addr = test_address2;
 
-  ON_CALL(btm_interface, IsDeviceBonded(test_address2, BT_TRANSPORT_LE)).WillByDefault(Return(false));
+  ON_CALL(mock_btm_security_, BTM_IsBonded(test_address2, BT_TRANSPORT_LE))
+          .WillByDefault(Return(false));
   // CSIS client should process set member event to JNI
   EXPECT_CALL(*callbacks, OnSetMemberAvailable(test_address2, 1));
 
@@ -1340,7 +1451,7 @@ TEST_F(CsisClientTest, test_not_report_set_member_after_remove_first_device) {
   result.inq_res.eir_len = 8;
   result.inq_res.bd_addr = test_address2;
 
-  ON_CALL(btm_interface, IsDeviceBonded(test_address2, BT_TRANSPORT_LE))
+  ON_CALL(mock_btm_security_, BTM_IsBonded(test_address2, BT_TRANSPORT_LE))
           .WillByDefault(Return(false));
   // CSIS client should NOT process set member event to JNI
   EXPECT_CALL(*callbacks, OnSetMemberAvailable(test_address2, 1)).Times(0);
@@ -1556,6 +1667,7 @@ TEST_F(CsisClientTest, test_storage_content) {
   SetSampleCapIncludedDatabaseCsis(4, 1, 3);
 
   TestAppRegister();
+
   TestConnect(GetTestAddress(1));
   InjectConnectedEvent(GetTestAddress(1), 1);
   GetSearchCompleteEvent(1);
@@ -1738,7 +1850,7 @@ TEST_F(CsisClientTest, test_bonding_failed) {
   result.inq_res.eir_len = 8;
   result.inq_res.bd_addr = test_address2;
 
-  ON_CALL(btm_interface, IsDeviceBonded(test_address2, _)).WillByDefault(DoAll(Return(false)));
+  ON_CALL(mock_btm_security_, BTM_IsBonded(test_address2, _)).WillByDefault(DoAll(Return(false)));
 
   // CSIS client should process Set Member Available event to JNI
   EXPECT_CALL(*callbacks, OnSetMemberAvailable(test_address2, 1));
@@ -1768,6 +1880,71 @@ TEST_F(CsisClientTest, test_bonding_failed) {
   Mock::VerifyAndClearExpectations(callbacks.get());
 
   TestAppUnregister();
+}
+
+TEST_F(CsisClientTest, test_two_devices_same_sirk_are_in_different_groups) {
+  uint16_t conn_id_1 = 1;
+  uint16_t conn_id_2 = 2;
+  SetSampleDatabaseCsis(conn_id_1, 1);
+  SetSampleDatabaseCsis(conn_id_2, 1);
+
+  /* Scenario
+   * 1. Two devices exposing CSIS group size 1 but have same SIRK
+   * 2. Such a device should end up in the different group but should be considered as not save
+   * 3. Both devices shall be disconnected
+   */
+
+  TestAppRegister();
+  TestConnect(test_address);
+  InjectConnectedEvent(test_address, conn_id_1);
+  GetSearchCompleteEvent(conn_id_1);
+  ASSERT_EQ(1, CsisClient::Get()->GetGroupId(test_address));
+
+  TestConnect(test_address2);
+
+  EXPECT_CALL(gatt_interface, Close(conn_id_1)).Times(1);
+  EXPECT_CALL(gatt_interface, Close(conn_id_2)).Times(1);
+
+  InjectConnectedEvent(test_address2, conn_id_2);
+  GetSearchCompleteEvent(conn_id_2);
+  ASSERT_EQ(2, CsisClient::Get()->GetGroupId(test_address2));
+
+  ASSERT_FALSE(CsisClient::Get()->ShallCsisBeUsedForTheDevice(test_address));
+  ASSERT_FALSE(CsisClient::Get()->ShallCsisBeUsedForTheDevice(test_address2));
+  Mock::VerifyAndClearExpectations(&gatt_interface);
+
+  TestAppUnregister();
+}
+
+TEST_F(CsisClientTest, test_storage_version_update) {
+  uint16_t conn_id_1 = 1;
+  SetSampleDatabaseCsis(conn_id_1, 1);
+  /**
+   * Scenario
+   * 1. Load storage with magic_v10
+   * 2. Connect device and expect to be stored with magic_v11
+   */
+  test_storage_entry_t entry_group_1 = {
+          .group_id = 1, .group_size = 1, .rank = 1, .sirk = {0x01}, .is_unsafe = false};
+
+  std::vector<test_storage_entry_t> csis_storage({entry_group_1});
+  std::vector<uint8_t> old_storage = prepare_test_storage(magic_v10, csis_storage);
+
+  TestAppRegister();
+  CsisClient::AddFromStorage(test_address, old_storage);
+  reset_mock_function_count_map();
+
+  TestConnect(test_address, true, true);
+  InjectConnectedEvent(test_address, conn_id_1);
+  GetSearchCompleteEvent(conn_id_1);
+  ASSERT_EQ(1, get_func_call_count("btif_storage_update_csis_info"));
+
+  std::vector<uint8_t> new_storage;
+
+  // Store to byte buffer
+  CsisClient::GetForStorage(test_address, new_storage);
+  ASSERT_EQ(magic_v11, new_storage[0]);
+  ASSERT_EQ(new_storage.size(), old_storage.size() + 1);
 }
 
 }  // namespace

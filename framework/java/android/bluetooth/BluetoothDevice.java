@@ -168,7 +168,7 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * contain the extra fields {@link #EXTRA_NAME} and/or {@link #EXTRA_RSSI} and/or {@link
      * #EXTRA_IS_COORDINATED_SET_MEMBER} if they are available.
      *
-     * <p>From {@link Build.VERSION_CODES_FULL.BAKLAVA_1}, it contains the extra field {@link
+     * <p>From {@link Build.VERSION_CODES_FULL#BAKLAVA_1}, it contains the extra field {@link
      * #EXTRA_DISCOVERY_RESULT_TYPE}. Based on the discovery result type, it can contain extra
      * fields for UUIDs:
      *
@@ -532,7 +532,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * </ul>
      */
     @SuppressLint("ActionValue")
-    @FlaggedApi(Flags.FLAG_GET_SVC_UUIDS_FROM_BLE_ADV_DATA)
     public static final String EXTRA_DISCOVERY_RESULT_TYPE =
             "android.bluetooth.device.extra.DISCOVERY_RESULT_TYPE";
 
@@ -1023,13 +1022,13 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * content://com.example.fileprovider/example_bluetooth_metadata/f1234model.png). Data type
      * should be {@link Byte} array.
      */
-    @Hide
-    @FlaggedApi(Flags.FLAG_SUPPORT_ZOOMED_IN_ICON_METADATA)
-    @SystemApi
-    public static final int METADATA_ZOOMED_IN_ICON = 30;
+    @Hide @SystemApi public static final int METADATA_ZOOMED_IN_ICON = 30;
+
+    // DO NOT UPDATE ADDITIONAL METADATA_FOO
+    // Instead, look into adding proper setter/getter
 
     // Need to update this value after adding new Metadata
-    private static final int METADATA_MAX_KEY = METADATA_EXCLUSIVE_MANAGER;
+    private static final int METADATA_MAX_KEY = METADATA_ZOOMED_IN_ICON;
 
     /**
      * Device type which is used in METADATA_DEVICE_TYPE Indicates this Bluetooth device is a
@@ -1366,7 +1365,12 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      */
     @Hide @SystemApi public static final int PAIRING_VARIANT_PIN_16_DIGITS = 7;
 
-    /** Indicates that user participation is requested to initiate the pairing process. */
+    /**
+     * Signals a request for user participation to begin the LE Legacy pairing process. Accepting
+     * this allows the Bluetooth stack to proceed toward the formal pairing association model;
+     * rejecting or ignoring it results in immediate pairing failure. Note: This only authorizes the
+     * process to start and does not constitute final pairing approval.
+     */
     @FlaggedApi(Flags.FLAG_AUTONOMOUS_REPAIRING_INITIATION)
     public static final int PAIRING_CONTEXT_USER_PARTICIPATION_REQUESTED = 0;
 
@@ -1377,11 +1381,18 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @FlaggedApi(Flags.FLAG_AUTONOMOUS_REPAIRING_INITIATION)
     public static final int PAIRING_CONTEXT_USER_APPROVAL_REQUESTED = 1;
 
-    /** Indicates that the re-pairing process is initiated. */
+    /**
+     * Signals an autonomous, system-initiated re-pairing process. Acceptance replaces the existing
+     * bond; rejection or ignoring preserves it. Failure results in immediate link disconnection and
+     * an {@code ACTION_KEY_MISSING} intent broadcast.
+     */
     @FlaggedApi(Flags.FLAG_AUTONOMOUS_REPAIRING_INITIATION)
     public static final int PAIRING_CONTEXT_REPAIRING = 2;
 
-    /** Indicates the pairing algorithm used. */
+    /**
+     * Represents a non-exhaustive list of known pairing algorithms. This list is subject to
+     * expansion as future Bluetooth specifications introduce new pairing methods.
+     */
     @Hide
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(
@@ -1395,21 +1406,31 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     @FlaggedApi(Flags.FLAG_PROVIDE_PAIRING_ALGO)
     public @interface PairingAlgorithm {}
 
-    /** Indicates the pairing algorithm used is LE legacy. */
+    /**
+     * Indicates usage of the LE Legacy pairing algorithm. Refer to Bluetooth Core Spec v6.2, Vol 1,
+     * Part A, Section 5 for security requirements and procedure details.
+     */
     @FlaggedApi(Flags.FLAG_PROVIDE_PAIRING_ALGO)
     public static final int PAIRING_ALGORITHM_LE_LEGACY = 0;
 
-    /** Indicates the pairing algorithm used is BR/EDR legacy. */
+    /**
+     * Indicates usage of the BR/EDR Legacy pairing algorithm. Refer to Bluetooth Core Spec v6.2,
+     * Vol 1, Part A, Section 5 for security requirements and procedure details.
+     */
     @FlaggedApi(Flags.FLAG_PROVIDE_PAIRING_ALGO)
     public static final int PAIRING_ALGORITHM_BREDR_LEGACY = 1;
 
-    /** Indicates the pairing algorithm used is BR/EDR SSP. */
+    /**
+     * Indicates usage of the BR/EDR Secure Simple Pairing (SSP) algorithm. Refer to Bluetooth Core
+     * Spec v6.2, Vol 1, Part A, Section 5 for security requirements and procedure details.
+     */
     @FlaggedApi(Flags.FLAG_PROVIDE_PAIRING_ALGO)
     public static final int PAIRING_ALGORITHM_BREDR_SSP = 2;
 
     /**
-     * Indicates the pairing algorithm used is Secure Connections. This is applicable for both
-     * BR/EDR and LE transports.
+     * Indicates usage of the Secure Connections pairing algorithm, applicable to both BR/EDR and LE
+     * transports. Refer to Bluetooth Core Spec v6.2, Vol 1, Part A, Section 5 for security
+     * requirements and procedure details.
      */
     @FlaggedApi(Flags.FLAG_PROVIDE_PAIRING_ALGO)
     public static final int PAIRING_ALGORITHM_SC = 3;
@@ -1433,7 +1454,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * <p>A {@code null} or absent EXTRA_UUID_LE indicates the system failed obtain the UUIDs.
      */
     @SuppressLint("ActionValue")
-    @FlaggedApi(Flags.FLAG_GET_SVC_UUIDS_FROM_BLE_ADV_DATA)
     public static final String EXTRA_UUID_LE = "android.bluetooth.device.extra.UUID_LE";
 
     @Hide public static final String EXTRA_SDP_RECORD = "android.bluetooth.device.extra.SDP_RECORD";
@@ -1687,11 +1707,10 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * @param address valid Bluetooth MAC address
      * @param addressType valid address type
-     * @throws RuntimeException Bluetooth is not available on this platform
      * @throws IllegalArgumentException address or addressType is invalid
      */
     @Hide
-    /*package*/ BluetoothDevice(BluetoothAdapter adapter, String address, int addressType) {
+    public BluetoothDevice(BluetoothAdapter adapter, String address, int addressType) {
         if (!BluetoothAdapter.checkBluetoothAddress(address)) {
             throw new IllegalArgumentException(address + " is not a valid Bluetooth address");
         }
@@ -1714,8 +1733,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
         mAttributionSource = AttributionSource.myAttributionSource();
     }
 
-    // Constructor used by android/app/jni/com_android_bluetooth_le_audio.cpp
-    @SuppressWarnings("unused")
+    /** see {@link #BluetoothDevice(BluetoothAdapter, String, int)} */
+    @SuppressWarnings("unused") // Used by android/app/jni/com_android_bluetooth_le_audio.cpp
     private BluetoothDevice(String address, int addressType) {
         this(BluetoothAdapter.getDefaultAdapter(), address, addressType);
     }
@@ -1845,9 +1864,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
     }
 
     /**
-     * Returns the address type of this BluetoothDevice, one of {@link #ADDRESS_TYPE_PUBLIC}, {@link
-     * #ADDRESS_TYPE_RANDOM}, {@link #ADDRESS_TYPE_ANONYMOUS}, or {@link #ADDRESS_TYPE_UNKNOWN}.
-     *
      * @return Bluetooth address type
      */
     @RequiresNoPermission
@@ -2354,8 +2370,8 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      *
      * <p>This method requires the calling app to have the {@link
      * android.Manifest.permission#BLUETOOTH_CONNECT} permission. Additionally, an app must either
-     * have {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} permission or be
-     * associated with the Companion Device manager (see {@link
+     * have {@link android.Manifest.permission#BLUETOOTH_PRIVILEGED} permission or be associated
+     * with the Companion Device manager (see {@link
      * android.companion.CompanionDeviceManager#associate( AssociationRequest,
      * android.companion.CompanionDeviceManager.Callback, Handler)}).
      *
@@ -2401,9 +2417,15 @@ public final class BluetoothDevice implements Parcelable, Attributable {
             conditional = true)
     public @ConnectionReturnValues int disconnect() {
         if (DBG) log("disconnect()");
-        return callServiceIfEnabled(
-                s -> s.disconnectAllEnabledProfiles(this, mAttributionSource),
-                BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED);
+        if (Flags.fixNoAclDisconnectedIntent()) {
+            return callServiceIfEnabled(
+                    s -> s.disconnectAllAcl(this, mAttributionSource),
+                    BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED);
+        } else {
+            return callServiceIfEnabled(
+                    s -> s.disconnectAllEnabledProfiles(this, mAttributionSource),
+                    BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ENABLED);
+        }
     }
 
     /**
@@ -2559,7 +2581,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast.
      */
-    @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
     @RequiresLegacyBluetoothPermission
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
@@ -2592,7 +2613,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return False if the check fails, True if the process of initiating an ACL connection to the
      *     remote device was started or cached UUIDs will be broadcast with the specific transport.
      */
-    @FlaggedApi(Flags.FLAG_EXPLICIT_UUID_TRANSPORT_API)
     @Hide
     @SystemApi
     @RequiresBluetoothConnectPermission
@@ -3832,7 +3852,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return Whether the on-head detection enabled state was set properly.
      */
     @Hide
-    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
@@ -3856,7 +3875,6 @@ public final class BluetoothDevice implements Parcelable, Attributable {
      * @return Whether the on head detection state was set properly.
      */
     @Hide
-    @FlaggedApi(Flags.FLAG_PRIORITIZED_IN_EAR_ROUTING)
     @SystemApi
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})

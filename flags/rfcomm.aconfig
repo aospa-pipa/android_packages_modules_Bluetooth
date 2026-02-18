@@ -2,16 +2,6 @@ package: "com.android.bluetooth.flags"
 container: "com.android.bt"
 
 flag {
-    name: "rfcomm_fix_bta_ag_rfc_acp_open_error"
-    namespace: "bluetooth"
-    description: "Properly handle bta_ag_rfc_acp_open when check connection fail"
-    bug: "417997444"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "hfp_collision_fix_rfcomm_port_rx_buf_critical_error"
     namespace: "bluetooth"
     description: "fix RFCOMM port RX_BUF_CRITICAL error issue caused by HFP collision"
@@ -36,6 +26,16 @@ flag {
     namespace: "bluetooth"
     description: "Mark an in use port as not in use when calling port_release_port"
     bug: "460549793"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "release_port_instead_mux_when_timeout_after_closed"
+    namespace: "bluetooth"
+    description: "Release port instead of release mux when timeout after port closed"
+    bug: "474236480"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

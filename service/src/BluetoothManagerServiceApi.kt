@@ -40,7 +40,7 @@ interface BluetoothManagerServiceApi {
 
     fun getAddress(): String?
 
-    fun setName(name: String)
+    fun setName(name: String?)
 
     fun getName(): String?
 
@@ -59,10 +59,6 @@ interface BluetoothManagerServiceApi {
     fun disableBle(packageName: String, token: IBinder): Boolean
 
     fun factoryReset(): Boolean
-
-    fun setBtHciSnoopLogMode(mode: Int): Int
-
-    fun getBtHciSnoopLogMode(): Int
 
     fun isAutoOnSupported(): Boolean
 

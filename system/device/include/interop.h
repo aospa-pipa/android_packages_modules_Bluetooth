@@ -411,6 +411,11 @@ typedef enum {
   // fallback in the stack for those devices.
   INTEROP_DISABLE_PROFILE_FALLBACK,
 
+  // Some remote devices initiate SMP over BR, which triggers
+  // btif_dm_ble_auth_cmpl_evt and starts GATT service discovery. This flow
+  // blocks pairing_cb reset, preventing subsequent pairings with other devices.
+  INTEROP_SKIP_GATT_DISCOVERY_OVER_LE,
+
   END_OF_INTEROP_LIST
 } interop_feature_t;
 
@@ -432,7 +437,7 @@ bool interop_match_name(const interop_feature_t feature, const char* name);
 // Then if either interop_match_addr or interop_match_name is matched, this
 // function will return true.
 bool interop_match_addr_or_name(const interop_feature_t feature, RawAddress addr,
-                                bt_status_t (*get_remote_device_property)(RawAddress,
+                                bt_status_t (*get_remote_device_property)(const RawAddress&,
                                                                           bt_property_t*));
 
 // Check if a given |manufacturer| matches a known interoperability workaround

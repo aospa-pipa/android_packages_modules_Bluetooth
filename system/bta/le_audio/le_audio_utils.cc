@@ -25,12 +25,12 @@
 
 #include "audio_hal_client/audio_hal_client.h"
 #include "codec_manager.h"
+#include "com_android_bluetooth_flags.h"
 #include "common/strings.h"
 #include "hardware/bt_le_audio.h"
 #include "le_audio/codec_manager.h"
 #include "le_audio_types.h"
 
-using bluetooth::common::ToString;
 using bluetooth::le_audio::types::AudioContexts;
 using bluetooth::le_audio::types::LeAudioContextType;
 
@@ -74,7 +74,7 @@ LeAudioContextType AudioContentToLeAudioContext(audio_content_type_t content_typ
       return LeAudioContextType::MEDIA;
     case AUDIO_USAGE_ASSISTANCE_ACCESSIBILITY:
     case AUDIO_USAGE_ASSISTANT:
-    /*  return LeAudioContextType::VOICEASSISTANTS;*/
+      return LeAudioContextType::VOICEASSISTANTS;
     case AUDIO_USAGE_VOICE_COMMUNICATION:
     case AUDIO_USAGE_CALL_ASSISTANT:
       return LeAudioContextType::CONVERSATIONAL;
@@ -136,50 +136,6 @@ AudioContexts GetAudioContextsFromSourceMetadata(
   return track_contexts;
 }
 
-AudioContexts GetAudioContextsFromSinkMetadata(
-        const std::vector<struct record_track_metadata_v7>& sink_metadata) {
-  AudioContexts all_track_contexts;
-
-  for (const auto& entry : sink_metadata) {
-    auto track = entry.base;
-    if (track.source == AUDIO_SOURCE_INVALID) {
-      continue;
-    }
-    LeAudioContextType track_context;
-
-    log::debug(
-            "source={}(0x{:02x}), gain={:f}, destination device=0x{:08x}, "
-            "destination device address={:32s}",
-            audioSourceToStr(track.source), track.source, track.gain, track.dest_device,
-            track.dest_device_address);
-
-    if (track.source == AUDIO_SOURCE_MIC || track.source == AUDIO_SOURCE_CAMCORDER) {
-      track_context = LeAudioContextType::LIVE;
-
-    } else if (track.source == AUDIO_SOURCE_VOICE_COMMUNICATION ||
-               track.source == AUDIO_SOURCE_VOICE_CALL) {
-      track_context = LeAudioContextType::CONVERSATIONAL;
-    } else {
-      /* Fallback to voice assistant
-       * This will handle also a case when the device is
-       * AUDIO_SOURCE_VOICE_RECOGNITION
-       */
-     /* track_context = LeAudioContextType::VOICEASSISTANTS;*/
-      track_context = LeAudioContextType::CONVERSATIONAL;
-      log::warn(
-              "Could not match the recording track type to group available "
-              "context. Using context {}.",
-              ToString(track_context));
-    }
-
-    all_track_contexts.set(track_context);
-  }
-
-  log::info("Allowed contexts from sink metadata: {} (0x{:08x})",
-            bluetooth::common::ToString(all_track_contexts), all_track_contexts.value());
-  return all_track_contexts;
-}
-
 bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType(
         const types::LeAudioCodecId& codecId, std::optional<uint32_t> sampling_frequency_hz) {
   if (codecId == types::LeAudioCodecIdLc3) {
@@ -189,9 +145,6 @@ bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType
   } else if (codecId == types::LeAudioCodecIdAptxLeX) {
     return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX;
   } else if (codecId == types::LeAudioCodecIdOpus) {
-    if (!com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()) {
-      return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS;
-    }
     if (sampling_frequency_hz.has_value() &&
         sampling_frequency_hz.value() > LeAudioCodecConfiguration::kSampleRate48000) {
       return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES;
@@ -229,10 +182,7 @@ types::LeAudioCodecId translateCodecTypeToLeAudioCodecId(btle_audio_codec_index_
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS:
       return types::LeAudioCodecIdOpus;
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES:
-      if (com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()) {
-        return types::LeAudioCodecIdOpus;
-      }
-      [[fallthrough]];
+      return types::LeAudioCodecIdOpus;
     default:
       break;
   }
@@ -307,6 +257,8 @@ bluetooth::le_audio::btle_audio_frame_duration_index_t translateToBtLeAudioCodec
       return bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_7500US;
     case 10000:
       return bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_10000US;
+    case 20000:
+      return bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_20000US;
   }
   return bluetooth::le_audio::LE_AUDIO_FRAME_DURATION_INDEX_NONE;
 }

@@ -49,6 +49,7 @@ struct BTA_dm_acl_up_failed BTA_dm_acl_up_failed;
 struct BTA_dm_notify_remote_features_complete BTA_dm_notify_remote_features_complete;
 struct BTA_dm_on_hw_off BTA_dm_on_hw_off;
 struct BTA_dm_on_hw_on BTA_dm_on_hw_on;
+struct BTA_dm_remove_on_disconnect BTA_dm_remove_on_disconnect;
 struct BTA_dm_report_role_change BTA_dm_report_role_change;
 struct bta_dm_add_ble_device bta_dm_add_ble_device;
 struct bta_dm_add_blekey bta_dm_add_blekey;
@@ -93,13 +94,14 @@ void BTA_dm_acl_down(const AclLinkSpec& link_spec) {
   inc_func_call_count(__func__);
   test::mock::bta_dm_act::BTA_dm_acl_down(link_spec);
 }
-void BTA_dm_acl_up(const AclLinkSpec& link_spec, uint16_t acl_handle) {
+void BTA_dm_acl_up(const AclLinkSpec& link_spec, uint16_t acl_handle, bool locally_initiated) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_act::BTA_dm_acl_up(link_spec, acl_handle);
+  test::mock::bta_dm_act::BTA_dm_acl_up(link_spec, acl_handle, locally_initiated);
 }
-void BTA_dm_acl_up_failed(const AclLinkSpec& link_spec, tHCI_STATUS hci_status) {
+void BTA_dm_acl_up_failed(const AclLinkSpec& link_spec, tHCI_STATUS hci_status,
+                          bool locally_initiated) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_act::BTA_dm_acl_up_failed(link_spec, hci_status);
+  test::mock::bta_dm_act::BTA_dm_acl_up_failed(link_spec, hci_status, locally_initiated);
 }
 void BTA_dm_notify_remote_features_complete(const RawAddress bd_addr) {
   inc_func_call_count(__func__);
@@ -113,6 +115,10 @@ void BTA_dm_on_hw_on(const std::string local_name) {
   inc_func_call_count(__func__);
   test::mock::bta_dm_act::BTA_dm_on_hw_on(local_name);
 }
+void BTA_dm_remove_on_disconnect(const AclLinkSpec& link_spec) {
+  inc_func_call_count(__func__);
+  test::mock::bta_dm_act::BTA_dm_remove_on_disconnect(link_spec);
+}
 void BTA_dm_report_role_change(const RawAddress bd_addr, tHCI_ROLE new_role,
                                tHCI_STATUS hci_status) {
   inc_func_call_count(__func__);
@@ -123,10 +129,10 @@ void bta_dm_add_ble_device(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
   inc_func_call_count(__func__);
   test::mock::bta_dm_act::bta_dm_add_ble_device(bd_addr, addr_type, dev_type);
 }
-void bta_dm_add_blekey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE blekey,
-                       tBTM_LE_KEY_TYPE key_type) {
+void bta_dm_add_blekey(const RawAddress& bd_addr, const PairingType& pairing_type,
+                       tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& key) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_act::bta_dm_add_blekey(bd_addr, blekey, key_type);
+  test::mock::bta_dm_act::bta_dm_add_blekey(bd_addr, pairing_type, key_type, key);
 }
 void bta_dm_ble_config_local_privacy(bool privacy_enable) {
   inc_func_call_count(__func__);
@@ -170,10 +176,9 @@ void bta_dm_ble_update_conn_params(const RawAddress& bd_addr, uint16_t min_int, 
   test::mock::bta_dm_act::bta_dm_ble_update_conn_params(bd_addr, min_int, max_int, latency, timeout,
                                                         min_ce_len, max_ce_len);
 }
-void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                 tBT_DEVICE_TYPE device_type) {
+void bta_dm_bond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport) {
   inc_func_call_count(__func__);
-  test::mock::bta_dm_act::bta_dm_bond(bd_addr, addr_type, transport, device_type);
+  test::mock::bta_dm_act::bta_dm_bond(bd_addr, addr_type, transport);
 }
 void bta_dm_bond_cancel(const RawAddress& bd_addr) {
   inc_func_call_count(__func__);

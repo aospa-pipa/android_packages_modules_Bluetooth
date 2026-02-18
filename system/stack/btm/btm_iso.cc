@@ -21,8 +21,6 @@
 #include "include/btm_iso_api.h"
 #include "stack/include/bt_hdr.h"
 
-using bluetooth::hci::iso_manager::BigCallbacks;
-using bluetooth::hci::iso_manager::CigCallbacks;
 using bluetooth::hci::iso_manager::iso_impl;
 using bluetooth::hci::iso_manager::VscCallback;
 
@@ -201,12 +199,6 @@ void IsoManager::HandleVSCodecSettingsEvent(uint8_t mode, uint16_t delay,
   }
 }
 
-void IsoManager::HandleHciHdtEvent(uint8_t sub_code, uint8_t* params, uint16_t length) {
-  if (pimpl_->IsRunning()) {
-    pimpl_->iso_impl_->on_iso_hdt_event(sub_code, params, length);
-  }
-}
-
 void IsoManager::Start() {
   if (!pimpl_->IsRunning()) {
     pimpl_->Start();
@@ -222,6 +214,37 @@ void IsoManager::Stop() {
 void IsoManager::Dump(int fd) {
   if (pimpl_->IsRunning()) {
     pimpl_->Dump(fd);
+  }
+}
+
+bool IsoManager::AddIncomingCisEventsListener(iso_manager::IsoClientHandle client_handle,
+                                              const RawAddress& pseudo_address, uint8_t cig_id,
+                                              uint8_t cis_id) {
+  if (pimpl_->IsRunning()) {
+    return pimpl_->iso_impl_->add_incoming_cis_events_listener(client_handle, pseudo_address,
+                                                               cig_id, cis_id);
+  }
+  return false;
+}
+
+void IsoManager::RemoveIncomingCisEventsListener(iso_manager::IsoClientHandle client_handle,
+                                                 const RawAddress& pseudo_address, uint8_t cig_id,
+                                                 uint8_t cis_id) {
+  if (pimpl_->IsRunning()) {
+    pimpl_->iso_impl_->remove_incoming_cis_events_listener(client_handle, pseudo_address, cig_id,
+                                                           cis_id);
+  }
+}
+
+void IsoManager::AcceptIncomingCisConnection(uint16_t conn_handle) {
+  if (pimpl_->IsRunning()) {
+    pimpl_->iso_impl_->accept_incoming_cis_connection(conn_handle);
+  }
+}
+
+void IsoManager::RejectIncomingCisConnection(uint16_t conn_handle, uint8_t reason) {
+  if (pimpl_->IsRunning()) {
+    pimpl_->iso_impl_->reject_incoming_cis_connection(conn_handle, reason);
   }
 }
 

@@ -29,6 +29,7 @@ import com.android.bluetooth.btservice.AdapterService
 import com.google.common.truth.Truth.assertThat
 import org.mockito.Mockito.lenient
 import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
@@ -47,10 +48,14 @@ internal fun getTestDevice(@IntRange(from = 0x00, to = 0xFF) id: Int): Bluetooth
     return getTestDevice(address)
 }
 
-internal fun getTestDevice(address: String): BluetoothDevice =
+internal fun getTestDevice(
+    address: String,
+    addressType: Int = BluetoothDevice.ADDRESS_TYPE_PUBLIC,
+): BluetoothDevice =
     mock<BluetoothDevice>().apply {
         doReturn(address).whenever(this).address
         doReturn(address).whenever(this).toString()
+        doReturn(addressType).whenever(this).addressType
     }
 
 internal fun getRealDevice(@IntRange(from = 0x00, to = 0xFF) id: Int): BluetoothDevice {
@@ -86,5 +91,7 @@ internal fun Context.mockResources(resources: Resources = mock<Resources>()) =
 internal fun AdapterService.mockGetRemoteDevice(vararg devices: BluetoothDevice) =
     devices.forEach { device ->
         val address = device.address
-        lenient().doReturn(device).whenever(this).getRemoteDevice(address)
+        val addressType = device.addressType
+        lenient().doReturn(device).whenever(this).getRemoteDevice(eq(address))
+        lenient().doReturn(device).whenever(this).getRemoteDevice(eq(address), eq(addressType))
     }

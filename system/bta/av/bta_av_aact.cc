@@ -311,15 +311,19 @@ static void notify_start_failed(tBTA_AV_SCB* p_scb) {
  * Returns          void
  *
  ******************************************************************************/
-void bta_av_st_rc_timer(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
+void bta_av_st_rc_timer(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   log::verbose("rc_handle:{}, use_rc: {}", p_scb->rc_handle, p_scb->use_rc);
   /* for outgoing RC connection as INT/CT */
   if ((p_scb->rc_handle == BTA_AV_RC_HANDLE_NONE) &&
       /* (bta_av_cb.features & BTA_AV_FEAT_RCCT) && */
       (p_scb->use_rc || (p_scb->role & BTA_AV_ROLE_AD_ACP))) {
     if ((p_scb->wait & BTA_AV_WAIT_ROLE_SW_BITS) == 0) {
-      bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL, BTA_AV_AVRC_TIMER_EVT,
-                          p_scb->hndl);
+      if (!com_android_bluetooth_flags_no_avrcp_connection_delay()) {
+        bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL, BTA_AV_AVRC_TIMER_EVT,
+                            p_scb->hndl);
+      } else {
+        bta_av_ssm_execute(p_scb, BTA_AV_AVRC_TIMER_EVT, p_data);
+      }
     } else {
       p_scb->wait |= BTA_AV_WAIT_CHECK_RC;
     }
@@ -824,8 +828,12 @@ void bta_av_do_disc_a2dp(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   if (p_scb->wait & BTA_AV_WAIT_CHECK_RC) {
     p_scb->wait &= ~BTA_AV_WAIT_CHECK_RC;
-    bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL, BTA_AV_AVRC_TIMER_EVT,
-                        p_scb->hndl);
+    if (!com_android_bluetooth_flags_no_avrcp_connection_delay()) {
+      bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL, BTA_AV_AVRC_TIMER_EVT,
+                          p_scb->hndl);
+    } else {
+      bta_av_ssm_execute(p_scb, BTA_AV_AVRC_TIMER_EVT, p_data);
+    }
   }
 
   /* store peer addr other parameters */
@@ -884,7 +892,7 @@ void bta_av_cleanup(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
   log::info("peer {}", p_scb->PeerAddress());
 
   /* free any buffers */
-  p_scb->sdp_discovery_started = false;
+  bta_av_free_sdb(p_scb, NULL);
   p_scb->SetAvdtpVersion(0);
 
   /* initialize some control block variables */
@@ -1390,7 +1398,7 @@ void bta_av_do_close(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
  ******************************************************************************/
 void bta_av_connect_req(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* /* p_data */) {
   log::verbose("peer {} coll_mask=0x{:02x}", p_scb->PeerAddress(), p_scb->coll_mask);
-  p_scb->sdp_discovery_started = false;
+  bta_av_free_sdb(p_scb, NULL);
   if (p_scb->coll_mask & BTA_AV_COLL_INC_TMR) {
     /* SNK initiated L2C connection while SRC was doing SDP.    */
     /* Wait until timeout to check if SNK starts signalling.    */
@@ -1419,8 +1427,10 @@ void bta_av_sdp_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     p_scb->open_status = BTA_AV_FAIL_SDP;
   }
 
-  p_scb->sdp_discovery_started = false;
-  bta_av_str_closed(p_scb, p_data);
+  bta_av_free_sdb(p_scb, NULL);
+  if (!com_android_bluetooth_flags_cleanup_avdt_on_sdp_result_when_closing()) {
+    bta_av_str_closed(p_scb, p_data);
+  }
 }
 
 /*******************************************************************************
@@ -2028,16 +2038,11 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
 
   log::info("peer {} bta_handle:0x{:x} audio_open_cnt:{}, p_data {} start:{}", p_scb->PeerAddress(),
             p_scb->hndl, bta_av_cb.audio_open_cnt, std::format_ptr(p_data), start);
-  if (!com_android_bluetooth_flags_delay_sniff_subrating()) {
-    bta_sys_idle(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
-    BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
-  }
   if(!is_delay_subrate) {
     log::info("Not delaying Sniff Subrating");
     bta_sys_idle(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
-
   if (p_scb->co_started) {
     if (bta_av_cb.offload_started_hndl == p_scb->hndl) {
       bta_av_vendor_offload_stop();
@@ -2058,11 +2063,9 @@ void bta_av_str_stopped(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
     BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
   }
 
-  if (com_android_bluetooth_flags_delay_sniff_subrating()) {
-    log::info("Delayed Sniff Subrating");
-    bta_sys_idle(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
-    BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
-  }
+  log::info("Delayed Sniff Subrating");
+  bta_sys_idle(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
+  BTM_unblock_role_switch_and_sniff_mode_for(p_scb->PeerAddress());
 
   /* if q_info.a2dp_list is not empty, drop it now */
   if (BTA_AV_CHNL_AUDIO == p_scb->chnl) {
@@ -2485,12 +2488,12 @@ void bta_av_start_ok(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
        * Otherwise allow role switch, if source is peripheral.
        * Because it would not hurt source, if the peer device wants source to be
        * central.
-       * do not disable sniff mode unconditionally during streaming */
+       * disable sniff mode unconditionally during streaming */
       if ((get_btm_client_interface().link_policy.BTM_GetRole(p_scb->PeerAddress(),
                                                               BT_TRANSPORT_BR_EDR, &cur_role) ==
            tBTM_STATUS::BTM_SUCCESS) &&
           (cur_role == HCI_ROLE_CENTRAL)) {
-         get_btm_client_interface().link_policy.BTM_block_role_switch_for(p_scb->PeerAddress());
+        get_btm_client_interface().link_policy.BTM_block_role_switch_for(p_scb->PeerAddress());
       }
     }
 
@@ -2554,8 +2557,7 @@ void bta_av_start_failed(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
   if (!p_scb->started && !p_scb->co_started) {
         bta_sys_idle(BTA_ID_AV, p_scb->app_id, p_scb->PeerAddress());
 
-    if (com_android_bluetooth_flags_avdt_close_on_start_failure_bad_state() &&
-        err_code == AVDT_ERR_BAD_STATE) {
+    if (err_code == AVDT_ERR_BAD_STATE) {
       /* START failed. Close connection. */
       bta_av_ssm_execute(p_scb, BTA_AV_API_CLOSE_EVT, NULL);
     }
@@ -3080,8 +3082,12 @@ void bta_av_open_rc(tBTA_AV_SCB* p_scb, tBTA_AV_DATA* p_data) {
       if (p_scb->rc_handle == BTA_AV_RC_HANDLE_NONE) {
         /* AVRC channel is not connected. delay a little bit */
         if ((p_scb->wait & BTA_AV_WAIT_ROLE_SW_BITS) == 0) {
-          bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL, BTA_AV_AVRC_TIMER_EVT,
-                              p_scb->hndl);
+          if (!com_android_bluetooth_flags_no_avrcp_connection_delay()) {
+            bta_sys_start_timer(p_scb->avrc_ct_timer, BTA_AV_RC_DISC_TIME_VAL,
+                                BTA_AV_AVRC_TIMER_EVT, p_scb->hndl);
+          } else {
+            bta_av_ssm_execute(p_scb, BTA_AV_AVRC_TIMER_EVT, p_data);
+          }
         } else {
           p_scb->wait |= BTA_AV_WAIT_CHECK_RC;
         }

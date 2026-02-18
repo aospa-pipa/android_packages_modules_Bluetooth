@@ -29,8 +29,8 @@ import static com.android.bluetooth.TestUtils.getTestDevice;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -62,8 +62,8 @@ public class A2dpSinkStateMachineTest {
 
     private final BluetoothDevice mDevice = getTestDevice(11);
 
-    private A2dpSinkStateMachine mStateMachine;
     private TestLooper mLooper;
+    private A2dpSinkStateMachine mStateMachine;
 
     @Before
     public void setUp() throws Exception {

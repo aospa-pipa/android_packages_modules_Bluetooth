@@ -58,23 +58,30 @@ public:
 
     types::CigState GetState(void) const { return state_; }
     void SetState(bluetooth::le_audio::types::CigState state);
+    void GenerateCisIds(types::LeAudioContextType context_type);
+    void ClearCisIds(void) { cises.clear(); }
+    bool AssignCisIds(LeAudioDevice* leAudioDevice);
+    void AssignCisConnHandles(const std::vector<uint16_t>& conn_handles);
+    void UnassignCis(LeAudioDevice* leAudioDevice, uint16_t conn_handle);
+    void UnassignAllCises(void);
+    void PrintCigState(void);
+    const std::vector<struct types::cis>& GetCises(void) const { return cises; }
+
+    types::BidirectionalPair<bool> GetConnectedCisDirections(void);
+
+  private:
     void GetCisCount(types::LeAudioContextType context_type, uint8_t& out_cis_count_bidir,
                      uint8_t& out_cis_count_unidir_sink,
                      uint8_t& out_cis_count_unidir_source,
                      std::shared_ptr<const types::AudioSetConfiguration> conf,
                      types::BidirectionalPair<types::AudioContexts> group_contexts) const;
-    void GenerateCisIds(types::LeAudioContextType context_type);
-    bool AssignCisIds(LeAudioDevice* leAudioDevice);
-    void AssignCisConnHandles(const std::vector<uint16_t>& conn_handles);
-    void UnassignCis(LeAudioDevice* leAudioDevice, uint16_t conn_handle);
-    types::BidirectionalPair<bool> GetConnectedCisDirections(void);
-    std::vector<struct types::cis> cises;
-
-  private:
     uint8_t GetFirstFreeCisId(types::CisType cis_type) const;
 
     LeAudioDeviceGroup* group_;
     types::CigState state_;
+
+    /* Life time of cises is from GenerateCisIds() up to when CIG is removed.*/
+    std::vector<struct types::cis> cises;
   } cig;
 
   bool IsGroupConfiguredTo(const types::AudioSetConfiguration& cfg) {
@@ -258,9 +265,9 @@ public:
   void SetPendingConfiguration(void);
   void ClearPendingConfiguration(void);
   void AddToAllowListNotConnectedGroupMembers(int gatt_if);
-  void ApplyReconnectionMode(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode);
+  void ApplyReconnectionMode(int gatt_if);
   void Disable(int gatt_if);
-  void Enable(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode);
+  void Enable(int gatt_if);
   bool IsEnabled(void) const;
   void UpdateMetadataForActiveAndNotStreamingAses(
           const types::BidirectionalPair<std::vector<uint8_t>>& ccid_lists);

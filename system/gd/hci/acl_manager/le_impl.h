@@ -161,9 +161,6 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
             handler_->BindOn(this, &le_impl::on_le_event),
             handler_->BindOn(this, &le_impl::on_le_disconnect),
             handler_->BindOn(this, &le_impl::on_le_read_remote_version_information));
-    for (const auto event : LeHdtConnectionManagementEvents) {
-      hci_layer_.RegisterHdtEventHandler(event, handler_->BindOn(this, &le_impl::on_hdt_event));
-    }
     le_address_manager_ = new LeAddressManager(
             common::Bind(&le_impl::enqueue_command, common::Unretained(this)), handler_,
             controller.GetMacAddress(), controller.GetLeFilterAcceptListSize(),
@@ -176,9 +173,6 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
     }
     delete le_address_manager_;
     hci_layer_.PutLeAclConnectionInterface();
-    for (const auto event : LeHdtConnectionManagementEvents) {
-      hci_layer_.UnregisterHdtEventHandler(event);
-    }
     connections.reset();
   }
 
@@ -240,29 +234,17 @@ struct le_impl : public bluetooth::hci::LeAddressManagerCallback {
       case SubeventCode::LE_SUBRATE_CHANGE:
         on_le_subrate_change(event_packet);
         break;
+      case SubeventCode::DATA_LENGTH_CHANGE_V2:
+        on_data_length_change_v2(event_packet);
+        break;
+      case SubeventCode::LE_TEST_REPORT_HDT_LINK_QUALITY:
+        // Need to implement
+        break;
       default:
         log::fatal("Unhandled event code {}", SubeventCodeText(code));
     }
   }
 
-  void on_hdt_event(HdtEventView event_packet) {
-    log::info("Received HDT event (event code 0xFE)");
-    SubeventCode code = event_packet.GetSubeventCode();
-    switch (code) {
-      case SubeventCode::ENCRYPTION_CHANGE_V3:
-        on_encryption_change_v3(event_packet);
-        break;
-      case SubeventCode::ENCRYPTION_KEY_REFRESH_COMPLETE_V2:
-        on_encryption_key_refresh_complete_v2(event_packet);
-        break;
-      case SubeventCode::DATA_LENGTH_CHANGE_V2:
-        on_data_length_change_v2(event_packet);
-        break;
-      case SubeventCode::LE_TEST_REPORT_HDT_LINK_QUALITY:
-      default:
-        log::fatal("Unhandled event code {}", SubeventCodeText(code));
-    }
-  }
 private:
   static constexpr uint16_t kIllegalConnectionHandle = 0xffff;
   // Stores the connection_complete events which are not processed immediately because another
@@ -764,7 +746,7 @@ public:
     });
   }
 
-  void on_data_length_change_v2(HdtEventView view) {
+  void on_data_length_change_v2(LeMetaEventView view) {
     auto data_length_v2_view = LeDataLengthChangeV2View::Create(view);
     if (!data_length_v2_view.IsValid()) {
       log::error("Invalid packet");
@@ -818,39 +800,6 @@ public:
     });
   }
 
-  void on_encryption_change_v3(HdtEventView view) {
-    auto encryption_change_v3_view = EncryptionChangeV3View::Create(view);
-    if (!encryption_change_v3_view.IsValid()) {
-      log::error("Invalid packet");
-      return;
-    }
-    auto handle = encryption_change_v3_view.GetConnectionHandle();
-    connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
-      callbacks->OnEncryptionChangeV3(encryption_change_v3_view.GetStatus(),
-                                      static_cast<uint8_t>(encryption_change_v3_view.GetEncryptionEnabled()),
-                                      encryption_change_v3_view.GetKeySize(),
-                                      encryption_change_v3_view.GetMicLength(),
-                                      encryption_change_v3_view.GetKeySchedEnabled(),
-                                      encryption_change_v3_view.GetKeySchedDebugFlag());
-    });
-  }
-
-  
-  void on_encryption_key_refresh_complete_v2(HdtEventView view) {
-    auto refresh_view = EncryptionKeyRefreshCompleteV2View::Create(view);
-    if (!refresh_view.IsValid()) {
-      log::error("Invalid packet");
-      return;
-    }
-    auto handle = refresh_view.GetConnectionHandle();
-    connections.execute(handle, [=](LeConnectionManagementCallbacks* callbacks) {
-      callbacks->OnEncryptionKeyRefreshCompleteV2(refresh_view.GetStatus(),
-                                                  refresh_view.GetMicLength(),
-                                                  refresh_view.GetKeySchedEnabled(),
-                                                  refresh_view.GetKeySchedDebugFlag());
-    });
-   }
-
 
   uint16_t HACK_get_handle(Address address) { return connections.HACK_get_handle(address); }
 
@@ -875,15 +824,14 @@ public:
 
   void direct_connect_add(AddressWithType address_with_type, bool prefer_relax_mode) {
     log::debug("{}, {}", address_with_type, prefer_relax_mode);
-    direct_connections_.insert(address_with_type);
     if (prefer_relax_mode) {
       relaxed_direct_connections_.insert(address_with_type);
     }
-    if (create_connection_timeout_alarms_.find(address_with_type) !=
-        create_connection_timeout_alarms_.end()) {
-      log::verbose("Timer already added for {}", address_with_type);
+    if (direct_connections_.find(address_with_type) != direct_connections_.end()) {
+      log::verbose("Direct connect already in progress for {}", address_with_type);
       return;
     }
+    direct_connections_.insert(address_with_type);
 
     auto emplace_result = create_connection_timeout_alarms_.emplace(
             std::piecewise_construct,
@@ -1074,25 +1022,20 @@ public:
       }
     }
 
-    if (com::android::bluetooth::flags::initial_conn_params_p1()) {
-      if (prefer_relaxed_connection_interval) {
-        conn_interval_min = LeConnectionParameters::GetMinConnIntervalRelaxed();
-        conn_interval_max = LeConnectionParameters::GetMaxConnIntervalRelaxed();
-        log::debug("conn_interval_min={}, conn_interval_max={}", conn_interval_min,
-                   conn_interval_max);
-      } else {
-        size_t num_classic_acl_connections = classic_acl_count_provider_.GetAclCount();
-        size_t num_acl_connections = connections.size();
-
-        log::debug("ACL connection count: Classic={}, LE={}", num_classic_acl_connections,
-                   num_acl_connections);
-
-        choose_connection_mode(num_classic_acl_connections + num_acl_connections,
-                               &conn_interval_min, &conn_interval_max);
-      }
+    if (prefer_relaxed_connection_interval) {
+      conn_interval_min = LeConnectionParameters::GetMinConnIntervalRelaxed();
+      conn_interval_max = LeConnectionParameters::GetMaxConnIntervalRelaxed();
+      log::debug("conn_interval_min={}, conn_interval_max={}", conn_interval_min,
+                 conn_interval_max);
     } else {
-      conn_interval_min = os::GetSystemPropertyUint32(kPropertyMinConnInterval, kConnIntervalMin);
-      conn_interval_max = os::GetSystemPropertyUint32(kPropertyMaxConnInterval, kConnIntervalMax);
+      size_t num_classic_acl_connections = classic_acl_count_provider_.GetAclCount();
+      size_t num_acl_connections = connections.size();
+
+      log::debug("ACL connection count: Classic={}, LE={}", num_classic_acl_connections,
+                 num_acl_connections);
+
+      choose_connection_mode(num_classic_acl_connections + num_acl_connections, &conn_interval_min,
+                             &conn_interval_max);
     }
 
     uint16_t conn_latency = os::GetSystemPropertyUint32(kPropertyConnLatency, kConnLatency);
@@ -1232,8 +1175,7 @@ public:
       connection_mode = ConnectionMode::AGGRESSIVE;
     }
 
-    if (com::android::bluetooth::flags::leaudio_use_aggressive_params() &&
-        num_acl_connections < iso_aggressive_connection_threshold &&
+    if (num_acl_connections < iso_aggressive_connection_threshold &&
         accept_list_contains_only_le_audio_devices()) {
       connection_mode = ConnectionMode::AGGRESSIVE_ISO;
     }
@@ -1315,8 +1257,7 @@ public:
       bool in_accept_list_due_to_direct_connect =
               direct_connections_.find(address_with_type) != direct_connections_.end();
       if (already_in_accept_list && (in_accept_list_due_to_direct_connect || !is_direct) &&
-          (!com::android::bluetooth::flags::allow_rearm_if_suspend_scan_params_used() ||
-           is_using_system_suspend_scan_params_ == system_suspend_)) {
+          is_using_system_suspend_scan_params_ == system_suspend_) {
         log::info("Device {} already in accept list. Stop here.", address_with_type);
         return;
       }
@@ -1530,8 +1471,38 @@ public:
     }
   }
 
+  void refresh_connection_parameters() {
+    if (accept_list.empty()) {
+      return;
+    }
+
+    // refreshing the connection parameters is done by disarming and re-arming connectability.
+    switch (connectability_state_) {
+      case ConnectabilityState::ARMED:
+      case ConnectabilityState::ARMING:
+        arm_on_disarm_ = true;
+        disarm_connectability();
+        break;
+      case ConnectabilityState::DISARMING:
+        arm_on_disarm_ = true;
+        break;
+      case ConnectabilityState::DISARMED:
+        arm_connectability();
+        break;
+    }
+  }
+
   void set_system_suspend_state(bool suspended, std::promise<void> promise) {
-    system_suspend_ = suspended;
+    if (!com::android::bluetooth::flags::resolve_collision_conn_discon()) {
+      system_suspend_ = suspended;
+      promise.set_value();
+      return;
+    }
+
+    if (system_suspend_ != suspended) {
+      system_suspend_ = suspended;
+      refresh_connection_parameters();
+    }
     promise.set_value();
   }
 

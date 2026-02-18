@@ -55,6 +55,7 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.bluetooth.storage.BluetoothStorageManager;
+import com.android.bluetooth.util.Text;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.List;
@@ -562,6 +563,16 @@ public class AvrcpTargetService extends ProfileService {
             return;
         }
 
+        if (KeyEvent.KEYCODE_VOLUME_UP == keyCode || KeyEvent.KEYCODE_VOLUME_DOWN == keyCode) {
+            mAudioManager.adjustSuggestedStreamVolume(
+                    KeyEvent.KEYCODE_VOLUME_UP == keyCode
+                            ? AudioManager.ADJUST_RAISE
+                            : AudioManager.ADJUST_LOWER,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.FLAG_SHOW_UI);
+            return;
+        }
+
         int action = pushed ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP;
         KeyEvent event = new KeyEvent(action, keyCode);
         mAudioManager.dispatchMediaKeyEvent(event);
@@ -678,6 +689,6 @@ public class AvrcpTargetService extends ProfileService {
         }
 
         // Tab everything over by two spaces
-        sb.append(tempBuilder.toString().replaceAll("(?m)^", "  "));
+        sb.append(Text.indent(tempBuilder.toString(), "  "));
     }
 }

@@ -175,14 +175,19 @@ void LeAudioDeviceGroup::ClearSourcesFromConfiguration(void) {
 
 void LeAudioDeviceGroup::ClearAllCises(void) {
   log::info("group_id: {}", group_id_);
-  cig.cises.clear();
+
+  if (com_android_bluetooth_flags_leaudio_fix_clear_cises_in_the_cig()) {
+    cig.UnassignAllCises();
+  } else {
+    cig.ClearCisIds();
+  }
   ClearSinksFromConfiguration();
   ClearSourcesFromConfiguration();
 }
 
 void LeAudioDeviceGroup::UpdateCisConfiguration(uint8_t direction) {
   CodecManager::GetInstance()->UpdateCisConfiguration(
-          cig.cises, stream_conf.stream_params.get(direction), direction);
+          cig.GetCises(), stream_conf.stream_params.get(direction), direction);
 }
 
 void LeAudioDeviceGroup::Cleanup(void) {
@@ -684,33 +689,32 @@ uint8_t LeAudioDeviceGroup::GetFraming(void) const {
 
 /* TODO: Preferred parameter may be other than minimum */
 static uint16_t find_max_transport_latency(const LeAudioDeviceGroup* group, uint8_t direction) {
-  uint16_t max_transport_latency = 0;
+  uint16_t max_transport_latency = types::kMaxTransportLatencyMin;
 
   for (LeAudioDevice* leAudioDevice = group->GetFirstActiveDevice(); leAudioDevice != nullptr;
        leAudioDevice = group->GetNextActiveDevice(leAudioDevice)) {
+    /* Find the minimum Max_Transport_Latency among all active ASEs */
     for (ase* ase = leAudioDevice->GetFirstActiveAseByDirection(direction); ase != nullptr;
          ase = leAudioDevice->GetNextActiveAseWithSameDirection(ase)) {
-      if (!ase) {
-        break;
+      /* The Max_Transport_Latency parameter shall be in the range of 0x0005 to 0x0FA0
+       * as defined in the BAP Assigned Numbers.
+       */
+      if ((ase->qos_config.max_transport_latency <= types::kMaxTransportLatencyMin) ||
+          (ase->qos_config.max_transport_latency > types::kMaxTransportLatencyMax)) {
+        log::warn("Unexpected Max Transport Latency on {}, active ase_id: {}: Latency: {:#x}",
+                  leAudioDevice->address_, ase->id, ase->qos_config.max_transport_latency);
+        continue;
       }
 
-      if (max_transport_latency == 0) {
-        // first assignment
+      /* Assign new value if this is very first assignment or if new value is smaller than previous
+       * one. Note: types::kMaxTransportLatencyMin is special as it is also used as a default value
+       * when the direction is not used.
+       */
+      if (max_transport_latency == types::kMaxTransportLatencyMin ||
+          ase->qos_config.max_transport_latency < max_transport_latency) {
         max_transport_latency = ase->qos_config.max_transport_latency;
-      } else if (ase->qos_config.max_transport_latency < max_transport_latency) {
-        if (ase->qos_config.max_transport_latency != 0) {
-          max_transport_latency = ase->qos_config.max_transport_latency;
-        } else {
-          log::warn("Trying to set latency back to 0, ASE ID {}", ase->id);
-        }
       }
     }
-  }
-
-  if (max_transport_latency < types::kMaxTransportLatencyMin) {
-    max_transport_latency = types::kMaxTransportLatencyMin;
-  } else if (max_transport_latency > types::kMaxTransportLatencyMax) {
-    max_transport_latency = types::kMaxTransportLatencyMax;
   }
 
   return max_transport_latency;
@@ -868,48 +872,50 @@ uint8_t LeAudioDeviceGroup::GetTargetPhy(uint8_t direction) const {
 }
 
 bool LeAudioDeviceGroup::GetPresentationDelay(uint32_t* delay, uint8_t direction) const {
-  uint32_t delay_min = 0;
-  uint32_t delay_max = UINT32_MAX;
-  uint32_t preferred_delay_min = delay_min;
-  uint32_t preferred_delay_max = delay_max;
+  uint32_t common_delay_min = 0;
+  uint32_t common_delay_max = 0xFFFFFF; /* 3 Octects  */
+  uint32_t common_preferred_delay_min = common_delay_min;
+  uint32_t common_preferred_delay_max = common_delay_max;
 
   LeAudioDevice* leAudioDevice = GetFirstActiveDevice();
   log::assert_that(leAudioDevice, "Shouldn't be called without an active device.");
 
-  do {
-    struct ase* ase = leAudioDevice->GetFirstActiveAseByDirection(direction);
-    if (!ase) {
-      continue;  // device has no active ASEs in this direction
-    }
-
-    do {
-      /* No common range check */
-      if (ase->qos_preferences.pres_delay_min > delay_max ||
-          ase->qos_preferences.pres_delay_max < delay_min) {
+  /* Here we are trying to find a common supported presentation delay range for all active ASEs
+   * We are looking in both ranges, the regular one and preferred. This is expected that coordinated
+   * set will provide presentation delays ranges which have a common part. */
+  for (; leAudioDevice; leAudioDevice = GetNextActiveDevice(leAudioDevice)) {
+    for (struct ase* ase = leAudioDevice->GetFirstActiveAseByDirection(direction); ase;
+         ase = leAudioDevice->GetNextActiveAseWithSameDirection(ase)) {
+      /* Make sure provided presentation delay has a common range. */
+      if (ase->qos_preferences.pres_delay_min > common_delay_max ||
+          ase->qos_preferences.pres_delay_max < common_delay_min) {
         return false;
       }
 
-      if (ase->qos_preferences.pres_delay_min > delay_min) {
-        delay_min = ase->qos_preferences.pres_delay_min;
+      if (ase->qos_preferences.pres_delay_min > common_delay_min) {
+        common_delay_min = ase->qos_preferences.pres_delay_min;
       }
-      if (ase->qos_preferences.pres_delay_max < delay_max) {
-        delay_max = ase->qos_preferences.pres_delay_max;
+      if (ase->qos_preferences.pres_delay_max < common_delay_max) {
+        common_delay_max = ase->qos_preferences.pres_delay_max;
       }
-      if (ase->qos_preferences.preferred_pres_delay_min > preferred_delay_min) {
-        preferred_delay_min = ase->qos_preferences.preferred_pres_delay_min;
+      if (ase->qos_preferences.preferred_pres_delay_min > common_preferred_delay_min) {
+        common_preferred_delay_min = ase->qos_preferences.preferred_pres_delay_min;
       }
-      if (ase->qos_preferences.preferred_pres_delay_max < preferred_delay_max &&
+      if (ase->qos_preferences.preferred_pres_delay_max < common_preferred_delay_max &&
           ase->qos_preferences.preferred_pres_delay_max != types::kPresDelayNoPreference) {
-        preferred_delay_max = ase->qos_preferences.preferred_pres_delay_max;
+        common_preferred_delay_max = ase->qos_preferences.preferred_pres_delay_max;
       }
-    } while ((ase = leAudioDevice->GetNextActiveAseWithSameDirection(ase)));
-  } while ((leAudioDevice = GetNextActiveDevice(leAudioDevice)));
+    }
+  }
 
-  if (preferred_delay_min <= preferred_delay_max && preferred_delay_min >= delay_min &&
-      preferred_delay_min <= delay_max) {
-    *delay = preferred_delay_min;
+  if (common_preferred_delay_min <= common_preferred_delay_max &&
+      common_preferred_delay_min >= common_delay_min &&
+      common_preferred_delay_min <= common_delay_max) {
+    log::debug("direction {}, preferred delay: {:#x}  ", direction, common_preferred_delay_min);
+    *delay = common_preferred_delay_min;
   } else {
-    *delay = delay_min;
+    log::debug("direction {}, delay_min: {:#x}  ", direction, common_delay_min);
+    *delay = common_delay_min;
   }
 
   return true;
@@ -936,21 +942,6 @@ uint16_t LeAudioDeviceGroup::GetRemoteDelay(uint8_t direction) const {
 
 BidirectionalPair<bool> LeAudioDeviceGroup::GetDirectionSupport(
         types::LeAudioContextType ctx_type) const {
-  if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
-    BidirectionalPair<bool> remote_directions = {true, true};
-    // Remove the Source support if Sink only scenario is used
-    // Note: With the RINGTONE we should already prepare for a call.
-    if ((types::kLeAudioContextAllRemoteSinkOnly.test(ctx_type) &&
-         (ctx_type != types::LeAudioContextType::RINGTONE)) ||
-        ctx_type == types::LeAudioContextType::UNSPECIFIED) {
-      log::debug("Remote source not supported for {}", common::ToString(ctx_type));
-      remote_directions.source = false;
-    }
-    log::info("Returning remote's source: {}, sink: {}",
-              remote_directions.source, remote_directions.sink);
-    return remote_directions;
-  }
-
   auto audio_context_type_manager = AudioContextTypeManager::Get();
   if (audio_context_type_manager == nullptr) {
     log::warn("audio_context_type_manager is nullptr");
@@ -997,8 +988,6 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
   bool remote_has_gmap = false;
   BidirectionalPair<bool> has_direction = GetDirectionSupport(ctx_type);
 
-  log::debug("leaudio_use_context_type_manager: {}",
-              com_android_bluetooth_flags_leaudio_use_context_type_manager());
   // Define a requirement for each location. Knowing codec specific
   // capabilities (i.e. multiplexing capability) the config provider can
   // determine the number of ASEs to activate.
@@ -1046,7 +1035,7 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
         continue;
       }
 
-      if (!com_android_bluetooth_flags_leaudio_use_context_type_manager()) {
+      if (false) {
         if (ctx_type == types::LeAudioContextType::VOICEASSISTANTS ||
             ctx_type == types::LeAudioContextType::GAME) {
           // For GAME and VOICE ASSISTANT, ignore direction if it is not supported only on a single
@@ -1172,8 +1161,7 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
       }
       break;
     case ::bluetooth::le_audio::types::LeAudioContextType::MEDIA:
-      if (com_android_bluetooth_flags_dsa_use_codec_extensibility() &&
-          (dsa_.mode == DsaMode::ISO_SW || dsa_.mode == DsaMode::ISO_HW)) {
+      if (dsa_.mode == DsaMode::ISO_SW || dsa_.mode == DsaMode::ISO_HW) {
         log::debug("Setting the DSA flag for mode: {}", common::ToString(dsa_.mode));
         // Set the DSA flags
         new_req.flags = CodecManager::Flags(new_req.flags | CodecManager::Flags::SPATIAL_AUDIO);
@@ -1212,8 +1200,7 @@ bool LeAudioDeviceGroup::UpdateAudioSetConfigurationCache(LeAudioContextType ctx
                                                           bool use_preference) const {
   log::info("ctx_type: {}", ToHexString(ctx_type));
   auto requirements = GetAudioSetConfigurationRequirements(ctx_type);
-  if (com_android_bluetooth_flags_leaudio_use_context_type_manager() && !requirements.sink_pacs &&
-      !requirements.source_pacs) {
+  if (!requirements.sink_pacs && !requirements.source_pacs) {
     log::debug("No requirements for context type: {}", common::ToString(ctx_type));
     return false;
   }
@@ -1703,12 +1690,8 @@ void LeAudioDeviceGroup::CigConfiguration::GetCisCount(LeAudioContextType contex
   }
 
   // For non-LC3 codecs like Opus, we should base the strategy calcualation based on the config
-  const bool derive_strategy_from_config =
-          current_config && true/*com_android_bluetooth_flags_leaudio_add_opus_hi_res_codec_type()*/;
-  log::info("derive_strategy_from_config {}", derive_strategy_from_config);
-  auto strategy = derive_strategy_from_config
-                          ? group_->FindGroupStrategyForConfig(current_config.get())
-                          : group_->GetGroupSinkStrategy();
+  auto strategy = current_config ? group_->FindGroupStrategyForConfig(current_config.get())
+                                 : group_->GetGroupSinkStrategy();
   if ((strategy == types::LeAudioConfigurationStrategy::STEREO_TWO_CISES_PER_DEVICE) &&
       !(group_contexts.sink.test(context_type) && group_contexts.source.test(context_type))) {
     log::warn("Remote does not support (context:{}) for both directions",
@@ -1774,7 +1757,8 @@ void LeAudioDeviceGroup::CigConfiguration::GetCisCount(LeAudioContextType contex
                  out_cis_count_unidir_sink = expected_device_cnt;
               }
             }
-          } else if (context_type == LeAudioContextType::LIVE) {
+          } else if (context_type == LeAudioContextType::LIVE ||
+                     context_type == LeAudioContextType::VOICEASSISTANTS) {
             out_cis_count_bidir = 2 * expected_device_cnt;
           } else if (context_type == LeAudioContextType::GAME) {
             out_cis_count_bidir = expected_device_cnt;
@@ -1819,54 +1803,68 @@ void LeAudioDeviceGroup::CigConfiguration::GenerateCisIds(LeAudioContextType con
   log::info("Group {}, group_id: {}, context_type: {}", std::format_ptr(group_), group_->group_id_,
             bluetooth::common::ToString(context_type));
 
+  /* Based on the context type and LeAudio group topology (banded headphones/ CSIS set/ TWS Set),
+   * list of expected CISes is generated with assigned CIS_IDs and type
+   * (direction(sink/source)/(uni/bi)directional). Later this is going to be used as an input to set
+   * cig parameter commands.
+   */
+  auto generate_expected_cis_ids =
+          [&](LeAudioContextType context_type) -> std::vector<struct types::cis> {
+    uint8_t cis_count_bidir = 0;
+    uint8_t cis_count_unidir_sink = 0;
+    uint8_t cis_count_unidir_source = 0;
+    auto group_contexts = group_->GetLatestAvailableContexts();
+    std::vector<struct types::cis> expected_cises;
+
+    GetCisCount(context_type, cis_count_bidir, cis_count_unidir_sink, cis_count_unidir_source,
+              group_->GetConfiguration(context_type), group_contexts);
+
+    uint8_t idx = 0;
+    while (cis_count_bidir > 0) {
+      struct bluetooth::le_audio::types::cis cis_entry = {
+              .id = idx,
+              .type = CisType::CIS_TYPE_BIDIRECTIONAL,
+              .conn_handle = 0,
+              .addr = RawAddress::kEmpty,
+      };
+      expected_cises.push_back(cis_entry);
+      cis_count_bidir--;
+      idx++;
+    }
+
+    while (cis_count_unidir_sink > 0) {
+      struct bluetooth::le_audio::types::cis cis_entry = {
+              .id = idx,
+              .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SINK,
+              .conn_handle = 0,
+              .addr = RawAddress::kEmpty,
+      };
+      expected_cises.push_back(cis_entry);
+      cis_count_unidir_sink--;
+      idx++;
+    }
+
+    while (cis_count_unidir_source > 0) {
+      struct bluetooth::le_audio::types::cis cis_entry = {
+              .id = idx,
+              .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SOURCE,
+              .conn_handle = 0,
+              .addr = RawAddress::kEmpty,
+      };
+      expected_cises.push_back(cis_entry);
+      cis_count_unidir_source--;
+      idx++;
+    }
+
+    return expected_cises;
+  };
+
   if (cises.size() > 0) {
     log::info("CIS IDs already generated");
     return;
   }
 
-  uint8_t cis_count_bidir = 0;
-  uint8_t cis_count_unidir_sink = 0;
-  uint8_t cis_count_unidir_source = 0;
-  auto group_contexts = group_->GetLatestAvailableContexts();
-  GetCisCount(context_type, cis_count_bidir, cis_count_unidir_sink, cis_count_unidir_source,
-              group_->GetConfiguration(context_type), group_contexts);
-
-  uint8_t idx = 0;
-  while (cis_count_bidir > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_BIDIRECTIONAL,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_bidir--;
-    idx++;
-  }
-
-  while (cis_count_unidir_sink > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SINK,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_unidir_sink--;
-    idx++;
-  }
-
-  while (cis_count_unidir_source > 0) {
-    struct bluetooth::le_audio::types::cis cis_entry = {
-            .id = idx,
-            .type = CisType::CIS_TYPE_UNIDIRECTIONAL_SOURCE,
-            .conn_handle = 0,
-            .addr = RawAddress::kEmpty,
-    };
-    cises.push_back(cis_entry);
-    cis_count_unidir_source--;
-    idx++;
-  }
+  cises = generate_expected_cis_ids(context_type);
 }
 
 bool LeAudioDeviceGroup::CigConfiguration::AssignCisIds(LeAudioDevice* leAudioDevice) {
@@ -2010,16 +2008,17 @@ void LeAudioDeviceGroup::AssignCisConnHandlesToAses(LeAudioDevice* leAudioDevice
     return;
   }
 
+  auto& cises = cig.GetCises();
   for (; ase != nullptr; ase = leAudioDevice->GetFirstActiveAseByCisAndDataPathState(
                                  CisState::IDLE, DataPathState::IDLE)) {
     auto ases_pair = leAudioDevice->GetAsesByCisId(ase->cis_id);
 
     if (ases_pair.sink && ases_pair.sink->active) {
-      ases_pair.sink->cis_conn_hdl = cig.cises[ase->cis_id].conn_handle;
+      ases_pair.sink->cis_conn_hdl = cises[ase->cis_id].conn_handle;
       ases_pair.sink->cis_state = CisState::ASSIGNED;
     }
     if (ases_pair.source && ases_pair.source->active) {
-      ases_pair.source->cis_conn_hdl = cig.cises[ase->cis_id].conn_handle;
+      ases_pair.source->cis_conn_hdl = cises[ase->cis_id].conn_handle;
       ases_pair.source->cis_state = CisState::ASSIGNED;
     }
   }
@@ -2034,6 +2033,24 @@ void LeAudioDeviceGroup::AssignCisConnHandlesToAses(void) {
   /* Assign all CIS connection handles to ases */
   for (; leAudioDevice != nullptr; leAudioDevice = GetNextActiveDevice(leAudioDevice)) {
     AssignCisConnHandlesToAses(leAudioDevice);
+  }
+}
+
+void LeAudioDeviceGroup::CigConfiguration::UnassignAllCises(void) {
+  log::info("Group {}, group_id {}", std::format_ptr(group_), group_->group_id_);
+
+  for (struct bluetooth::le_audio::types::cis& cis_entry : cises) {
+    cis_entry.addr = RawAddress::kEmpty;
+  }
+}
+
+void LeAudioDeviceGroup::CigConfiguration::PrintCigState(void) {
+  log::verbose("Group {}, group_id {} cig_state: {}", std::format_ptr(group_), group_->group_id_,
+               bluetooth::common::ToString(state_));
+
+  for (struct bluetooth::le_audio::types::cis& cis_entry : cises) {
+    log::verbose("cis_id: {}, type: {}, conn_handle: {:#x}, assigned_address: {}", cis_entry.id,
+                 cis_entry.type, cis_entry.conn_handle, cis_entry.addr);
   }
 }
 
@@ -2745,13 +2762,14 @@ void LeAudioDeviceGroup::RemoveCisFromStreamIfNeeded(LeAudioDevice* leAudioDevic
           stream_conf.stream_params.source.num_of_channels);
 
   cig.UnassignCis(leAudioDevice, cis_conn_hdl);
+  auto& cises = cig.GetCises();
 
   if (old_sink_channels > 0) {
     if (stream_conf.stream_params.sink.num_of_channels == 0) {
       ClearSinksFromConfiguration();
     } else if (old_sink_channels > stream_conf.stream_params.sink.num_of_channels) {
       CodecManager::GetInstance()->UpdateCisConfiguration(
-              cig.cises,
+              cises,
               stream_conf.stream_params.get(bluetooth::le_audio::types::kLeAudioDirectionSink),
               bluetooth::le_audio::types::kLeAudioDirectionSink);
     }
@@ -2762,7 +2780,7 @@ void LeAudioDeviceGroup::RemoveCisFromStreamIfNeeded(LeAudioDevice* leAudioDevic
       ClearSourcesFromConfiguration();
     } else if (old_source_channels > stream_conf.stream_params.source.num_of_channels) {
       CodecManager::GetInstance()->UpdateCisConfiguration(
-              cig.cises,
+              cises,
               stream_conf.stream_params.get(bluetooth::le_audio::types::kLeAudioDirectionSource),
               bluetooth::le_audio::types::kLeAudioDirectionSource);
     }
@@ -2847,15 +2865,14 @@ void LeAudioDeviceGroup::Disable(int gatt_if) {
     log::info("Group {} in state {}. Removing {} from background connect", group_id_,
               bluetooth::common::ToString(GetState()), address);
 
-    BTA_GATTC_CancelOpen(gatt_if, address, false);
-
     if (connection_state == DeviceConnectState::CONNECTING_AUTOCONNECT) {
+      BTA_GATTC_CancelOpen(gatt_if, address, false);
       dev->SetConnectionState(DeviceConnectState::DISCONNECTED);
     }
   }
 }
 
-void LeAudioDeviceGroup::Enable(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode) {
+void LeAudioDeviceGroup::Enable(int gatt_if) {
   is_enabled_ = true;
   for (auto& device_iter : leAudioDevices_) {
     auto dev = device_iter.lock();
@@ -2876,7 +2893,7 @@ void LeAudioDeviceGroup::Enable(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mod
               bluetooth::common::ToString(GetState()), address);
 
     if (connection_state == DeviceConnectState::DISCONNECTED) {
-      BTA_GATTC_Open(gatt_if, address, reconnection_mode, false);
+      BTA_GATTC_Open(gatt_if, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
       dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
     }
   }
@@ -2914,14 +2931,15 @@ void LeAudioDeviceGroup::AddToAllowListNotConnectedGroupMembers(int gatt_if) {
   }
 }
 
-void LeAudioDeviceGroup::ApplyReconnectionMode(int gatt_if, tBTM_BLE_CONN_TYPE reconnection_mode) {
+void LeAudioDeviceGroup::ApplyReconnectionMode(int gatt_if) {
   for (const auto& device_iter : leAudioDevices_) {
     auto dev = device_iter.lock();
     if (!dev) {
       continue;
     }
     BTA_GATTC_CancelOpen(gatt_if, dev->address_, false);
-    BTA_GATTC_Open(gatt_if, dev->address_, reconnection_mode, false);
+    BTA_GATTC_Open(gatt_if, dev->address_,
+                   BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
     log::info("Group {} in state {}. Adding {} to default reconnection mode", group_id_,
               bluetooth::common::ToString(GetState()), dev->address_);
     dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
@@ -3028,19 +3046,20 @@ void LeAudioDeviceGroup::PrintDebugState(void) const {
             << ", state: " << bluetooth::common::ToString(GetState())
             << ", target state: " << bluetooth::common::ToString(GetTargetState())
             << ", cig state: " << bluetooth::common::ToString(cig.GetState())
-            << ", \n group supported contexts: "
+            << "\n group supported contexts: "
             << bluetooth::common::ToString(GetSupportedContexts())
-            << ", \n group available contexts: "
+            << "\n group available contexts: "
             << bluetooth::common::ToString(GetAvailableContexts())
-            << ", \n group user allowed contexts: "
+            << "\n group user allowed contexts: "
             << bluetooth::common::ToString(GetAllowedContextMask())
-            << ", \n configuration context type: "
-            << bluetooth::common::ToString(GetConfigurationContextType())
-            << ", \n active config: \"" << (active_conf ? active_conf->name : " not set") << "\"";
+            << "\n configuration context type: "
+            << bluetooth::common::ToString(GetConfigurationContextType()) << "\n active config: \""
+            << (active_conf ? active_conf->name : " not set") << "\"";
 
-  if (cig.cises.size() > 0) {
-    log::info("\n Allocated CISes: {}", static_cast<int>(cig.cises.size()));
-    for (auto cis : cig.cises) {
+  auto& cises = cig.GetCises();
+  if (cises.size() > 0) {
+    log::info("\n Allocated CISes: {}", static_cast<int>(cises.size()));
+    for (auto cis : cises) {
       log::info("\n cis id: {}, type: {}, conn_handle {}, addr: {}", cis.id, cis.type,
                 cis.conn_handle, cis.addr.ToString());
     }
@@ -3060,10 +3079,10 @@ void LeAudioDeviceGroup::PrintDebugState(void) const {
 
     debug_str << "\n presentation_delay for sink (speaker): " << +sink_delay
               << " us, presentation_delay for source (microphone): " << +source_delay
-              << "us, \n MtoS transport latency:  " << +max_transport_latency_mtos
+              << "us\n MtoS transport latency:  " << +max_transport_latency_mtos
               << ", StoM transport latency: " << +max_transport_latency_stom
-              << ", \n MtoS Phy: " << loghex(phy_mtos) << ", MtoS sdu: " << loghex(phy_stom)
-              << " \n MtoS sdu: " << +sdu_mts << ", StoM sdu: " << +sdu_stom;
+              << "\n MtoS Phy: " << loghex(phy_mtos) << ", MtoS sdu: " << loghex(phy_stom)
+              << "\n MtoS sdu: " << +sdu_mts << ", StoM sdu: " << +sdu_stom;
   }
 
   log::info("{}", debug_str.str());
@@ -3123,15 +3142,13 @@ void LeAudioDeviceGroup::Dump(std::stringstream& stream, int active_group_id) co
   }
 
   stream << std::format("      DSA mode: {}{}, is_active: {}\n", common::ToString(dsa_.mode),
-                        (dsa_.mode == DsaMode::DISABLED) ? ""
-                        : com_android_bluetooth_flags_dsa_use_codec_extensibility()
-                                ? " (codec extensibility)"
-                                : " (static)",
+                        (dsa_.mode == DsaMode::DISABLED) ? "" : " (codec extensibility)",
                         dsa_.active);
 
-  stream << "      == CISes (" << static_cast<int>(cig.cises.size()) << "):";
-  if (cig.cises.size() > 0) {
-    for (auto cis : cig.cises) {
+  auto& cises = cig.GetCises();
+  stream << "      == CISes (" << static_cast<int>(cises.size()) << "):";
+  if (cises.size() > 0) {
+    for (auto cis : cises) {
       stream << "\n\t cis id: " << static_cast<int>(cis.id)
              << ",\ttype: " << static_cast<int>(cis.type)
              << ",\tconn_handle: " << static_cast<int>(cis.conn_handle)

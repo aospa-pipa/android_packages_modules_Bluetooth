@@ -4,15 +4,13 @@
 
 use crate::bindings::root as bindings;
 use crate::topstack::get_dispatchers;
-use crate::utils::{LTCheckedPtr, LTCheckedPtrMut};
+use crate::utils::LTCheckedPtrMut;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter, Result};
 use std::hash::{Hash, Hasher};
 use std::os::fd::RawFd;
-use std::os::raw::c_char;
-use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 use std::{cmp, mem};
@@ -25,9 +23,26 @@ pub enum BtState {
     On,
 }
 
-impl From<bindings::bt_state_t> for BtState {
-    fn from(item: bindings::bt_state_t) -> Self {
-        BtState::from_u32(item).unwrap_or(BtState::Off)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtState(bindings::bt_state_t);
+
+impl From<CxxBtState> for BtState {
+    fn from(item: CxxBtState) -> Self {
+        match item.0 {
+            bindings::bt_state_t_BT_STATE_OFF => BtState::Off,
+            bindings::bt_state_t_BT_STATE_ON => BtState::On,
+            _ => panic!("Unsupported bt_state_t {}", item.0),
+        }
+    }
+}
+
+impl From<BtState> for CxxBtState {
+    fn from(item: BtState) -> Self {
+        let i = match item {
+            BtState::Off => bindings::bt_state_t_BT_STATE_OFF,
+            BtState::On => bindings::bt_state_t_BT_STATE_ON,
+        };
+        CxxBtState(i)
     }
 }
 
@@ -48,7 +63,7 @@ impl From<CxxBtTransport> for BtTransport {
             bindings::tBT_TRANSPORT_BT_TRANSPORT_AUTO => BtTransport::Auto,
             bindings::tBT_TRANSPORT_BT_TRANSPORT_BR_EDR => BtTransport::Bredr,
             bindings::tBT_TRANSPORT_BT_TRANSPORT_LE => BtTransport::Le,
-            _ => unreachable!(),
+            _ => panic!("Unsupported tBT_TRANSPORT {}", item.0),
         }
     }
 }
@@ -82,7 +97,7 @@ pub enum BtAddrType {
 }
 
 #[gen_cxx_extern_trivial_tuple]
-pub(crate) struct CxxBtAddrType(pub bindings::tBLE_ADDR_TYPE);
+pub(crate) struct CxxBtAddrType(bindings::tBLE_ADDR_TYPE);
 
 // TODO(@sarveshkalwit): Update once tBLE_ADDR_TYPE is updated to an enum
 impl From<CxxBtAddrType> for BtAddrType {
@@ -105,22 +120,40 @@ impl From<u8> for BtAddrType {
 
 #[derive(Clone, Debug, FromPrimitive, ToPrimitive, PartialEq, PartialOrd)]
 #[repr(u32)]
-pub enum BtSspVariant {
+pub enum PairingVariant {
     PasskeyConfirmation = 0,
     PasskeyEntry,
     Consent,
     PasskeyNotification,
+    Participation,
 }
 
-impl From<bindings::bt_ssp_variant_t> for BtSspVariant {
-    fn from(item: bindings::bt_ssp_variant_t) -> Self {
-        BtSspVariant::from_u32(item).unwrap_or(BtSspVariant::PasskeyConfirmation)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxPairingVariant(bindings::PairingVariant);
+
+impl From<CxxPairingVariant> for PairingVariant {
+    fn from(item: CxxPairingVariant) -> Self {
+        match item.0 {
+            bindings::PairingVariant_PASSKEY_CONFIRMATION => PairingVariant::PasskeyConfirmation,
+            bindings::PairingVariant_PASSKEY_ENTRY => PairingVariant::PasskeyEntry,
+            bindings::PairingVariant_CONSENT => PairingVariant::Consent,
+            bindings::PairingVariant_PASSKEY_NOTIFICATION => PairingVariant::PasskeyNotification,
+            bindings::PairingVariant_PARTICIPATION => PairingVariant::Participation,
+            _ => panic!("Unsupported PairingVariant {}", item.0),
+        }
     }
 }
 
-impl From<BtSspVariant> for bindings::bt_ssp_variant_t {
-    fn from(item: BtSspVariant) -> Self {
-        item.to_u32().unwrap_or(0)
+impl From<PairingVariant> for CxxPairingVariant {
+    fn from(item: PairingVariant) -> Self {
+        let i = match item {
+            PairingVariant::PasskeyConfirmation => bindings::PairingVariant_PASSKEY_CONFIRMATION,
+            PairingVariant::PasskeyEntry => bindings::PairingVariant_PASSKEY_ENTRY,
+            PairingVariant::Consent => bindings::PairingVariant_CONSENT,
+            PairingVariant::PasskeyNotification => bindings::PairingVariant_PASSKEY_NOTIFICATION,
+            PairingVariant::Participation => bindings::PairingVariant_PARTICIPATION,
+        };
+        CxxPairingVariant(i)
     }
 }
 
@@ -132,9 +165,35 @@ pub enum BtBondState {
     Bonded,
 }
 
-impl From<bindings::bt_bond_state_t> for BtBondState {
-    fn from(item: bindings::bt_bond_state_t) -> Self {
-        BtBondState::from_u32(item).unwrap_or(BtBondState::NotBonded)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtBondState(bindings::bt_bond_state_t);
+
+impl From<CxxBtBondState> for BtBondState {
+    fn from(item: CxxBtBondState) -> Self {
+        match item.0 {
+            bindings::bt_bond_state_t_BT_BOND_STATE_NONE => BtBondState::NotBonded,
+            bindings::bt_bond_state_t_BT_BOND_STATE_BONDING => BtBondState::Bonding,
+            bindings::bt_bond_state_t_BT_BOND_STATE_BONDED => BtBondState::Bonded,
+            _ => panic!("Unsupported bt_bond_state_t {}", item.0),
+        }
+    }
+}
+
+impl From<BtBondState> for CxxBtBondState {
+    fn from(item: BtBondState) -> Self {
+        let i = match item {
+            BtBondState::NotBonded => bindings::bt_bond_state_t_BT_BOND_STATE_NONE,
+            BtBondState::Bonding => bindings::bt_bond_state_t_BT_BOND_STATE_BONDING,
+            BtBondState::Bonded => bindings::bt_bond_state_t_BT_BOND_STATE_BONDED,
+        };
+        CxxBtBondState(i)
+    }
+}
+
+// Needed for conversion from DBus
+impl From<u32> for BtBondState {
+    fn from(item: u32) -> Self {
+        BtBondState::from_u32(item).unwrap()
     }
 }
 
@@ -167,9 +226,26 @@ pub enum BtAclState {
     Disconnected,
 }
 
-impl From<bindings::bt_acl_state_t> for BtAclState {
-    fn from(item: bindings::bt_acl_state_t) -> Self {
-        BtAclState::from_u32(item).unwrap_or(BtAclState::Disconnected)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtAclState(bindings::bt_acl_state_t);
+
+impl From<CxxBtAclState> for BtAclState {
+    fn from(item: CxxBtAclState) -> Self {
+        match item.0 {
+            bindings::bt_acl_state_t_BT_ACL_STATE_CONNECTED => BtAclState::Connected,
+            bindings::bt_acl_state_t_BT_ACL_STATE_DISCONNECTED => BtAclState::Disconnected,
+            _ => panic!("Unsupported bt_acl_state_t {}", item.0),
+        }
+    }
+}
+
+impl From<BtAclState> for CxxBtAclState {
+    fn from(item: BtAclState) -> Self {
+        let i = match item {
+            BtAclState::Connected => bindings::bt_acl_state_t_BT_ACL_STATE_CONNECTED,
+            BtAclState::Disconnected => bindings::bt_acl_state_t_BT_ACL_STATE_DISCONNECTED,
+        };
+        CxxBtAclState(i)
     }
 }
 
@@ -182,53 +258,58 @@ pub enum BtDeviceType {
     Dual,
 }
 
+/// This is part of the DBus API, so avoid making change on it.
 #[derive(Clone, Debug, Eq, Hash, FromPrimitive, ToPrimitive, PartialEq, PartialOrd)]
 #[repr(u32)]
 pub enum BtPropertyType {
-    BdName = 0x1,
-    BdAddr,
-    Uuids,
-    ClassOfDevice,
-    TypeOfDevice,
-    ServiceRecord,
-    Reserved07,
-    AdapterBondedDevices,
-    AdapterDiscoverableTimeout,
-    RemoteFriendlyName,
-    RemoteRssi,
-    RemoteVersionInfo,
-    LocalLeFeatures,
-    Reserved0E,
-    Reserved0F,
-    DynamicAudioBuffer,
-    RemoteIsCoordinatedSetMember,
-    Appearance,
-    VendorProductInfo,
-    Reserved14,
-    // Unimplemented:
-    //  BT_PROPERTY_REMOTE_ASHA_CAPABILITY,
-    //  BT_PROPERTY_REMOTE_ASHA_TRUNCATED_HISYNCID,
-    //  BT_PROPERTY_REMOTE_MODEL_NUM,
+    BdName = 0x01,
+    BdAddr = 0x02,
+    Uuids = 0x03,
+    ClassOfDevice = 0x04,
+    TypeOfDevice = 0x05,
+    AdapterBondedDevices = 0x08,
+    RemoteFriendlyName = 0x0A,
+    RemoteRssi = 0x0B,
+    LocalLeFeatures = 0x0D,
+    Appearance = 0x12,
+    VendorProductInfo = 0x13,
     RemoteAddrType = 0x18,
-    // Unimplemented:
-    // BT_PROPERTY_REMOTE_HOST_SECURE_CONNECTIONS_SUPPORTED,
-    // BT_PROPERTY_REMOTE_MAX_SESSION_KEY_SIZE,
-    // BT_PROPERTY_LPP_OFFLOAD_FEATURES,
-    UuidsLe = 0x1C,
-
     Unknown = 0xFE,
-    RemoteDeviceTimestamp = 0xFF,
 }
 
-impl From<u32> for BtPropertyType {
-    fn from(item: u32) -> Self {
-        BtPropertyType::from_u32(item).unwrap_or(BtPropertyType::Unknown)
-    }
-}
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtPropertyType(bindings::bt_property_type_t);
 
-impl From<BtPropertyType> for u32 {
+impl From<BtPropertyType> for CxxBtPropertyType {
     fn from(item: BtPropertyType) -> Self {
-        item.to_u32().unwrap_or(0)
+        let i = match item {
+            BtPropertyType::BdName => bindings::bt_property_type_t_BT_PROPERTY_BDNAME,
+            BtPropertyType::BdAddr => bindings::bt_property_type_t_BT_PROPERTY_BDADDR,
+            BtPropertyType::Uuids => bindings::bt_property_type_t_BT_PROPERTY_UUIDS,
+            BtPropertyType::ClassOfDevice => {
+                bindings::bt_property_type_t_BT_PROPERTY_CLASS_OF_DEVICE
+            }
+            BtPropertyType::TypeOfDevice => bindings::bt_property_type_t_BT_PROPERTY_TYPE_OF_DEVICE,
+            BtPropertyType::AdapterBondedDevices => {
+                bindings::bt_property_type_t_BT_PROPERTY_ADAPTER_BONDED_DEVICES
+            }
+            BtPropertyType::RemoteFriendlyName => {
+                bindings::bt_property_type_t_BT_PROPERTY_REMOTE_FRIENDLY_NAME
+            }
+            BtPropertyType::RemoteRssi => bindings::bt_property_type_t_BT_PROPERTY_REMOTE_RSSI,
+            BtPropertyType::LocalLeFeatures => {
+                bindings::bt_property_type_t_BT_PROPERTY_LOCAL_LE_FEATURES
+            }
+            BtPropertyType::Appearance => bindings::bt_property_type_t_BT_PROPERTY_APPEARANCE,
+            BtPropertyType::VendorProductInfo => {
+                bindings::bt_property_type_t_BT_PROPERTY_VENDOR_PRODUCT_INFO
+            }
+            BtPropertyType::RemoteAddrType => {
+                bindings::bt_property_type_t_BT_PROPERTY_REMOTE_ADDR_TYPE
+            }
+            BtPropertyType::Unknown => panic!("Converting BtPropertyType::Unknown to CXX"),
+        };
+        CxxBtPropertyType(i)
     }
 }
 
@@ -239,9 +320,26 @@ pub enum BtDiscoveryState {
     Started,
 }
 
-impl From<u32> for BtDiscoveryState {
-    fn from(item: u32) -> Self {
-        BtDiscoveryState::from_u32(item).unwrap_or(BtDiscoveryState::Stopped)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtDiscoveryState(bindings::bt_discovery_state_t);
+
+impl From<CxxBtDiscoveryState> for BtDiscoveryState {
+    fn from(item: CxxBtDiscoveryState) -> Self {
+        match item.0 {
+            bindings::bt_discovery_state_t_BT_DISCOVERY_STOPPED => BtDiscoveryState::Stopped,
+            bindings::bt_discovery_state_t_BT_DISCOVERY_STARTED => BtDiscoveryState::Started,
+            _ => panic!("Unsupported bt_discovery_state_t {}", item.0),
+        }
+    }
+}
+
+impl From<BtDiscoveryState> for CxxBtDiscoveryState {
+    fn from(item: BtDiscoveryState) -> Self {
+        let i = match item {
+            BtDiscoveryState::Stopped => bindings::bt_discovery_state_t_BT_DISCOVERY_STOPPED,
+            BtDiscoveryState::Started => bindings::bt_discovery_state_t_BT_DISCOVERY_STARTED,
+        };
+        CxxBtDiscoveryState(i)
     }
 }
 
@@ -280,9 +378,40 @@ pub enum BtConnectionDirection {
     Incoming,
 }
 
-impl From<u32> for BtConnectionDirection {
-    fn from(item: u32) -> Self {
-        BtConnectionDirection::from_u32(item).unwrap_or(BtConnectionDirection::Unknown)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtConnectionDirection(bindings::bt_conn_direction_t);
+
+impl From<CxxBtConnectionDirection> for BtConnectionDirection {
+    fn from(item: CxxBtConnectionDirection) -> Self {
+        match item.0 {
+            bindings::bt_conn_direction_t_BT_CONN_DIRECTION_UNKNOWN => {
+                BtConnectionDirection::Unknown
+            }
+            bindings::bt_conn_direction_t_BT_CONN_DIRECTION_OUTGOING => {
+                BtConnectionDirection::Outgoing
+            }
+            bindings::bt_conn_direction_t_BT_CONN_DIRECTION_INCOMING => {
+                BtConnectionDirection::Incoming
+            }
+            _ => panic!("Unsupported bt_conn_direction_t {}", item.0),
+        }
+    }
+}
+
+impl From<BtConnectionDirection> for CxxBtConnectionDirection {
+    fn from(item: BtConnectionDirection) -> Self {
+        let i = match item {
+            BtConnectionDirection::Unknown => {
+                bindings::bt_conn_direction_t_BT_CONN_DIRECTION_UNKNOWN
+            }
+            BtConnectionDirection::Outgoing => {
+                bindings::bt_conn_direction_t_BT_CONN_DIRECTION_OUTGOING
+            }
+            BtConnectionDirection::Incoming => {
+                bindings::bt_conn_direction_t_BT_CONN_DIRECTION_INCOMING
+            }
+        };
+        CxxBtConnectionDirection(i)
     }
 }
 
@@ -302,7 +431,7 @@ pub fn ascii_to_string(data: &[u8], length: usize) -> String {
 fn u32_from_bytes(item: &[u8]) -> u32 {
     let mut u: [u8; 4] = [0; 4];
     let len = std::cmp::min(item.len(), 4);
-    u[0..len].copy_from_slice(&item);
+    u[0..len].copy_from_slice(item);
     u32::from_ne_bytes(u)
 }
 
@@ -334,12 +463,6 @@ impl From<BtStatus> for i32 {
     }
 }
 
-impl From<bindings::bt_bdname_t> for String {
-    fn from(item: bindings::bt_bdname_t) -> Self {
-        ascii_to_string(&item.name, item.name.len())
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BtServiceRecord {
     pub uuid: bindings::bluetooth::Uuid,
@@ -368,15 +491,38 @@ pub enum BtScanMode {
     ConnectableLimitedDiscoverable,
 }
 
-impl From<bindings::bt_scan_mode_t> for BtScanMode {
-    fn from(item: bindings::bt_scan_mode_t) -> Self {
-        BtScanMode::from_u32(item).unwrap_or(BtScanMode::None_)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtScanMode(bindings::bt_scan_mode_t);
+
+impl From<CxxBtScanMode> for BtScanMode {
+    fn from(item: CxxBtScanMode) -> Self {
+        match item.0 {
+            bindings::bt_scan_mode_t_BT_SCAN_MODE_NONE => BtScanMode::None_,
+            bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE => BtScanMode::Connectable,
+            bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE => {
+                BtScanMode::ConnectableDiscoverable
+            }
+            bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE_LIMITED_DISCOVERABLE => {
+                BtScanMode::ConnectableLimitedDiscoverable
+            }
+            _ => panic!("Unsupported bt_scan_mode_t {}", item.0),
+        }
     }
 }
 
-impl From<BtScanMode> for bindings::bt_scan_mode_t {
-    fn from(val: BtScanMode) -> Self {
-        BtScanMode::to_u32(&val).unwrap_or_default()
+impl From<BtScanMode> for CxxBtScanMode {
+    fn from(item: BtScanMode) -> Self {
+        let i = match item {
+            BtScanMode::None_ => bindings::bt_scan_mode_t_BT_SCAN_MODE_NONE,
+            BtScanMode::Connectable => bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE,
+            BtScanMode::ConnectableDiscoverable => {
+                bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE
+            }
+            BtScanMode::ConnectableLimitedDiscoverable => {
+                bindings::bt_scan_mode_t_BT_SCAN_MODE_CONNECTABLE_LIMITED_DISCOVERABLE
+            }
+        };
+        CxxBtScanMode(i)
     }
 }
 
@@ -408,17 +554,36 @@ pub enum BtThreadEvent {
     Disassociate,
 }
 
-impl From<bindings::bt_cb_thread_evt> for BtThreadEvent {
-    fn from(item: bindings::bt_cb_thread_evt) -> Self {
-        BtThreadEvent::from_u32(item).unwrap_or(BtThreadEvent::Associate)
+#[gen_cxx_extern_trivial_tuple]
+struct CxxBtThreadEvent(bindings::bt_cb_thread_evt);
+
+impl From<CxxBtThreadEvent> for BtThreadEvent {
+    fn from(item: CxxBtThreadEvent) -> Self {
+        match item.0 {
+            bindings::bt_cb_thread_evt_ASSOCIATE_JVM => BtThreadEvent::Associate,
+            bindings::bt_cb_thread_evt_DISASSOCIATE_JVM => BtThreadEvent::Disassociate,
+            _ => panic!("Unsupported bt_cb_thread_evt {}", item.0),
+        }
     }
 }
 
-pub type BtHciErrorCode = u8;
 pub type BtLocalLeFeatures = bindings::bt_local_le_features_t;
-pub type BtPinCode = bindings::bt_pin_code_t;
 pub type BtRemoteVersion = bindings::bt_remote_version_t;
 pub type BtVendorProductInfo = bindings::bt_vendor_product_info_t;
+
+pub type BtHciErrorCode = u8;
+
+#[gen_cxx_extern_trivial_tuple]
+pub(crate) struct CxxBtHciErrorCode(pub bindings::bt_hci_error_code_t);
+
+impl From<CxxBtHciErrorCode> for BtHciErrorCode {
+    fn from(item: CxxBtHciErrorCode) -> Self {
+        item.0
+    }
+}
+
+#[gen_cxx_extern_trivial]
+pub type BtPinCode = bindings::bt_pin_code_t;
 
 impl Display for BtVendorProductInfo {
     fn fmt(&self, f: &mut Formatter) -> Result {
@@ -588,21 +753,14 @@ pub enum BluetoothProperty {
     Uuids(Vec<Uuid>),
     ClassOfDevice(u32),
     TypeOfDevice(BtDeviceType),
-    ServiceRecord(BtServiceRecord),
     AdapterBondedDevices(Vec<RawAddress>),
-    AdapterDiscoverableTimeout(u32),
     RemoteFriendlyName(String),
     RemoteRssi(i8),
-    RemoteVersionInfo(BtRemoteVersion),
     LocalLeFeatures(BtLocalLeFeatures),
-    DynamicAudioBuffer(),
-    RemoteIsCoordinatedSetMember(bool),
     Appearance(u16),
     VendorProductInfo(BtVendorProductInfo),
     RemoteAddrType(BtAddrType),
-    RemoteDeviceTimestamp(),
-
-    Unknown(),
+    Unknown,
 }
 
 /// Unknown or invalid RSSI value.
@@ -623,30 +781,20 @@ const TYPED_ADDR_LENGTH: usize = bindings::RawAddress_kLength as usize + 1;
 
 impl BluetoothProperty {
     pub fn get_type(&self) -> BtPropertyType {
-        match &*self {
+        match self {
             BluetoothProperty::BdName(_) => BtPropertyType::BdName,
             BluetoothProperty::BdAddr(_) => BtPropertyType::BdAddr,
             BluetoothProperty::Uuids(_) => BtPropertyType::Uuids,
             BluetoothProperty::ClassOfDevice(_) => BtPropertyType::ClassOfDevice,
             BluetoothProperty::TypeOfDevice(_) => BtPropertyType::TypeOfDevice,
-            BluetoothProperty::ServiceRecord(_) => BtPropertyType::ServiceRecord,
             BluetoothProperty::AdapterBondedDevices(_) => BtPropertyType::AdapterBondedDevices,
-            BluetoothProperty::AdapterDiscoverableTimeout(_) => {
-                BtPropertyType::AdapterDiscoverableTimeout
-            }
             BluetoothProperty::RemoteFriendlyName(_) => BtPropertyType::RemoteFriendlyName,
             BluetoothProperty::RemoteRssi(_) => BtPropertyType::RemoteRssi,
-            BluetoothProperty::RemoteVersionInfo(_) => BtPropertyType::RemoteVersionInfo,
             BluetoothProperty::LocalLeFeatures(_) => BtPropertyType::LocalLeFeatures,
-            BluetoothProperty::DynamicAudioBuffer() => BtPropertyType::DynamicAudioBuffer,
-            BluetoothProperty::RemoteIsCoordinatedSetMember(_) => {
-                BtPropertyType::RemoteIsCoordinatedSetMember
-            }
             BluetoothProperty::Appearance(_) => BtPropertyType::Appearance,
             BluetoothProperty::VendorProductInfo(_) => BtPropertyType::VendorProductInfo,
-            BluetoothProperty::RemoteDeviceTimestamp() => BtPropertyType::RemoteDeviceTimestamp,
             BluetoothProperty::RemoteAddrType(_) => BtPropertyType::RemoteAddrType,
-            BluetoothProperty::Unknown() => BtPropertyType::Unknown,
+            BluetoothProperty::Unknown => BtPropertyType::Unknown,
         }
     }
 
@@ -654,30 +802,8 @@ impl BluetoothProperty {
     fn get_len(&self) -> usize {
         match self {
             BluetoothProperty::BdName(name) => cmp::min(PROPERTY_NAME_MAX, name.len() + 1),
-            BluetoothProperty::BdAddr(addr) => addr.address.len(),
-            BluetoothProperty::Uuids(uulist) => uulist.len() * mem::size_of::<Uuid>(),
             BluetoothProperty::ClassOfDevice(_) => mem::size_of::<u32>(),
-            BluetoothProperty::TypeOfDevice(_) => mem::size_of::<BtDeviceType>(),
-            BluetoothProperty::ServiceRecord(rec) => {
-                mem::size_of::<BtServiceRecord>() + cmp::min(PROPERTY_NAME_MAX, rec.name.len() + 1)
-            }
-            BluetoothProperty::AdapterBondedDevices(devlist) => devlist.len() * TYPED_ADDR_LENGTH,
-            BluetoothProperty::AdapterDiscoverableTimeout(_) => mem::size_of::<u32>(),
-            BluetoothProperty::RemoteFriendlyName(name) => {
-                cmp::min(PROPERTY_NAME_MAX, name.len() + 1)
-            }
-            BluetoothProperty::RemoteRssi(_) => mem::size_of::<i8>(),
-            BluetoothProperty::RemoteVersionInfo(_) => mem::size_of::<BtRemoteVersion>(),
-            BluetoothProperty::LocalLeFeatures(_) => mem::size_of::<BtLocalLeFeatures>(),
-            BluetoothProperty::RemoteIsCoordinatedSetMember(_) => mem::size_of::<bool>(),
-            BluetoothProperty::Appearance(_) => mem::size_of::<u16>(),
-            BluetoothProperty::VendorProductInfo(_) => mem::size_of::<BtVendorProductInfo>(),
-            BluetoothProperty::RemoteAddrType(_) => mem::size_of::<BtAddrType>(),
-
-            // TODO(abps) - Figure out sizes for these
-            BluetoothProperty::DynamicAudioBuffer() => 0,
-            BluetoothProperty::RemoteDeviceTimestamp() => 0,
-            BluetoothProperty::Unknown() => 0,
+            _ => panic!("Converting unsupported BluetoothProperty {:?} to CXX", self),
         }
     }
 
@@ -685,7 +811,7 @@ impl BluetoothProperty {
     /// LTCheckedPtrMut to it.
     ///
     /// The lifetime of the returned pointer is tied to that of the slice given.
-    fn get_data_ptr<'a>(&'a self, data: &'a mut [u8]) -> LTCheckedPtrMut<'a, u8> {
+    fn get_data_ptr<'a>(&self, data: &'a mut [u8]) -> LTCheckedPtrMut<'a, u8> {
         let len = self.get_len();
         match self {
             BluetoothProperty::BdName(name) => {
@@ -693,139 +819,53 @@ impl BluetoothProperty {
                 data[0..copy_len].copy_from_slice(&name.as_bytes()[0..copy_len]);
                 data[copy_len] = 0;
             }
-            BluetoothProperty::BdAddr(addr) => {
-                data.copy_from_slice(&addr.address);
-            }
-            BluetoothProperty::Uuids(uulist) => {
-                for (idx, &uuid) in uulist.iter().enumerate() {
-                    let start = idx * mem::size_of::<Uuid>();
-                    let end = start + mem::size_of::<Uuid>();
-                    data[start..end].copy_from_slice(&uuid.uu);
-                }
-            }
             BluetoothProperty::ClassOfDevice(cod) => {
                 data.copy_from_slice(&cod.to_ne_bytes());
             }
-            BluetoothProperty::TypeOfDevice(tod) => {
-                data.copy_from_slice(&BtDeviceType::to_u32(tod).unwrap_or_default().to_ne_bytes());
-            }
-            BluetoothProperty::ServiceRecord(sr) => {
-                // Do an unsafe cast to binding:: type and assign the values
-                // The underlying memory location is provided by |data| which will
-                // have enough space because it uses get_len()
-                let record =
-                    unsafe { &mut *(data.as_mut_ptr() as *mut bindings::bt_service_record_t) };
-                record.uuid = sr.uuid;
-                record.channel = sr.channel;
-                let name_len = len - mem::size_of::<BtServiceRecord>() - 1;
-                record.name[0..name_len].copy_from_slice(
-                    &(sr.name.as_bytes().iter().map(|x| *x as c_char).collect::<Vec<c_char>>())
-                        [0..name_len],
-                );
-                record.name[name_len] = 0;
-            }
-            BluetoothProperty::AdapterBondedDevices(devlist) => {
-                for (idx, &dev) in devlist.iter().enumerate() {
-                    let start = idx * TYPED_ADDR_LENGTH;
-                    let end = start + mem::size_of::<RawAddress>();
-                    data[start..end].copy_from_slice(&dev.address);
-                    // 0 is public address. We never pass this prop from Rust to LibBluetooth so
-                    // this shouldn't matter for now.
-                    log::error!(
-                        "Converting BluetoothProperty::AdapterBondedDevices to bt_property_t"
-                    );
-                    data[end] = 0;
-                }
-            }
-            BluetoothProperty::AdapterDiscoverableTimeout(timeout) => {
-                data.copy_from_slice(&timeout.to_ne_bytes());
-            }
-            BluetoothProperty::RemoteFriendlyName(name) => {
-                let copy_len = len - 1;
-                data[0..copy_len].copy_from_slice(&name.as_bytes()[0..copy_len]);
-                data[copy_len] = 0;
-            }
-            BluetoothProperty::RemoteRssi(rssi) => {
-                data[0] = *rssi as u8;
-            }
-            BluetoothProperty::RemoteVersionInfo(rvi) => {
-                let ptr: *const BtRemoteVersion = rvi;
-                let slice = unsafe {
-                    std::slice::from_raw_parts(ptr as *mut u8, mem::size_of::<BtRemoteVersion>())
-                };
-                data.copy_from_slice(&slice);
-            }
-            BluetoothProperty::LocalLeFeatures(llf) => {
-                let ptr: *const BtLocalLeFeatures = llf;
-                let slice = unsafe {
-                    std::slice::from_raw_parts(ptr as *mut u8, mem::size_of::<BtLocalLeFeatures>())
-                };
-                data.copy_from_slice(&slice);
-            }
-            BluetoothProperty::RemoteIsCoordinatedSetMember(icsm) => {
-                data[0] = *icsm as u8;
-            }
-            BluetoothProperty::Appearance(appearance) => {
-                data.copy_from_slice(&appearance.to_ne_bytes());
-            }
-            BluetoothProperty::VendorProductInfo(vpi) => {
-                let ptr: *const BtVendorProductInfo = vpi;
-                let slice = unsafe {
-                    std::slice::from_raw_parts(
-                        ptr as *mut u8,
-                        mem::size_of::<BtVendorProductInfo>(),
-                    )
-                };
-                data.copy_from_slice(&slice);
-            }
-            BluetoothProperty::RemoteAddrType(addr_type) => {
-                data.copy_from_slice(
-                    &BtAddrType::to_u32(addr_type).unwrap_or_default().to_ne_bytes(),
-                );
-            }
-
-            BluetoothProperty::DynamicAudioBuffer() => (),
-            BluetoothProperty::RemoteDeviceTimestamp() => (),
-            BluetoothProperty::Unknown() => (),
+            _ => panic!("Converting unsupported BluetoothProperty {:?} to CXX", self),
         };
 
         data.into()
     }
 }
 
-// TODO(abps) - Check that sizes are correct when given a BtProperty
-impl From<bindings::bt_property_t> for BluetoothProperty {
-    fn from(prop: bindings::bt_property_t) -> Self {
-        // Property values may be null, which isn't valid to pass for `slice::from_raw_parts`.
-        // Choose a dangling pointer in that case.
-        let prop_val_ptr =
-            NonNull::new(prop.val as *mut u8).unwrap_or(NonNull::dangling()).as_ptr();
-        let len = prop.len as usize;
-        let slice: &[u8] = unsafe { std::slice::from_raw_parts(prop_val_ptr, len) };
+#[gen_cxx_extern_trivial]
+pub type CxxBluetoothProperty = bindings::bt_property_t;
 
-        match BtPropertyType::from(prop.type_) {
-            BtPropertyType::BdName => BluetoothProperty::BdName(ascii_to_string(slice, len)),
-            BtPropertyType::BdAddr => {
+// TODO(abps) - Check that sizes are correct when given a BtProperty
+impl From<CxxBluetoothProperty> for BluetoothProperty {
+    fn from(prop: CxxBluetoothProperty) -> Self {
+        let slice = ffi::get_property_bytes(&prop);
+        let len = slice.len();
+
+        match prop.type_ {
+            bindings::bt_property_type_t_BT_PROPERTY_BDNAME => {
+                BluetoothProperty::BdName(ascii_to_string(slice, len))
+            }
+            bindings::bt_property_type_t_BT_PROPERTY_BDADDR => {
                 BluetoothProperty::BdAddr(RawAddress::from_bytes(slice).unwrap_or_default())
             }
-            BtPropertyType::Uuids | BtPropertyType::UuidsLe => {
+            bindings::bt_property_type_t_BT_PROPERTY_UUIDS
+            | bindings::bt_property_type_t_BT_PROPERTY_UUIDS_LE => {
                 let count = len / mem::size_of::<Uuid>();
                 BluetoothProperty::Uuids(ptr_to_vec(prop.val as *const Uuid, count))
             }
-            BtPropertyType::ClassOfDevice => {
+            // TODO(b/445332302): Make use of this and remove EIR TARGET_FLOSS quirk
+            bindings::bt_property_type_t_BT_PROPERTY_UUIDS_FROM_EXTENDED_INQUIRY_RESPONSE
+            | bindings::bt_property_type_t_BT_PROPERTY_UUIDS_FROM_LE_ADVERTISING_DATA => {
+                BluetoothProperty::Unknown
+            }
+            bindings::bt_property_type_t_BT_PROPERTY_CLASS_OF_DEVICE => {
                 BluetoothProperty::ClassOfDevice(u32_from_bytes(slice))
             }
-            BtPropertyType::TypeOfDevice => BluetoothProperty::TypeOfDevice(
-                BtDeviceType::from_u32(u32_from_bytes(slice)).unwrap_or(BtDeviceType::Unknown),
-            ),
-            BtPropertyType::ServiceRecord => {
-                let v =
-                    unsafe { (prop.val as *const bindings::bt_service_record_t).read_unaligned() };
-                BluetoothProperty::ServiceRecord(BtServiceRecord::from(v))
+            bindings::bt_property_type_t_BT_PROPERTY_TYPE_OF_DEVICE => {
+                BluetoothProperty::TypeOfDevice(
+                    BtDeviceType::from_u32(u32_from_bytes(slice)).unwrap_or(BtDeviceType::Unknown),
+                )
             }
-            BtPropertyType::AdapterBondedDevices => {
+            bindings::bt_property_type_t_BT_PROPERTY_ADAPTER_BONDED_DEVICES => {
                 assert!(
-                    len % TYPED_ADDR_LENGTH == 0,
+                    len.is_multiple_of(TYPED_ADDR_LENGTH),
                     "Invalid AdapterBondedDevices prop len: {}",
                     len
                 );
@@ -844,84 +884,43 @@ impl From<bindings::bt_property_t> for BluetoothProperty {
                         .collect(),
                 )
             }
-            BtPropertyType::AdapterDiscoverableTimeout => {
-                BluetoothProperty::AdapterDiscoverableTimeout(u32_from_bytes(slice))
-            }
-            BtPropertyType::RemoteFriendlyName => {
+            bindings::bt_property_type_t_BT_PROPERTY_REMOTE_FRIENDLY_NAME => {
                 BluetoothProperty::RemoteFriendlyName(ascii_to_string(slice, len))
             }
-            BtPropertyType::RemoteRssi => BluetoothProperty::RemoteRssi(slice[0] as i8),
-            BtPropertyType::RemoteVersionInfo => {
-                let v = unsafe { (prop.val as *const BtRemoteVersion).read_unaligned() };
-                BluetoothProperty::RemoteVersionInfo(v)
+            bindings::bt_property_type_t_BT_PROPERTY_REMOTE_RSSI => {
+                BluetoothProperty::RemoteRssi(slice[0] as i8)
             }
-            BtPropertyType::LocalLeFeatures => {
+            bindings::bt_property_type_t_BT_PROPERTY_LOCAL_LE_FEATURES => {
                 let v = unsafe { (prop.val as *const BtLocalLeFeatures).read_unaligned() };
                 BluetoothProperty::LocalLeFeatures(v)
             }
-            BtPropertyType::RemoteIsCoordinatedSetMember => {
-                BluetoothProperty::RemoteIsCoordinatedSetMember(slice[0] != 0)
+            bindings::bt_property_type_t_BT_PROPERTY_APPEARANCE => {
+                BluetoothProperty::Appearance(u16_from_bytes(slice))
             }
-            BtPropertyType::Appearance => BluetoothProperty::Appearance(u16_from_bytes(slice)),
-            BtPropertyType::VendorProductInfo => {
+            bindings::bt_property_type_t_BT_PROPERTY_VENDOR_PRODUCT_INFO => {
                 let v = unsafe { (prop.val as *const BtVendorProductInfo).read_unaligned() };
                 BluetoothProperty::VendorProductInfo(BtVendorProductInfo::from(v))
             }
-            BtPropertyType::RemoteAddrType => {
+            bindings::bt_property_type_t_BT_PROPERTY_REMOTE_ADDR_TYPE => {
                 BluetoothProperty::RemoteAddrType(BtAddrType::from(CxxBtAddrType(slice[0])))
             }
-            // TODO(abps) - Figure out if these values should actually have contents
-            BtPropertyType::DynamicAudioBuffer => BluetoothProperty::DynamicAudioBuffer(),
-            BtPropertyType::RemoteDeviceTimestamp => BluetoothProperty::RemoteDeviceTimestamp(),
-            _ => BluetoothProperty::Unknown(),
+            _ => BluetoothProperty::Unknown,
         }
     }
 }
 
-impl From<BluetoothProperty> for (Box<[u8]>, bindings::bt_property_t) {
+/// TODO(b/446827362): Consider to strongly tie the lifetime of the data and CxxBluetoothProperty.
+impl From<BluetoothProperty> for (Box<[u8]>, CxxBluetoothProperty) {
     fn from(prop: BluetoothProperty) -> Self {
         let dvec: Vec<u8> = vec![0; prop.get_len()];
         let mut data: Box<[u8]> = dvec.into_boxed_slice();
-        let prop = bindings::bt_property_t {
-            type_: prop.get_type().into(),
+        let prop = CxxBluetoothProperty {
+            type_: prop.get_type() as u32,
             len: prop.get_len() as i32,
             val: prop.get_data_ptr(&mut data).cast_into::<std::os::raw::c_void>(),
         };
 
         (data, prop)
-    }
-}
-
-pub enum SupportedProfiles {
-    HidHost,
-    Hfp,
-    A2dp,
-    Gatt,
-    Sdp,
-    Socket,
-    HfClient,
-    LeAudio,
-    VolumeControl,
-    CoordinatedSet,
-}
-
-impl From<SupportedProfiles> for Vec<u8> {
-    fn from(item: SupportedProfiles) -> Self {
-        match item {
-            SupportedProfiles::HidHost => "hidhost",
-            SupportedProfiles::Hfp => "handsfree",
-            SupportedProfiles::A2dp => "a2dp",
-            SupportedProfiles::Gatt => "gatt",
-            SupportedProfiles::Sdp => "sdp",
-            SupportedProfiles::Socket => "socket",
-            SupportedProfiles::HfClient => "handsfree_client",
-            SupportedProfiles::LeAudio => "le_audio",
-            SupportedProfiles::VolumeControl => "volume_control",
-            SupportedProfiles::CoordinatedSet => "csis_client",
-        }
-        .bytes()
-        .chain("\0".bytes())
-        .collect::<Vec<u8>>()
     }
 }
 
@@ -1026,8 +1025,14 @@ impl Display for DisplayAddress<'_> {
     }
 }
 
+#[gen_cxx_extern_trivial]
 pub type AclLinkSpec = bindings::AclLinkSpec;
-pub type OobData = bindings::bt_oob_data_s;
+
+#[gen_cxx_extern_trivial]
+type CxxPairingType = bindings::PairingType;
+
+#[gen_cxx_extern_trivial_tuple]
+struct CxxPairingInitiator(bindings::PairingInitiator);
 
 /// An enum representing `bt_callbacks_t` from btif.
 #[derive(Clone, Debug)]
@@ -1038,23 +1043,11 @@ pub enum BaseCallbacks {
     DeviceFound(Vec<BluetoothProperty>),
     DiscoveryState(BtDiscoveryState),
     PinRequest(RawAddress, String, u32, bool),
-    SspRequest(RawAddress, BtSspVariant, u32),
+    SspRequest(RawAddress, PairingVariant, u32),
     BondState(BtStatus, RawAddress, BtBondState, i32),
-    AddressConsolidate(RawAddress, RawAddress),
-    LeAddressAssociate(RawAddress, RawAddress, u8),
     AclState(BtStatus, AclLinkSpec, BtAclState, BtHciErrorCode, BtConnectionDirection, u16),
     ThreadEvent(BtThreadEvent),
-    // Unimplemented so far:
-    // dut_mode_recv_cb
-    // le_test_mode_cb
-    // energy_info_cb
-    // link_quality_report_cb
-    // switch_buffer_size_cb
-    // switch_codec_cb
-    GenerateLocalOobData(u8, Box<OobData>), // Box OobData as its size is much bigger than others
-    LeRandCallback(u64),
     KeyMissing(RawAddress, u8),
-    // encryption_change_cb
 }
 
 pub struct BaseCallbacksDispatcher {
@@ -1063,128 +1056,253 @@ pub struct BaseCallbacksDispatcher {
 
 type BaseCb = Arc<Mutex<BaseCallbacksDispatcher>>;
 
-cb_variant!(BaseCb, adapter_state_cb -> BaseCallbacks::AdapterState, u32 -> BtState);
+cb_variant!(BaseCb, adapter_state_cb -> BaseCallbacks::AdapterState, CxxBtState -> BtState);
 cb_variant!(BaseCb, adapter_properties_cb -> BaseCallbacks::AdapterProperties,
-    u32 -> BtStatus, i32 -> _, *mut bindings::bt_property_t, {
-        let _2 = ptr_to_vec(_2, _1 as usize);
-    }
-);
+u32 -> BtStatus, &[CxxBluetoothProperty] -> Vec::<BluetoothProperty>, {
+    let _1: Vec<BluetoothProperty> = _1.iter().map(|prop| (*prop).into()).collect();
+});
 cb_variant!(BaseCb, remote_device_properties_cb -> BaseCallbacks::RemoteDeviceProperties,
-    u32 -> BtStatus, RawAddress, u8, i32 -> _, *mut bindings::bt_property_t, {
-        let _4 = ptr_to_vec(_4, _3 as usize);
-    }
-);
+    u32 -> BtStatus, RawAddress, u8, &[CxxBluetoothProperty] -> Vec::<BluetoothProperty>, {
+    let _3: Vec<BluetoothProperty> = _3.iter().map(|prop| (*prop).into()).collect();
+});
 cb_variant!(BaseCb, device_found_cb -> BaseCallbacks::DeviceFound,
-    i32 -> _, *mut bindings::bt_property_t, {
-        let _1 = ptr_to_vec(_1, _0 as usize);
-    }
-);
+    &[CxxBluetoothProperty] -> Vec::<BluetoothProperty>, {
+    let _0: Vec<BluetoothProperty> = _0.iter().map(|prop| (*prop).into()).collect();
+});
 cb_variant!(BaseCb, discovery_state_cb -> BaseCallbacks::DiscoveryState,
-    bindings::bt_discovery_state_t -> BtDiscoveryState
+    CxxBtDiscoveryState -> BtDiscoveryState
 );
 cb_variant!(BaseCb, pin_request_cb -> BaseCallbacks::PinRequest,
-    RawAddress, *mut bindings::bt_bdname_t, u32, bool, i32 -> _, {
-        let _1 = String::from(unsafe{*_1});
-    }
+    RawAddress, String, u32, bool, i32 -> _
 );
 cb_variant!(BaseCb, ssp_request_cb -> BaseCallbacks::SspRequest,
-    RawAddress, bindings::bt_ssp_variant_t -> BtSspVariant, u32, i32 -> _
+    RawAddress,
+    i32 -> _,
+    CxxPairingVariant -> PairingVariant,
+    u32,
+    i32 -> _
 );
 cb_variant!(BaseCb, bond_state_cb -> BaseCallbacks::BondState,
     u32 -> BtStatus,
     RawAddress,
-    bindings::tBT_TRANSPORT -> _,
-    bindings::bt_bond_state_t -> BtBondState,
-    bindings::PairingType -> _,
-    i32
+    CxxBtTransport -> _,
+    CxxBtBondState -> BtBondState,
+    CxxPairingType -> _,
+    i32,
+    CxxPairingInitiator -> _
 );
-cb_variant!(BaseCb, address_consolidate_cb -> BaseCallbacks::AddressConsolidate,
-    RawAddress, RawAddress
-);
-cb_variant!(BaseCb, le_address_associate_cb -> BaseCallbacks::LeAddressAssociate,
-    RawAddress, RawAddress, u8
-);
-cb_variant!(BaseCb, thread_evt_cb -> BaseCallbacks::ThreadEvent, u32 -> BtThreadEvent);
+cb_variant!(BaseCb, thread_evt_cb -> BaseCallbacks::ThreadEvent, CxxBtThreadEvent -> BtThreadEvent);
 cb_variant!(BaseCb, acl_state_cb -> BaseCallbacks::AclState,
     u32 -> BtStatus,
-    *mut AclLinkSpec,
-    bindings::bt_acl_state_t -> BtAclState,
-    bindings::bt_hci_error_code_t -> BtHciErrorCode,
-    bindings::bt_conn_direction_t -> BtConnectionDirection,
-    u16 -> u16,
-    {
-        let _1 = unsafe { *(_1 as *const AclLinkSpec) };
-    }
+    AclLinkSpec,
+    CxxBtAclState -> BtAclState,
+    CxxBtHciErrorCode -> BtHciErrorCode,
+    CxxBtConnectionDirection -> BtConnectionDirection,
+    u16 -> u16
 );
-cb_variant!(BaseCb, generate_local_oob_data_cb -> BaseCallbacks::GenerateLocalOobData,
-    bindings::tBT_TRANSPORT, OobData -> Box::<OobData>
-);
-cb_variant!(BaseCb, le_rand_cb -> BaseCallbacks::LeRandCallback, u64);
 cb_variant!(BaseCb, key_missing_cb -> BaseCallbacks::KeyMissing, RawAddress, u8);
 
-struct RawInterfaceWrapper {
-    pub raw: *const bindings::bt_interface_t,
-}
+// Rust Btif FFI that matches the C++ Btif Interface defined in /topshim/btif/btif_shim.h
+#[cxx::bridge(namespace = "bluetooth::topshim::rust")]
+pub(crate) mod ffi {
+    unsafe extern "C++" {
+        #![allow(private_interfaces)]
 
-unsafe impl Send for RawInterfaceWrapper {}
+        include!("bluetooth/types/address.h");
+        include!("include/hardware/bluetooth.h");
+        include!("topshim/btif/btif_shim.h");
 
-/// Macro to call functions via function pointers. Expects the self object to
-/// have a raw interface wrapper at `self.internal`. The actual function call is
-/// marked unsafe since it will need to dereference a C object. This can cause
-/// segfaults if not validated beforehand.
-///
-/// Example:
-///     ccall!(self, foobar, arg1, arg2)
-///     Expands to: unsafe {((*self.internal.raw).foobar.unwrap())(arg1, arg2)}
-#[macro_export]
-macro_rules! ccall {
-    ($self:ident,$fn_name:ident) => {
-        unsafe {
-            ((*$self.internal.raw).$fn_name.unwrap())()
-        }
-    };
-    ($self:ident,$fn_name:ident, $($args:expr),*) => {
-        unsafe {
-            ((*$self.internal.raw).$fn_name.unwrap())($($args),*)
-        }
-    };
-}
+        #[namespace = ""]
+        type RawAddress = crate::btif::RawAddress;
 
-/// Macro to call const functions via cxx. Expects the self object to have the
-/// cxx object to be called at `self.internal_cxx`.
-///
-/// Example:
-///     cxxcall!(self, foobar, arg1, arg2)
-///     Expands to: self.internal_cxx.foobar(arg1, arg2)
-#[macro_export]
-macro_rules! cxxcall {
-    ($self:expr,$fn_name:ident) => {
-        $self.internal_cxx.$fn_name()
-    };
-    ($self:expr,$fn_name:ident, $($args:expr),*) => {
-        $self.internal_cxx.$fn_name($($args),*)
-    };
-}
+        #[namespace = ""]
+        #[cxx_name = "bt_property_type_t"]
+        type BtPropertyType = super::CxxBtPropertyType;
 
-/// Macro to call mutable functions via cxx. Mutable functions are always
-/// required to be defined with `self: Pin<&mut Self>`. The self object must
-/// have the cxx object at `self.internal_cxx`.
-///
-/// Example:
-///     mutcxxcall!(self, foobar, arg1, arg2)
-///     Expands to: self.internal_cxx.pin_mut().foobar(arg1, arg2)
-#[macro_export]
-macro_rules! mutcxxcall {
-    ($self:expr,$fn_name:ident) => {
-        $self.internal_cxx.pin_mut().$fn_name()
-    };
-    ($self:expr,$fn_name:ident, $($args:expr),*) => {
-        $self.internal_cxx.pin_mut().$fn_name($($args),*)
-    };
+        #[namespace = ""]
+        #[cxx_name = "bt_scan_mode_t"]
+        type BtScanMode = super::CxxBtScanMode;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_property_t"]
+        type BluetoothProperty = super::CxxBluetoothProperty;
+
+        #[namespace = ""]
+        #[cxx_name = "PairingVariant"]
+        type PairingVariant = super::CxxPairingVariant;
+
+        #[namespace = ""]
+        #[cxx_name = "tBT_TRANSPORT"]
+        type BtTransport = super::CxxBtTransport;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_state_t"]
+        type BtState = super::CxxBtState;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_acl_state_t"]
+        type BtAclState = super::CxxBtAclState;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_bond_state_t"]
+        type BtBondState = super::CxxBtBondState;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_discovery_state_t"]
+        type BtDiscoveryState = super::CxxBtDiscoveryState;
+
+        #[namespace = ""]
+        #[cxx_name = "AclLinkSpec"]
+        type AclLinkSpec = super::AclLinkSpec;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_pin_code_t"]
+        type BtPinCode = super::BtPinCode;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_hci_error_code_t"]
+        type BtHciErrorCode = super::CxxBtHciErrorCode;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_conn_direction_t"]
+        type BtConnectionDirection = super::CxxBtConnectionDirection;
+
+        #[namespace = ""]
+        #[cxx_name = "PairingType"]
+        type PairingType = super::CxxPairingType;
+
+        #[namespace = ""]
+        #[cxx_name = "PairingInitiator"]
+        type PairingInitiator = super::CxxPairingInitiator;
+
+        #[namespace = ""]
+        #[cxx_name = "bt_cb_thread_evt"]
+        type BtThreadEvent = super::CxxBtThreadEvent;
+
+        fn get_property_bytes(prop: &BluetoothProperty) -> &[u8];
+
+        type BtIntf;
+
+        fn GetBtIntf() -> UniquePtr<BtIntf>;
+
+        fn set_adapter_index(self: &BtIntf, adapter_index: i32);
+        fn bluetooth_init(
+            self: &BtIntf,
+            guest_mode: bool,
+            is_common_criteria_mode: bool,
+            config_compare_result: i32,
+            is_atv: bool,
+            hci_instance_name: String,
+        );
+        fn bluetooth_enable(self: &BtIntf);
+        fn bluetooth_disable(self: &BtIntf);
+        fn bluetooth_cleanup(self: &BtIntf);
+        fn get_adapter_properties(self: &BtIntf) -> i32;
+        fn get_adapter_property(self: &BtIntf, prop_type: BtPropertyType) -> i32;
+        fn set_scan_mode(self: &BtIntf, mode: BtScanMode);
+        fn set_adapter_property(self: &BtIntf, property: BluetoothProperty) -> i32;
+        fn get_remote_device_properties(self: &BtIntf, remote_addr: RawAddress) -> i32;
+        fn get_remote_device_property(
+            self: &BtIntf,
+            remote_addr: RawAddress,
+            prop_type: BtPropertyType,
+        ) -> i32;
+        fn set_remote_device_property(
+            self: &BtIntf,
+            remote_addr: RawAddress,
+            property: BluetoothProperty,
+        ) -> i32;
+        fn get_remote_services(self: &BtIntf, remote_addr: RawAddress, transport: i32) -> i32;
+        fn start_discovery(self: &BtIntf) -> i32;
+        fn cancel_discovery(self: &BtIntf) -> i32;
+        fn create_bond(self: &BtIntf, bd_addr: RawAddress, transport: i32) -> i32;
+        fn remove_bond(self: &BtIntf, bd_addr: RawAddress) -> i32;
+        fn cancel_bond(self: &BtIntf, bd_addr: RawAddress) -> i32;
+        fn pairing_is_busy(self: &BtIntf) -> bool;
+        fn get_connection_state(self: &BtIntf, bd_addr: RawAddress) -> i32;
+        fn pin_reply(
+            self: &BtIntf,
+            bd_addr: RawAddress,
+            accept: u8,
+            pin_len: u8,
+            pin_code: &mut BtPinCode,
+        ) -> i32;
+        fn ssp_reply(
+            self: &BtIntf,
+            bd_addr: RawAddress,
+            variant: PairingVariant,
+            accept: u8,
+            passkey: u32,
+        ) -> i32;
+        fn dump(self: &BtIntf, fd: i32);
+        fn generate_local_oob_data(self: &BtIntf, transport: BtTransport) -> i32;
+        fn clear_event_filter(self: &BtIntf) -> i32;
+        fn clear_event_mask(self: &BtIntf) -> i32;
+        fn clear_filter_accept_list(self: &BtIntf) -> i32;
+        fn disconnect_all_acls(self: &BtIntf) -> i32;
+        fn disconnect_acl(self: &BtIntf, bd_addr: RawAddress, transport: i32) -> i32;
+        fn le_rand(self: &BtIntf) -> i32;
+        fn set_event_filter_inquiry_result_all_devices(self: &BtIntf) -> i32;
+        fn set_default_event_mask_except(self: &BtIntf, mask: u64, le_mask: u64) -> i32;
+        fn restore_filter_accept_list(self: &BtIntf) -> i32;
+        fn allow_wake_by_hid(self: &BtIntf) -> i32;
+        fn set_event_filter_connection_setup_all_devices(self: &BtIntf) -> i32;
+        fn set_suspend_state(self: &BtIntf, suspend: bool) -> i32;
+        fn get_wbs_supported(self: &BtIntf) -> bool;
+        fn get_swb_supported(self: &BtIntf) -> bool;
+        fn is_coding_format_supported(self: &BtIntf, coding_format: u8) -> bool;
+    }
+
+    // Callbacks from C++ to Rust. Generated by cb_variant!
+    extern "Rust" {
+        fn adapter_state_cb(state: BtState);
+        fn adapter_properties_cb(status: u32, properties: &[BluetoothProperty]);
+        fn remote_device_properties_cb(
+            status: u32,
+            remote_addr: RawAddress,
+            address_type: u8,
+            properties: &[BluetoothProperty],
+        );
+        fn device_found_cb(properties: &[BluetoothProperty]);
+        fn discovery_state_cb(state: BtDiscoveryState);
+        fn pin_request_cb(
+            remote_addr: RawAddress,
+            bdname: String,
+            passkey: u32,
+            accept: bool,
+            pairing_alg: i32,
+        );
+        fn ssp_request_cb(
+            remote_addr: RawAddress,
+            transport: i32,
+            variant: PairingVariant,
+            passkey: u32,
+            pairing_alg: i32,
+        );
+        fn bond_state_cb(
+            status: u32,
+            remote_addr: RawAddress,
+            transport: BtTransport,
+            state: BtBondState,
+            pairing_type: PairingType,
+            bond_result: i32,
+            pairing_initiator: PairingInitiator,
+        );
+        fn thread_evt_cb(evt: BtThreadEvent);
+        fn acl_state_cb(
+            status: u32,
+            link_spec: AclLinkSpec,
+            state: BtAclState,
+            hci_reason: BtHciErrorCode,
+            direction: BtConnectionDirection,
+            handle: u16,
+        );
+        fn key_missing_cb(remote_addr: RawAddress, cod: u8);
+    }
 }
 
 #[no_mangle]
-extern "C" fn wake_lock_noop(_0: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int {
+extern "C" fn wake_lock_noop(_: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int {
     // The wakelock mechanism is not available on this platform,
     // so just returning success to avoid error log.
     0
@@ -1192,15 +1310,15 @@ extern "C" fn wake_lock_noop(_0: *const ::std::os::raw::c_char) -> ::std::os::ra
 
 /// Rust wrapper around `bt_interface_t`.
 pub struct BluetoothInterface {
-    internal: RawInterfaceWrapper,
+    internal: cxx::UniquePtr<ffi::BtIntf>,
 
     /// Set to true after `initialize` is called.
     pub is_init: bool,
-
-    // Need to take ownership of callbacks so it doesn't get freed after init
-    callbacks: Option<Box<bindings::bt_callbacks_t>>,
-    os_callouts: Option<Box<bindings::bt_os_callouts_t>>,
 }
+
+// SAFETY: The pointer is to a static, thread-safe interface provided by the
+// Bluetooth stack. It's safe to send this pointer across threads.
+unsafe impl Send for BluetoothInterface {}
 
 #[gen_cxx_extern_trivial]
 pub(crate) type CxxBluetoothInterface = bindings::bt_interface_t;
@@ -1216,155 +1334,100 @@ impl BluetoothInterface {
     ///
     /// * `callbacks` - Dispatcher struct that accepts [`BaseCallbacks`]
     /// * `hci_index` - Index of the hci adapter in use
-    pub fn initialize(&mut self, callbacks: BaseCallbacksDispatcher, hci_index: i32) -> bool {
+    pub fn initialize(&mut self, callbacks: BaseCallbacksDispatcher, hci_index: i32) {
         if get_dispatchers().lock().unwrap().set::<BaseCb>(Arc::new(Mutex::new(callbacks))) {
             panic!("Tried to set dispatcher for BaseCallbacks but it already existed");
         }
 
-        // Fill up callbacks struct to pass to init function (will be copied so
-        // no need to worry about ownership)
-        let mut callbacks = Box::new(bindings::bt_callbacks_t {
-            size: std::mem::size_of::<bindings::bt_callbacks_t>(),
-            adapter_state_changed_cb: Some(adapter_state_cb),
-            adapter_properties_cb: Some(adapter_properties_cb),
-            remote_device_properties_cb: Some(remote_device_properties_cb),
-            device_found_cb: Some(device_found_cb),
-            discovery_state_changed_cb: Some(discovery_state_cb),
-            pin_request_cb: Some(pin_request_cb),
-            ssp_request_cb: Some(ssp_request_cb),
-            bond_state_changed_cb: Some(bond_state_cb),
-            address_consolidate_cb: Some(address_consolidate_cb),
-            le_address_associate_cb: Some(le_address_associate_cb),
-            acl_state_changed_cb: Some(acl_state_cb),
-            thread_evt_cb: Some(thread_evt_cb),
-            dut_mode_recv_cb: None,
-            le_test_mode_cb: None,
-            energy_info_cb: None,
-            link_quality_report_cb: None,
-            generate_local_oob_data_cb: Some(generate_local_oob_data_cb),
-            switch_buffer_size_cb: None,
-            switch_codec_cb: None,
-            le_rand_cb: Some(le_rand_cb),
-            key_missing_cb: Some(key_missing_cb),
-            encryption_change_cb: None,
-        });
-
-        let cb_ptr = LTCheckedPtrMut::from(&mut callbacks);
-
         let (guest_mode, is_common_criteria_mode, config_compare_result, is_atv) =
             (false, false, 0, false);
 
-        let hci_instance_name = std::ffi::CString::new("default").unwrap();
-        let hci_instance_name_ptr = LTCheckedPtr::from(&hci_instance_name);
+        let hci_instance_name = String::from("default");
 
-        ccall!(self, set_adapter_index, hci_index);
-        let init = ccall!(
-            self,
-            init,
-            cb_ptr.into(),
+        self.internal.set_adapter_index(hci_index);
+        self.internal.bluetooth_init(
             guest_mode,
             is_common_criteria_mode,
             config_compare_result,
             is_atv,
-            hci_instance_name_ptr.into()
+            hci_instance_name,
         );
 
-        self.is_init = init == 0;
-        self.callbacks = Some(callbacks);
-
-        if self.is_init {
-            // Fill up OSI function table and register it with BTIF.
-            // TODO(b/271931441) - pass a NoOpOsCallouts structure from
-            // gd/rust/linux/stack.
-            let mut callouts = Box::new(bindings::bt_os_callouts_t {
-                size: std::mem::size_of::<bindings::bt_os_callouts_t>(),
-                acquire_wake_lock: Some(wake_lock_noop),
-                release_wake_lock: Some(wake_lock_noop),
-            });
-            let callouts_ptr = LTCheckedPtrMut::from(&mut callouts);
-            ccall!(self, set_os_callouts, callouts_ptr.into());
-            self.os_callouts = Some(callouts);
-        }
-
-        return self.is_init;
+        self.is_init = true;
     }
 
     pub fn cleanup(&self) {
-        ccall!(self, cleanup)
+        self.internal.bluetooth_cleanup()
     }
 
-    pub fn enable(&self) -> i32 {
-        ccall!(self, enable)
+    pub fn enable(&self) {
+        self.internal.bluetooth_enable()
     }
 
-    pub fn disable(&self) -> i32 {
-        ccall!(self, disable)
+    pub fn disable(&self) {
+        self.internal.bluetooth_disable()
     }
 
     pub fn get_adapter_properties(&self) -> i32 {
-        ccall!(self, get_adapter_properties)
+        self.internal.get_adapter_properties()
     }
 
     pub fn get_adapter_property(&self, prop: BtPropertyType) -> i32 {
-        let converted_type = bindings::bt_property_type_t::from(prop);
-        ccall!(self, get_adapter_property, converted_type)
+        self.internal.get_adapter_property(prop.into())
     }
 
     pub fn set_adapter_property(&self, prop: BluetoothProperty) -> i32 {
-        let prop_pair: (Box<[u8]>, bindings::bt_property_t) = prop.into();
-        let prop_ptr = LTCheckedPtr::from_ref(&prop_pair.1);
-        ccall!(self, set_adapter_property, prop_ptr.into())
+        let (_data, prop): (Box<[u8]>, CxxBluetoothProperty) = prop.into();
+        self.internal.set_adapter_property(prop)
     }
 
     pub fn set_scan_mode(&self, mode: BtScanMode) {
-        ccall!(self, set_scan_mode, mode.into())
+        self.internal.set_scan_mode(mode.into())
     }
 
     pub fn get_remote_device_properties(&self, addr: RawAddress) -> i32 {
-        ccall!(self, get_remote_device_properties, addr)
+        self.internal.get_remote_device_properties(addr)
     }
 
     pub fn get_remote_device_property(&self, addr: RawAddress, prop_type: BtPropertyType) -> i32 {
-        let converted_type = bindings::bt_property_type_t::from(prop_type);
-        ccall!(self, get_remote_device_property, addr, converted_type)
+        self.internal.get_remote_device_property(addr, prop_type.into())
     }
 
     pub fn set_remote_device_property(&self, addr: RawAddress, prop: BluetoothProperty) -> i32 {
-        let prop_pair: (Box<[u8]>, bindings::bt_property_t) = prop.into();
-        let prop_ptr = LTCheckedPtr::from_ref(&prop_pair.1);
-        ccall!(self, set_remote_device_property, addr, prop_ptr.into())
+        let (_data, prop): (Box<[u8]>, CxxBluetoothProperty) = prop.into();
+        self.internal.set_remote_device_property(addr, prop)
     }
 
     pub fn get_remote_services(&self, addr: RawAddress, transport: BtTransport) -> i32 {
-        ccall!(self, get_remote_services, addr, transport.to_i32().unwrap())
+        self.internal.get_remote_services(addr, transport.to_i32().unwrap())
     }
 
     pub fn start_discovery(&self) -> i32 {
-        ccall!(self, start_discovery)
+        self.internal.start_discovery()
     }
 
     pub fn cancel_discovery(&self) -> i32 {
-        ccall!(self, cancel_discovery)
+        self.internal.cancel_discovery()
     }
 
     pub fn pairing_is_busy(&self) -> bool {
-        ccall!(self, pairing_is_busy)
+        self.internal.pairing_is_busy()
     }
 
     pub fn create_bond(&self, addr: RawAddress, transport: BtTransport) -> i32 {
-        ccall!(self, create_bond, addr, transport as i32)
+        self.internal.create_bond(addr, transport as i32)
     }
 
     pub fn remove_bond(&self, addr: RawAddress) -> i32 {
-        ccall!(self, remove_bond, addr)
+        self.internal.remove_bond(addr)
     }
 
     pub fn cancel_bond(&self, addr: RawAddress) -> i32 {
-        ccall!(self, cancel_bond, addr)
+        self.internal.cancel_bond(addr)
     }
 
     pub fn get_connection_state(&self, addr: RawAddress) -> BtConnectionState {
-        ccall!(self, get_connection_state, addr).into()
+        self.internal.get_connection_state(addr).into()
     }
 
     pub fn pin_reply(
@@ -1374,100 +1437,85 @@ impl BluetoothInterface {
         pin_len: u8,
         pin_code: &mut BtPinCode,
     ) -> i32 {
-        let pin_code_ptr = LTCheckedPtrMut::from_ref(pin_code);
-        ccall!(self, pin_reply, addr, accept, pin_len, pin_code_ptr.into())
+        self.internal.pin_reply(addr, accept, pin_len, pin_code)
     }
 
     pub fn ssp_reply(
         &self,
         addr: RawAddress,
-        variant: BtSspVariant,
+        variant: PairingVariant,
         accept: u8,
         passkey: u32,
     ) -> i32 {
-        let cvariant = bindings::bt_ssp_variant_t::from(variant);
-        ccall!(self, ssp_reply, addr, cvariant, accept, passkey)
+        self.internal.ssp_reply(addr, variant.into(), accept, passkey)
     }
 
     pub fn clear_event_filter(&self) -> i32 {
-        ccall!(self, clear_event_filter)
+        self.internal.clear_event_filter()
     }
 
     pub fn clear_event_mask(&self) -> i32 {
-        ccall!(self, clear_event_mask)
+        self.internal.clear_event_mask()
     }
 
     pub fn clear_filter_accept_list(&self) -> i32 {
-        ccall!(self, clear_filter_accept_list)
+        self.internal.clear_filter_accept_list()
     }
 
     pub fn disconnect_all_acls(&self) -> i32 {
-        ccall!(self, disconnect_all_acls)
+        self.internal.disconnect_all_acls()
     }
 
     pub fn allow_wake_by_hid(&self) -> i32 {
-        ccall!(self, allow_wake_by_hid)
+        self.internal.allow_wake_by_hid()
     }
 
     pub fn get_wbs_supported(&self) -> bool {
-        ccall!(self, get_wbs_supported)
+        self.internal.get_wbs_supported()
     }
 
     pub fn get_swb_supported(&self) -> bool {
-        ccall!(self, get_swb_supported)
+        self.internal.get_swb_supported()
     }
 
     pub fn is_coding_format_supported(&self, coding_format: u8) -> bool {
-        ccall!(self, is_coding_format_supported, coding_format)
+        self.internal.is_coding_format_supported(coding_format)
     }
 
     pub fn le_rand(&self) -> i32 {
-        ccall!(self, le_rand)
+        self.internal.le_rand()
     }
 
     pub fn generate_local_oob_data(&self, transport: BtTransport) -> i32 {
-        ccall!(self, generate_local_oob_data, transport as u8)
+        self.internal.generate_local_oob_data(transport.into())
     }
 
     pub fn restore_filter_accept_list(&self) -> i32 {
-        ccall!(self, restore_filter_accept_list)
+        self.internal.restore_filter_accept_list()
     }
 
     pub fn set_default_event_mask_except(&self, mask: u64, le_mask: u64) -> i32 {
-        ccall!(self, set_default_event_mask_except, mask, le_mask)
+        self.internal.set_default_event_mask_except(mask, le_mask)
     }
 
     pub fn set_event_filter_inquiry_result_all_devices(&self) -> i32 {
-        ccall!(self, set_event_filter_inquiry_result_all_devices)
+        self.internal.set_event_filter_inquiry_result_all_devices()
     }
 
     pub fn set_event_filter_connection_setup_all_devices(&self) -> i32 {
-        ccall!(self, set_event_filter_connection_setup_all_devices)
+        self.internal.set_event_filter_connection_setup_all_devices()
     }
 
-    pub(crate) fn get_profile_interface(
-        &self,
-        profile: SupportedProfiles,
-    ) -> *const std::os::raw::c_void {
-        let cprofile = Vec::<u8>::from(profile);
-        let cprofile_ptr = LTCheckedPtr::from(&cprofile);
-        ccall!(self, get_profile_interface, cprofile_ptr.cast_into::<std::os::raw::c_char>())
+    pub fn set_suspend_state(&self, suspend: bool) -> i32 {
+        self.internal.set_suspend_state(suspend)
     }
 
-    // TODO(@sarveshkalwit): Remove once all modules have been updated with FFI
-    pub(crate) fn as_raw_ptr(&self) -> *const u8 {
-        self.internal.raw as *const u8
-    }
-
-    pub(crate) fn as_raw_btif(&self) -> &CxxBluetoothInterface {
-        // SAFETY: The pointer `self.internal.raw` is a pointer to a static,
-        // thread-safe interface provided by the Bluetooth stack. It is
-        // guaranteed to be valid for the lifetime of the program.
-        unsafe { &*self.internal.raw }
+    pub(crate) fn as_btif(&self) -> &ffi::BtIntf {
+        self.internal.as_ref().unwrap()
     }
 
     pub fn dump(&self, fd: RawFd) {
-        ccall!(self, dump, fd, std::ptr::null_mut())
+        self.internal.dump(fd)
     }
 }
 
@@ -1484,58 +1532,18 @@ pub trait ToggleableProfile {
 }
 
 pub fn get_btinterface() -> BluetoothInterface {
-    let mut ifptr: *const bindings::bt_interface_t = std::ptr::null();
-
-    if unsafe { bindings::hal_util_load_bt_library(&mut ifptr) } == 0 {
-        BluetoothInterface {
-            internal: RawInterfaceWrapper { raw: ifptr },
-            is_init: false,
-            callbacks: None,
-            os_callouts: None,
-        }
-    } else {
-        panic!("Failed to get BluetoothInterface");
-    }
+    let intf: cxx::UniquePtr<ffi::BtIntf> = ffi::GetBtIntf();
+    BluetoothInterface { internal: intf, is_init: false }
 }
 
 // Turns C-array T[] to Vec<U>.
 pub(crate) fn ptr_to_vec<T: Copy, U: From<T>>(start: *const T, length: usize) -> Vec<U> {
-    unsafe {
-        (0..length).map(|i| U::from(start.offset(i as isize).read_unaligned())).collect::<Vec<U>>()
-    }
+    unsafe { (0..length).map(|i| U::from(start.add(i).read_unaligned())).collect::<Vec<U>>() }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make_bdname_from_slice(slice: &[u8]) -> bindings::bt_bdname_t {
-        // Length of slice must be less than bd_name max
-        assert!(slice.len() <= 249);
-
-        let mut bdname = bindings::bt_bdname_t { name: [128; 249] };
-
-        for (i, v) in slice.iter().enumerate() {
-            bdname.name[i] = *v;
-        }
-
-        bdname
-    }
-
-    #[test]
-    fn test_bdname_conversions() {
-        let hello_bdname = make_bdname_from_slice(&[72, 69, 76, 76, 79, 0]);
-        assert_eq!("HELLO".to_string(), String::from(hello_bdname));
-
-        let empty_bdname = make_bdname_from_slice(&[0]);
-        assert_eq!("".to_string(), String::from(empty_bdname));
-
-        let no_nullterm_bdname = make_bdname_from_slice(&[72, 69, 76, 76, 79]);
-        assert_eq!("".to_string(), String::from(no_nullterm_bdname));
-
-        let invalid_bdname = make_bdname_from_slice(&[128; 249]);
-        assert_eq!("".to_string(), String::from(invalid_bdname));
-    }
 
     #[test]
     fn test_ptr_to_vec() {
@@ -1543,48 +1551,6 @@ mod tests {
         let vec: Vec<i32> = ptr_to_vec(arr.as_ptr(), arr.len());
         let expected: Vec<i32> = vec![1, 2, 3];
         assert_eq!(expected, vec);
-    }
-
-    #[test]
-    fn test_property_with_string_conversions() {
-        {
-            let bdname = BluetoothProperty::BdName("FooBar".into());
-            let prop_pair: (Box<[u8]>, bindings::bt_property_t) = bdname.into();
-            let converted: BluetoothProperty = prop_pair.1.into();
-            assert!(match converted {
-                BluetoothProperty::BdName(name) => "FooBar".to_string() == name,
-                _ => false,
-            });
-        }
-
-        {
-            let orig_record = BtServiceRecord {
-                uuid: Uuid::from([0; 16]),
-                channel: 3,
-                name: "FooBar".to_string(),
-            };
-            let service_record = BluetoothProperty::ServiceRecord(orig_record.clone());
-            let prop_pair: (Box<[u8]>, bindings::bt_property_t) = service_record.into();
-            let converted: BluetoothProperty = prop_pair.1.into();
-            assert!(match converted {
-                BluetoothProperty::ServiceRecord(sr) => {
-                    sr.uuid == orig_record.uuid
-                        && sr.channel == orig_record.channel
-                        && sr.name == orig_record.name
-                }
-                _ => false,
-            });
-        }
-
-        {
-            let rfname = BluetoothProperty::RemoteFriendlyName("FooBizz".into());
-            let prop_pair: (Box<[u8]>, bindings::bt_property_t) = rfname.into();
-            let converted: BluetoothProperty = prop_pair.1.into();
-            assert!(match converted {
-                BluetoothProperty::RemoteFriendlyName(name) => "FooBizz".to_string() == name,
-                _ => false,
-            });
-        }
     }
 
     #[test]

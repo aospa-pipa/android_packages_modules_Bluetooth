@@ -101,12 +101,13 @@ typedef struct {
 #define BTA_DM_AUTH_SMP_PAIR_NOT_SUPPORT (BTA_DM_AUTH_FAIL_BASE + SMP_PAIR_NOT_SUPPORT)
 #define BTA_DM_AUTH_SMP_UNKNOWN_ERR (BTA_DM_AUTH_FAIL_BASE + SMP_PAIR_FAIL_UNKNOWN)
 #define BTA_DM_AUTH_SMP_CONN_TOUT (BTA_DM_AUTH_FAIL_BASE + SMP_CONN_TOUT)
+#define BTA_DM_AUTH_SMP_UNSPECIFIED_FAIL (BTA_DM_AUTH_FAIL_BASE + SMP_FAIL)
 
 typedef uint8_t tBTA_LE_KEY_TYPE; /* can be used as a bit mask */
 
 typedef union {
   tBTM_LE_PENC_KEYS penc_key;   /* received peer encryption key */
-  tBTM_LE_PCSRK_KEYS psrk_key;  /* received peer device SRK */
+  tBTM_LE_PCSRK_KEYS pcsrk_key;  /* received peer device SRK */
   tBTM_LE_PID_KEYS pid_key;     /* peer device ID key */
   tBTM_LE_LENC_KEYS lenc_key;   /* local encryption reproduction keys LTK = = d1(ER,DIV,0)*/
   tBTM_LE_LCSRK_KEYS lcsrk_key; /* local device CSRK = d1(ER,DIV,1)*/
@@ -142,7 +143,7 @@ typedef struct {
 typedef struct {
   RawAddress bd_addr; /* peer address */
   tBTM_LE_KEY_TYPE key_type;
-  tBTM_LE_KEY_VALUE* p_key_value;
+  const tBTM_LE_KEY_VALUE* p_key_value;
 } tBTA_DM_BLE_KEY;
 
 /* Structure associated with BTA_DM_AUTH_CMPL_EVT */
@@ -157,6 +158,7 @@ typedef struct {
   tBLE_ADDR_TYPE addr_type; /* Peer device address type */
   tBT_DEVICE_TYPE dev_type;
   bool is_ctkd; /* True if key is derived using CTKD procedure */
+  bool smp_over_br;
 } tBTA_DM_AUTH_CMPL;
 
 /* Structure associated with BTA_DM_DEV_UNPAIRED_EVT */
@@ -278,8 +280,7 @@ typedef void(tBTA_DM_ENCRYPT_CBACK)(const RawAddress& bd_addr, tBT_TRANSPORT tra
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport,
-                tBT_DEVICE_TYPE device_type);
+void BTA_DmBond(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type, tBT_TRANSPORT transport);
 
 /*******************************************************************************
  *
@@ -346,7 +347,8 @@ void BTA_DmConfirm(const RawAddress& bd_addr, bool accept);
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmAddDevice(RawAddress bd_addr, DEV_CLASS dev_class, LinkKey link_key, uint8_t key_type,
+void BTA_DmAddDevice(const RawAddress& bd_addr, const DEV_CLASS& dev_class,
+                     const PairingType& pairing_type, const LinkKey& link_key, uint8_t key_type,
                      uint8_t pin_length);
 
 /*******************************************************************************
@@ -437,14 +439,15 @@ void BTA_DmAddBleDevice(const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
  *                  information stored in the NVRAM.
  *
  * Parameters:      bd_addr          - BD address of the peer
- *                  p_le_key         - LE key values.
- *                  key_type         - LE SMP key type.
+ *                  pairing_type     - Pairing type
+ *                  key_type         - Key type
+ *                  le_key           - Key value
  *
  * Returns          void
  *
  ******************************************************************************/
-void BTA_DmAddBleKey(const RawAddress& bd_addr, tBTA_LE_KEY_VALUE* p_le_key,
-                     tBTM_LE_KEY_TYPE key_type);
+void BTA_DmAddBleKey(const RawAddress& bd_addr, const PairingType& pairing_type,
+                     tBTM_LE_KEY_TYPE key_type, const tBTA_LE_KEY_VALUE& le_key);
 
 /*******************************************************************************
  *

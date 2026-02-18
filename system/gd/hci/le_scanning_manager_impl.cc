@@ -40,7 +40,7 @@
 #include "os/handler.h"
 #include "os/system_properties.h"
 #include "stack/include/ble_hci_link_interface.h"
-#include "stack/include/btm_sec_api.h"
+#include "stack/include/btm_client_interface.h"
 
 namespace bluetooth {
 namespace hci {
@@ -81,6 +81,12 @@ enum class ScanApiType {
   LEGACY = 1,
   ANDROID_HCI = 2,
   EXTENDED = 3,
+};
+
+enum class ScanCallerType {
+  JAVA = 1,
+  DISCOVERY = 2,
+  CSIS = 3,
 };
 
 struct Scanner {
@@ -499,7 +505,9 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     }
   }
 
-  void configure_scan() {
+  void configure_scan(uint16_t scan_win_1m, uint32_t scan_int_1m, LeScanType scan_type,
+                      uint16_t scan_win_coded, uint32_t scan_int_coded,
+                      LeScanningFilterPolicy scan_filter_policy, uint8_t scan_phy) {
     std::vector<PhyScanParameters> parameter_vector;
 
     // The Host shall not issue set scan parameter command when scanning is enabled
@@ -518,23 +526,23 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
 
     switch (api_type_) {
       case ScanApiType::EXTENDED:
-        if ((phy_ & k1mPhyMask) != 0) {
+        if ((scan_phy & k1mPhyMask) != 0) {
           PhyScanParameters phy_scan_parameters;
-          phy_scan_parameters.le_scan_window_ = window_ms_1m_;
-          phy_scan_parameters.le_scan_interval_ = interval_ms_1m_;
-          phy_scan_parameters.le_scan_type_ = le_scan_type_;
+          phy_scan_parameters.le_scan_window_ = scan_win_1m;
+          phy_scan_parameters.le_scan_interval_ = scan_int_1m;
+          phy_scan_parameters.le_scan_type_ = scan_type;
           parameter_vector.push_back(phy_scan_parameters);
         }
-        if ((phy_ & kCodedPhyMask) != 0) {
+        if ((scan_phy & kCodedPhyMask) != 0) {
           PhyScanParameters phy_scan_parameters;
-          phy_scan_parameters.le_scan_window_ = window_ms_coded_;
-          phy_scan_parameters.le_scan_interval_ = interval_ms_coded_;
-          phy_scan_parameters.le_scan_type_ = le_scan_type_;
+          phy_scan_parameters.le_scan_window_ = scan_win_coded;
+          phy_scan_parameters.le_scan_interval_ = scan_int_coded;
+          phy_scan_parameters.le_scan_type_ = scan_type;
           parameter_vector.push_back(phy_scan_parameters);
         }
         le_scanning_interface_->EnqueueCommand(
-                LeSetExtendedScanParametersBuilder::Create(own_address_type_, filter_policy_, phy_,
-                                                           parameter_vector),
+                LeSetExtendedScanParametersBuilder::Create(own_address_type_, scan_filter_policy,
+                                                           scan_phy, parameter_vector),
                 handler_->BindOnceOn(this, &impl::on_set_scan_parameter_complete));
         break;
       case ScanApiType::ANDROID_HCI:
@@ -543,8 +551,8 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
           return;
         }
         le_scanning_interface_->EnqueueCommand(
-                LeExtendedScanParamsBuilder::Create(le_scan_type_, interval_ms_1m_, window_ms_1m_,
-                                                    own_address_type_, filter_policy_),
+                LeExtendedScanParamsBuilder::Create(scan_type, scan_int_1m, scan_win_1m,
+                                                    own_address_type_, scan_filter_policy),
                 handler_->BindOnceOn(this, &impl::on_set_scan_parameter_complete));
 
         break;
@@ -555,8 +563,8 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
         }
         le_scanning_interface_->EnqueueCommand(
 
-                LeSetScanParametersBuilder::Create(le_scan_type_, interval_ms_1m_, window_ms_1m_,
-                                                   own_address_type_, filter_policy_),
+                LeSetScanParametersBuilder::Create(scan_type, scan_int_1m, scan_win_1m,
+                                                   own_address_type_, scan_filter_policy),
                 handler_->BindOnceOn(this, &impl::on_set_scan_parameter_complete));
         break;
     }
@@ -603,19 +611,68 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     }
   }
 
-  void scan(bool start) {
+  bool update_start_scan(ScanCallerType callerType) {
+    bool should_start_scan = true;
+    switch (callerType) {
+      case ScanCallerType::DISCOVERY:
+      case ScanCallerType::CSIS:
+        if (callerType == ScanCallerType::DISCOVERY) {
+          set_le_discovery_active();
+        } else {
+          set_le_csis_scan_active();
+        }
+        break;
+      case ScanCallerType::JAVA:
+        // Mark Java scan as active
+        set_le_java_scan_active();
+        break;
+    }
+    return should_start_scan;
+  }
+
+  bool update_stop_scan(ScanCallerType callerType) {
+    bool should_stop_scan = false;
+    switch (callerType) {
+      case ScanCallerType::DISCOVERY:
+      case ScanCallerType::CSIS:
+        if (callerType == ScanCallerType::DISCOVERY) {
+          reset_le_discovery();
+        } else {
+          reset_le_csis_scan();
+        }
+        break;
+      case ScanCallerType::JAVA:
+        // Mark Java scan as inactive
+        reset_le_java_scan();
+        break;
+    }
+    return should_stop_scan;
+  }
+
+  void scan(bool start, ScanCallerType callerType) {
     // On-resume flag should always be reset if there is an explicit start/stop call.
     scan_on_resume_ = false;
     if (start) {
-      configure_scan();
-      start_scan();
-    } else {
-      if (address_manager_registered_) {
-        le_address_manager_->Unregister(this);
-        address_manager_registered_ = false;
-        paused_ = false;
+      if (com::android::bluetooth::flags::migrate_btm_scan_to_gd()) {
+        // Only start scan if we need to
+        if (update_start_scan(callerType)) {
+          start_scan();
+        }
+      } else {
+        configure_scan(window_ms_1m_, interval_ms_1m_, le_scan_type_, window_ms_coded_,
+                       interval_ms_coded_, filter_policy_, phy_);
+        start_scan();
       }
-      stop_scan();
+    } else {
+      if (!com::android::bluetooth::flags::migrate_btm_scan_to_gd() ||
+          update_stop_scan(callerType)) {
+        if (address_manager_registered_) {
+          le_address_manager_->Unregister(this);
+          address_manager_registered_ = false;
+          paused_ = false;
+        }
+        stop_scan();
+      }
     }
   }
 
@@ -764,7 +821,8 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
 
   bool is_bonded(Address target_address) {
     if (com::android::bluetooth::flags::irk_scanning_bond_check_update()) {
-      return BTM_IsBonded(RawAddress(target_address.address), BT_TRANSPORT_LE);
+      return get_btm_client_interface().security.BTM_IsBonded(RawAddress(target_address.address),
+                                                              BT_TRANSPORT_LE);
     } else {
       for (auto device : storage_module_->GetBondedDevices()) {
         if (device.GetAddress() == target_address) {
@@ -1682,7 +1740,8 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
       // This is a workaround for b/381010390.
       // We'll eventually recover scan parameters which could be overridden by
       // btm_send_hci_set_scan_params.
-      configure_scan();
+      configure_scan(window_ms_1m_, interval_ms_1m_, le_scan_type_, window_ms_coded_,
+                     interval_ms_coded_, filter_policy_, phy_);
       start_scan();
     }
     le_address_manager_->AckResume(this);
@@ -1763,7 +1822,7 @@ void LeScanningManagerImpl::Unregister(ScannerId scanner_id) {
 }
 
 void LeScanningManagerImpl::Scan(bool start) {
-  pimpl_->handler_->CallOn(pimpl_.get(), &impl::scan, start);
+  pimpl_->handler_->CallOn(pimpl_.get(), &impl::scan, start, ScanCallerType::JAVA);
 }
 
 void LeScanningManagerImpl::SetScanParameters(LeScanType scan_type, ScannerId scanner_id_1m,

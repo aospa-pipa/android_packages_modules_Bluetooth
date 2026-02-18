@@ -36,7 +36,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
-import com.android.bluetooth.Utils;
+import com.android.bluetooth.Util;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.profile.ProfileService;
 import com.android.bluetooth.util.BluetoothTrace;
@@ -313,8 +313,10 @@ class PbapClientStateMachine extends StateMachine {
     public void onSdpResultReceived(int status, PbapSdpRecord record) {
         if (status != SDP_SUCCESS) {
             sendMessage(MSG_SDP_FAILED, status);
-        } else {
+        } else if (record != null) {
             sendMessage(MSG_SDP_COMPLETE, record);
+        } else {
+            Log.e(TAG, "Received null PSE record for device=" + mDevice);
         }
     }
 
@@ -987,7 +989,7 @@ class PbapClientStateMachine extends StateMachine {
         mContext.sendBroadcastMultiplePermissions(
                 intent,
                 new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
-                Utils.getTempBroadcastOptions());
+                Util.getTempBroadcastOptions());
     }
 
     /* Callback for getting events back from our OBEX Client */

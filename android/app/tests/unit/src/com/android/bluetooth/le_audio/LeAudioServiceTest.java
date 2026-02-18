@@ -56,7 +56,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.app.ActivityManager;
 import android.bluetooth.BluetoothDevice;
@@ -263,8 +262,7 @@ public class LeAudioServiceTest {
 
     @Parameters(name = "{0}")
     public static List<FlagsWrapper> getParams() {
-        return FlagsWrapper.progressionOf(
-                Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK, Flags.FLAG_MAINLINE_BETA_STORAGE);
+        return FlagsWrapper.progressionOf(Flags.FLAG_MAINLINE_BETA_STORAGE);
     }
 
     public LeAudioServiceTest(FlagsWrapper flags) {
@@ -395,43 +393,36 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportLeCallControl_isCG() {
         assertTmapRole(TMAP_ROLE_FLAG_CG, LE_CALL_CONTROL);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportMcpServer_isUMS() {
         assertTmapRole(TMAP_ROLE_FLAG_UMS, MCP_SERVER);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportLeCallControlAndMcpServer_isCGAndUMS() {
         assertTmapRole(TMAP_ROLE_FLAG_CG | TMAP_ROLE_FLAG_UMS, LE_CALL_CONTROL, MCP_SERVER);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportBroadcast_isBMS() {
         assertTmapRole(TMAP_ROLE_FLAG_BMS, LE_AUDIO_BROADCAST);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportBroadcastAndLeCallControl_isBMSAndCG() {
         assertTmapRole(TMAP_ROLE_FLAG_CG | TMAP_ROLE_FLAG_BMS, LE_AUDIO_BROADCAST, LE_CALL_CONTROL);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportBroadcastAndMcpServer_isBMSAndUMS() {
         assertTmapRole(TMAP_ROLE_FLAG_UMS | TMAP_ROLE_FLAG_BMS, LE_AUDIO_BROADCAST, MCP_SERVER);
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_DO_NOT_HARDCODE_TMAP_ROLE_MASK)
     public void tmapRoleMask_whenSupportLeCallControlAndBroadcastAndMcpServer_isBMSAndUMSAndCG() {
         assertTmapRole(
                 TMAP_ROLE_FLAG_CG | TMAP_ROLE_FLAG_UMS | TMAP_ROLE_FLAG_BMS,
@@ -441,11 +432,15 @@ public class LeAudioServiceTest {
     }
 
     private void assertTmapRole(int expectedMasks, int... supportedProfiles) {
-        // revert the profile set in setup
+        // revert the profile set
         ExtendedMockito.doReturn(false)
                 .when(() -> Config.isProfileSupported(BluetoothProfile.LE_AUDIO_BROADCAST));
         ExtendedMockito.doReturn(false)
                 .when(() -> Config.isProfileSupported(BluetoothProfile.LE_AUDIO));
+        ExtendedMockito.doReturn(false)
+                .when(() -> Config.isProfileSupported(BluetoothProfile.LE_CALL_CONTROL));
+        ExtendedMockito.doReturn(false)
+                .when(() -> Config.isProfileSupported(BluetoothProfile.MCP_SERVER));
         for (int profile : supportedProfiles) {
             ExtendedMockito.doReturn(true).when(() -> Config.isProfileSupported(profile));
         }
@@ -485,9 +480,10 @@ public class LeAudioServiceTest {
         mInOrder.verify(mNativeInterface).setEnableState(eq(mSingleDevice), eq(true));
 
         // Verify the device is disabled in the service when policy is set to FORBIDDEN
-        when(mAdapterService.setProfileConnectionPolicy(
-                        eq(mSingleDevice), eq(BluetoothProfile.LE_AUDIO), anyInt()))
-                .thenReturn(true);
+        doReturn(true)
+                .when(mAdapterService)
+                .setProfileConnectionPolicy(
+                        eq(mSingleDevice), eq(BluetoothProfile.LE_AUDIO), anyInt());
         mService.setConnectionPolicy(mSingleDevice, CONNECTION_POLICY_FORBIDDEN);
         mInOrder.verify(mNativeInterface).setEnableState(eq(mSingleDevice), eq(false));
     }
@@ -1041,10 +1037,10 @@ public class LeAudioServiceTest {
     @Test
     public void testSetConnectionPolicy() {
         doReturn(true).when(mAdapterService).setProfileConnectionPolicy(any(), anyInt(), anyInt());
-        when(mVolumeControlService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mCsipSetCoordinatorService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mHapClientService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mBassClientService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
+        doReturn(true).when(mVolumeControlService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mCsipSetCoordinatorService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mHapClientService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mBassClientService).setConnectionPolicy(any(), anyInt());
         doReturn(CONNECTION_POLICY_UNKNOWN)
                 .when(mAdapterService)
                 .getProfileConnectionPolicy(mSingleDevice, BluetoothProfile.LE_AUDIO);
@@ -1122,10 +1118,10 @@ public class LeAudioServiceTest {
         doReturn(true).when(mAdapterService).setProfileConnectionPolicy(any(), anyInt(), anyInt());
         // Make LE Audio related services setConnectionPolicy() method return true.
         // These should NOT be called if not available
-        when(mVolumeControlService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mCsipSetCoordinatorService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mHapClientService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
-        when(mBassClientService.setConnectionPolicy(any(), anyInt())).thenReturn(true);
+        doReturn(true).when(mVolumeControlService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mCsipSetCoordinatorService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mHapClientService).setConnectionPolicy(any(), anyInt());
+        doReturn(true).when(mBassClientService).setConnectionPolicy(any(), anyInt());
         doReturn(CONNECTION_POLICY_UNKNOWN)
                 .when(mAdapterService)
                 .getProfileConnectionPolicy(mSingleDevice, BluetoothProfile.LE_AUDIO);
@@ -2465,7 +2461,7 @@ public class LeAudioServiceTest {
         List<BluetoothDevice> devices = new ArrayList<>();
         Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
-        when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
+        doReturn(devices).when(mDatabaseManager).getMostRecentlyConnectedDevices();
         doReturn(mLeftDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
 
         devices.add(mLeftDevice);
@@ -2590,13 +2586,13 @@ public class LeAudioServiceTest {
         verify(headsetService, never()).getActiveDevice();
 
         mService.mHfpHandoverDevice = headsetDevice;
-        when(headsetService.getActiveDevice()).thenReturn(headsetDevice);
+        doReturn(headsetDevice).when(headsetService).getActiveDevice();
         mService.handleGroupIdleDuringCall();
         verify(headsetService).connectAudio();
         assertThat(mService.mHfpHandoverDevice).isNull();
 
         mService.mHfpHandoverDevice = headsetDevice;
-        when(headsetService.getActiveDevice()).thenReturn(null);
+        doReturn(null).when(headsetService).getActiveDevice();
         mService.handleGroupIdleDuringCall();
         verify(headsetService).setActiveDevice(headsetDevice);
         assertThat(mService.mHfpHandoverDevice).isNull();
@@ -2786,7 +2782,7 @@ public class LeAudioServiceTest {
      */
     @Test
     public void testSendPreferredAudioProfileChangeToAudioFramework() {
-        when(mAdapterService.isAllSupportedClassicAudioProfilesActive(any())).thenReturn(true);
+        doReturn(true).when(mAdapterService).isAllSupportedClassicAudioProfilesActive(any());
 
         // TEST 1: Verify no requests are sent to the audio framework if there is no active device
         assertThat(mService.removeActiveDevice(false)).isTrue();
@@ -3362,10 +3358,7 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags({
-        Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API,
-        Flags.FLAG_MAINLINE_BETA_STORAGE
-    })
+    @EnableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testSetCodecConfigPreference() {
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
 
@@ -3425,7 +3418,6 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
     @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testSetCodecConfigPreference_old() {
         // Not connected device
@@ -3484,10 +3476,7 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags({
-        Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API,
-        Flags.FLAG_MAINLINE_BETA_STORAGE
-    })
+    @EnableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testCodecConfigPreferenceRestore() {
         assertThat(mService.setActiveDevice(mSingleDevice)).isFalse();
         connectTestDevice(mSingleDevice, TEST_GROUP_ID);
@@ -3537,7 +3526,6 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
     @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testCodecConfigPreferenceRestore_old() {
         // Not connected device
@@ -3623,7 +3611,6 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @EnableFlags(Flags.FLAG_LEAUDIO_ADD_OPUS_HI_RES_CODEC_TYPE_API)
     @DisableFlags(Flags.FLAG_MAINLINE_BETA_STORAGE)
     public void testSetGetCodecConfigPreferenceOpus() {
         // Not connected device
@@ -3727,7 +3714,7 @@ public class LeAudioServiceTest {
         List<BluetoothDevice> devices = new ArrayList<>();
         Set<BluetoothDevice> broadcastReceivers = new HashSet<>();
 
-        when(mDatabaseManager.getMostRecentlyConnectedDevices()).thenReturn(devices);
+        doReturn(devices).when(mDatabaseManager).getMostRecentlyConnectedDevices();
         doReturn(mSingleDevice).when(mStorage).getLeastRecentlyConnectedDeviceInList(any());
 
         // Not connected device
@@ -3851,7 +3838,7 @@ public class LeAudioServiceTest {
         String gamePackageName = "com.example.game";
 
         // Mock package manager to identify the app as a game
-        when(mPackageManager.getPackagesForUid(testUid)).thenReturn(new String[] {gamePackageName});
+        doReturn(new String[] {gamePackageName}).when(mPackageManager).getPackagesForUid(testUid);
         ApplicationInfo gameAppInfo = new ApplicationInfo();
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             gameAppInfo.category = ApplicationInfo.CATEGORY_GAME;
@@ -3859,8 +3846,9 @@ public class LeAudioServiceTest {
             gameAppInfo.flags = ApplicationInfo.FLAG_IS_GAME;
         }
 
-        when(mPackageManager.getApplicationInfo(eq(gamePackageName), anyInt()))
-                .thenReturn(gameAppInfo);
+        doReturn(gameAppInfo)
+                .when(mPackageManager)
+                .getApplicationInfo(eq(gamePackageName), anyInt());
 
         ArgumentCaptor<ActivityManager.OnUidImportanceListener> listenerCaptor =
                 ArgumentCaptor.forClass(ActivityManager.OnUidImportanceListener.class);
@@ -3917,20 +3905,20 @@ public class LeAudioServiceTest {
         String gamePackageName2 = "com.example.game2";
 
         // Mock package manager for two game apps
-        when(mPackageManager.getPackagesForUid(testUid1))
-                .thenReturn(new String[] {gamePackageName1});
-        when(mPackageManager.getPackagesForUid(testUid2))
-                .thenReturn(new String[] {gamePackageName2});
+        doReturn(new String[] {gamePackageName1}).when(mPackageManager).getPackagesForUid(testUid1);
+        doReturn(new String[] {gamePackageName2}).when(mPackageManager).getPackagesForUid(testUid2);
         ApplicationInfo gameAppInfo = new ApplicationInfo();
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             gameAppInfo.category = ApplicationInfo.CATEGORY_GAME;
         } else {
             gameAppInfo.flags = ApplicationInfo.FLAG_IS_GAME;
         }
-        when(mPackageManager.getApplicationInfo(eq(gamePackageName1), anyInt()))
-                .thenReturn(gameAppInfo);
-        when(mPackageManager.getApplicationInfo(eq(gamePackageName2), anyInt()))
-                .thenReturn(gameAppInfo);
+        doReturn(gameAppInfo)
+                .when(mPackageManager)
+                .getApplicationInfo(eq(gamePackageName1), anyInt());
+        doReturn(gameAppInfo)
+                .when(mPackageManager)
+                .getApplicationInfo(eq(gamePackageName2), anyInt());
 
         ArgumentCaptor<ActivityManager.OnUidImportanceListener> listenerCaptor =
                 ArgumentCaptor.forClass(ActivityManager.OnUidImportanceListener.class);
@@ -4038,6 +4026,26 @@ public class LeAudioServiceTest {
         mInOrder.verify(mAdapterService, never()).sendBroadcastAsUser(any(), any(), any(), any());
         mInOrder.verify(mAdapterService, never())
                 .sendBroadcastWithMultiplePermissions(any(), any());
+    }
+
+    @Test
+    public void testSetAllowlistFlag() {
+        BluetoothDevice device = getTestDevice(10);
+        mService.setAllowlistFlag(device, true);
+        verify(mNativeInterface).setAllowlistFlag(device, true);
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_ALLOWLIST_REFACTOR)
+    public void testDeviceConnected_callsSetAllowlistFlag() {
+        BluetoothDevice device = getTestDevice(11);
+        mService.createDeviceDescriptor(device, true);
+
+        doReturn(true).when(mAdapterService).isLeAudioAllowed(device);
+
+        mService.deviceConnected(device);
+
+        verify(mNativeInterface).setAllowlistFlag(device, true);
     }
 
     private void verifyIntentSentMultiplePermissions(Matcher<Intent>... matchers) {

@@ -88,7 +88,6 @@ import android.util.Pair;
 
 import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.GuardedBy;
-import com.android.server.bluetooth.SystemServiceMessage;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -220,31 +219,31 @@ public final class BluetoothAdapter {
     public @interface AdapterState {}
 
     /** Indicates the local Bluetooth adapter is off. */
-    public static final int STATE_OFF = 10;
+    public static final int STATE_OFF = State.OFF;
 
     /**
      * Indicates the local Bluetooth adapter is turning on. However local clients should wait for
      * {@link #STATE_ON} before attempting to use the adapter.
      */
-    public static final int STATE_TURNING_ON = 11;
+    public static final int STATE_TURNING_ON = State.TURNING_ON;
 
     /** Indicates the local Bluetooth adapter is on, and ready for use. */
-    public static final int STATE_ON = 12;
+    public static final int STATE_ON = State.ON;
 
     /**
      * Indicates the local Bluetooth adapter is turning off. Local clients should immediately
      * attempt graceful disconnection of any remote links.
      */
-    public static final int STATE_TURNING_OFF = 13;
+    public static final int STATE_TURNING_OFF = State.TURNING_OFF;
 
     /** Indicates the local Bluetooth adapter is turning Bluetooth LE mode on. */
-    @Hide public static final int STATE_BLE_TURNING_ON = 14;
+    @Hide public static final int STATE_BLE_TURNING_ON = State.BLE_TURNING_ON;
 
     /** Indicates the local Bluetooth adapter is in LE only mode. */
-    @Hide @SystemApi public static final int STATE_BLE_ON = 15;
+    @Hide @SystemApi public static final int STATE_BLE_ON = State.BLE_ON;
 
     /** Indicates the local Bluetooth adapter is turning off LE only mode. */
-    @Hide public static final int STATE_BLE_TURNING_OFF = 16;
+    @Hide public static final int STATE_BLE_TURNING_OFF = State.BLE_TURNING_OFF;
 
     /**
      * Used as an optional extra field for the {@link PendingIntent} provided to {@link
@@ -274,7 +273,7 @@ public final class BluetoothAdapter {
     @Retention(RetentionPolicy.SOURCE)
     public @interface RfcommListenerResult {}
 
-    /** Human-readable string helper for AdapterState and InternalAdapterState */
+    /** Human-readable string helper for Adapter state */
     @Hide
     @SystemApi
     @RequiresNoPermission
@@ -793,7 +792,6 @@ public final class BluetoothAdapter {
     private DistanceMeasurementManager mDistanceMeasurementManager;
 
     private final IBluetoothManager mManagerService;
-    private final SystemServiceMessenger mSystemServiceMessenger;
     private final AttributionSource mAttributionSource;
     private final Optional<Context> mContext;
 
@@ -1010,16 +1008,6 @@ public final class BluetoothAdapter {
         mManagerService = requireNonNull(managerService);
         mContext = Optional.ofNullable(context);
         mAttributionSource = requireNonNull(source);
-        if (Flags.bluetoothSystemServerMessenger()) {
-            try {
-                mSystemServiceMessenger =
-                        new SystemServiceMessenger(mManagerService.getServiceMessenger());
-            } catch (RemoteException e) {
-                throw e.rethrowFromSystemServer();
-            }
-        } else {
-            mSystemServiceMessenger = null;
-        }
 
         mQualityCallbackWrapper =
                 new CallbackWrapper<>(
@@ -1313,16 +1301,6 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean disableBLE() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.Disable();
-            data.attributionSource = mAttributionSource;
-            data.bleToken = mToken;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
-        if (!isBleScanAlwaysAvailable()) {
-            return false;
-        }
         try {
             return mManagerService.disableBle(mAttributionSource, mToken);
         } catch (RemoteException e) {
@@ -1363,16 +1341,6 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean enableBLE() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.Enable();
-            data.attributionSource = mAttributionSource;
-            data.bleToken = mToken;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
-        if (!isBleScanAlwaysAvailable()) {
-            return false;
-        }
         try {
             return mManagerService.enableBle(mAttributionSource, mToken);
         } catch (RemoteException e) {
@@ -1536,12 +1504,6 @@ public final class BluetoothAdapter {
             Log.d(TAG, "enable(): BT already enabled!");
             return true;
         }
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.Enable();
-            data.attributionSource = mAttributionSource;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.enable(mAttributionSource);
         } catch (RemoteException e) {
@@ -1606,13 +1568,6 @@ public final class BluetoothAdapter {
             allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED},
             conditional = true)
     public boolean disable(boolean persist) {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.Disable();
-            data.attributionSource = mAttributionSource;
-            data.persist = persist;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.disable(mAttributionSource, persist);
         } catch (RemoteException e) {
@@ -1631,12 +1586,6 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, LOCAL_MAC_ADDRESS})
     public String getAddress() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.GetAddress();
-            data.attributionSource = mAttributionSource;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.getAddress(mAttributionSource);
         } catch (RemoteException e) {
@@ -1655,12 +1604,6 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public String getName() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.GetName();
-            data.attributionSource = mAttributionSource;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.getName(mAttributionSource);
         } catch (RemoteException e) {
@@ -1686,14 +1629,7 @@ public final class BluetoothAdapter {
     @RequiresPermission(allOf = {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED})
     public boolean clearBluetooth() {
         try {
-            if (Flags.bluetoothSystemServerMessenger()) {
-                var data = new SystemServiceMessage.FactoryReset();
-                data.attributionSource = mAttributionSource;
-
-                return mSystemServiceMessenger.send(data).value;
-            } else {
-                return mManagerService.factoryReset(mAttributionSource);
-            }
+            return mManagerService.factoryReset(mAttributionSource);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -1767,13 +1703,6 @@ public final class BluetoothAdapter {
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean setName(String name) {
         if (Flags.setNameInSystemServer()) {
-            if (Flags.bluetoothSystemServerMessenger()) {
-                var data = new SystemServiceMessage.SetName();
-                data.attributionSource = mAttributionSource;
-                data.name = name;
-                mSystemServiceMessenger.send(data);
-                return true;
-            }
             try {
                 mManagerService.setName(name, mAttributionSource);
                 return true;
@@ -2155,10 +2084,6 @@ public final class BluetoothAdapter {
     @SystemApi
     @RequiresNoPermission
     public boolean isBleScanAlwaysAvailable() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.IsBleScanAvailable();
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.isBleScanAvailable();
         } catch (RemoteException e) {
@@ -2435,10 +2360,6 @@ public final class BluetoothAdapter {
      */
     @RequiresNoPermission
     private boolean isHearingAidProfileSupported() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.IsHearingAidSupported();
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.isHearingAidProfileSupported();
         } catch (RemoteException e) {
@@ -3695,17 +3616,6 @@ public final class BluetoothAdapter {
     @RequiresBluetoothConnectPermission
     @RequiresPermission(BLUETOOTH_CONNECT)
     public boolean enableNoAutoConnect() {
-        if (isEnabled()) {
-            Log.d(TAG, "enableNoAutoConnect(): BT already enabled!");
-            return true;
-        }
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.Enable();
-            data.attributionSource = mAttributionSource;
-            data.isQuiet = true;
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.enableNoAutoConnect(mAttributionSource);
         } catch (RemoteException e) {
@@ -4010,20 +3920,6 @@ public final class BluetoothAdapter {
         final boolean wantRegistered = !sProxyServiceStateCallbacks.isEmpty();
 
         if (isRegistered == wantRegistered) {
-            return;
-        }
-        if (Flags.bluetoothSystemServerMessenger()) {
-            if (wantRegistered) {
-                var data = new SystemServiceMessage.RegisterAdapter();
-                data.binder = sManagerCallback;
-                sService = IBluetooth.Stub.asInterface(mSystemServiceMessenger.send(data).value);
-            } else {
-                var data = new SystemServiceMessage.UnregisterAdapter();
-                data.binder = sManagerCallback;
-                mSystemServiceMessenger.send(data);
-                sService = null;
-            }
-            sServiceRegistered = wantRegistered;
             return;
         }
         if (wantRegistered) {
@@ -5270,18 +5166,12 @@ public final class BluetoothAdapter {
                 && mode != BT_SNOOP_LOG_MODE_FULL) {
             throw new IllegalArgumentException("Invalid Bluetooth HCI snoop log mode param value");
         }
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.SetSnoopLog();
-            data.mode = mode;
-
-            mSystemServiceMessenger.send(data);
-            return BluetoothStatusCodes.SUCCESS;
-        }
         try {
-            return mManagerService.setBtHciSnoopLogMode(mode);
+            mManagerService.setBtHciSnoopLogMode(mode);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
+        return BluetoothStatusCodes.SUCCESS;
     }
 
     /**
@@ -5294,11 +5184,6 @@ public final class BluetoothAdapter {
     @RequiresPermission(BLUETOOTH_PRIVILEGED)
     @BluetoothSnoopLogMode
     public int getBluetoothHciSnoopLoggingMode() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.GetSnoopLog();
-
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.getBtHciSnoopLogMode();
         } catch (RemoteException e) {
@@ -5311,10 +5196,6 @@ public final class BluetoothAdapter {
     @SystemApi
     @RequiresPermission(BLUETOOTH_PRIVILEGED)
     public boolean isAutoOnSupported() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.IsAutoSupported();
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.isAutoOnSupported();
         } catch (RemoteException e) {
@@ -5332,10 +5213,6 @@ public final class BluetoothAdapter {
     @SystemApi
     @RequiresPermission(BLUETOOTH_PRIVILEGED)
     public boolean isAutoOnEnabled() {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.IsAutoEnabled();
-            return mSystemServiceMessenger.send(data).value;
-        }
         try {
             return mManagerService.isAutoOnEnabled();
         } catch (RemoteException e) {
@@ -5354,12 +5231,6 @@ public final class BluetoothAdapter {
     @SystemApi
     @RequiresPermission(BLUETOOTH_PRIVILEGED)
     public void setAutoOnEnabled(boolean status) {
-        if (Flags.bluetoothSystemServerMessenger()) {
-            var data = new SystemServiceMessage.SetAutoOnEnabled();
-            data.enabledStatus = status;
-            mSystemServiceMessenger.send(data);
-            return;
-        }
         try {
             mManagerService.setAutoOnEnabled(status);
         } catch (RemoteException e) {

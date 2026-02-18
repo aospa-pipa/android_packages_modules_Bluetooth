@@ -452,6 +452,27 @@ struct btsnd_hcic_ble_big_terminate_sync {
 };
 extern struct btsnd_hcic_ble_big_terminate_sync btsnd_hcic_ble_big_terminate_sync;
 
+// Name: btsnd_hcic_ble_accept_cis_req
+// Params: uint16_t cis_conn_handle
+// Return: void
+struct btsnd_hcic_ble_accept_cis_req {
+  std::function<void(uint16_t)> body{};
+  void operator()(uint16_t cis_conn_handle) { body(cis_conn_handle); }
+};
+extern struct btsnd_hcic_ble_accept_cis_req btsnd_hcic_ble_accept_cis_req;
+
+// Name: btsnd_hcic_ble_reject_cis_req
+// Params: uint16_t cis_conn_handle, uint8_t reason, base::OnceCallback<void(uint8_t*, uint16_t)> cb
+// Return: void
+struct btsnd_hcic_ble_reject_cis_req {
+  std::function<void(uint16_t, uint8_t, base::OnceCallback<void(uint8_t*, uint16_t)>)> body{};
+  void operator()(uint16_t cis_conn_handle, uint8_t reason,
+                  base::OnceCallback<void(uint8_t*, uint16_t)> cb) {
+    body(cis_conn_handle, reason, std::move(cb));
+  }
+};
+extern struct btsnd_hcic_ble_reject_cis_req btsnd_hcic_ble_reject_cis_req;
+
 // Name: btsnd_hci_ble_set_default_phy
 // Params: uint8_t all_phys, uint8_t tx_phys, uint8_t rx_phys
 // Return: void
@@ -465,14 +486,14 @@ struct btsnd_hci_ble_set_default_phy {
 extern struct btsnd_hci_ble_set_default_phy btsnd_hci_ble_set_default_phy;
 
 // Name: btsnd_hcic_le_set_hdt_default_parameters
-// Params: uint8_t preferred_mic_length, uint8_t preferred_packet_format, uint8_t preferred_acl_rates
+// Params: uint8_t preferred_mic_length, uint8_t preferred_packet_format, uint16_t preferred_acl_rates
 // Return: void
 struct btsnd_hcic_le_set_hdt_default_parameters {
-  std::function<void(uint8_t, uint8_t, uint8_t)> body{
+  std::function<void(uint8_t, uint8_t, uint16_t)> body{
           [](uint8_t /* preferred_mic_length */, uint8_t /* preferred_packet_format */,
-             uint8_t /* preferred_acl_rates */) {}};
+             uint16_t /* preferred_acl_rates */) {}};
   void operator()(uint8_t preferred_mic_length, uint8_t preferred_packet_format,
-                  uint8_t preferred_acl_rates) {
+                  uint16_t preferred_acl_rates) {
     body(preferred_mic_length, preferred_packet_format, preferred_acl_rates);
   }
 };
@@ -526,8 +547,7 @@ struct btsnd_hcic_ble_read_enc_key_sched_debug_mode {
   void operator()() { body(); }
 };
 extern struct btsnd_hcic_ble_read_enc_key_sched_debug_mode btsnd_hcic_ble_read_enc_key_sched_debug_mode;
-// 
-
+//
 }  // namespace stack_hcic_hciblecmds
 }  // namespace mock
 }  // namespace test

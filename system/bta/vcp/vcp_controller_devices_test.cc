@@ -29,9 +29,10 @@
 
 #include "bta/test/common/bta_gatt_api_mock.h"
 #include "bta/test/common/bta_gatt_queue_mock.h"
-#include "bta/test/common/btm_api_mock.h"
 #include "gatt/database_builder.h"
 #include "stack/include/bt_uuid16.h"
+#include "test/mock/mock_stack_btm_interface.h"
+#include "test/mock/mock_stack_security_client_interface.h"
 
 namespace bluetooth {
 namespace vcp {
@@ -47,10 +48,10 @@ using ::testing::SaveArg;
 using ::testing::SetArgPointee;
 using ::testing::Test;
 
-static RawAddress GetTestAddress(int index) {
+static RawAddress GetTestAddress(uint8_t index) {
   EXPECT_LT(index, UINT8_MAX);
-  RawAddress result = {{0xC0, 0xDE, 0xC0, 0xDE, 0x00, static_cast<uint8_t>(index)}};
-  return result;
+  std::array<uint8_t, 6> bytes{0xC0, 0xDE, 0xC0, 0xDE, 0x00, index};
+  return RawAddress(bytes);
 }
 
 class VolumeControllerDevicesTest : public ::testing::Test {
@@ -224,7 +225,8 @@ protected:
     device = new VolumeControllerDevice(GetTestAddress(1), true);
     gatt::SetMockBtaGattInterface(&gatt_interface);
     gatt::SetMockBtaGattQueue(&gatt_queue);
-    bluetooth::manager::SetMockBtmInterface(&btm_interface);
+    set_security_client_interface(mock_btm_security_);
+    set_mock_btm_client_interface_security(mock_btm_security_);
 
     ON_CALL(gatt_interface, GetCharacteristic(_, _))
             .WillByDefault(Invoke(
@@ -259,7 +261,7 @@ protected:
   }
 
   void TearDown() override {
-    bluetooth::manager::SetMockBtmInterface(nullptr);
+    reset_mock_btm_client_interface();
     gatt::SetMockBtaGattQueue(nullptr);
     gatt::SetMockBtaGattInterface(nullptr);
     delete device;
@@ -268,12 +270,12 @@ protected:
   /* sample database 1xVCS, 2xAICS, 2xVOCS */
   void SetSampleDatabase1(void) {
     gatt::DatabaseBuilder builder;
-    builder.AddService(0x0001, 0x0017, kVolumeControlUuid, true);
+    builder.AddService(0x0001, 0x0017, kVolumeControlServiceUuid, true);
     builder.AddIncludedService(0x0002, kVolumeAudioInputUuid, 0x0020, 0x002e);
     builder.AddIncludedService(0x0003, kVolumeAudioInputUuid, 0x0040, 0x004f);
     builder.AddIncludedService(0x0004, kVolumeOffsetUuid, 0x0060, 0x0069);
     builder.AddIncludedService(0x0005, kVolumeOffsetUuid, 0x0080, 0x008b);
-    builder.AddCharacteristic(0x0010, 0x0011, kVolumeControlStateUuid,
+    builder.AddCharacteristic(0x0010, 0x0011, kVolumeStateUuid,
                               GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
     builder.AddDescriptor(0x0012, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
     builder.AddCharacteristic(0x0013, 0x0014, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -360,10 +362,10 @@ protected:
   /* sample database 1xAICS, 1xVOCS */
   void SetSampleDatabase3(void) {
     gatt::DatabaseBuilder builder;
-    builder.AddService(0x0001, 0x0017, kVolumeControlUuid, true);
+    builder.AddService(0x0001, 0x0017, kVolumeControlServiceUuid, true);
     builder.AddIncludedService(0x0002, kVolumeAudioInputUuid, 0x0020, 0x002e);
     builder.AddIncludedService(0x0004, kVolumeOffsetUuid, 0x0060, 0x0069);
-    builder.AddCharacteristic(0x0010, 0x0011, kVolumeControlStateUuid,
+    builder.AddCharacteristic(0x0010, 0x0011, kVolumeStateUuid,
                               GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
     builder.AddDescriptor(0x0012, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
     builder.AddCharacteristic(0x0013, 0x0014, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -403,7 +405,7 @@ protected:
   VolumeControllerDevice* device = nullptr;
   NiceMock<gatt::MockBtaGattInterface> gatt_interface;
   NiceMock<gatt::MockBtaGattQueue> gatt_queue;
-  NiceMock<bluetooth::manager::MockBtmInterface> btm_interface;
+  NiceMock<MockSecurityClientInterface> mock_btm_security_;
   std::list<gatt::Service> services;
 };
 
@@ -414,9 +416,9 @@ TEST_F(VolumeControllerDeviceTest, test_service_volume_control_not_found) {
 
 TEST_F(VolumeControllerDeviceTest, test_service_aics_incomplete) {
   gatt::DatabaseBuilder builder;
-  builder.AddService(0x0001, 0x000a, kVolumeControlUuid, true);
+  builder.AddService(0x0001, 0x000a, kVolumeControlServiceUuid, true);
   builder.AddIncludedService(0x0002, kVolumeAudioInputUuid, 0x000b, 0x0018);
-  builder.AddCharacteristic(0x0003, 0x0004, kVolumeControlStateUuid,
+  builder.AddCharacteristic(0x0003, 0x0004, kVolumeStateUuid,
                             GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
   builder.AddDescriptor(0x0005, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
   builder.AddCharacteristic(0x0006, 0x0007, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -450,9 +452,9 @@ TEST_F(VolumeControllerDeviceTest, test_service_aics_incomplete) {
 
 TEST_F(VolumeControllerDeviceTest, test_service_aics_found) {
   gatt::DatabaseBuilder builder;
-  builder.AddService(0x0001, 0x000a, kVolumeControlUuid, true);
+  builder.AddService(0x0001, 0x000a, kVolumeControlServiceUuid, true);
   builder.AddIncludedService(0x0002, kVolumeAudioInputUuid, 0x000b, 0x001a);
-  builder.AddCharacteristic(0x0003, 0x0004, kVolumeControlStateUuid,
+  builder.AddCharacteristic(0x0003, 0x0004, kVolumeStateUuid,
                             GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
   builder.AddDescriptor(0x0005, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
   builder.AddCharacteristic(0x0006, 0x0007, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -493,8 +495,8 @@ TEST_F(VolumeControllerDeviceTest, test_service_aics_found) {
 
 TEST_F(VolumeControllerDeviceTest, test_service_volume_control_incomplete) {
   gatt::DatabaseBuilder builder;
-  builder.AddService(0x0001, 0x0006, kVolumeControlUuid, true);
-  builder.AddCharacteristic(0x0002, 0x0003, kVolumeControlStateUuid,
+  builder.AddService(0x0001, 0x0006, kVolumeControlServiceUuid, true);
+  builder.AddCharacteristic(0x0002, 0x0003, kVolumeStateUuid,
                             GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
   builder.AddDescriptor(0x0004, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
   builder.AddCharacteristic(0x0005, 0x0006, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -511,9 +513,9 @@ TEST_F(VolumeControllerDeviceTest, test_service_volume_control_incomplete) {
 
 TEST_F(VolumeControllerDeviceTest, test_service_vocs_incomplete) {
   gatt::DatabaseBuilder builder;
-  builder.AddService(0x0001, 0x000a, kVolumeControlUuid, true);
+  builder.AddService(0x0001, 0x000a, kVolumeControlServiceUuid, true);
   builder.AddIncludedService(0x0002, kVolumeOffsetUuid, 0x000b, 0x0013);
-  builder.AddCharacteristic(0x0003, 0x0004, kVolumeControlStateUuid,
+  builder.AddCharacteristic(0x0003, 0x0004, kVolumeStateUuid,
                             GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
   builder.AddDescriptor(0x0005, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
   builder.AddCharacteristic(0x0006, 0x0007, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -543,9 +545,9 @@ TEST_F(VolumeControllerDeviceTest, test_service_vocs_incomplete) {
 
 TEST_F(VolumeControllerDeviceTest, test_service_vocs_found) {
   gatt::DatabaseBuilder builder;
-  builder.AddService(0x0001, 0x000a, kVolumeControlUuid, true);
+  builder.AddService(0x0001, 0x000a, kVolumeControlServiceUuid, true);
   builder.AddIncludedService(0x0002, kVolumeOffsetUuid, 0x000b, 0x0015);
-  builder.AddCharacteristic(0x0003, 0x0004, kVolumeControlStateUuid,
+  builder.AddCharacteristic(0x0003, 0x0004, kVolumeStateUuid,
                             GATT_CHAR_PROP_BIT_READ | GATT_CHAR_PROP_BIT_NOTIFY);
   builder.AddDescriptor(0x0005, Uuid::From16Bit(GATT_UUID_CHAR_CLIENT_CONFIG));
   builder.AddCharacteristic(0x0006, 0x0007, kVolumeControlPointUuid, GATT_CHAR_PROP_BIT_WRITE);
@@ -921,10 +923,10 @@ TEST_F(VolumeControllerDeviceTest, test_enqueue_remaining_requests_multiread) {
 }
 
 TEST_F(VolumeControllerDeviceTest, test_check_link_encrypted) {
-  ON_CALL(btm_interface, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(true)));
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(true)));
   ASSERT_EQ(true, device->IsEncryptionEnabled());
 
-  ON_CALL(btm_interface, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(false)));
+  ON_CALL(mock_btm_security_, BTM_IsEncrypted(_, _)).WillByDefault(DoAll(Return(false)));
   ASSERT_NE(true, device->IsEncryptionEnabled());
 }
 

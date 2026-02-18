@@ -168,6 +168,8 @@ public:
   MOCK_METHOD((void), SetCodecPriority,
               (const ::bluetooth::le_audio::types::LeAudioCodecId& codecId, int32_t priority),
               (override));
+  MOCK_METHOD((void), UpdateBroadcastAudioConfigToHal,
+              (const ::bluetooth::le_audio::broadcast_offload_config&), (override));
   MOCK_METHOD((void), SuspendedForReconfiguration, (), (override));
   MOCK_METHOD((void), ReconfigurationComplete, (), (override));
 
@@ -177,14 +179,17 @@ public:
               (const override));
 
   MOCK_METHOD((std::optional<::bluetooth::le_audio::types::AudioSetConfiguration>),
-              GetUnicastConfig,
-              (types::LeAudioContextType,
-               std::optional<const ::bluetooth::le_audio::types::PublishedAudioCapabilities*>,
-               std::optional<const ::bluetooth::le_audio::types::PublishedAudioCapabilities*>),
+              GetUnicastConfig, (const CodecManager::UnicastConfigurationRequirements&),
               (const override));
+
+  MOCK_METHOD((::bluetooth::le_audio::types::VendorDataPathConfiguration),
+              GetVendorConfigureDataPathPayload,
+              ((std::vector<uint16_t>), (::bluetooth::le_audio::types::LeAudioContextType),
+              (bool), (bool)), (override));
 
   MOCK_METHOD((void), UpdateMetadataChanged, (::bluetooth::le_audio::types::AseState& state,
                int cig_id, int cis_id, const std::vector<uint8_t>& data), (override));
+
 
   MOCK_METHOD((void), OnDestroyed, ());
   virtual ~MockLeAudioSinkHalClient() override { OnDestroyed(); }
@@ -243,6 +248,11 @@ static const types::LeAudioCodecId kLeAudioCodecIdVendor_C0DE = {
         .coding_format = types::kLeAudioCodingFormatVendorSpecific,
         .vendor_company_id = types::kLeAudioVendorCompanyIdGoogle,
         .vendor_codec_id = 0xC0DE};
+
+static const types::LeAudioCodecId kLeAudioCodecIdVendor_Opus = {
+        .coding_format = types::kLeAudioCodingFormatVendorSpecific,
+        .vendor_company_id = types::kLeAudioVendorCompanyIdGoogle,
+        .vendor_codec_id = 0x0001};
 
 static const types::CodecConfigSetting lc3_16_2 = {
         .id = kLeAudioCodecIdLc3,
@@ -313,8 +323,62 @@ static constexpr char kPropLeAudioBidirSwbSupported[] =
 
 static RawAddress GetTestAddress(uint8_t index) {
   EXPECT_LT(index, UINT8_MAX);
-  RawAddress result = {{0xC0, 0xDE, 0xC0, 0xDE, 0x00, index}};
-  return result;
+  std::array<uint8_t, 6> bytes{0xC0, 0xDE, 0xC0, 0xDE, 0x00, index};
+  return RawAddress(bytes);
+}
+
+static auto PrepareStackProviderInfo(bool is_encoding, bool with_vendor, bool opus) {
+  ProviderInfo stack_provider_info;
+  std::vector<ProviderInfo::CentralCodecInfo>* central_codec_infos;
+
+  if (is_encoding) {
+    central_codec_infos = &stack_provider_info.encoding_codec_configs;
+  } else {
+    central_codec_infos = &stack_provider_info.decoding_codec_configs;
+  }
+
+  ProviderInfo::CentralCodecInfo lc3_codec_info = {.codec_id = kLeAudioCodecIdLc3};
+  lc3_codec_info.supported_configs.push_back({.sample_freq = 16000,
+                                              .frame_duration = 7500,
+                                              .channel_count = 1,
+                                              .bits_per_sample = 16});
+  lc3_codec_info.supported_configs.push_back({
+          .sample_freq = 48000,
+          .frame_duration = 10000,
+          .channel_count = 1,
+          .bits_per_sample = 16,
+  });
+  central_codec_infos->push_back(lc3_codec_info);
+
+  if (with_vendor) {
+    stack_provider_info.isMulticodecSupported = true;
+    ProviderInfo::CentralCodecInfo vs_codec_info = {.codec_id = kLeAudioCodecIdVendor_C0DE};
+    vs_codec_info.supported_configs.push_back({.sample_freq = 16000,
+                                               .frame_duration = 7500,
+                                               .channel_count = 1,
+                                               .bits_per_sample = 16});
+    vs_codec_info.supported_configs.push_back({.sample_freq = 48000,
+                                               .frame_duration = 10000,
+                                               .channel_count = 1,
+                                               .bits_per_sample = 16});
+    central_codec_infos->push_back(vs_codec_info);
+  }
+
+  if (opus) {
+    stack_provider_info.isMulticodecSupported = true;
+    ProviderInfo::CentralCodecInfo opus_codec_info = {.codec_id = kLeAudioCodecIdVendor_Opus};
+    opus_codec_info.supported_configs.push_back({.sample_freq = 48000,
+                                                 .frame_duration = 7500,
+                                                 .channel_count = 1,
+                                                 .bits_per_sample = 16});
+    opus_codec_info.supported_configs.push_back({.sample_freq = 96000,
+                                                 .frame_duration = 10000,
+                                                 .channel_count = 1,
+                                                 .bits_per_sample = 16});
+    central_codec_infos->push_back(opus_codec_info);
+  }
+
+  return stack_provider_info;
 }
 
 class CodecManagerTestBase : public Test {
@@ -322,6 +386,7 @@ public:
   virtual void SetUp() override {
     __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
     com::android::bluetooth::flags::provider_->reset_flags();
+    com::android::bluetooth::flags::provider_->leaudio_codec_id_support(true);
     set_mock_offload_capabilities(offload_capabilities_none);
 
     bluetooth::legacy::hci::testing::SetMock(legacy_hci_mock_);
@@ -1934,6 +1999,63 @@ TEST_F(CodecManagerTestAdsp, test_notify_hal_with_empty_cis_handles) {
                                types::AseConfiguration(lc3_16_2)}},
   });
   codec_manager->UpdateSelectedCodecConfig(lc3_config);
+}
+
+TEST_F(CodecManagerTestAdsp, test_vendor_specific_codec_config) {
+  osi_property_set_bool(kPropLeAudioCodecExtensibility, true);
+
+  provider_info = PrepareStackProviderInfo(true, true, false);
+
+  // Set the offloader capabilities
+  std::vector<AudioSetConfiguration> offload_capabilities;
+  set_mock_offload_capabilities(offload_capabilities);
+
+  const std::vector<bluetooth::le_audio::btle_audio_codec_config_t> offloading_preference = {};
+  codec_manager->Start(offloading_preference);
+
+  auto local_capa = codec_manager->GetLocalAudioOutputCodecCapa();
+  bool is_vsc_supported = false;
+  for (auto& capa : local_capa) {
+    if (capa.codec_type == btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_VENDOR_SPECIFIC) {
+      is_vsc_supported = true;
+      ASSERT_TRUE(kLeAudioCodecIdVendor_C0DE.getCodecIdRaw() == capa.codec_id);
+      break;
+    }
+  }
+  ASSERT_TRUE(is_vsc_supported);
+}
+
+TEST_F(CodecManagerTestAdsp, test_vendor_specific_codec_opus_config) {
+  osi_property_set_bool(kPropLeAudioCodecExtensibility, true);
+
+  provider_info = PrepareStackProviderInfo(true, true, true);
+
+  // Set the offloader capabilities
+  std::vector<AudioSetConfiguration> offload_capabilities;
+  set_mock_offload_capabilities(offload_capabilities);
+
+  const std::vector<bluetooth::le_audio::btle_audio_codec_config_t> offloading_preference = {};
+  codec_manager->Start(offloading_preference);
+
+  auto local_capa = codec_manager->GetLocalAudioOutputCodecCapa();
+  bool has_opus_high = false;
+  bool has_opus = false;
+  for (auto& capa : local_capa) {
+    switch (capa.codec_type) {
+      case btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS:
+        has_opus = true;
+        break;
+      case btle_audio_codec_index_t::LE_AUDIO_CODEC_INDEX_SOURCE_OPUS_HI_RES:
+        has_opus_high = true;
+        break;
+      default:
+        continue;
+        break;
+    }
+  }
+
+  ASSERT_TRUE(has_opus_high);
+  ASSERT_TRUE(has_opus);
 }
 
 }  // namespace bluetooth::le_audio

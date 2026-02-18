@@ -82,13 +82,13 @@ public:
           SubeventCode subevent_code,
           common::ContextualCallback<void(LeMetaEventView)> event_handler);
 
-  virtual void UnregisterLeEventHandler(SubeventCode subevent_code);
+  virtual void UnregisterLeEventHandler(SubeventCode subevent_code); 
 
-  virtual void RegisterHdtEventHandler(
-          SubeventCode subevent_code,
-          common::ContextualCallback<void(HdtEventView)> event_handler);
+  virtual void RegisterDevelopmentEventHandler(
+          DevelopmentSubeventCode subevent_code,
+          common::ContextualCallback<void(DevelopmentEventView)> event_handler);
 
-  virtual void UnregisterHdtEventHandler(SubeventCode subevent_code);      
+  virtual void UnregisterDevelopmentEventHandler(DevelopmentSubeventCode subevent_code);
 
   virtual void RegisterVendorSpecificEventHandler(
           VseSubeventCode event, common::ContextualCallback<void(VendorSpecificEventView)> handler);
