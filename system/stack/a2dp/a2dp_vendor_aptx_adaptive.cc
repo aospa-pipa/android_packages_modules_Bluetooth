@@ -41,13 +41,13 @@
 
 #define LOG_TAG "a2dp_vendor_aptx_adaptive"
 
-#include "a2dp_vendor_aptx_adaptive.h"
+#include "stack/include/a2dp_vendor_aptx_adaptive.h"
 
 #include <bluetooth/log.h>
 #include <string.h>
 
-#include "a2dp_vendor.h"
-#include "a2dp_vendor_aptx_adaptive_encoder.h"
+#include "stack/include/a2dp_vendor.h"
+#include "stack/include/a2dp_vendor_aptx_adaptive_encoder.h"
 #include "stack/include/a2dp_codec_api.h"
 #include "bt_target.h"
 #include "internal_include/bt_trace.h"
