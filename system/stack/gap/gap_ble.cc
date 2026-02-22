@@ -38,7 +38,6 @@
 #include "btm_int_types.h"
 #include "gap_api.h"
 #include "gap_int.h"
-#include "gatt_api.h"
 #include "hardware/bt_gatt_types.h"
 #include "main/shim/dumpsys.h"
 #include "main/shim/le_advertising_manager.h"
@@ -53,6 +52,7 @@
 #define GAP_ENC_KEY_CHARACTERISTIC 2 /* Read for Enc Key Material Characteristic */
 #define GAP_ENC_KEY_CCCD 3           /* Discover CCCD */
 #define GAP_ENC_KEY_CONFIG_CCCD 4    /* Write CCCD */
+#include "stack/include/gatt_api.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;

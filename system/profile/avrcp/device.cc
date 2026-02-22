@@ -35,7 +35,7 @@
 #include "device/include/interop.h"
 #include "btif/include/btif_av.h"
 #include "internal_include/stack_config.h"
-#include "l2cdefs.h"
+#include "stack/include/l2cdefs.h"
 #include "osi/include/properties.h"
 #include "packet/avrcp/avrcp_reject_packet.h"
 #include "packet/avrcp/general_reject_packet.h"
@@ -906,6 +906,7 @@ void Device::TrackChangedNotificationResponse(uint8_t label, bool interim, std::
 void Device::PlaybackStatusNotificationResponse(uint8_t label, bool interim, PlayStatus status) {
   log::verbose("PlaybackStatusNotificationResponse, label:{}, interim:{}", label, interim);
   if (status.state == PlayState::PAUSED) {
+    log::verbose("Cancelling play position updates due to PAUSED state, device={}", address_);
     play_pos_update_cb_.Cancel();
   }
 
@@ -1344,6 +1345,10 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
               }
               d->media_interface_->SendKeyEvent(d->address_, packet->GetOperationId(),
                   packet->GetKeyState());
+            }
+            else {
+              log::verbose("Ignoring key event from inactive device: PT:{}, KEYSTATE:{}",
+                  packet->GetOperationId(), packet->GetKeyState());
             }
           }, weak_ptr_factory_.GetWeakPtr(), pass_through_packet));
     } break;

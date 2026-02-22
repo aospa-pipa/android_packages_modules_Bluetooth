@@ -3018,13 +3018,6 @@ void do_le_execute_write(char* p) {
   Ret = sGattInterface->cExecuteWrite(g_conn_id, is_execute);
   printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
 }
-void do_le_set_idle_timeout(char* p) {
-  int idle_timeout;
-  RawAddress bd_addr = {{0}};
-  if (FALSE == GetBdAddr(p, &bd_addr)) return;
-  idle_timeout = get_int(&p, -1);  // arg2
-  sGattInterface->cSetIdleTimeout(bd_addr.address, idle_timeout);
-}
 
 /*******************************************************************************
  ** GATT SERVER API commands

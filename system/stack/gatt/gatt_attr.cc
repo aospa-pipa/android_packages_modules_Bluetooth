@@ -40,8 +40,6 @@
 #include "btif/include/btif_storage.h"
 #include "device/include/interop.h"
 #include "eatt/eatt.h"
-#include "gap_api.h"
-#include "gatt_api.h"
 #include "gatt_int.h"
 #include "internal_include/bt_target.h"
 #include "internal_include/stack_config.h"
@@ -50,6 +48,8 @@
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_ble_addr.h"
 #include "stack/include/btm_client_interface.h"
+#include "stack/include/gap_api.h"
+#include "stack/include/gatt_api.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;

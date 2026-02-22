@@ -43,7 +43,7 @@
 #include "btif_api.h"
 #include "btif_config.h"
 #include "stack/l2cap/internal/l2c_api.h"
-#include "l2cdefs.h"
+#include "stack/include/l2cdefs.h"
 #include "osi/include/allocator.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/l2cap/l2c_int.h"

@@ -44,7 +44,7 @@
 
 #include "btif_api.h"
 #include "crypto_toolbox/crypto_toolbox.h"
-#include "smp_api.h"
+#include "stack/include/smp_api.h"
 #include "stack/include/btm_client_interface.h"
 
 using crypto_toolbox::aes_128;

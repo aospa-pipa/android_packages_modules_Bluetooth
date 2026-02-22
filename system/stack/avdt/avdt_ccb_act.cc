@@ -31,11 +31,10 @@
 #include <cstdint>
 #include <string.h>
 
-#include "a2dp_aac_constants.h"
-#include "avdt_api.h"
+#include <cstdint>
+
 #include "avdt_defs.h"
 #include "avdt_int.h"
-#include "avdtc_api.h"
 #include "bta/include/bta_av_api.h"
 #include "btif/include/btif_av_co.h"
 #include "btif/include/btif_storage.h"
@@ -45,6 +44,9 @@
 #include "osi/include/allocator.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/properties.h"
+#include "stack/include/a2dp_aac_constants.h"
+#include "stack/include/avdt_api.h"
+#include "stack/include/avdtc_api.h"
 #include "stack/include/bt_hdr.h"
 #include "btif/include/btif_config.h"
 

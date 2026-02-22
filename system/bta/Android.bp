@@ -23,7 +23,6 @@ cc_defaults {
         "packages/modules/Bluetooth/system/btif/avrcp",
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/stack/btm",
-        "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/udrv/include",
     ],
     header_libs: ["libbluetooth_headers"],
@@ -652,7 +651,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -924,7 +922,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1009,7 +1006,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1110,7 +1106,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1248,7 +1243,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1345,7 +1339,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/le_audio",
         "packages/modules/Bluetooth/system/stack/btm",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1413,7 +1406,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/le_audio",
         "packages/modules/Bluetooth/system/bta/test/common",
         "packages/modules/Bluetooth/system/stack/btm",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1504,7 +1496,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1567,7 +1558,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1637,7 +1627,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":BtaDmSources",
@@ -1711,7 +1700,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":BtaDmSources",
@@ -1786,7 +1774,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":BtaDmSources",
@@ -1858,7 +1845,6 @@ cc_test {
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/sys",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
 
     shared_libs: [
@@ -1909,7 +1895,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/bta/include",
         "packages/modules/Bluetooth/system/bta/test/common",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",

@@ -55,13 +55,13 @@
 #include <sys/prctl.h>
 #include <unistd.h>
 
-#include "bt_types.h"
+#include "stack/include/bt_types.h"
 #include "stack/btm/internal/btm_api.h"
-#include "gap_api.h"
-#include "gatt_api.h"
+#include "stack/include/gap_api.h"
+#include "stack/include/gatt_api.h"
 #include "stack/l2cap/internal/l2c_api.h"
 #include "stack/include/smp_api_types.h"
-#include "smp_status.h"
+#include "stack/include/smp_status.h"
 
 __BEGIN_DECLS
 
@@ -189,7 +189,6 @@ typedef struct {
                          tGATT_VALUE* p_write);
   tGATT_STATUS (*cExecuteWrite)(uint16_t conn_id, bool is_execute);
   tGATT_STATUS (*cSendHandleValueConfirm)(uint16_t conn_id, uint16_t handle);
-  void (*cSetIdleTimeout)(RawAddress bd_addr, uint16_t idle_tout);
   void (*cSetVisibility)(uint16_t disc_mode, uint16_t conn_mode);
 
   // GATT Server APIs
