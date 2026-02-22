@@ -865,6 +865,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     isA2dpActive = true;
                 }
             }
+
             if (Objects.equals(mLeAudioActiveDevice, device)) {
                 hasFallbackDevice = setFallbackDeviceActiveLocked(device);
                 if (!hasFallbackDevice) {
@@ -881,6 +882,17 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                             setA2dpActiveDevice(null, false);
                         }
                     }
+                }
+            }
+
+            if (Flags.admClearActiveDeviceOnDisconnect()) {
+                /* If hasFallbackDevice is true, it means fallback was found, and active device is
+                 * being changed, or there is another LE Audio device active, from the same group
+                 * as disconnected device.
+                 * In case fallback was not found, we should deactivate LE Audio device.
+                 */
+                if (!hasFallbackDevice) {
+                    setLeAudioActiveDevice(null, /* stopAudio= */ true);
                 }
             }
         }

@@ -16,7 +16,6 @@ cc_library_static {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/include",
-        "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/types",
     ],
     static_libs: [
@@ -283,7 +282,6 @@ cc_defaults {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/include",
-        "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/test/common",
         "packages/modules/Bluetooth/system/types",
     ],
@@ -1021,8 +1019,8 @@ cc_test {
         "mts_defaults",
     ],
     test_suites: ["general-tests"],
-    local_include_dirs: [
-        "include",
+    include_dirs: [
+        "packages/modules/Bluetooth/system",
     ],
     srcs: [
         "test/ad_parser_unittest.cc",
@@ -1132,7 +1130,6 @@ cc_test {
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/stack/btm",
         "packages/modules/Bluetooth/system/stack/eatt",
-        "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/stack/l2cap",
     ],
     srcs: [
@@ -1205,7 +1202,6 @@ cc_test {
         "external/libldac/inc",
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1276,7 +1272,6 @@ cc_test {
         "external/libldac/inc",
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -1365,7 +1360,6 @@ cc_test {
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/embdrv/encoder_for_aptxhd/include",
         "packages/modules/Bluetooth/system/gd",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     target: {
         android: {
@@ -1476,7 +1470,6 @@ cc_test {
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/stack/btm",
         "packages/modules/Bluetooth/system/stack/eatt",
-        "packages/modules/Bluetooth/system/stack/include",
     ],
     srcs: [
         ":LegacyStackSdp",
@@ -2141,7 +2134,6 @@ cc_test {
         "packages/modules/Bluetooth/system/gd",
         "packages/modules/Bluetooth/system/stack/btm",
         "packages/modules/Bluetooth/system/stack/eatt",
-        "packages/modules/Bluetooth/system/stack/include",
         "packages/modules/Bluetooth/system/stack/l2cap",
     ],
     srcs: [

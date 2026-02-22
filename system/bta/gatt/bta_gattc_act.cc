@@ -46,7 +46,6 @@
 #include "osi/include/allocator.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int_types.h"
-#include "stack/gatt/gatt_int.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_ble_api_types.h"

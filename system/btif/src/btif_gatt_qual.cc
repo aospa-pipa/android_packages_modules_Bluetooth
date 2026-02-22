@@ -42,7 +42,7 @@
 
 #include "bta_api.h"
 #include "btif_api.h"
-#include "gatt_api.h"
+#include "stack/include/gatt_api.h"
 #include "stack/include/btm_client_interface.h"
 
 using namespace bluetooth;
@@ -148,10 +148,6 @@ tGATT_STATUS Gatt_SendHandleValueConfirm(uint16_t conn_id, uint16_t handle) {
   return Ret;
 }
 
-void Gatt_SetIdleTimeout(RawAddress bd_addr, uint16_t idle_tout) {
-  GATT_SetIdleTimeout(bd_addr, idle_tout, BT_TRANSPORT_LE, L2CAP_ATT_CID);
-  printf("%s::\n", __FUNCTION__);
-}
 
 void Gatt_SetLeAdvMode(tBTA_DM_DISC disc_mode, tBTA_DM_CONN conn_mode) {
   printf("%s::call set Visibility\n", __FUNCTION__);
@@ -180,7 +176,6 @@ static const btgatt_test_interface_t btgatt_testInterface = {
     Gatt_Write,
     Gatt_ExecuteWrite,
     Gatt_SendHandleValueConfirm,
-    Gatt_SetIdleTimeout,
     Gatt_SetLeAdvMode,
     Gatt_SendMultiNotification};
 

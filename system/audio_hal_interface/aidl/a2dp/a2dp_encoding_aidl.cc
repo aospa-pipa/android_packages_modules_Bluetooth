@@ -31,11 +31,11 @@
 #include "client_interface_aidl.h"
 #include "codec_status_aidl.h"
 #include "hardware/audio.h"
-#include "a2dp_aac.h"
-#include "a2dp_sbc.h"
-#include "a2dp_vendor_aptx_adaptive_constants.h"
-#include "a2dp_vendor_ldac_constants.h"
-#include <a2dp_vendor.h>
+#include "stack/include/a2dp_aac.h"
+#include "stack/include/a2dp_sbc.h"
+#include "stack/include/a2dp_vendor_aptx_adaptive_constants.h"
+#include "stack/include/a2dp_vendor_ldac_constants.h"
+#include "stack/include/a2dp_vendor.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_vendor_types.h"
 #define AAC_SAMPLE_SIZE  1024
