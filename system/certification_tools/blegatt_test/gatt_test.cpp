@@ -191,6 +191,9 @@ bluetooth_enable_t bluetooth_enable_func = NULL;
 typedef void (*bluetooth_disable_t)(void);
 bluetooth_disable_t bluetooth_disable_func = NULL;
 
+typedef void (*bluetooth_cleanup_t)(void);
+bluetooth_cleanup_t bluetooth_cleanup_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -1959,6 +1962,11 @@ int load_bt_lib(const bt_interface_t** interface) {
     printf("failed to load symbol bluetooth_disable from Bluetooth library\n");
   }
 
+  bluetooth_cleanup_func = (bluetooth_cleanup_t)dlsym(handle, "bluetooth_cleanup");
+  if (!bluetooth_cleanup_func) {
+    printf("failed to load symbol bluetooth_cleanup from Bluetooth library\n");
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -2420,7 +2428,7 @@ void bdt_disable(void) {
 }
 
 void do_pairing(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = GATT_TRANSPORT_LE;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
   if (BT_STATUS_SUCCESS != sBtInterface->create_bond(bd_addr, transport)) {
@@ -2435,7 +2443,11 @@ void do_pairing(char* p) {
 
 void bdt_cleanup(void) {
   bdt_log("CLEANUP");
-  sBtInterface->cleanup();
+  if (bluetooth_cleanup_func) {
+    bluetooth_cleanup_func();
+  } else {
+    bdt_log("Error: bluetooth_cleanup function not found");
+  }
 }
 
 /*******************************************************************************
@@ -2622,7 +2634,7 @@ void do_le_send_connect_req(int client_if, RawAddress bd_addr, int transport,
 }
 
 void do_le_client_connect(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
@@ -2631,7 +2643,7 @@ void do_le_client_connect(char* p) {
 }
 
 void do_le_client_connect_ext(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = BT_TRANSPORT_BR_EDR;
   int client_if = 0;
 
@@ -2643,7 +2655,7 @@ void do_le_client_connect_ext(char* p) {
 }
 
 void do_le_client_refresh(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
 
   if (Btif_gatt_layer) {
@@ -2652,7 +2664,7 @@ void do_le_client_refresh(char* p) {
 }
 
 void do_le_conn_param_update(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int min_interval = 24;
   int max_interval = 40;
   int latency = 0;
@@ -2669,7 +2681,7 @@ void do_le_conn_param_update(char* p) {
 }
 
 void do_le_conn_subrate_req(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int subrate_min = 5;
   int subrate_max = 10;
   int max_latency = 0;
@@ -2689,7 +2701,7 @@ void do_le_conn_subrate_req(char* p) {
 
 void do_le_client_connect_auto(char* p) {
   bool ret = -1;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
@@ -2706,7 +2718,7 @@ void do_le_client_connect_auto(char* p) {
 void do_le_cl_disconnect(int conn_id, bool is_ext, char* p) {
   int ret = -1;
   bool return_status;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
@@ -3047,7 +3059,7 @@ void do_le_execute_write(char* p) {
 }
 void do_le_set_idle_timeout(char* p) {
   int idle_timeout;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   idle_timeout = get_int(&p, -1);  // arg2
   sGattInterface->cSetIdleTimeout(bd_addr.address, idle_timeout);
@@ -3229,7 +3241,7 @@ void do_le_server_add_custom_service(char* p) {
 }
 
 void do_le_sr_connect(int server_if, char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   uint8_t addr_type;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
@@ -3247,7 +3259,7 @@ void do_le_server_connect_ext(char* p) {
 }
 
 void do_le_server_connect_auto(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   uint8_t addr_type = (uint8_t)get_int(&p, 1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
  BtStatus Ret = sGattIfaceScan->server->connect(g_server_if_scan, bd_addr, addr_type,
@@ -3255,7 +3267,7 @@ void do_le_server_connect_auto(char* p) {
 }
 
 void do_le_sr_disconnect(int server_if, bool is_ext, char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   int transport = BT_TRANSPORT_BR_EDR;
   transport = get_int(&p, -1);
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
@@ -3425,7 +3437,7 @@ static void do_start_advertisment(char* p) {
   Uuid uuid;
   int option = get_int(&p, -1);
   int start = get_int(&p, -1);
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   bool is_valid = false;
 
   // 128 bit UUID: 1122A00D-0000-0000-0123-456789ABCDEF
@@ -3474,7 +3486,7 @@ static void le_l2cap_coc_flow_ctrl(char* p) {
 uint16_t do_le_l2cap_coc_connect(char* p) {
   int le_initiator_sec_level;
   uint16_t le_coc_seclevel = 0;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   uint16_t le_psm = (uint16_t)get_int(&p, -1);
 
   t_le_chnl_info* le_conn_info = le_allocate_conn_info(le_psm, FALSE);
@@ -3522,7 +3534,7 @@ uint16_t do_le_l2cap_coc_connect(char* p) {
 uint16_t do_l2cap_coc_connect(char* p) {
   int le_initiator_sec_level;
   uint16_t le_coc_seclevel = 0;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   uint16_t psm = (uint16_t)get_int(&p, -1);
 
   tL2CAP_LE_CFG_INFO p_cfg;
@@ -3560,7 +3572,7 @@ uint16_t do_l2cap_coc_connect(char* p) {
 }
 
 uint16_t do_l2cap_coc_reconfigure(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   std::vector<uint16_t> chnl_id;
   tL2CAP_LE_CFG_INFO p_cfg;
   p_cfg.mtu = get_int(&p, -1);
@@ -3777,7 +3789,7 @@ void do_smp_init(char* p) {
 
 void do_smp_pair(char* p) {
   tSMP_STATUS Ret = SMP_SUCCESS;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   Ret = sSmpIface->Pair(bd_addr.address);
   printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
@@ -3785,7 +3797,7 @@ void do_smp_pair(char* p) {
 
 void do_smp_pair_cancel(char* p) {
   bool Ret = 0;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   Ret = sSmpIface->PairCancel(bd_addr.address);
   printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
@@ -3793,7 +3805,7 @@ void do_smp_pair_cancel(char* p) {
 
 void do_smp_security_grant(char* p) {
   tSMP_STATUS res;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
   res = (tSMP_STATUS)get_int(&p, -1);           // arg2
   sSmpIface->SecurityGrant(bd_addr.address, res);
@@ -3803,7 +3815,7 @@ void do_smp_security_grant(char* p) {
 void do_smp_passkey_reply(char* p) {
   uint32_t passkey;
   uint8_t res;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
   printf("get res value\n");
   res = (uint8_t)get_int(&p, -1);  // arg2
@@ -3817,14 +3829,14 @@ void do_smp_passkey_reply(char* p) {
 void do_smp_encrypt(char* p) {
   bool Ret = 0;
   uint8_t res;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
   res = (uint8_t)get_int(&p, -1);               // arg2
   printf("%s:: res =%d Ret=%d \n", __FUNCTION__, res, Ret);
 }
 
 void do_remove_bond(char* p) {
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   printf("%s:: remote_bd_addr=%02x:%02x:%02x:%02x:%02x:%02x \n", __FUNCTION__,
          bd_addr.address[0], bd_addr.address[1], bd_addr.address[2],
@@ -3839,7 +3851,7 @@ void do_le_gap_conn_param_update(char* p) {
   attr_value.conn_param.int_max = 70;
   attr_value.conn_param.latency = 0;
   attr_value.conn_param.sp_tout = 10;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;
   printf("stage 1\n");
   sGapInterface->Gap_BleAttrDBUpdate(
@@ -3869,7 +3881,7 @@ void do_l2cap_send_data_cid(char* p) {
   uint16_t cid = 0;
   BT_HDR bt_hdr;
   uint16_t Ret = 0;
-  RawAddress bd_addr = {{0}};
+  RawAddress bd_addr = RawAddress::kEmpty;
   if (FALSE == GetBdAddr(p, &bd_addr)) return;  // arg1
   cid = (uint16_t)get_int(&p, -1);              // arg2
 

@@ -192,6 +192,9 @@ bluetooth_enable_t bluetooth_enable_func = NULL;
 typedef void (*bluetooth_disable_t)(void);
 bluetooth_disable_t bluetooth_disable_func = NULL;
 
+typedef void (*bluetooth_cleanup_t)(void);
+bluetooth_cleanup_t bluetooth_cleanup_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -508,6 +511,11 @@ int load_bt_lib(const bt_interface_t** interface) {
     printf("failed to load symbol bluetooth_disable from Bluetooth library\n");
   }
 
+  bluetooth_cleanup_func = (bluetooth_cleanup_t)dlsym(handle, "bluetooth_cleanup");
+  if (!bluetooth_cleanup_func) {
+    printf("failed to load symbol bluetooth_cleanup from Bluetooth library\n");
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -718,7 +726,9 @@ void bdt_disable(void) {
   return;
 }
 
-void bdt_cleanup(void) { sBtInterface->cleanup(); }
+void bdt_cleanup(void) {
+  if (bluetooth_cleanup_func) bluetooth_cleanup_func();
+}
 
 btl2cap_interface_t* get_l2cap_interface(void) {
   if ((btvendorInterface) && sBtInterface) {
