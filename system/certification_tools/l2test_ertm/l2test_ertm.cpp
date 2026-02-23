@@ -590,8 +590,9 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
     }
 }
 #endif
-static void ssp_request_cb(RawAddress remote_bd_addr,
-                           bt_ssp_variant_t pairing_variant,
+
+static void ssp_request_cb(RawAddress remote_bd_addr, int transport,
+                           PairingVariant pairing_variant,
                            uint32_t pass_key, int pairing_algo) {
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
@@ -602,7 +603,7 @@ static void ssp_request_cb(RawAddress remote_bd_addr,
 
 static void bond_state_changed_cb(bt_status_t status,
                                   RawAddress remote_bd_addr,tBT_TRANSPORT transport,
-                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason) {
+                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason, PairingInitiator pairing_initiator) {
   g_PairState = state;
 }
 
@@ -648,12 +649,11 @@ static bt_os_callouts_t callouts = {
 
 void bdt_init(void) {
   printf("INIT BT \n");
-  if (bluetooth_init_func) {
-      bluetooth_init_func(&bt_callbacks, false, false, 0, false, "default", &callouts);
-      status = BT_STATUS_SUCCESS;
+
+  if (sBtInterface && sBtInterface->bluetooth_init_wrapper) {
+      sBtInterface->bluetooth_init_wrapper(&bt_callbacks, false, false, 0, false, "default", &bt_os_callbacks, false);
   } else {
-      printf("Error: bluetooth_init function not found\n");
-      status = BT_STATUS_FAIL;
+      bdt_log("Error: wrapper interface not loaded");
       exit(0);
   }
   
@@ -676,8 +676,14 @@ void bdt_enable(void) {
     printf("Bluetooth is already enabled\n");
     return;
   }
-  std::string toolName = "l2cap_tool";
-  status = (bt_status_t)sBtInterface->enable(std::move(toolName));
+
+  if (sBtInterface && sBtInterface->bluetooth_enable_wrapper) {
+     sBtInterface->bluetooth_enable_wrapper("l2cap_tool");
+     status = BT_STATUS_SUCCESS;
+  } else {
+      bdt_log("Error: wrapper interface not loaded");
+      status = BT_STATUS_FAIL;
+  }
   return;
 }
 
@@ -685,12 +691,26 @@ void bdt_disable(void) {
   if (BT_STATE_ON != g_AdapterState) {
     return;
   }
-  status = (bt_status_t)sBtInterface->disable();
+
+  if (sBtInterface && sBtInterface->bluetooth_disable_wrapper) {
+      sBtInterface->bluetooth_disable_wrapper();
+      status = BT_STATUS_SUCCESS;
+  } else {
+      bdt_log("Error: wrapper interface not loaded");
+      check_return_status(status);
+  }
   check_return_status(status);
   return;
 }
 
-void bdt_cleanup(void) { sBtInterface->cleanup(); }
+void bdt_cleanup(void) {
+  bdt_log("CLEANUP");
+  if (sBtInterface && sBtInterface->bluetooth_cleanup_wrapper) {
+      sBtInterface->bluetooth_cleanup_wrapper();
+  } else {
+      bdt_log("Error: wrapper interface not loaded");
+  }
+}
 
 btl2cap_interface_t* get_l2cap_interface(void) {
   if ((btvendorInterface) && sBtInterface) {

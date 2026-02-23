@@ -1023,6 +1023,23 @@ static bool pbap_pse_dynamic_version_upgrade_is_enabled() {
   return is_pse_version_upgrade_enabled();
 }
 
+// Wrapper functions for GATT TOOL interface
+static void bluetooth_init_wrapper(bt_callbacks_t* callbacks, bool guest_mode,
+                                   bool is_common_criteria_mode, int config_compare_result,
+                                   bool is_atv, const char* hci_instance_name,
+                                   bt_os_callouts_t* callouts, bool autonomous_repairing_initiation) {
+  bluetooth_init(callbacks, guest_mode, is_common_criteria_mode, config_compare_result, is_atv,
+                 std::string(hci_instance_name ? hci_instance_name : ""), callouts, autonomous_repairing_initiation);
+}
+
+static void bluetooth_enable_wrapper(const char* local_name) {
+  bluetooth_enable(std::string(local_name ? local_name : ""));
+}
+
+static void bluetooth_disable_wrapper(void) { bluetooth_disable(); }
+
+static void bluetooth_cleanup_wrapper(void) { bluetooth_cleanup(); }
+
 static const void* get_profile_interface(const char* profile_id) {
   log::info("id = {}", profile_id);
 
@@ -1332,6 +1349,10 @@ EXPORT_SYMBOL bt_interface_t bluetoothInterface = {
         .interop_database_add_remove_name = interop_database_add_remove_name,
         .get_remote_pbap_pce_version = get_remote_pbap_pce_version,
         .pbap_pse_dynamic_version_upgrade_is_enabled = pbap_pse_dynamic_version_upgrade_is_enabled,
+        .bluetooth_init_wrapper = bluetooth_init_wrapper,
+        .bluetooth_enable_wrapper = bluetooth_enable_wrapper,
+        .bluetooth_disable_wrapper = bluetooth_disable_wrapper,
+        .bluetooth_cleanup_wrapper = bluetooth_cleanup_wrapper,
 };
 
 // callback reporting helpers
