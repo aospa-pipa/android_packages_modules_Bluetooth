@@ -185,6 +185,12 @@ typedef void (*bluetooth_init_t)(bt_callbacks_t* callbacks, bool guest_mode,
                                  bt_os_callouts_t* callouts);
 bluetooth_init_t bluetooth_init_func = NULL;
 
+typedef void (*bluetooth_enable_t)(const std::string local_name);
+bluetooth_enable_t bluetooth_enable_func = NULL;
+
+typedef void (*bluetooth_disable_t)(void);
+bluetooth_disable_t bluetooth_disable_func = NULL;
+
 static gid_t groups[] = {AID_NET_BT,    AID_INET, AID_NET_BT_ADMIN,
                          AID_SYSTEM,    AID_MISC, AID_SDCARD_RW,
                          AID_NET_ADMIN, AID_VPN};
@@ -1943,6 +1949,16 @@ int load_bt_lib(const bt_interface_t** interface) {
     goto error;
   }
 
+  bluetooth_enable_func = (bluetooth_enable_t)dlsym(handle, "bluetooth_enable");
+  if (!bluetooth_enable_func) {
+    printf("failed to load symbol bluetooth_enable from Bluetooth library\n");
+  }
+
+  bluetooth_disable_func = (bluetooth_disable_t)dlsym(handle, "bluetooth_disable");
+  if (!bluetooth_disable_func) {
+    printf("failed to load symbol bluetooth_disable from Bluetooth library\n");
+  }
+
   // Success.
   printf(" loaded HAL Success\n");
   *interface = itf;
@@ -2059,9 +2075,9 @@ static void pin_request_cb(RawAddress remote_bd_addr, bt_bdname_t* bd_name,
     // Avoid unused parameter warnings if not used
 }
 static void ssp_request_cb(RawAddress remote_bd_addr,
-                           bt_ssp_variant_t pairing_variant,
+                           PairingVariant pairing_variant,
                            uint32_t pass_key, int pairing_alg) {
-  printf("ssp_request_cb : variant=%d passkey=%u\n", pairing_variant, pass_key);
+  printf("ssp_request_cb : variant=%d passkey=%u\n", static_cast<uint8_t>(pairing_variant), pass_key);
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
@@ -2375,9 +2391,14 @@ void bdt_enable(void) {
     return;
   }
 
-  std::string toolName = "gatt_tool";
-  status = sBtInterface->enable(std::move(toolName));
-
+  if (bluetooth_enable_func) {
+      std::string toolName = "gatt_tool";
+      bluetooth_enable_func(std::move(toolName));
+  } else {
+      bdt_log("Error: bluetooth_enable function not found");
+  }
+  
+  status = BT_STATUS_SUCCESS;
   check_return_status(status);
 }
 
@@ -2387,8 +2408,14 @@ void bdt_disable(void) {
     bdt_log("Bluetooth is already disabled");
     return;
   }
-  status = sBtInterface->disable();
-
+  
+  if (bluetooth_disable_func) {
+      bluetooth_disable_func();
+  } else {
+      bdt_log("Error: bluetooth_disable function not found");
+  }
+  
+  status = BT_STATUS_SUCCESS;
   check_return_status(status);
 }
 
