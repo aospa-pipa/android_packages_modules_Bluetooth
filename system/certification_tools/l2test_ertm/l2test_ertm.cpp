@@ -626,7 +626,7 @@ static void ssp_request_cb(RawAddress remote_bd_addr,
 
 static void bond_state_changed_cb(bt_status_t status,
                                   RawAddress remote_bd_addr,tBT_TRANSPORT transport,
-                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason) {
+                                  bt_bond_state_t state,PairingType pairing_type, int fail_reason, PairingInitiator pairing_initiator) {
   g_PairState = state;
 }
 
