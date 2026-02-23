@@ -2082,10 +2082,11 @@ static void pin_request_cb(RawAddress remote_bd_addr, bt_bdname_t* bd_name,
       "entry with .\n");
     // Avoid unused parameter warnings if not used
 }
-static void ssp_request_cb(RawAddress remote_bd_addr,
+
+static void ssp_request_cb(RawAddress remote_bd_addr, int transport,
                            PairingVariant pairing_variant,
-                           uint32_t pass_key, int pairing_alg) {
-  printf("ssp_request_cb : variant=%d passkey=%u\n", static_cast<uint8_t>(pairing_variant), pass_key);
+                           uint32_t pass_key, int  pairing_alg) {
+  printf("ssp_request_cb : variant=%d passkey=%u transport=%d\n", pairing_variant, pass_key, transport);
   if (BT_STATUS_SUCCESS != sBtInterface->ssp_reply(remote_bd_addr,
                                                    pairing_variant, TRUE,
                                                    pass_key)) {
