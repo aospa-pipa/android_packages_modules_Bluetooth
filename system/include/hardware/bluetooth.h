@@ -1167,6 +1167,18 @@ typedef struct {
 
   /** check if pbap pse dynamic version upgrade is enable */
   bool (*pbap_pse_dynamic_version_upgrade_is_enabled)();
+
+  /** GATT TOOL interface wrapper functions */
+  void (*bluetooth_init_wrapper)(bt_callbacks_t* callbacks, bool guest_mode,
+                                   bool is_common_criteria_mode, int config_compare_result,
+                                   bool is_atv, const char* hci_instance_name,
+                                   bt_os_callouts_t* callouts, bool autonomous_repairing_initiation);
+
+  void (*bluetooth_enable_wrapper)(const char* local_name);
+
+  void (*bluetooth_disable_wrapper)(void);
+
+  void (*bluetooth_cleanup_wrapper)(void);
 } bt_interface_t;
 
 #define BLUETOOTH_INTERFACE_STRING "bluetoothInterface"
