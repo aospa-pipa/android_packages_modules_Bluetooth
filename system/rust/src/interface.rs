@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-//! Common types used throughout the Bluetooth stack.
+//! Interfaces for basic services
+//!
+//! These are intended to be the API that application-level profiles (e.g. A2DP or Asha) are
+//! written against, allowing for easier faking, mocking, and changes to underlying stack
+//! implementations.
+//!
+//! Where possible, these interfaces provide references to the Bluetooth specification to provide
+//! additional clarity about expected behavior in cases where the documentation may be incomplete.
 
-pub mod address;
-pub mod psm;
-pub mod uuid;
-
-pub use address::Address;
-pub use psm::Psm;
-pub use uuid::Uuid;
+pub mod gap;
+pub mod gatt;

@@ -16,6 +16,7 @@
 
 //! Crate root for the Unified Bluetooth Rust Stack.
 
+pub mod interface;
 pub mod le_audio;
 pub mod pdl;
 pub mod types;
