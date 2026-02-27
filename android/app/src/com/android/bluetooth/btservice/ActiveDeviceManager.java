@@ -1641,17 +1641,17 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                  * recently removed device, it means it just switched profile it is using and is
                  * not new one.
                  */
-                boolean hasFallbackDevice =
-                        !(recentlyRemovedDevice != null
+                boolean stopAudio =
+                        (recentlyRemovedDevice != null
                                 && device.equals(recentlyRemovedDevice)
                                 && connectedHearingAidDevices.size() == 1);
 
                 if (mHearingAidConnectedDevices.contains(device)) {
                     Log.i(TAG, "Found a hearing aid fallback device: " + device);
                     setHearingAidActiveDevice(device, /* stopAudio= */ true);
-                    setA2dpActiveDevice(null, /* stopAudio= */ !hasFallbackDevice);
+                    setA2dpActiveDevice(null, stopAudio);
                     setHfpActiveDevice(null);
-                    setLeAudioActiveDevice(null, /* stopAudio= */ !hasFallbackDevice);
+                    setLeAudioActiveDevice(null, stopAudio);
                 } else {
                     Log.i(TAG, "Found a LE hearing aid fallback device: " + device);
                     if (areSameGroupMembers(recentlyRemovedDevice, device)) {
@@ -1666,8 +1666,8 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     } else {
                         setLeHearingAidActiveDevice(device);
                     }
-                    setHearingAidActiveDevice(null, /* stopAudio= */ !hasFallbackDevice);
-                    setA2dpActiveDevice(null, /* stopAudio= */ !hasFallbackDevice);
+                    setHearingAidActiveDevice(null, stopAudio);
+                    setA2dpActiveDevice(null, stopAudio);
                     setHfpActiveDevice(null);
                 }
                 return true;
@@ -2117,8 +2117,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 sb.append("    Connected: ").append(mLeAudioConnectedDevices.size()).append("\n");
                 getDevicesInfo(sb, mLeAudioConnectedDevices, null);
                 sb.append("    Active: ");
-                if (mAdapterService.isProfileSupported(
-                        mLeAudioActiveDevice, BluetoothProfile.HAP_CLIENT)) {
+                if (isLeAudioHearingAidDevice(mLeAudioActiveDevice)) {
                     getDevicesInfo(sb, mLeAudioActiveDevice);
                 }
                 sb.append("    Most recent: ");

@@ -27,13 +27,13 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/gatt_api.h"
+#include "stack/mock/mock_stack_acl.h"
+#include "stack/mock/mock_stack_btm_dev.h"
+#include "stack/mock/mock_stack_l2cap_api.h"
+#include "stack/mock/mock_stack_l2cap_ble.h"
+#include "stack/mock/mock_stack_l2cap_interface.h"
 #include "test/fake/fake_osi.h"
 #include "test/mock/mock_btif_config.h"
-#include "test/mock/mock_stack_acl.h"
-#include "test/mock/mock_stack_btm_dev.h"
-#include "test/mock/mock_stack_l2cap_api.h"
-#include "test/mock/mock_stack_l2cap_ble.h"
-#include "test/mock/mock_stack_l2cap_interface.h"
 
 using bluetooth::Uuid;
 using ::testing::NiceMock;
@@ -232,7 +232,7 @@ static void FuzzAsServer(FuzzedDataProvider& fdp) {
 
 static void ClientInit() {
   GattInit();
-  (void)GATT_Connect(s_AppIf, kDummyAddr, BTM_BLE_DIRECT_CONNECTION, BT_TRANSPORT_LE, false);
+  (void)GATT_LE_Connect(s_AppIf, kDummyAddr, BTM_BLE_DIRECT_CONNECTION, false);
 }
 
 static void ClientCleanup() {

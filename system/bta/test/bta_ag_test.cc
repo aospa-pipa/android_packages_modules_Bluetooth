@@ -32,17 +32,17 @@
 #include "bta/include/bta_hfp_api.h"
 #include "btif_status.h"
 #include "hci/controller_mock.h"
-#include "stack/include/sdp_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/main_thread.h"
+#include "stack/include/sdp_api.h"
+#include "stack/mock/mock_stack_acl.h"
+#include "stack/mock/mock_stack_btm_interface.h"
 #include "test/common/mock_functions.h"
 #include "test/fake/fake_osi.h"
 #include "test/mock/mock_bta_sys_main.h"
 #include "test/mock/mock_device_esco_parameters.h"
 #include "test/mock/mock_main_shim_entry.h"
 #include "test/mock/mock_osi_alarm.h"
-#include "test/mock/mock_stack_acl.h"
-#include "test/mock/mock_stack_btm_interface.h"
 
 #define TEST_BT com::android::bluetooth::flags
 
@@ -364,7 +364,7 @@ protected:
   }
 };
 
-TEST_F_WITH_FLAGS(BtaAgScoTest, codec_negotiate__aptx_state_on) {
+TEST_F(BtaAgScoTest, codec_negotiate__aptx_state_on) {
   tBTA_AG_SCB* p_scb = &bta_ag_cb.scb[0];
   p_scb->app_id = 0;
   p_scb->peer_addr = addr;
@@ -385,7 +385,7 @@ TEST_F_WITH_FLAGS(BtaAgScoTest, codec_negotiate__aptx_state_on) {
   bta_ag_deregister(p_scb, tBTA_AG_DATA::kEmpty);
 }
 
-TEST_F_WITH_FLAGS(BtaAgScoTest, codec_negotiate__aptx_state_off) {
+TEST_F(BtaAgScoTest, codec_negotiate__aptx_state_off) {
   tBTA_AG_SCB* p_scb = &bta_ag_cb.scb[0];
   p_scb->app_id = 0;
   p_scb->peer_addr = addr;

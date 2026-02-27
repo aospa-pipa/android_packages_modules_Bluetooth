@@ -63,6 +63,7 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_vendor_types.h"
 #include "btif_config.h"
+#include "storage/config_keys.h"
 
 using namespace bluetooth;
 
