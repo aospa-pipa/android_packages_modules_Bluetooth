@@ -38,6 +38,8 @@
 #include "bta/include/bta_av_api.h"
 #include "btif/include/btif_av_co.h"
 #include "btif/include/btif_storage.h"
+#include "gd/storage/config_keys.h"
+#define BTIF_STORAGE_KEY_FOR_SUPPORTED_CODECS "PeerSupportedCodecs"
 #include "device/include/interop.h"
 #include "internal_include/bt_target.h"
 #include "osi/include/alarm.h"

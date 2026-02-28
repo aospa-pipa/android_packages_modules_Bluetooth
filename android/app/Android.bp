@@ -212,6 +212,7 @@ android_library {
         "sap-api-java-static",
         "net-utils-services-common",
         "networkstack-client",
+        "telephony_flags_core_java_exported_lib",
     ],
 
     plugins: [
