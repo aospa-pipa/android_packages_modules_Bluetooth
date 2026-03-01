@@ -53,6 +53,8 @@
 #define GAP_ENC_KEY_CCCD 3           /* Discover CCCD */
 #define GAP_ENC_KEY_CONFIG_CCCD 4    /* Write CCCD */
 #include "stack/include/gatt_api.h"
+#include "stack/include/stack_app.h"
+#include "stack/include/stack_le_connection.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -109,7 +111,7 @@ void client_disc_res_cback(uint16_t, tGATT_DISC_TYPE, tGATT_DISC_RES*);
 void client_disc_cmpl_cback(uint16_t, tGATT_DISC_TYPE, tGATT_STATUS);
 void gap_cl_get_enc_key_info(tGAP_CLCB* p_clcb);
 
-tGATT_CBACK gap_cback = {
+stack::tGATT_CBACK gap_cback = {
         .p_conn_cb = client_connect_cback,
         .p_cmpl_cb = client_cmpl_cback,
         .p_disc_res_cb = client_disc_res_cback,
@@ -675,8 +677,9 @@ static bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid,
     p_clcb->connected = true;
   }
 
-  if (!GATT_LE_Connect(gatt_if, p_clcb->bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION, true, 0,
-                       false, com::android::bluetooth::flags::gatt_conn_settings())) {
+  if (!stack::leConnectionConnect(gatt_if, p_clcb->bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION,
+                                  true, 0, false,
+                                  com::android::bluetooth::flags::gatt_conn_settings())) {
     return false;
   }
 
@@ -701,7 +704,7 @@ bool accept_client_operation(const RawAddress& peer_bda, uint16_t uuid, uint16_t
     p_clcb->connected = true;
   }
 
-  if (!GATT_LE_Connect(gatt_if, p_clcb->bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION, true, 0, false, com::android::bluetooth::flags::gatt_conn_settings())) {
+  if (!stack::leConnectionConnect(gatt_if, p_clcb->bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION, true, 0, false, com::android::bluetooth::flags::gatt_conn_settings())) {
     return false;
   }
 
@@ -780,9 +783,9 @@ void gap_attr_db_init(void) {
   Uuid app_uuid = Uuid::From128BitBE(tmp);
   gatt_attr.fill({});
 
-  gatt_if = GATT_Register(app_uuid, "Gap", &gap_cback, false);
+  gatt_if = stack::appRegister(app_uuid, "Gap", &gap_cback, false);
 
-  GATT_StartIf(gatt_if);
+  stack::appStartIf(gatt_if);
 
   Uuid svc_uuid = Uuid::From16Bit(UUID_SERVCLASS_GAP_SERVER);
   Uuid name_uuid = Uuid::From16Bit(GATT_UUID_GAP_DEVICE_NAME);
@@ -1037,7 +1040,7 @@ bool GAP_BleCancelReadPeerDevName(const RawAddress& peer_bda) {
   }
 
   if (!p_clcb->connected) {
-    if (!GATT_CancelConnect(gatt_if, peer_bda, true)) {
+    if (!stack::leConnectionCancelConnect(gatt_if, peer_bda, true)) {
       log::error("Cannot cancel where No connection id");
       return false;
     }

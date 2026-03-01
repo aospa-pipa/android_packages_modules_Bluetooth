@@ -62,6 +62,7 @@
 #include "stack/l2cap/internal/l2c_api.h"
 #include "stack/include/smp_api_types.h"
 #include "stack/include/smp_status.h"
+#include "stack/include/stack_app.h"
 
 __BEGIN_DECLS
 
@@ -169,7 +170,7 @@ typedef struct {
 typedef struct {
   size_t size;
   // GATT common APIs (Both client and server)
-  tGATT_IF (*Register)(bluetooth::Uuid& p_app_uuid128, tGATT_CBACK* p_cb_info,
+  tGATT_IF (*Register)(bluetooth::Uuid& p_app_uuid128, bluetooth::stack::tGATT_CBACK* p_cb_info,
                        bool eatt_support);
   void (*Deregister)(tGATT_IF gatt_if);
   void (*StartIf)(tGATT_IF gatt_if);

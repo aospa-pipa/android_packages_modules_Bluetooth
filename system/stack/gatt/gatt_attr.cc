@@ -50,6 +50,8 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/gap_api.h"
 #include "stack/include/gatt_api.h"
+#include "stack/include/stack_app.h"
+#include "stack/include/stack_le_connection.h"
 
 using bluetooth::Uuid;
 using namespace bluetooth;
@@ -106,7 +108,7 @@ static tGATT_STATUS gatt_sr_write_cl_supp_feat(tCONN_ID conn_id, tGATT_WRITE_REQ
 static tGATT_STATUS gatt_sr_write_cccd(uint16_t conn_id, tGATT_WRITE_REQ* p_data);
 
 
-static tGATT_CBACK gatt_profile_cback = {
+static stack::tGATT_CBACK gatt_profile_cback = {
         .p_conn_cb = gatt_connect_cback,
         .p_cmpl_cb = gatt_cl_op_cmpl_cback,
         .p_disc_res_cb = gatt_disc_res_cback,
@@ -451,8 +453,8 @@ void gatt_profile_db_init(void) {
 
   /* Create a GATT profile service */
   gatt_cb.gatt_if =
-          GATT_Register(Uuid::From128BitBE(tmp), "GattProfileDb", &gatt_profile_cback, false);
-  GATT_StartIf(gatt_cb.gatt_if);
+          stack::appRegister(Uuid::From128BitBE(tmp), "GattProfileDb", &gatt_profile_cback, false);
+  stack::appStartIf(gatt_cb.gatt_if);
 
   Uuid service_uuid = Uuid::From16Bit(UUID_SERVCLASS_GATT_SERVER);
 
@@ -850,8 +852,9 @@ void GATT_LE_ConfigServiceChangeCCC(const RawAddress& remote_bda, bool /* enable
   }
 
   /* hold the link here */
-  if (!GATT_LE_Connect(gatt_cb.gatt_if, remote_bda, BLE_ADDR_PUBLIC, BTM_BLE_DIRECT_CONNECTION,
-                       true, 0, false, com::android::bluetooth::flags::gatt_conn_settings())) {
+  if (!stack::leConnectionConnect(gatt_cb.gatt_if, remote_bda, BLE_ADDR_PUBLIC,
+                                  BTM_BLE_DIRECT_CONNECTION, true, 0, false,
+                                  com::android::bluetooth::flags::gatt_conn_settings())) {
     log::warn(
             "Unable to connect GATT client gatt_if:{} peer:{} transport:{} "
             "connection_tyoe:{} opporunistic:{}",

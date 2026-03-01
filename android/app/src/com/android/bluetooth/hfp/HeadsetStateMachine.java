@@ -1707,11 +1707,6 @@ class HeadsetStateMachine extends StateMachine {
                                 if (!mNativeInterface.disconnectAudio(mDevice)) {
                                     stateLogE("processAudioEvent: failed to disconnect audio");
                                 }
-                                // Indicate rejection to other components.
-                                broadcastAudioState(
-                                        mDevice,
-                                        BluetoothHeadset.STATE_AUDIO_DISCONNECTED,
-                                        BluetoothHeadset.STATE_AUDIO_DISCONNECTED);
                             }
                             break;
                         }
