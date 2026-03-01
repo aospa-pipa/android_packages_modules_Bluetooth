@@ -26,6 +26,7 @@
 #include <openssl/base.h>
 #include <openssl/rand.h>
 
+#include <atomic>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -211,6 +212,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
       le_address_manager_->UnregisterSync(this);
     }
     advertising_sets_.clear();
+    num_advertisers_in_use_.store(0);
   }
 
   int8_t get_tx_path_loss_compensation() {
@@ -245,8 +247,6 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     log::info("tx_power: {}, calibrated_tx_power: {}", tx_power, calibrated_tx_power);
     return calibrated_tx_power;
   }
-
-  size_t GetNumberOfAdvertisingInstances() const { return num_instances_; }
 
   size_t GetNumberOfAdvertisingInstancesInUse() const {
     return std::count_if(advertising_sets_.begin(), advertising_sets_.end(),
@@ -444,6 +444,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     }
     advertising_sets_[id] = Advertiser();
     advertising_sets_[id].in_use = true;
+    num_advertisers_in_use_++;
 
     if (com::android::bluetooth::flags::ensure_acl_connection_is_removed_from_pending_list() &&
         removed_advertising_sets_.contains(id)) {
@@ -515,6 +516,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
     }
 
     advertising_sets_.erase(advertiser_id);
+    num_advertisers_in_use_--;
     if (advertising_sets_.empty() && address_manager_registered) {
       le_address_manager_->Unregister(this);
       address_manager_registered = false;
@@ -2045,6 +2047,7 @@ struct LeAdvertisingManagerImpl::impl : public bluetooth::hci::LeAddressManagerC
   EncrDataKey* key_iv = new EncrDataKey;
 
   size_t num_instances_;
+  std::atomic<size_t> num_advertisers_in_use_{0};
   std::vector<hci::EnabledSet> enabled_sets_;
   // map to mapping the id from java layer and advertiser id
   std::map<uint8_t, int> id_map_;
@@ -2671,10 +2674,6 @@ void LeAdvertisingManagerImpl::GetEncKeyMaterial() {
   // TODO: Bring back GetDependency
   // pimpl_->get_enc_key_material(shim::GetStorage(),
   //                              GetDependency<hci::HciLayer>(), pimpl_->handler_);
-}
-
-size_t LeAdvertisingManagerImpl::GetNumberOfAdvertisingInstances() const {
-  return pimpl_->GetNumberOfAdvertisingInstances();
 }
 
 size_t LeAdvertisingManagerImpl::GetNumberOfAdvertisingInstancesInUse() const {

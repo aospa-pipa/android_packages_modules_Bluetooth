@@ -80,10 +80,10 @@ void Gatt_StartIf(tGATT_IF gatt_if) {
 bool Gatt_Connect(tGATT_IF gatt_if, RawAddress bd_addr, bool is_direct,
                   tBT_TRANSPORT transport) {
   bool Ret = 0;
-  Ret = GATT_Connect(
+  Ret = GATT_LE_Connect(
       gatt_if, bd_addr,
       is_direct ? BTM_BLE_DIRECT_CONNECTION : BTM_BLE_BKG_CONNECT_ALLOW_LIST,
-      BT_TRANSPORT_LE, false);
+      false);
   printf("%s::Ret=%d,gatt_if=%d, is_direct=%d \n", __FUNCTION__, Ret, gatt_if,
          is_direct);
   return Ret;

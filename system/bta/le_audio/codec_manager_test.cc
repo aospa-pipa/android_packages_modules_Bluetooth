@@ -33,7 +33,7 @@
 #include "osi/include/properties.h"
 #include "test/mock/mock_legacy_hci_interface.h"
 #include "test/mock/mock_main_shim_entry.h"
-#include "test/mock/mock_stack_btm_interface.h"
+#include "stack/mock/mock_stack_btm_interface.h"
 
 using ::testing::_;
 using ::testing::Mock;
