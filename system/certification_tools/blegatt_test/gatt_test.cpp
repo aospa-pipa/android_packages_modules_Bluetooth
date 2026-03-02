@@ -1598,7 +1598,6 @@ void do_le_client_read_ext(char* p);
 void do_le_client_write(char* p);
 void do_le_client_write_ext(char* p);
 void do_le_execute_write(char* p);
-void do_le_set_idle_timeout(char* p);
 void do_le_server_register(char* p);
 void do_le_server_register_ext(char* p);
 void do_le_server_deregister(char* p);
@@ -1732,7 +1731,6 @@ const t_cmd console_cmd_list[] = {
      int min_interval,int max_interval,int adv_type,int chnl_map, int tx_power,
      int timeout",0}, { "stop_advertising", do_le_client_adv_disable, "::int
      adv_if",0},*/
-    {"c_set_idle_timeout", do_le_set_idle_timeout, "bd_addr, time_out(int)", 0},
     {"c_gap_attr_init", do_le_gap_attr_init, "::", 0},
     {"c_gap_conn_param_update", do_le_gap_conn_param_update, "::", 0},
     {"c_set_char_len", do_le_set_char_len, ":: <Default value: 512>", 0},
