@@ -125,7 +125,6 @@ public class AdvertiseManager {
             enforceThread();
 
             mIsAvailable = false;
-            mHandler.removeCallbacksAndMessages(null);
             mAdvertiserMap.clear();
             mAdvertiseBinder.cleanup();
             mNativeInterface.cleanup();
@@ -133,7 +132,6 @@ public class AdvertiseManager {
             mAdvertiseSuspendManager.cleanup();
         } else {
             mIsAvailable = false;
-            mHandler.removeCallbacksAndMessages(null);
             forceRunSyncOnAdvertiseThread(
                     () -> {
                         mAdvertiserMap.clear();
@@ -146,7 +144,17 @@ public class AdvertiseManager {
     }
 
     void dump(StringBuilder sb) {
-        forceRunSyncOnAdvertiseThread(() -> mAdvertiserMap.dump(sb));
+        if (!mIsAvailable) {
+            Log.w(TAG, "dump() - AdvertiseManager not available");
+            sb.append("AdvertiseManager: Not available\n");
+            return;
+        }
+        forceRunSyncOnAdvertiseThread(() -> {
+            // Check availability again in case cleanup ran while we were posting
+            if (mIsAvailable) {
+                mAdvertiserMap.dump(sb);
+            }
+        });
     }
 
     AdvertiseBinder getBinder() {
