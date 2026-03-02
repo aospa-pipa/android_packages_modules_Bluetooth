@@ -44,6 +44,8 @@
 #include "btif_api.h"
 #include "stack/include/gatt_api.h"
 #include "stack/include/btm_client_interface.h"
+#include "stack/include/stack_app.h"
+#include "stack/include/stack_le_connection.h"
 
 using namespace bluetooth;
 
@@ -54,10 +56,10 @@ using bluetooth::Uuid;
 uint16_t g_conn_id = 0;
 
 #define BTM_SEC_PROTO_L2CAP 0
-tGATT_IF Gatt_Register(Uuid& p_app_uuid128, tGATT_CBACK* p_cb_info,
+tGATT_IF Gatt_Register(Uuid& p_app_uuid128, stack::tGATT_CBACK* p_cb_info,
                        bool eatt_support) {
   tGATT_IF Gatt_if = 0;
-  Gatt_if = GATT_Register(p_app_uuid128, "gatt_qual_service", p_cb_info,
+  Gatt_if = stack::appRegister(p_app_uuid128, "gatt_qual_service", p_cb_info,
                           eatt_support);
   printf("%s:: Gatt_if=%d\n", __FUNCTION__, Gatt_if);
   if (!get_btm_client_interface().security.BTM_SetSecurityLevel(
@@ -68,19 +70,19 @@ tGATT_IF Gatt_Register(Uuid& p_app_uuid128, tGATT_CBACK* p_cb_info,
   return Gatt_if;
 }
 void Gatt_Deregister(tGATT_IF gatt_if) {
-  GATT_Deregister(gatt_if);
+  stack::appDeregister(gatt_if);
   printf("%s:: \n", __FUNCTION__);
 }
 
 void Gatt_StartIf(tGATT_IF gatt_if) {
-  GATT_StartIf(gatt_if);
+  stack::appStartIf(gatt_if);
   printf("%s::\n", __FUNCTION__);
 }
 
 bool Gatt_Connect(tGATT_IF gatt_if, RawAddress bd_addr, bool is_direct,
                   tBT_TRANSPORT transport) {
   bool Ret = 0;
-  Ret = GATT_LE_Connect(
+  Ret = stack::leConnectionConnect(
       gatt_if, bd_addr,
       is_direct ? BTM_BLE_DIRECT_CONNECTION : BTM_BLE_BKG_CONNECT_ALLOW_LIST,
       false);
