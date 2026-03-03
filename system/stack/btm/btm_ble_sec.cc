@@ -1096,7 +1096,7 @@ void btm_ble_link_encrypted(const RawAddress& bd_addr, uint8_t encr_enable) {
   }
 
   if (btm_cb.encrypted_advertising_data_supported && encr_enable &&
-      get_btm_client_interface().security.BTM_IsBonded(p_device->ble.pseudo_addr, BT_TRANSPORT_AUTO)){
+      get_security_client_interface().BTM_IsBonded(p_device->ble.pseudo_addr, BT_TRANSPORT_AUTO)){
     size_t length = btif_storage_get_enc_key_material_length(&p_device->ble.pseudo_addr);
 
     tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(p_device->ble.pseudo_addr, BT_TRANSPORT_LE);
@@ -1474,6 +1474,7 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
     BtmSecurity::Get().link_spec_ = {};
     BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
     BtmSecurity::Get().pairing_flags_ = 0;
+    BtmSecurity::Get().ResetLinkKeyRequestTimer();
   }
 
   p_device = btm_get_dev(bd_addr);  // BTM_LE_COMPLT_EVT event may have removed the device
@@ -1537,6 +1538,7 @@ static void btm_ble_complete_evt(const RawAddress& bd_addr, BtmDevice* p_device,
     BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
     BtmSecurity::Get().pairing_state_ = BTM_PAIR_STATE_IDLE;
     BtmSecurity::Get().pairing_flags_ = 0;
+    BtmSecurity::Get().ResetLinkKeyRequestTimer();
   }
 
   if (res == tBTM_STATUS::BTM_SUCCESS) {
@@ -1603,6 +1605,7 @@ tBTM_STATUS btm_proc_smp_cback(tSMP_EVT event, const RawAddress& bd_addr, tSMP_E
       BtmSecurity::Get().link_spec_ = {};
       BtmSecurity::Get().link_spec_.addrt.bda = RawAddress::kAny;
       BtmSecurity::Get().pairing_flags_ = 0;
+      BtmSecurity::Get().ResetLinkKeyRequestTimer();
     }
     return tBTM_STATUS::BTM_UNKNOWN_ADDR;
   }

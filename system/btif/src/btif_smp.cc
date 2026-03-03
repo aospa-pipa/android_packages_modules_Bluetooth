@@ -52,7 +52,7 @@ using namespace bluetooth;
 
 #include <bt_testapp.h>
 static void SmpInit(void) {
-  SMP_Init(get_btm_client_interface().security.BTM_GetSecurityMode());
+  SMP_Init(get_security_client_interface().BTM_GetSecurityMode());
 }
 static bool SmpRegister(tSMP_CALLBACK* p_cback) {
   bool Ret = 0;

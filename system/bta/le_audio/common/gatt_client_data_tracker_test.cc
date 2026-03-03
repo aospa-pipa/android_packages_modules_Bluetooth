@@ -53,7 +53,7 @@ public:
 
   void SetUp(void) override {
     __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
-    com::android::bluetooth::flags::provider_->reset_flags();
+    com_android_bluetooth_flags_reset_flags();
 
     // Use peripheral role by default
     get_btm_client_interface().link_policy.BTM_GetRole = [](const RawAddress& /* remote_bd_addr */,
@@ -389,7 +389,8 @@ TEST_F(GattClientDataTrackerTest, OnGattReadDescriptor) {
 
   // Expect response with the correct value
   EXPECT_CALL(gatt_server_interface_, SendRsp(conn_id, trans_id, GATT_SUCCESS, _))
-          .WillOnce([value_to_write](uint16_t, uint32_t, tGATT_STATUS, tGATTS_RSP* p_msg) {
+          .WillOnce([value_to_write](uint16_t, uint32_t, tGATT_STATUS,
+                                     std::unique_ptr<tGATTS_RSP> p_msg) {
             ASSERT_EQ(p_msg->attr_value.len, sizeof(value_to_write));
             uint16_t read_value = 0;
             const uint8_t* p_read = p_msg->attr_value.value;
@@ -425,7 +426,7 @@ TEST_F(GattClientDataTrackerTest, OnGattReadDescriptorUnknownHandle) {
 
   // Expect response with a default value (0x0000)
   EXPECT_CALL(gatt_server_interface_, SendRsp(conn_id, trans_id, GATT_SUCCESS, _))
-          .WillOnce([](uint16_t, uint32_t, tGATT_STATUS, tGATTS_RSP* p_msg) {
+          .WillOnce([](uint16_t, uint32_t, tGATT_STATUS, std::unique_ptr<tGATTS_RSP> p_msg) {
             ASSERT_EQ(p_msg->attr_value.len, 2);
             ASSERT_EQ(p_msg->attr_value.value[0], 0);
             ASSERT_EQ(p_msg->attr_value.value[1], 0);

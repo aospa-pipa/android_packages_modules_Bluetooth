@@ -160,6 +160,7 @@ import com.android.bluetooth.hid.HidHostService;
 import com.android.bluetooth.le_audio.LeAudioBroadcast;
 import com.android.bluetooth.le_audio.LeAudioPeripheralService;
 import com.android.bluetooth.le_audio.LeAudioService;
+import com.android.bluetooth.le_audio.LeAudioTmapService;
 import com.android.bluetooth.le_scan.PeriodicScanNativeInterface;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.le_scan.ScanNativeInterface;
@@ -1136,8 +1137,9 @@ public class AdapterService extends Service {
                             && SystemProperties.getBoolean(
                                     AdapterSuspend.BLUETOOTH_SUSPEND_STOP_LE_SCAN, false);
             var pauseAdvertisement =
-                    SystemProperties.getBoolean(
-                            AdapterSuspend.BLUETOOTH_SUSPEND_PAUSE_ADVERTISEMENT, false);
+                    Flags.adapterSuspendAdvertisement()
+                            && SystemProperties.getBoolean(
+                                    AdapterSuspend.BLUETOOTH_SUSPEND_PAUSE_ADVERTISEMENT, false);
             if (disconnectAcl || scanModeNone || stopLeScan || pauseAdvertisement) {
                 mAdapterSuspend =
                         Optional.of(
@@ -1444,6 +1446,7 @@ public class AdapterService extends Service {
             case BluetoothProfile.VAP_SERVER -> new VapServerService(this);
             case BluetoothProfile.VOLUME_CONTROL -> new VolumeControlService(this);
             case BluetoothProfile.LE_AUDIO_PERIPHERAL -> new LeAudioPeripheralService(this);
+            case BluetoothProfile.TMAP_SERVER -> new LeAudioTmapService(this);
             default -> throw new IllegalArgumentException(getProfileName(id));
         };
     }
@@ -4708,7 +4711,9 @@ public class AdapterService extends Service {
 
     /** Handle Bluetooth app state when active device changes for a given {@code profile}. */
     public void handleActiveDeviceChange(int profile, BluetoothDevice device) {
-        mActiveDeviceManager.profileActiveDeviceChanged(profile, device);
+        if (!Flags.admCentralizeActiveDeviceHandling()) {
+            mActiveDeviceManager.profileActiveDeviceChanged(profile, device);
+        }
         mSilenceDeviceManager.profileActiveDeviceChanged(profile, device);
         mPhonePolicy.ifPresent(policy -> policy.profileActiveDeviceChanged(profile, device));
     }

@@ -46,6 +46,7 @@
 #include "le_audio_health_status.h"
 #include "le_audio_log_history.h"
 #include "le_audio_types.h"
+#include "le_audio_utils.h"
 #include "osi/include/alarm.h"
 #include "osi/include/osi.h"
 #include "osi/include/properties.h"
@@ -2998,7 +2999,8 @@ private:
                  ase->id, ase->cis_id, ToString(ase->state));
       conf.ase_id = ase->id;
       conf.target_latency = ase->target_latency;
-      conf.target_phy = group->GetTargetPhy(ase->direction);
+      conf.target_phy =
+              le_audio::utils::GetTargetPhyFromPreferredPhy(group->GetPhyBitmask(ase->direction));
       log::verbose("conf.target_phy:  0x{:02x}", static_cast<int>(conf.target_phy));
       conf.codec_id = ase->codec_config.id;
 
@@ -3243,9 +3245,11 @@ private:
         break;
       }
       case AseState::BTA_LE_AUDIO_ASE_STATE_QOS_CONFIGURED:
-        log::verbose("Reconfiguring from QoS to Codec Configured group_id: {}", group->group_id_);
+        log::verbose("Reconfiguring ase {} from QoS to Codec Configured group_id: {}", ase->id,
+                     group->group_id_);
         SetAseState(leAudioDevice, ase, AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED);
         group->PrintDebugState();
+
         FALLTHROUGH_INTENDED;
       case AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED: {
         /* Received Configured in Configured state. This could be done
@@ -3312,7 +3316,14 @@ private:
              * Also it can happen, when second set member is adding while the other is in
              * Streaming or QoS Configured state.
              */
-            if (!PrepareAndSendConfigQos(group, leAudioDevice)) {
+            bool qos_succeed = false;
+            if (com_android_bluetooth_flags_leaudio_fix_qos_reconfiguration()) {
+              qos_succeed = PrepareAndSendQoSToTheGroup(group);
+            } else {
+              qos_succeed = PrepareAndSendConfigQos(group, leAudioDevice);
+            }
+
+            if (!qos_succeed) {
               log::warn("Could not trigger QoS configured state for group_id: {} device: {}",
                         group->group_id_, leAudioDevice->address_);
               return;

@@ -26,16 +26,22 @@
 
 #include <string>
 
+#include "hci/controller.h"
 #include "internal_include/bt_target.h"
 #include "internal_include/stack_config.h"
+#include "main/shim/entry.h"
 #include "main/shim/helpers.h"
 #include "osi/include/allocator.h"
 #include "stack/arbiter/acl_arbiter.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/connection_manager/connection_manager.h"
 #include "stack/gatt/gatt_int.h"
+#include "stack/include/acl_api.h"
+#include "stack/include/bt_types.h"
 #include "stack/include/btm_client_interface.h"
+#include "stack/include/btu_hcif.h"
 #include "stack/include/gatt_api.h"
+#include "stack/include/hcimsgs.h"
 #include "stack/include/l2cap_interface.h"
 
 using namespace bluetooth;
@@ -59,8 +65,8 @@ namespace bluetooth::stack {
  *
  ******************************************************************************/
 bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                         tBTM_BLE_CONN_TYPE connection_type, bool opportunistic,
-                         uint16_t preferred_mtu, bool prefer_relax_mode, bool auto_mtu_enabled) {
+                         tBTM_BLE_CONN_TYPE connection_type, uint16_t preferred_mtu,
+                         bool prefer_relax_mode, bool auto_mtu_enabled) {
   /* Make sure app is registered */
   tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
   if (!p_reg) {
@@ -75,7 +81,7 @@ bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_
     return false;
   }
 
-  if (opportunistic) {
+  if (connection_type == BTM_BLE_OPPORTUNISTIC) {
     log::info("Registered for opportunistic connection gatt_if={}", gatt_if);
     return true;
   }
@@ -156,9 +162,8 @@ bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_
 }
 
 bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr,
-                         tBTM_BLE_CONN_TYPE connection_type, bool opportunistic) {
-  return leConnectionConnect(gatt_if, bd_addr, BLE_ADDR_PUBLIC, connection_type, opportunistic, 0,
-                             false, false);
+                         tBTM_BLE_CONN_TYPE connection_type) {
+  return leConnectionConnect(gatt_if, bd_addr, BLE_ADDR_PUBLIC, connection_type, 0, false, false);
 }
 
 /*******************************************************************************
@@ -220,23 +225,47 @@ bool leConnectionCancelConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, bool
   return true;
 }
 
-void leConnectionUpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode, uint16_t subrate_max,
-                                     uint16_t subrate_min, uint16_t cont_num) {
-  if (!gatt_cb.subrate_mode_config.contains(subrate_mode)) {
-    log::warn("This is a unknown subrate mode to update: {}", subrate_mode);
-    return;
+tGATT_STATUS leConnectionUpdateSubrateConfig(tGATT_IF gatt_if, const RawAddress& bd_addr,
+                                             tGATT_SUBRATE_MODE subrate_mode, uint16_t subrate_max,
+                                             uint16_t subrate_min, uint16_t cont_num) {
+  log::info("gatt_if:{} addr:{}, subrate_mode:{}", gatt_if, bd_addr, subrate_mode);
+
+  /* Make sure app is registered */
+  tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
+  if (!p_reg) {
+    log::error("Unable to find registered app gatt_if={}", gatt_if);
+    return GATT_ERROR;
   }
-  if (subrate_min > subrate_max || cont_num >= subrate_max || subrate_min > 500 ||
-      subrate_max > 500) {
-    log::error("Invalid subrate parameter to update: {} {} {} {}", subrate_mode, subrate_max,
-               subrate_min, cont_num);
-    return;
+
+  if (!get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
+    return GATT_ERROR;
   }
-  log::debug("Update subrate mode config: {} {} {} {}", subrate_mode, subrate_max, subrate_min,
-             cont_num);
-  gatt_cb.subrate_mode_config[subrate_mode].subrate_max = subrate_max;
-  gatt_cb.subrate_mode_config[subrate_mode].subrate_min = subrate_min;
-  gatt_cb.subrate_mode_config[subrate_mode].cont_num = cont_num;
+
+  if (subrate_max != 0 || subrate_min != 0 || cont_num != 0) {
+    log::info("update subrate parameters: {} {} {}", subrate_max, subrate_min, cont_num);
+
+    if (!gatt_cb.subrate_mode_config.contains(subrate_mode)) {
+      log::warn("This is a unknown subrate mode to update: {}", subrate_mode);
+    } else {
+      if (subrate_min > subrate_max || cont_num >= subrate_max || subrate_min > 500 ||
+          subrate_max > 500) {
+        log::error("Invalid subrate parameter to update: {} {} {} {}", subrate_mode, subrate_max,
+                   subrate_min, cont_num);
+      } else {
+        log::debug("Update subrate mode config: {} {} {} {}", subrate_mode, subrate_max,
+                   subrate_min, cont_num);
+        gatt_cb.subrate_mode_config[subrate_mode].subrate_max = subrate_max;
+        gatt_cb.subrate_mode_config[subrate_mode].subrate_min = subrate_min;
+        gatt_cb.subrate_mode_config[subrate_mode].cont_num = cont_num;
+      }
+    }
+  }
+
+  if (!stack::leConnectionSubrateModeRequest(gatt_if, bd_addr, subrate_mode)) {
+    return GATT_ERROR;
+  }
+
+  return GATT_SUCCESS;
 }
 
 bool leConnectionSubrateModeRequest(tGATT_IF client_if, const RawAddress& bd_addr,
@@ -272,6 +301,112 @@ void leConnectionSubrateRequest(const RawAddress& bd_addr, uint16_t subrate_min,
                                                          max_latency, cont_num, timeout)) {
     log::warn("Unable to set L2CAP ble subrating peer:{}", bd_addr);
   }
+}
+
+void leConnectionUpdate(const RawAddress& bd_addr, uint16_t min_interval, uint16_t max_interval,
+                        uint16_t latency, uint16_t timeout, uint16_t min_ce_len,
+                        uint16_t max_ce_len) {
+  stack::l2cap::get_interface().L2CA_AdjustConnectionIntervals(&min_interval, &max_interval,
+                                                               BTM_BLE_CONN_INT_MIN);
+
+  if (get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
+    if (!stack::l2cap::get_interface().L2CA_UpdateBleConnParams(
+                bd_addr, min_interval, max_interval, latency, timeout, min_ce_len, max_ce_len)) {
+      log::error("Update connection parameters failed!");
+    }
+  } else {
+    get_btm_client_interface().ble.BTM_BleSetPrefConnParams(bd_addr, min_interval, max_interval,
+                                                            latency, timeout);
+  }
+}
+
+void leConnectionSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
+                        uint16_t phy_options) {
+  if (!get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
+    log::info(
+            "Unable to set phy preferences because no le acl is connected to "
+            "device");
+    return;
+  }
+
+  uint8_t all_phys = 0;
+  if (tx_phys == 0) {
+    all_phys &= 0x01;
+  }
+  if (rx_phys == 0) {
+    all_phys &= 0x02;
+  }
+
+  uint16_t handle = get_btm_client_interface().peer.BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
+
+  // checking if local controller supports it!
+  if (!bluetooth::shim::GetController()->SupportsBle2mPhy() &&
+      !bluetooth::shim::GetController()->SupportsBleCodedPhy()) {
+    log::info("Local controller unable to support setting of le phy parameters");
+    gatt_notify_phy_updated(static_cast<tHCI_STATUS>(GATT_REQ_NOT_SUPPORTED), handle, tx_phys,
+                            rx_phys);
+    return;
+  }
+
+  if (!acl_peer_supports_ble_2m_phy(handle) && !acl_peer_supports_ble_coded_phy(handle)) {
+    log::info("Remote device unable to support setting of le phy parameter");
+    gatt_notify_phy_updated(static_cast<tHCI_STATUS>(GATT_REQ_NOT_SUPPORTED), handle, tx_phys,
+                            rx_phys);
+    return;
+  }
+
+  constexpr uint8_t kLen = HCIC_PARAM_SIZE_BLE_SET_PHY;
+  uint8_t data[kLen];
+  uint8_t* pp = data;
+  UINT16_TO_STREAM(pp, handle);
+  UINT8_TO_STREAM(pp, all_phys);
+  UINT8_TO_STREAM(pp, tx_phys);
+  UINT8_TO_STREAM(pp, rx_phys);
+  UINT16_TO_STREAM(pp, phy_options);
+  btu_hcif_send_cmd_with_cb(HCI_BLE_SET_PHY, data, kLen, base::BindOnce([](uint8_t*, uint16_t) {}));
+}
+
+static void read_phy_cb(base::OnceCallback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb,
+                        uint8_t* data, uint16_t len) {
+  uint8_t status, tx_phy, rx_phy;
+  uint16_t handle;
+
+  log::assert_that(len == 5, "Received bad response length:{}", len);
+  uint8_t* pp = data;
+  STREAM_TO_UINT8(status, pp);
+  STREAM_TO_UINT16(handle, pp);
+  handle = handle & 0x0FFF;
+  STREAM_TO_UINT8(tx_phy, pp);
+  STREAM_TO_UINT8(rx_phy, pp);
+
+  std::move(cb).Run(tx_phy, rx_phy, status);
+}
+
+void leConnectionReadPhy(
+        const RawAddress& bd_addr,
+        base::OnceCallback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb) {
+  if (!get_btm_client_interface().peer.BTM_IsAclConnectionUp(bd_addr, BT_TRANSPORT_LE)) {
+    log::error("Wrong mode: no LE link exist or LE not supported");
+    std::move(cb).Run(0, 0, HCI_ERR_NO_CONNECTION);
+    return;
+  }
+
+  // The connection PHY is always LE_1M when the controller supports
+  // neither LE_2M nor LE_CODED PHYs.
+  if (!bluetooth::shim::GetController()->SupportsBle2mPhy() &&
+      !bluetooth::shim::GetController()->SupportsBleCodedPhy()) {
+    std::move(cb).Run(1, 1, HCI_SUCCESS);
+    return;
+  }
+
+  uint16_t handle = get_btm_client_interface().peer.BTM_GetHCIConnHandle(bd_addr, BT_TRANSPORT_LE);
+
+  constexpr uint8_t kLen = HCIC_PARAM_SIZE_BLE_READ_PHY;
+  uint8_t data[kLen];
+  uint8_t* pp = data;
+  UINT16_TO_STREAM(pp, handle);
+  btu_hcif_send_cmd_with_cb(HCI_BLE_READ_PHY, data, kLen,
+                            base::BindOnce(&read_phy_cb, std::move(cb)));
 }
 
 }  // namespace bluetooth::stack

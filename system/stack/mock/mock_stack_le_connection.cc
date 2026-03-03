@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <string>
 
+#include "base/functional/bind.h"
 #include "test/common/mock_functions.h"
 
 // Original usings
@@ -42,6 +43,9 @@ struct leConnectionSubrateModeRequest leConnectionSubrateModeRequest;
 struct leConnectionCancelConnect leConnectionCancelConnect;
 struct leConnectionConnect leConnectionConnect;
 struct leConnectionSubrateRequest leConnectionSubrateRequest;
+struct leConnectionUpdate leConnectionUpdate;
+struct leConnectionSetPhy leConnectionSetPhy;
+struct leConnectionReadPhy leConnectionReadPhy;
 }  // namespace stack_le_connection
 }  // namespace mock
 }  // namespace test
@@ -61,11 +65,12 @@ bool leConnectionConnect::return_value = false;
 
 namespace bluetooth::stack {
 // Mocked functions, if any
-void leConnectionUpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode, uint16_t subrate_max,
-                                     uint16_t subrate_min, uint16_t cont_num) {
+tGATT_STATUS leConnectionUpdateSubrateConfig(tGATT_IF gatt_if, const RawAddress& bd_addr,
+                                             tGATT_SUBRATE_MODE subrate_mode, uint16_t subrate_max,
+                                             uint16_t subrate_min, uint16_t cont_num) {
   inc_func_call_count(__func__);
-  test::mock::stack_le_connection::leConnectionUpdateSubrateConfig(subrate_mode, subrate_max,
-                                                                   subrate_min, cont_num);
+  return test::mock::stack_le_connection::leConnectionUpdateSubrateConfig(
+          gatt_if, bd_addr, subrate_mode, subrate_max, subrate_min, cont_num);
 }
 bool leConnectionSubrateModeRequest(tGATT_IF gatt_if, const RawAddress& bd_addr,
                                     tGATT_SUBRATE_MODE subrate_mode) {
@@ -78,18 +83,18 @@ bool leConnectionCancelConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, bool
   return test::mock::stack_le_connection::leConnectionCancelConnect(gatt_if, bd_addr, is_direct);
 }
 bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr, tBLE_ADDR_TYPE addr_type,
-                         tBTM_BLE_CONN_TYPE connection_type, bool opportunistic,
-                         uint16_t preferred_mtu, bool prefer_relax_mode, bool auto_mtu_enabled) {
+                         tBTM_BLE_CONN_TYPE connection_type, uint16_t preferred_mtu,
+                         bool prefer_relax_mode, bool auto_mtu_enabled) {
   inc_func_call_count(__func__);
-  return test::mock::stack_le_connection::leConnectionConnect(
-          gatt_if, bd_addr, addr_type, connection_type, opportunistic, preferred_mtu,
-          prefer_relax_mode, auto_mtu_enabled);
+  return test::mock::stack_le_connection::leConnectionConnect(gatt_if, bd_addr, addr_type,
+                                                              connection_type, preferred_mtu,
+                                                              prefer_relax_mode, auto_mtu_enabled);
 }
 bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr,
-                         tBTM_BLE_CONN_TYPE connection_type, bool opportunistic) {
+                         tBTM_BLE_CONN_TYPE connection_type) {
   inc_func_call_count(__func__);
   return test::mock::stack_le_connection::leConnectionConnect(gatt_if, bd_addr, 0, connection_type,
-                                                              opportunistic, 0, false, false);
+                                                              0, false, false);
 }
 
 void leConnectionSubrateRequest(const RawAddress& bd_addr, uint16_t subrate_min,
@@ -98,6 +103,26 @@ void leConnectionSubrateRequest(const RawAddress& bd_addr, uint16_t subrate_min,
   inc_func_call_count(__func__);
   return test::mock::stack_le_connection::leConnectionSubrateRequest(
           bd_addr, subrate_min, subrate_max, max_latency, cont_num, timeout);
+}
+
+void leConnectionUpdate(const RawAddress& bd_addr, uint16_t min_interval, uint16_t max_interval,
+                        uint16_t latency, uint16_t timeout, uint16_t min_ce_len,
+                        uint16_t max_ce_len) {
+  inc_func_call_count(__func__);
+  test::mock::stack_le_connection::leConnectionUpdate(bd_addr, min_interval, max_interval, latency,
+                                                      timeout, min_ce_len, max_ce_len);
+}
+
+void leConnectionSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
+                        uint16_t phy_options) {
+  inc_func_call_count(__func__);
+  test::mock::stack_le_connection::leConnectionSetPhy(bd_addr, tx_phys, rx_phys, phy_options);
+}
+void leConnectionReadPhy(
+        const RawAddress& bd_addr,
+        base::OnceCallback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb) {
+  inc_func_call_count(__func__);
+  test::mock::stack_le_connection::leConnectionReadPhy(bd_addr, std::move(cb));
 }
 }  // namespace bluetooth::stack
 

@@ -62,7 +62,7 @@ tGATT_IF Gatt_Register(Uuid& p_app_uuid128, stack::tGATT_CBACK* p_cb_info,
   Gatt_if = stack::appRegister(p_app_uuid128, "gatt_qual_service", p_cb_info,
                           eatt_support);
   printf("%s:: Gatt_if=%d\n", __FUNCTION__, Gatt_if);
-  if (!get_btm_client_interface().security.BTM_SetSecurityLevel(
+  if (!get_security_client_interface().BTM_SetSecurityLevel(
           TRUE, "gatt_tool", BTM_SEC_PROTO_L2CAP, 0, 0x1f, 0, 0)) {
     log::info("Error:: BTM_SetSecurityLevel failed");
     return FALSE;
@@ -84,8 +84,7 @@ bool Gatt_Connect(tGATT_IF gatt_if, RawAddress bd_addr, bool is_direct,
   bool Ret = 0;
   Ret = stack::leConnectionConnect(
       gatt_if, bd_addr,
-      is_direct ? BTM_BLE_DIRECT_CONNECTION : BTM_BLE_BKG_CONNECT_ALLOW_LIST,
-      false);
+      is_direct ? BTM_BLE_DIRECT_CONNECTION : BTM_BLE_BKG_CONNECT_ALLOW_LIST);
   printf("%s::Ret=%d,gatt_if=%d, is_direct=%d \n", __FUNCTION__, Ret, gatt_if,
          is_direct);
   return Ret;

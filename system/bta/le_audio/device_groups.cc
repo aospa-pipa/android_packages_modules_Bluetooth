@@ -853,23 +853,6 @@ uint8_t LeAudioDeviceGroup::GetPhyBitmask(uint8_t direction) const {
   return phy_bitfield;
 }
 
-uint8_t LeAudioDeviceGroup::GetTargetPhy(uint8_t direction) const {
-  uint8_t phy_bitfield = GetPhyBitmask(direction);
-  log::info("GetTargetPhy phy_bitfield: {}", phy_bitfield);
-
-  // prefer to use HDT if supported, and then 2M
-  bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
-  if (hdt_enabled && (phy_bitfield & bluetooth::hci::kIsoCigPhyHdt)) {
-    return types::kTargetPhyHdt;
-  } else if (phy_bitfield & bluetooth::hci::kIsoCigPhy2M) {
-    return types::kTargetPhy2M;
-  } else if (phy_bitfield & bluetooth::hci::kIsoCigPhy1M) {
-    return types::kTargetPhy1M;
-  } else {
-    return 0;
-  }
-}
-
 bool LeAudioDeviceGroup::GetPresentationDelay(uint32_t* delay, uint8_t direction) const {
   uint32_t common_delay_min = 0;
   uint32_t common_delay_max = 0xFFFFFF; /* 3 Octects  */
@@ -2194,7 +2177,8 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
     }
     if (ase_confs.empty()) {
       if (direction == types::kLeAudioDirectionSource &&
-          requirements.source_requirements->size() > 0) {
+          (requirements.source_requirements.has_value() &&
+           requirements.source_requirements->size() > 0)) {
         log::debug("No configurations for Source direction but the requirement was found.");
         return false;
       }
@@ -2203,13 +2187,16 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
     }
 
     // Verify the direction requirements.
-    if (direction == types::kLeAudioDirectionSink && requirements.sink_requirements->size() == 0) {
+    if (direction == types::kLeAudioDirectionSink &&
+        (!requirements.sink_requirements.has_value() ||
+         requirements.sink_requirements->size() == 0)) {
       log::debug("There is no requirement for Sink direction.");
       return false;
     }
 
     if (direction == types::kLeAudioDirectionSource &&
-        requirements.source_requirements->size() == 0) {
+        (!requirements.source_requirements.has_value() ||
+         requirements.source_requirements->size() == 0)) {
       log::debug("There is no requirement for source direction.");
       return false;
     }
@@ -2892,7 +2879,7 @@ void LeAudioDeviceGroup::Enable(int gatt_if) {
               bluetooth::common::ToString(GetState()), address);
 
     if (connection_state == DeviceConnectState::DISCONNECTED) {
-      BTA_GATTC_Open(gatt_if, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
+      BTA_GATTC_Open(gatt_if, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS);
       dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
     }
   }
@@ -2925,7 +2912,7 @@ void LeAudioDeviceGroup::AddToAllowListNotConnectedGroupMembers(int gatt_if) {
      * available members.
      */
     BTA_GATTC_CancelOpen(gatt_if, address, false);
-    BTA_GATTC_Open(gatt_if, address, BTM_BLE_DIRECT_CONNECTION, false);
+    BTA_GATTC_Open(gatt_if, address, BTM_BLE_DIRECT_CONNECTION);
     dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
   }
 }
@@ -2938,7 +2925,7 @@ void LeAudioDeviceGroup::ApplyReconnectionMode(int gatt_if) {
     }
     BTA_GATTC_CancelOpen(gatt_if, dev->address_, false);
     BTA_GATTC_Open(gatt_if, dev->address_,
-                   BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
+                   BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS);
     log::info("Group {} in state {}. Adding {} to default reconnection mode", group_id_,
               bluetooth::common::ToString(GetState()), dev->address_);
     dev->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <base/functional/callback_forward.h>
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_transport.h>
@@ -38,20 +39,17 @@ namespace bluetooth::stack {
  *                  connection_type: connection type
  *                  transport : Physical transport for GATT connection
  *                              (BR/EDR or LE)
- *                  opportunistic: will not keep device connected if other apps
- *                      disconnect, will not update connected apps counter, when
- *                      disconnected won't cause physical disconnection.
  *
  * Returns          true if connection started; else false
  *
  ******************************************************************************/
 [[nodiscard]] bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr,
                                        tBLE_ADDR_TYPE addr_type, tBTM_BLE_CONN_TYPE connection_type,
-                                       bool opportunistic, uint16_t preferred_mtu,
-                                       bool prefer_relax_mode, bool auto_mtu_enabled);
+                                       uint16_t preferred_mtu, bool prefer_relax_mode,
+                                       bool auto_mtu_enabled);
 
 [[nodiscard]] bool leConnectionConnect(tGATT_IF gatt_if, const RawAddress& bd_addr,
-                                       tBTM_BLE_CONN_TYPE connection_type, bool opportunistic);
+                                       tBTM_BLE_CONN_TYPE connection_type);
 
 /*******************************************************************************
  *
@@ -97,8 +95,10 @@ bool leConnectionSubrateModeRequest(tGATT_IF client_if, const RawAddress& bd_add
  *                  Subrate parameters
  *
  ******************************************************************************/
-void leConnectionUpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode, uint16_t subrate_max,
-                                     uint16_t subrate_min, uint16_t cont_num);
+tGATT_STATUS leConnectionUpdateSubrateConfig(tGATT_IF gatt_if, const RawAddress& bd_addr,
+                                             tGATT_SUBRATE_MODE subrate_mode,
+                                             uint16_t subrate_max = 0, uint16_t subrate_min = 0,
+                                             uint16_t cont_num = 0);
 
 /*******************************************************************************
  *
@@ -119,5 +119,44 @@ void leConnectionUpdateSubrateConfig(tGATT_SUBRATE_MODE subrate_mode, uint16_t s
 void leConnectionSubrateRequest(const RawAddress& bd_addr, uint16_t subrate_min,
                                 uint16_t subrate_max, uint16_t max_latency, uint16_t cont_num,
                                 uint16_t timeout);
+
+/*******************************************************************************
+ *
+ * Function         leConnectionUpdate
+ *
+ * Description      Update connection parameters.
+ *
+ * Parameters:      bd_addr       - BD address of the peer
+ *                  min_interval  - minimum connection interval
+ *                  max_interval  - maximum connection interval
+ *                  latency       - peripheral latency
+ *                  timeout       - supervision timeout
+ *                  min_ce_len    - minimum connection event length
+ *                  max_ce_len    - maximum connection event length
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void leConnectionUpdate(const RawAddress& bd_addr, uint16_t min_interval, uint16_t max_interval,
+                        uint16_t latency, uint16_t timeout, uint16_t min_ce_len,
+                        uint16_t max_ce_len);
+
+/**
+ * To set PHY preferences for specified LE connection
+ *
+ * @param bd_addr remote device address
+ * @param tx_phys preferred transmit PHYs
+ * @param rx_phys preferred receive PHYs
+ * @param phy_options PHY options
+ */
+void leConnectionSetPhy(const RawAddress& bd_addr, uint8_t tx_phys, uint8_t rx_phys,
+                        uint16_t phy_options);
+
+/**
+ * To read the current PHYs for specified LE connection
+ */
+void leConnectionReadPhy(
+        const RawAddress& bd_addr,
+        base::OnceCallback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb);
 
 }  // namespace bluetooth::stack

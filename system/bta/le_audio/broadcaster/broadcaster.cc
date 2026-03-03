@@ -397,7 +397,7 @@ public:
         return false;
       };
 
-      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+      if (com_android_bluetooth_flags_leaudio_broadcast_extend_audio_active_state()) {
         auto announcement = broadcast->GetBroadcastAnnouncement();
         bool broadcast_update = false;
         for (auto& subgroup : announcement.subgroup_configs) {
@@ -489,7 +489,7 @@ public:
       }
 
       // Append the Audio Active State
-      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+      if (com_android_bluetooth_flags_leaudio_broadcast_extend_audio_active_state()) {
         ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeAudioActiveState,
                 audio_active_state);
       }
@@ -683,7 +683,7 @@ public:
       }
 
       // Append the Audio Active State
-      if (com::android::bluetooth::flags::leaudio_broadcast_extend_audio_active_state()) {
+      if (com_android_bluetooth_flags_leaudio_broadcast_extend_audio_active_state()) {
         ltv.Add(bluetooth::le_audio::types::kLeAudioMetadataTypeAudioActiveState, false);
       }
 
@@ -998,7 +998,7 @@ public:
 
   void SetBigChannelMapClassification(uint8_t action, const RawAddress& sink_addr,
                                       uint32_t broadcast_id) override {
-    if (!com::android::bluetooth::flags::leaudio_broadcast_source_channel_map_classification()) {
+    if (!com_android_bluetooth_flags_leaudio_broadcast_source_channel_map_classification()) {
       return;
     }
 

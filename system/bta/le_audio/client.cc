@@ -100,6 +100,7 @@
 #include "stack/include/hci_error_code.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/main_thread.h"
+#include "stack/include/stack_le_connection.h"
 #include "state_machine.h"
 #include "storage_helper.h"
 
@@ -2500,7 +2501,7 @@ public:
 
     LeAudioDevice* leAudioDevice = leAudioDevices_.FindByAddress(address);
     if (!leAudioDevice) {
-      if (!get_btm_client_interface().security.BTM_IsBonded(address, BT_TRANSPORT_LE)) {
+      if (!get_security_client_interface().BTM_IsBonded(address, BT_TRANSPORT_LE)) {
         log::error("Connecting  {} when not bonded", address);
         callbacks_->OnConnectionState(ConnectionState::DISCONNECTED, address);
         bluetooth::le_audio::MetricsCollector::Get()->OnConnectionStateChanged(
@@ -2539,7 +2540,7 @@ public:
               bluetooth::le_audio::ConnectionStatus::SUCCESS);
     }
 
-    BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION, false);
+    BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION);
   }
 
   std::vector<RawAddress> GetGroupDevices(const int group_id) override {
@@ -3108,10 +3109,10 @@ public:
     if (group->IsAnyDeviceConnected()) {
       log::info("Group {} in connected state. Adding {} to allow list", leAudioDevice->group_id_,
                 address);
-      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_ALLOW_LIST, false);
+      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_ALLOW_LIST);
     } else {
       log::info("Adding {} to background connect", address);
-      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
+      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS);
     }
   }
 
@@ -3268,15 +3269,15 @@ public:
      * for other applications which are using background connect.
      */
     BTA_GATTC_CancelOpen(gatt_if_, address, false);
-    BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS, false);
+    BTA_GATTC_Open(gatt_if_, address, BTM_BLE_BKG_CONNECT_TARGETED_ANNOUNCEMENTS);
 
     bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
     if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
       log::info("{} set preferred PHY to HDT", address);
-      get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_HDT, PHY_HDT, 0);
+      stack::leConnectionSetPhy(address, PHY_HDT, PHY_HDT, 0);
     } else if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
       log::info("{} set preferred PHY to 2M", address);
-      get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
+      stack::leConnectionSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
     }
 
     get_btm_client_interface().peer.BTM_RequestPeerSCA(leAudioDevice->address_, transport);
@@ -3293,7 +3294,7 @@ public:
       /* Check if the device is in allow list and update the flag */
       leAudioDevice->UpdateDeviceAllowlistFlag();
     }
-    if (get_btm_client_interface().security.BTM_SecIsLeSecurityPending(address)) {
+    if (get_security_client_interface().BTM_SecIsLeSecurityPending(address)) {
       /* if security collision happened, wait for encryption done
        * (BTA_GATTC_ENC_CMPL_CB_EVT) */
       log::warn("{} Security Collision. Security is not completed", address);
@@ -3301,13 +3302,13 @@ public:
     }
 
     /* verify bond */
-    if (get_btm_client_interface().security.BTM_IsEncrypted(address, BT_TRANSPORT_LE)) {
+    if (get_security_client_interface().BTM_IsEncrypted(address, BT_TRANSPORT_LE)) {
       /* if link has been encrypted */
       OnEncryptionComplete(address, tBTM_STATUS::BTM_SUCCESS);
       return;
     }
 
-    tBTM_STATUS result = get_btm_client_interface().security.BTM_SetEncryption(
+    tBTM_STATUS result = get_security_client_interface().BTM_SetEncryption(
             address, BT_TRANSPORT_LE, nullptr, nullptr, BTM_BLE_SEC_ENCRYPT);
 
     log::info("Encryption required for {}. Request result: 0x{:02x}", address, result);
@@ -3451,10 +3452,10 @@ public:
       bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
       if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
         log::info("{} set preferred PHY to HDT", address);
-        get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_HDT, PHY_HDT, 0);
+        stack::leConnectionSetPhy(address, PHY_HDT, PHY_HDT, 0);
       } else if (bluetooth::shim::GetController()->SupportsBle2mPhy()) {
         log::info("{} set preferred PHY to 2M", address);
-        get_btm_client_interface().ble.BTM_BleSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
+        stack::leConnectionSetPhy(address, PHY_LE_2M, PHY_LE_2M, 0);
       }
     }
 
@@ -3552,7 +3553,7 @@ public:
 
     if (group != nullptr) {
       leAudioDevice->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
-      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION, false);
+      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION);
     } else {
       leAudioDevice->SetConnectionState(DeviceConnectState::DISCONNECTED);
     }
@@ -3693,7 +3694,7 @@ public:
       leAudioDevice->SetConnectionState(DeviceConnectState::CONNECTING_AUTOCONNECT);
 
       /* If timeout try to reconnect for 30 sec.*/
-      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION, false);
+      BTA_GATTC_Open(gatt_if_, address, BTM_BLE_DIRECT_CONNECTION);
       return;
     }
 
@@ -8083,10 +8084,10 @@ private:
       bool hdt_enabled = osi_property_get_bool("persist.vendor.qcom.bluetooth.hdt.enabled", false);
       if (hdt_enabled && bluetooth::shim::GetController()->SupportsBleHDTPhy()) {
         log::info("{} set preferred PHY to HDT", tmpDevice->address_);
-        get_btm_client_interface().ble.BTM_BleSetPhy(tmpDevice->address_, PHY_HDT,
+        stack::leConnectionSetPhy(tmpDevice->address_, PHY_HDT,
                                                      asymmetric ? PHY_LE_1M : PHY_HDT, 0);
       } else {
-        get_btm_client_interface().ble.BTM_BleSetPhy(tmpDevice->address_, PHY_LE_2M,
+        stack::leConnectionSetPhy(tmpDevice->address_, PHY_LE_2M,
                                                      asymmetric ? PHY_LE_1M : PHY_LE_2M, 0);
       }
       tmpDevice->acl_asymmetric_ = asymmetric;
@@ -8133,7 +8134,7 @@ void le_audio_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
 
     case BTA_GATTC_ENC_CMPL_CB_EVT: {
       tBTM_STATUS encryption_status;
-      if (get_btm_client_interface().security.BTM_IsEncrypted(p_data->enc_cmpl.remote_bda,
+      if (get_security_client_interface().BTM_IsEncrypted(p_data->enc_cmpl.remote_bda,
                                                               BT_TRANSPORT_LE)) {
         encryption_status = tBTM_STATUS::BTM_SUCCESS;
       } else {
