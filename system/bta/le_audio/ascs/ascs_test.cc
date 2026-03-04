@@ -65,7 +65,7 @@ public:
 
   virtual void SetUp(void) override {
     __android_log_set_minimum_priority(ANDROID_LOG_VERBOSE);
-    com::android::bluetooth::flags::provider_->reset_flags();
+    com_android_bluetooth_flags_reset_flags();
 
     // Use peripheral role by default
     get_btm_client_interface().link_policy.BTM_GetRole = [](const RawAddress& /* remote_bd_addr */,
@@ -407,7 +407,7 @@ public:
     ON_CALL(asc_callbacks_, OnGetAseState(_, _)).WillByDefault([&]() { return state; });
     ON_CALL(gatt_server_interface_, SendRsp(_, _, GATT_SUCCESS, _))
             .WillByDefault([&](uint16_t /*conn_id*/, uint32_t /*trans_id*/, tGATT_STATUS status,
-                               tGATTS_RSP* p_msg) {
+                               std::unique_ptr<tGATTS_RSP> p_msg) {
               ASSERT_EQ(GATT_SUCCESS, status);
 
               // Detects response to CCC descriptor write request

@@ -242,6 +242,9 @@ public interface BluetoothProfile {
     @SystemApi
     int LE_AUDIO_PERIPHERAL = 33;
 
+    /** Telephony and Media Audio Profile Service */
+    @Hide int TMAP_SERVER = 39;
+
     /**
      * Gets the maximum profile ID.
      *
@@ -252,6 +255,10 @@ public interface BluetoothProfile {
     @Hide
     static int getMaxProfileId() {
         /* Return value dependent on feature flags */
+        if (Flags.leaudioCentralizeTmap()) {
+            return TMAP_SERVER;
+        }
+
         if (Flags.leaudioPeripheralFeature()) {
             return LE_AUDIO_PERIPHERAL;
         }
@@ -459,6 +466,7 @@ public interface BluetoothProfile {
             case PC_PROFILE -> "PC_PROFILE";
             case CC_SERVER -> "CC_SERVER";
             case VAP_SERVER -> "VAP_SERVER";
+            case TMAP_SERVER -> "TMAP_SERVER";
             default -> "UNKNOWN_PROFILE (" + profile + ")";
         };
     }

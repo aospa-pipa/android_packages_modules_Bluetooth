@@ -41,7 +41,7 @@ using ::bluetooth::os::WakelockManager;
 
 namespace bluetooth {
 static std::chrono::milliseconds get_gd_stack_timeout_ms(bool is_start) {
-  log::assert_that(!com::android::bluetooth::flags::unify_timeout_property(),
+  log::assert_that(!com_android_bluetooth_flags_unify_timeout_property(),
                    "unify_timeout_property is enabled");
   auto gd_timeout = os::GetSystemPropertyUint32(
           is_start ? "bluetooth.gd.start_timeout" : "bluetooth.gd.stop_timeout",
@@ -97,7 +97,7 @@ void StackImpl::StartEverything() {
     stack_thread_ = new os::Thread("gd_stack_thread", os::Thread::Priority::REAL_TIME);
     stack_handler_ = new os::Handler(stack_thread_);
 
-    if (!com::android::bluetooth::flags::threading_remove_management_thread()) {
+    if (!com_android_bluetooth_flags_threading_remove_management_thread()) {
       management_thread_ = new Thread("management_thread", Thread::Priority::NORMAL);
       management_handler_ = new Handler(management_thread_);
     }
@@ -105,7 +105,7 @@ void StackImpl::StartEverything() {
     WakelockManager::Get().Acquire();
   }
 
-  if (com::android::bluetooth::flags::threading_remove_management_thread()) {
+  if (com_android_bluetooth_flags_threading_remove_management_thread()) {
     this->handle_start_up();
   } else {
     std::promise<void> promise;
@@ -114,7 +114,7 @@ void StackImpl::StartEverything() {
                                                common::Unretained(this), std::move(promise)));
 
     std::chrono::milliseconds start_timeout;
-    if (!com::android::bluetooth::flags::unify_timeout_property()) {
+    if (!com_android_bluetooth_flags_unify_timeout_property()) {
       start_timeout = get_gd_stack_timeout_ms(/* is_start = */ true);
     } else {
       if (android::sysprop::bluetooth::Hardware::degraded_performance_mode().value_or(false) ||
@@ -178,7 +178,7 @@ void StackImpl::Stop() {
   stack_handler_->WaitUntilStopped(bluetooth::kHandlerStopTimeout);
   WakelockManager::Get().Acquire();
 
-  if (com::android::bluetooth::flags::threading_remove_management_thread()) {
+  if (com_android_bluetooth_flags_threading_remove_management_thread()) {
     this->handle_shut_down();
     WakelockManager::Get().Release();
     WakelockManager::Get().CleanUp();
@@ -189,7 +189,7 @@ void StackImpl::Stop() {
                                                common::Unretained(this), std::move(promise)));
 
     std::chrono::milliseconds stop_timeout;
-    if (com::android::bluetooth::flags::unify_timeout_property()) {
+    if (com_android_bluetooth_flags_unify_timeout_property()) {
       stop_timeout = std::chrono::milliseconds(12000);
     } else {
       stop_timeout = get_gd_stack_timeout_ms(/* is_start = */ true);

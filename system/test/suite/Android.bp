@@ -42,7 +42,6 @@ cc_defaults {
     shared_libs: [
         "vendor.qti.hardware.bluetooth_audio@2.1",
         "vendor.qti.hardware.bluetooth_audio@2.0",
-        "libPlatformProperties",
         "libaaudio",
         "libbinder_ndk",
         "libcrypto",
@@ -67,6 +66,7 @@ cc_defaults {
         "lib-bt-packets-avrcp",
         "lib-bt-packets-base",
         "libFraunhoferAAC",
+        "libPlatformProperties",
         "libbluetooth_log",
         "libbluetooth_metrics_mock",
         "libbluetooth_private_gatt_rs",

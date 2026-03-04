@@ -136,7 +136,7 @@ static void l2cble_on_certainly_connected(tL2C_LCB* p_lcb) {
   /* send callback */
   l2cu_process_fixed_chnl_resp(p_lcb);
 
-  if (com::android::bluetooth::flags::move_conn_mgr_callbacks()) {
+  if (com_android_bluetooth_flags_move_conn_mgr_callbacks()) {
     /* Remove the direct connection */
     connection_manager::on_connection_complete(p_lcb->remote_bd_addr);
   }
@@ -1488,7 +1488,7 @@ tL2CAP_LE_RESULT_CODE l2ble_sec_access_req(const RawAddress& bd_addr, uint16_t p
   p_buf->p_callback = p_callback;
   p_buf->p_ref_data = p_ref_data;
   fixed_queue_enqueue(p_lcb->le_sec_pending_q, p_buf);
-  tBTM_STATUS result = get_btm_client_interface().security.BTM_BleStartSecCheck(
+  tBTM_STATUS result = get_security_client_interface().BTM_BleStartSecCheck(
           bd_addr, psm, is_originator, &l2cble_sec_comp, p_ref_data);
 
   switch (result) {

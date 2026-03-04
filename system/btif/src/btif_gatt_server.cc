@@ -45,8 +45,8 @@
 #include "btif_status.h"
 #include "osi/include/allocator.h"
 #include "stack/include/bt_uuid16.h"
-#include "stack/include/btm_client_interface.h"
 #include "stack/include/main_thread.h"
+#include "stack/include/stack_le_connection.h"
 
 using base::BindOnce;
 using bluetooth::Uuid;
@@ -439,14 +439,15 @@ static BtStatus btif_gatts_send_indication(int /* server_if */, int attribute_ha
 
 static void btif_gatts_send_response_impl(int conn_id, int trans_id, int status,
                                           btgatt_response_t response) {
-  tGATTS_RSP rsp_struct;
-  btif_to_bta_response(&rsp_struct, &response);
+  std::unique_ptr<tGATTS_RSP> rsp_struct = std::make_unique<tGATTS_RSP>();
+  btif_to_bta_response(rsp_struct.get(), &response);
 
+  uint16_t handle = rsp_struct->attr_value.handle;
   BTA_GATTS_SendRsp(static_cast<tCONN_ID>(conn_id), trans_id, static_cast<tGATT_STATUS>(status),
-                    &rsp_struct);
+                    std::move(rsp_struct));
 
   auto callbacks = bt_gatt_callbacks;
-  HAL_CBACK(callbacks, server->response_confirmation_cb, 0, rsp_struct.attr_value.handle);
+  HAL_CBACK(callbacks, server->response_confirmation_cb, 0, handle);
 }
 
 static BtStatus btif_gatts_send_response(int conn_id, int trans_id, int status,
@@ -459,11 +460,7 @@ static BtStatus btif_gatts_send_response(int conn_id, int trans_id, int status,
 static BtStatus btif_gatts_set_preferred_phy(const RawAddress& bd_addr, uint8_t tx_phy,
                                              uint8_t rx_phy, uint16_t phy_options) {
   CHECK_BTGATT_INIT();
-  do_in_main_thread(BindOnce(
-          [](const RawAddress& bd_addr, uint8_t tx_phy, uint8_t rx_phy, uint16_t phy_options) {
-            get_btm_client_interface().ble.BTM_BleSetPhy(bd_addr, tx_phy, rx_phy, phy_options);
-          },
-          bd_addr, tx_phy, rx_phy, phy_options));
+  do_in_main_thread(BindOnce(&stack::leConnectionSetPhy, bd_addr, tx_phy, rx_phy, phy_options));
   return BtifStatus();
 }
 
@@ -471,7 +468,8 @@ static BtStatus btif_gatts_read_phy(
         const RawAddress& bd_addr,
         base::OnceCallback<void(uint8_t tx_phy, uint8_t rx_phy, uint8_t status)> cb) {
   CHECK_BTGATT_INIT();
-  do_in_main_thread(BindOnce(&BTM_BleReadPhy, bd_addr, jni_thread_wrapper(std::move(cb))));
+  do_in_main_thread(
+          BindOnce(&stack::leConnectionReadPhy, bd_addr, jni_thread_wrapper(std::move(cb))));
   return BtifStatus();
 }
 

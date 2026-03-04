@@ -31,7 +31,6 @@
 #include "stack/include/stack_le_connection.h"
 #include "stack/mock/mock_stack_acl.h"
 #include "stack/mock/mock_stack_btm_dev.h"
-#include "stack/mock/mock_stack_l2cap_api.h"
 #include "stack/mock/mock_stack_l2cap_ble.h"
 #include "stack/mock/mock_stack_l2cap_interface.h"
 #include "test/fake/fake_osi.h"
@@ -236,7 +235,7 @@ static void FuzzAsServer(FuzzedDataProvider& fdp) {
 
 static void ClientInit() {
   GattInit();
-  (void)stack::leConnectionConnect(s_AppIf, kDummyAddr, BTM_BLE_DIRECT_CONNECTION, false);
+  (void)stack::leConnectionConnect(s_AppIf, kDummyAddr, BTM_BLE_DIRECT_CONNECTION);
 }
 
 static void ClientCleanup() {

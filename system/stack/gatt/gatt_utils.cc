@@ -886,12 +886,12 @@ std::list<tGATT_SRV_LIST_ELEM>::iterator gatt_sr_find_i_rcb_by_handle(uint16_t h
 void gatt_sr_get_sec_info(const RawAddress& rem_bda, tBT_TRANSPORT transport,
                           tGATT_SEC_FLAG* p_sec_flag, uint8_t* p_key_size) {
   tGATT_SEC_FLAG flags = {};
-  flags.is_link_key_known = get_btm_client_interface().security.BTM_IsBonded(rem_bda, transport);
+  flags.is_link_key_known = get_security_client_interface().BTM_IsBonded(rem_bda, transport);
   flags.is_link_key_authed = btm_is_link_key_authed(rem_bda, transport);
-  flags.is_encrypted = get_btm_client_interface().security.BTM_IsEncrypted(rem_bda, transport);
+  flags.is_encrypted = get_security_client_interface().BTM_IsEncrypted(rem_bda, transport);
   flags.can_read_discoverable_characteristics = BTM_CanReadDiscoverableCharacteristics(rem_bda);
 
-  *p_key_size = get_btm_client_interface().security.BTM_BleReadSecKeySize(rem_bda);
+  *p_key_size = get_security_client_interface().BTM_BleReadSecKeySize(rem_bda);
   *p_sec_flag = flags;
 }
 /*******************************************************************************
@@ -1792,7 +1792,7 @@ void gatt_cleanup_upon_disc(const RawAddress& bda, tGATT_DISCONN_REASON reason,
     return;
   }
 
-  if (com::android::bluetooth::flags::gatt_offload_api()) {
+  if (com_android_bluetooth_flags_gatt_offload_api()) {
     /* Notify disconnection to offload HAL */
     gatt_offload_clear_sessions_by_acl_handle(gatt_get_acl_handle_by_tcb(p_tcb),
                                               bluetooth::hal::GATT_ERROR_NONE);

@@ -79,7 +79,6 @@ cc_test {
         ":TestMockJni",
         ":TestMockLegacyHciInterface",
         ":TestMockMainShimEntry",
-        ":TestMockStack",
         "shim/acl.cc",
         "shim/acl_api.cc",
         "shim/acl_interface.cc",
@@ -99,6 +98,7 @@ cc_test {
     static_libs: [
         "bluetooth_constants-cpp",
         "bluetooth_flags_c_lib_for_test",
+        "libPlatformProperties",
         "libbase",
         "libbluetooth_crypto_toolbox",
         "libbluetooth_gd",
@@ -109,6 +109,7 @@ cc_test {
         "libbluetooth_types",
         "libbt-btu-main-thread",
         "libbt-common",
+        "libbt-stack-mock",
         "libbtdevice",
         "libchrome",
         "libcom.android.sysprop.bluetooth.wrapped",
@@ -120,7 +121,6 @@ cc_test {
         "libosi",
     ],
     shared_libs: [
-        "libPlatformProperties",
         "libaconfig_storage_read_api_cc",
         "libbinder_ndk",
         "libcrypto",

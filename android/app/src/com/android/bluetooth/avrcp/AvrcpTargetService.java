@@ -375,8 +375,8 @@ public class AvrcpTargetService extends ProfileService {
      * <p>If a {@link com.android.bluetooth.audio_util.Image} is present in the {@link Metadata},
      * add its handle from {@link AvrcpCoverArtService}.
      */
-    Metadata getCurrentSongInfo() {
-        Metadata metadata = mMediaPlayerList.getCurrentSongInfo();
+    Metadata getSongInfo(String mediaId) {
+        Metadata metadata = mMediaPlayerList.getSongInfo(mediaId);
         if (mAvrcpCoverArtService != null && metadata.image != null) {
             metadata.image.setImageHandle(mAvrcpCoverArtService.storeImage(metadata.image));
         }
@@ -387,7 +387,7 @@ public class AvrcpTargetService extends ProfileService {
     PlayStatus getPlayState() {
         return PlayStatus.fromPlaybackState(
                 mMediaPlayerList.getCurrentPlayStatus(),
-                Long.parseLong(mMediaPlayerList.getCurrentSongInfo().duration));
+                Long.parseLong(mMediaPlayerList.getSongInfo("").duration));
     }
 
     /** Returns the current media ID of the active player from {@link MediaPlayerList}. */
@@ -395,7 +395,7 @@ public class AvrcpTargetService extends ProfileService {
         String id = mMediaPlayerList.getCurrentMediaId();
         if (id != null && !id.isEmpty()) return id;
 
-        Metadata song = mMediaPlayerList.getCurrentSongInfo();
+        Metadata song = mMediaPlayerList.getSongInfo("");
         if (song != null && !song.mediaId.isEmpty()) return song.mediaId;
 
         // We always want to return something, the error string just makes debugging easier
@@ -512,7 +512,7 @@ public class AvrcpTargetService extends ProfileService {
         PlayStatus status;
         if (activePlayer != null) {
             status = PlayStatus.fromPlaybackState(activePlayer.getPlaybackState(),
-                    Long.parseLong(getCurrentSongInfo().duration));
+                    Long.parseLong(getSongInfo("").duration));
         } else {
             status = getPlayState();
         }

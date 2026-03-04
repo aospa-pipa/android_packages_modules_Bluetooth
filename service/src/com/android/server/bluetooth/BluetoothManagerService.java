@@ -175,7 +175,6 @@ public class BluetoothManagerService {
     private final Context mContext;
     private final Looper mLooper;
 
-    private final boolean mIsHearingAidProfileSupported;
     private final String mHciInstanceName;
     private AutoOn mAutoOn;
     private AirplaneModeController mAirplaneModeController;
@@ -603,21 +602,6 @@ public class BluetoothManagerService {
         // Observe BLE scan only mode settings change.
         BleScanSettingListener.initialize(mLooper, mContentResolver, this::onBleScanDisabled);
 
-        // Disable ASHA if BLE is not supported, overriding any system property
-        if (!isBleSupported(mContext)) {
-            mIsHearingAidProfileSupported = false;
-        } else {
-            // ASHA default value is:
-            //   * disabled on Automotive, TV, and Watch.
-            //   * enabled for other form factor
-            // This default value can be overridden with a system property
-            final boolean isAshaEnabledByDefault =
-                    !(isAutomotive(mContext) || isWatch(mContext) || isTv(mContext));
-            mIsHearingAidProfileSupported =
-                    BluetoothProperties.isProfileAshaCentralEnabled()
-                            .orElse(isAshaEnabledByDefault);
-        }
-
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SETTING_RESTORED);
         filter.addAction(Intent.ACTION_SHUTDOWN);
@@ -870,10 +854,6 @@ public class BluetoothManagerService {
             return false;
         }
         return BleScanSettingListener.isScanAllowed();
-    }
-
-    boolean isHearingAidProfileSupported() {
-        return mIsHearingAidProfileSupported;
     }
 
     Context getUserContext() {
@@ -2196,28 +2176,6 @@ public class BluetoothManagerService {
             throw new IllegalStateException("AutoOn is not supported in current config");
         }
         mAutoOn.setEnabled(status);
-    }
-
-    /** Check if BLE is supported by this platform */
-    private static boolean isBleSupported(Context context) {
-        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
-    }
-
-    /** Check if this is an automotive device */
-    private static boolean isAutomotive(Context context) {
-        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE);
-    }
-
-    /** Check if this is a watch device */
-    private static boolean isWatch(Context context) {
-        return context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WATCH);
-    }
-
-    /** Check if this is a TV device */
-    private static boolean isTv(Context context) {
-        PackageManager pm = context.getPackageManager();
-        return pm.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
-                || pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK);
     }
 
     /**

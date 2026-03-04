@@ -514,7 +514,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     std::vector<PhyScanParameters> parameter_vector;
 
     // The Host shall not issue set scan parameter command when scanning is enabled
-    stop_scan();
+    stop_scan(__func__);
 
     if (le_address_manager_->GetAddressPolicy() != LeAddressManager::USE_PUBLIC_ADDRESS) {
       if (controller_->IsRpaGenerationSupported()) {
@@ -753,7 +753,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     // On-resume flag should always be reset if there is an explicit start/stop call.
     scan_on_resume_ = false;
     if (start) {
-      if (com::android::bluetooth::flags::migrate_btm_scan_to_gd()) {
+      if (com_android_bluetooth_flags_migrate_btm_scan_to_gd()) {
         // Only start scan if we need to
         if (update_start_scan(callerType)) {
           start_scan();
@@ -764,14 +764,13 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
         start_scan();
       }
     } else {
-      if (!com::android::bluetooth::flags::migrate_btm_scan_to_gd() ||
-          update_stop_scan(callerType)) {
+      if (!com_android_bluetooth_flags_migrate_btm_scan_to_gd() || update_stop_scan(callerType)) {
         if (address_manager_registered_) {
           le_address_manager_->Unregister(this);
           address_manager_registered_ = false;
           paused_ = false;
         }
-        stop_scan();
+        stop_scan(__func__);
       }
     }
   }
@@ -811,9 +810,9 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     }
   }
 
-  void stop_scan() {
+  void stop_scan(std::string caller) {
     if (!is_scanning_) {
-      log::info("Scanning already stopped, return!");
+      log::info("Scanning already stopped, return. caller={}", caller);
       return;
     }
     is_scanning_ = false;
@@ -920,9 +919,9 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
   }
 
   bool is_bonded(Address target_address) {
-    if (com::android::bluetooth::flags::irk_scanning_bond_check_update()) {
-      return get_btm_client_interface().security.BTM_IsBonded(RawAddress(target_address.address),
-                                                              BT_TRANSPORT_LE);
+    if (com_android_bluetooth_flags_irk_scanning_bond_check_update()) {
+      return get_security_client_interface().BTM_IsBonded(RawAddress(target_address.address),
+                                                          BT_TRANSPORT_LE);
     } else {
       for (auto device : storage_module_->GetBondedDevices()) {
         if (device.GetAddress() == target_address) {
@@ -1821,9 +1820,14 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
       log::warn("Unregistered!");
       return;
     }
+    if (paused_) {
+      log::info("Already paused");
+      ack_pause();
+      return;
+    }
     paused_ = true;
     scan_on_resume_ = is_scanning_;
-    stop_scan();
+    stop_scan(__func__);
     ack_pause();
   }
 
@@ -2058,6 +2062,22 @@ void LeScanningManagerImpl::RegisterScanningCallback(ScanningCallback* scanning_
 bool LeScanningManagerImpl::IsAdTypeFilterSupported() const {
   return pimpl_->is_ad_type_filter_supported();
 }
+
+bool LeScanningManagerImpl::Is1mPhyConfigured() const { return pimpl_->is_1m_phy_configured(); }
+
+bool LeScanningManagerImpl::IsCodedPhyConfigured() const {
+  return pimpl_->is_coded_phy_configured();
+}
+
+bool LeScanningManagerImpl::IsScanActive() const { return pimpl_->is_scan_active(); }
+
+uint32_t LeScanningManagerImpl::GetIntervalMs1m() const { return pimpl_->interval_ms_1m_; }
+
+uint16_t LeScanningManagerImpl::GetWindowMs1m() const { return pimpl_->window_ms_1m_; }
+
+uint32_t LeScanningManagerImpl::GetIntervalMsCoded() const { return pimpl_->interval_ms_coded_; }
+
+uint16_t LeScanningManagerImpl::GetWindowMsCoded() const { return pimpl_->window_ms_coded_; }
 
 void LeScanningManagerImpl::StartDiscovery(uint8_t duration) {
   pimpl_->handler_->CallOn(pimpl_.get(), &impl::start_discovery, duration);
