@@ -30,7 +30,7 @@ public:
   static constexpr uint64_t kDefaultEventMask = 0x3dbfffffffffffff;
   static constexpr uint64_t kDefaultEventMaskPage2 = 0x0000000002000000;
   static constexpr uint64_t kHdtEventMaskPage2 = 0xc000000000000000;
-  static constexpr uint64_t kDefaultLeEventMask = 0x000000077f02fe7f;
+  static constexpr uint64_t kDefaultLeEventMask = 0x000004077f02fe7f;
   static constexpr uint64_t kLeCSEventMask = 0x0007f80000000000;
   static constexpr uint64_t kLeHDTEventMask = 0x4620000000000000;
 

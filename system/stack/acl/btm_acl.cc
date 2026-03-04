@@ -87,6 +87,8 @@
 #include "stack/include/l2cdefs.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/l2c_int.h"
+#include "hci/event_checkers.h"
+#include "hci/hci_interface.h"
 
 #ifndef PROPERTY_LINK_SUPERVISION_TIMEOUT
 #define PROPERTY_LINK_SUPERVISION_TIMEOUT "bluetooth.core.acl.link_supervision_timeout"
@@ -132,6 +134,7 @@ typedef struct {
 } __attribute__((packed)) acl_header_t;
 
 constexpr uint8_t BTM_MAX_SW_ROLE_FAILED_ATTEMPTS = 3;
+constexpr uint8_t LE_READ_REMOTE_FEATURES_MAX_PAGE = 10;
 
 /* Define masks for supported and exception 2.0 ACL packet types
  */
@@ -425,7 +428,16 @@ void btm_acl_created(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROL
 
     if (bluetooth::shim::GetController()->SupportsBlePeripheralInitiatedFeaturesExchange() ||
         link_role == HCI_ROLE_CENTRAL) {
-      btsnd_hcic_ble_read_remote_feat(p_acl->hci_handle);
+      if (bluetooth::shim::GetController()->IsSupported(
+                                            bluetooth::hci::OpCode::LE_READ_ALL_REMOTE_FEATURES)) {
+        bluetooth::shim::GetHciLayer()->EnqueueCommand(
+                bluetooth::hci::LeReadAllRemoteFeaturesBuilder::Create(p_acl->hci_handle,
+                                                       LE_READ_REMOTE_FEATURES_MAX_PAGE),
+                    get_main_thread()->BindOnce(
+                    bluetooth::hci::check_status<bluetooth::hci::LeReadAllRemoteFeaturesStatusView>));
+      } else {
+        btsnd_hcic_ble_read_remote_feat(p_acl->hci_handle);
+      }
     } else {
       internal_.btm_establish_continue(p_acl, locally_initiated);
     }
@@ -1978,6 +1990,25 @@ bool acl_set_peer_le_features_from_handle(uint16_t hci_handle, const uint8_t* p)
 
   DEVICE_IOT_CONFIG_ADDR_SET_BIN(p_acl->link_spec.addrt.bda, key, p_acl->peer_le_features,
                                  BD_FEATURES_LEN);
+  return true;
+}
+
+bool acl_set_all_peer_le_features_from_handle(uint16_t hci_handle, std::array<uint8_t, 248> le_features){
+  tACL_CONN* p_acl = internal_.acl_get_connection_from_handle(hci_handle);
+  if (p_acl == nullptr) {
+    return false;
+  }
+  for(int i=0; i<BD_ALL_FEATURES_LEN; i++){
+    p_acl->peer_le_features[i] = le_features[i];
+  }
+  p_acl->peer_le_features_valid = true;
+  log::debug("Completed le feature read request");
+
+  /* save LE remote supported features to iot conf file */
+  std::string key = IOT_CONF_KEY_RT_SUPP_FEATURES "_" + std::to_string(0);
+
+  DEVICE_IOT_CONFIG_ADDR_SET_BIN(p_acl->link_spec.addrt.bda, key, p_acl->peer_le_features,
+                                 BD_ALL_FEATURES_LEN);
   return true;
 }
 
