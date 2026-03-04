@@ -70,6 +70,8 @@
 #include "l2c_int.h"
 #include "stack/include/hcimsgs.h"
 #include <bt_testapp.h>
+#include "stack/include/stack_app.h"
+#include "stack/include/stack_le_connection.h"
 
 using bluetooth::Uuid;
 #define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
@@ -1282,7 +1284,7 @@ static void AttributeReq_cb(uint16_t conn_id, uint32_t trans_id,
          trans_id, type);
 }
 
-static tGATT_CBACK sGattCB = {
+static bluetooth::stack::tGATT_CBACK sGattCB = {
     Connection_cb,
     OperationCmpl_cb,
     DiscoverRes_cb,
