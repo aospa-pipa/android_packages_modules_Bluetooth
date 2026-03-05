@@ -1290,7 +1290,7 @@ void Device::MessageReceived(uint8_t label, std::shared_ptr<Packet> pkt) {
                     log::warn("Ignore passthrough play during active Call");
                     return;
                   }
-                  if(!d->media_interface_){
+                  if(!d->media_interface_) {
                     log::info("media_interface_ is NULL, return");
                     return;
                   }
@@ -1661,9 +1661,25 @@ void Device::HandleChangePath(uint8_t label, std::shared_ptr<ChangePathRequest> 
       send_message(label, true, std::move(builder));
       return;
     }
-    current_path_.push(vfs_ids_.get_media_id(pkt->GetUid()));
-    log::verbose("Pushing Path to stack: \"{}\"", CurrentFolder());
+
+    auto new_path = vfs_ids_.get_media_id(pkt->GetUid());
+    log::verbose("Check pushing {} on top of {} ", new_path, CurrentFolder());
+    if (CurrentFolder() != new_path) {
+      current_path_.push(new_path);
+      log::verbose("Pushing Path to stack in current_path_: \"{}\"", CurrentFolder());
+    }
+
+    std::string current_browse_path;
+    if (vfs_uid_to_folder_name_.find(pkt->GetUid()) != vfs_uid_to_folder_name_.end())
+      current_browse_path = vfs_uid_to_folder_name_[pkt->GetUid()];
+    browse_path_.push(current_browse_path);
+    log::verbose("Pushing Browse Path to stack in browse_path_: \"{}\"", browse_path_.top());
   } else {
+    if (!browse_path_.empty()) {
+      log::verbose("Pop Browse Path to stack in browse_path_: \"{}\"", browse_path_.top());
+      browse_path_.pop();
+    }
+
     // Don't pop the root id off the stack
     if (current_path_.size() > 1) {
       current_path_.pop();
@@ -1691,6 +1707,8 @@ void Device::ChangePathResponse(uint8_t label, std::shared_ptr<ChangePathRequest
           !item.folder.is_playable) {
         non_playable_vfs_uids_.insert(item_uid);
       }
+      vfs_ids_.insert(item.folder.media_id);
+      folder_ids_.insert(item.folder.media_id);
     } else if (item.type == ListItem::SONG) {
       vfs_ids_.insert(item.song.media_id);
     }
@@ -1951,6 +1969,7 @@ void Device::GetVFSListResponse(uint8_t label, std::shared_ptr<GetFolderItemsReq
   for (const auto& item : items) {
     if (item.type == ListItem::FOLDER) {
       uint64_t item_uid = vfs_ids_.insert(item.folder.media_id);
+      folder_ids_.insert(item.folder.media_id);
       if (com_android_bluetooth_flags_fix_play_item_non_playable_folder() &&
           !item.folder.is_playable) {
         non_playable_vfs_uids_.insert(item_uid);
@@ -1968,11 +1987,12 @@ void Device::GetVFSListResponse(uint8_t label, std::shared_ptr<GetFolderItemsReq
   for (auto i = pkt->GetStartItem(); i <= pkt->GetEndItem() && i < items.size(); i++) {
     if (items[i].type == ListItem::FOLDER) {
       auto folder = items[i].folder;
-      FolderItem folder_item(vfs_ids_.get_uid(folder.media_id), folder.folderType,
-                             folder.is_playable, folder.name);
+      auto vfs_folder_uid = vfs_ids_.get_uid(folder.media_id);
+      FolderItem folder_item(vfs_folder_uid, 0x00, folder.is_playable, folder.name);
       if (!builder->AddFolder(folder_item)) {
         break;
       }
+      vfs_uid_to_folder_name_.insert(std::pair<uint64_t, std::string>(vfs_folder_uid, folder.name));
     } else if (items[i].type == ListItem::SONG) {
       auto song = items[i].song;
 
@@ -2049,7 +2069,7 @@ void Device::HandleSetBrowsedPlayer(uint8_t label, std::shared_ptr<SetBrowsedPla
   if (!pkt->IsValid()) {
     log::warn("{}: Request packet is not valid", address_);
     auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::INVALID_PARAMETER, 0x0000,
-                                                                 0, 0, "");
+                                                                 0, 0, current_path_, browse_mtu_);
     send_message(label, true, std::move(response));
     return;
   }
@@ -2068,29 +2088,34 @@ void Device::SetBrowsedPlayerResponse(uint8_t label, std::shared_ptr<SetBrowsedP
 
   if (!success) {
     auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::INVALID_PLAYER_ID, 0x0000,
-                                                                 num_items, 0, "");
+                                                                 0, 0, browse_path_, browse_mtu_);
     send_message(label, true, std::move(response));
     return;
   }
 
   if (pkt->GetPlayerId() == 0 && num_items == 0) {
     // Response fail if no browsable player in Bluetooth Player
-    auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::PLAYER_NOT_BROWSABLE,
-                                                                 0x0000, num_items, 0, "");
+    auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::PLAYER_NOT_BROWSABLE, 0x0,
+                                                                 0, 0, browse_path_, browse_mtu_);
     send_message(label, true, std::move(response));
     return;
   }
 
   curr_browsed_player_id_ = pkt->GetPlayerId();
 
-  // Clear the path and push the new root or current path.
-  current_path_ = std::stack<std::string>();
-  current_path_.push(current_path);
+  uint8_t folder_depth = browse_path_.size();
+  log::info("folder_depth={}", (uint8_t)folder_depth);
 
-  uint8_t folder_depth = std::max<uint8_t>(current_path_.size() - 1, 0);
+  // Clear the path and push the new root or current path if path is empty.
+  if (current_path_.empty()) {
+    current_path_ = std::stack<std::string>();
+    current_path_.push(current_path);
+    log::verbose("Pushing Path to stack in current_path_: \"{}\"", CurrentFolder());
+  }
 
   auto response = SetBrowsedPlayerResponseBuilder::MakeBuilder(Status::NO_ERROR, 0x0000, num_items,
-                                                               folder_depth, current_path);
+                                                               folder_depth, browse_path_,
+                                                               browse_mtu_);
   send_message(label, true, std::move(response));
 }
 

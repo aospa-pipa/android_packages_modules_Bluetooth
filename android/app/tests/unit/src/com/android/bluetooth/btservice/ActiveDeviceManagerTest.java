@@ -1154,6 +1154,49 @@ public class ActiveDeviceManagerTest {
     }
 
     /**
+     * Verify set active device calls when two sets connect in parallel.
+     *
+     * <pre>
+     * Steps:
+     * 1. There are two LE Audio Sets: A and B with devices in them: A = {1, 2}, B={3, 4}.
+     * 2. Devices connect:
+     *    i) device 1 - set active device is called
+     *    ii) device 3 - set active device is called
+     *    iii) devices 2 - set active device is not called
+     *    iv) device 4 - set active device is not called
+     * 3. After this operation Set B={3, 4} remains Active as it was connected as the second set.
+     * </pre>
+     */
+    @Test
+    public void leAudioTwoSetsAlternatingConnections_setActive() {
+        doReturn(1).when(mLeAudioService).getGroupId(mLeAudioDevice);
+        doReturn(1).when(mLeAudioService).getGroupId(mLeAudioDevice2);
+        doReturn(2).when(mLeAudioService).getGroupId(mLeAudioDevice3);
+        doReturn(2).when(mLeAudioService).getGroupId(mLeAudioDevice4);
+        doReturn(mLeAudioDevice).when(mLeAudioService).getLeadDevice(mLeAudioDevice);
+        doReturn(mLeAudioDevice).when(mLeAudioService).getLeadDevice(mLeAudioDevice2);
+        doReturn(mLeAudioDevice3).when(mLeAudioService).getLeadDevice(mLeAudioDevice3);
+        doReturn(mLeAudioDevice3).when(mLeAudioService).getLeadDevice(mLeAudioDevice4);
+
+        InOrder order = inOrder(mLeAudioService);
+        leAudioConnected(mLeAudioDevice);
+        mTestLooper.dispatchAll();
+        order.verify(mLeAudioService).setActiveDevice(mLeAudioDevice);
+
+        leAudioConnected(mLeAudioDevice3);
+        mTestLooper.dispatchAll();
+        order.verify(mLeAudioService).setActiveDevice(mLeAudioDevice3);
+
+        leAudioConnected(mLeAudioDevice2);
+        mTestLooper.dispatchAll();
+        order.verify(mLeAudioService, never()).setActiveDevice(mLeAudioDevice4);
+
+        leAudioConnected(mLeAudioDevice4);
+        mTestLooper.dispatchAll();
+        order.verify(mLeAudioService, never()).setActiveDevice(mLeAudioDevice2);
+    }
+
+    /**
      * One LE Audio set, containing two buds, is connected. When one device got disconnected
      * fallback device should not be set to true active device to fallback device.
      */
@@ -1669,6 +1712,70 @@ public class ActiveDeviceManagerTest {
         hearingAidDisconnected(mSecondaryAudioDevice);
         mTestLooper.dispatchAll();
         verify(mHearingAidService).setActiveDevice(mHearingAidDevice);
+    }
+
+    /**
+     * Verifies that the ActiveDeviceManager handles a second connection event for the same Hearing
+     * Aid device correctly.
+     *
+     * <pre>
+     * 1. Hearing Aid device connected.
+     * 2. Verify setActiveDevice is called.
+     * 3. Connect the same Hearing Aid device again.
+     * 4. Verify setActiveDevice is not called again.
+     * </pre>
+     */
+    @Test
+    public void hearingAidDeviceConnectsTwice_setActiveIsCalledOnce() {
+        hearingAidConnected(mHearingAidDevice);
+        mTestLooper.dispatchAll();
+        verify(mHearingAidService).setActiveDevice(mHearingAidDevice);
+
+        // Connect again
+        hearingAidConnected(mHearingAidDevice);
+        mTestLooper.dispatchAll();
+        // setActiveDevice should not be called again
+        verify(mHearingAidService, times(1)).setActiveDevice(mHearingAidDevice);
+    }
+
+    /**
+     * Hearing aid is connected, but active device is HFP. When the active HFP device is
+     * disconnected, the hearing aid should be the active one.
+     *
+     * <pre>
+     * 1. Connect HA device. Verify it is active.
+     * 2. Connect and activate HFP device. Verify HA is removed active and HFP is active.
+     * 3. Disconnect HFP device.
+     * 4. Verify fallback to HA (HA becomes active).
+     * </pre>
+     */
+    @Test
+    public void hfpDeviceDisconnected_fallbackToHearingAid() {
+        doReturn(AudioManager.MODE_NORMAL).when(mAudioManager).getMode();
+        doReturn(true).when(mHearingAidService).removeActiveDevice(anyBoolean());
+
+        // Connect HA device
+        hearingAidConnected(mHearingAidDevice);
+        mTestLooper.dispatchAll();
+        verify(mHearingAidService).setActiveDevice(mHearingAidDevice);
+
+        Mockito.clearInvocations(mHearingAidService);
+
+        // Connect and activate HFP device, which deactivates HA
+        headsetConnected(mHeadsetDevice, false);
+        headsetActiveDeviceChanged(mHeadsetDevice);
+        mTestLooper.dispatchAll();
+        verify(mHearingAidService).removeActiveDevice(false);
+        assertThat(mActiveDeviceManager.getHfpActiveDevice()).isEqualTo(mHeadsetDevice);
+        assertThat(mActiveDeviceManager.getHearingAidActiveDevices()).isEmpty();
+
+        // Disconnect HFP device
+        headsetDisconnected(mHeadsetDevice);
+        mTestLooper.dispatchAll();
+
+        // Verify fallback to HA
+        verify(mHearingAidService).setActiveDevice(mHearingAidDevice);
+        assertThat(mActiveDeviceManager.getHearingAidActiveDevices()).contains(mHearingAidDevice);
     }
 
     /**

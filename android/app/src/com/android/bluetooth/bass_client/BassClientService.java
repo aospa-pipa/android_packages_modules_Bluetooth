@@ -189,6 +189,7 @@ public class BassClientService extends ConnectableProfile {
     private final Map<Integer, HashSet<BluetoothDevice>> mLocalBroadcastReceivers =
             new ConcurrentHashMap<>();
     private final BassScanCallbackWrapper mBassScanCallback = new BassScanCallbackWrapper();
+    private final BassScanCallbackWrapper mPASyncScanCallback = new BassScanCallbackWrapper();
 
     private final BluetoothAdapter mAdapter;
     // TODO Delete it on leaudioBroadcastImproveSourceOperations flag cleanup
@@ -329,15 +330,23 @@ public class BassClientService extends ConnectableProfile {
                                     .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
                                     .setLegacy(false)
                                     .build();
-                    mScanController.doOnScanThread(
+                    if (mScanController.isOnScanThread()) {
+                        mScanController.registerAndStartScanInternal(
+                                            this, source, settings, mBaasUuidFilters);
+                    } else {
+                        mScanController.doOnScanThread(
                             () ->
                                     mScanController.registerAndStartScanInternal(
                                             this, source, settings, mBaasUuidFilters));
+                    }
                     return;
                 }
-
-                mScanController.doOnScanThread(
-                        () -> mScanController.registerScannerInternal(this, null, source));
+                if (mScanController.isOnScanThread()) {
+                    mScanController.registerScannerInternal(this, null, source);
+                } else {
+                    mScanController.doOnScanThread(
+                            () -> mScanController.registerScannerInternal(this, null, source));
+                }
             }
         }
 
@@ -1007,6 +1016,9 @@ public class BassClientService extends ConnectableProfile {
         synchronized (mSearchScanCallbackLock) {
             if (isAnySearchInProgress()) {
                 mBassScanCallback.stopScanAndUnregister();
+            }
+            if (mPASyncScanCallback.isBroadcastAudioAnnouncementScanActive()) {
+                mPASyncScanCallback.stopScanAndUnregister();
             }
             mIsForegroundScan = false;
             mIsBackgroundScan = false;
@@ -3447,6 +3459,10 @@ public class BassClientService extends ConnectableProfile {
                 }
             }
             handleSelectSourceRequest();
+            if (mPASyncScanCallback.isBroadcastAudioAnnouncementScanActive()) {
+                Log.d(TAG, "Stop search for PA sync");
+                mPASyncScanCallback.stopScanAndUnregister();
+            }
         }
 
         private void initiatePaSyncTransferToSink(
@@ -4076,6 +4092,11 @@ public class BassClientService extends ConnectableProfile {
                         scanRes.getRssi(),
                         BassUtils.getPublicBroadcastData(scanRecord),
                         BassUtils.getBroadcastName(scanRecord));
+            }
+
+            if (!mPASyncScanCallback.isBroadcastAudioAnnouncementScanActive()) {
+                Log.d(TAG, "Start search for PA sync");
+                mPASyncScanCallback.registerAndStartScan(Collections.emptyList());
             }
 
             // Check if there are resources for sync
@@ -5807,7 +5828,16 @@ public class BassClientService extends ConnectableProfile {
                 continue;
             }
 
-            if (getAllSources(device).stream().anyMatch(rs -> !isLocalBroadcast(rs))) {
+            Map<Integer, BluetoothLeBroadcastMetadata> entry =
+                    mBroadcastMetadataMap.get(device);
+
+            /* null means that this source was not added or modified by assistant */
+            if (entry == null) {
+                continue;
+            }
+
+            /* Assistant manages some external broadcast */
+            if (entry.values().stream().anyMatch(e -> !isLocalBroadcast(e))) {
                 return true;
             }
         }

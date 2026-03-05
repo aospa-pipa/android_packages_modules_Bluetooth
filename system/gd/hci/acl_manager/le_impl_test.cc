@@ -1400,7 +1400,12 @@ TEST_F(LeImplTest, on_le_connection_canceled_on_pause) {
   ASSERT_EQ(ConnectabilityState::DISARMED, le_impl_->connectability_state_);
 }
 
+// TODO: delete with gd_conn_mgr_one_timeout
 TEST_F(LeImplTest, on_create_connection_timeout) {
+  if (com::android::bluetooth::flags::gd_conn_mgr_one_timeout()) {
+    GTEST_SKIP() << "Skipping test because gd_conn_mgr_one_timeout flag is enabled.";
+  }
+
   EXPECT_CALL(mock_le_connection_callbacks_,
               OnLeConnectFail(_, ErrorCode::CONNECTION_ACCEPT_TIMEOUT))
           .Times(1);
@@ -1583,11 +1588,15 @@ TEST_F(LeImplTest, direct_connection_after_background_connection) {
   // Check state is ARMED
   ASSERT_EQ(ConnectabilityState::ARMED, le_impl_->connectability_state_);
 
-  // Simulate timeout on direct connect. Verify background connect is still in place
-  EXPECT_CALL(mock_le_connection_callbacks_,
-              OnLeConnectFail(_, ErrorCode::CONNECTION_ACCEPT_TIMEOUT))
-          .Times(1);
-  le_impl_->on_create_connection_timeout(address);
+  // Simulate upper layer timeout on direct connect. Verify background connect is still in place
+  if (!com::android::bluetooth::flags::gd_conn_mgr_one_timeout()) {
+    EXPECT_CALL(mock_le_connection_callbacks_,
+                OnLeConnectFail(_, ErrorCode::CONNECTION_ACCEPT_TIMEOUT))
+            .Times(1);
+    le_impl_->on_create_connection_timeout(address);
+  } else {
+    le_impl_->direct_connect_remove(address);
+  }
   sync_handler();
   cancel_connection = hci_layer_->GetCommand(OpCode::LE_CREATE_CONNECTION_CANCEL);
   hci_layer_->IncomingEvent(
@@ -1650,10 +1659,15 @@ TEST_F(LeImplTest, direct_connection_after_direct_connection) {
 
   log::info("Simulate timeout");
 
-  EXPECT_CALL(mock_le_connection_callbacks_,
-              OnLeConnectFail(_, ErrorCode::CONNECTION_ACCEPT_TIMEOUT))
-          .Times(1);
-  le_impl_->on_create_connection_timeout(address);
+  if (!com::android::bluetooth::flags::gd_conn_mgr_one_timeout()) {
+    EXPECT_CALL(mock_le_connection_callbacks_,
+                OnLeConnectFail(_, ErrorCode::CONNECTION_ACCEPT_TIMEOUT))
+            .Times(1);
+    le_impl_->on_create_connection_timeout(address);
+  } else {
+    // upper layer requesting removal on timeout
+    le_impl_->direct_connect_remove(address);
+  }
   sync_handler();
   cancel_connection = hci_layer_->GetCommand(OpCode::LE_CREATE_CONNECTION_CANCEL);
   EXPECT_TRUE(cancel_connection.IsValid());

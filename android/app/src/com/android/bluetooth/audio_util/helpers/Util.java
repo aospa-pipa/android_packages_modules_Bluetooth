@@ -46,7 +46,7 @@ class Util {
 
     private static class MultiPlayersSupport {
         private static boolean sValue =
-                SystemProperties.getBoolean(MULTIPLE_PLAYERS_SUPPORT_ENABLED_PROPERTY, false);
+                SystemProperties.getBoolean(MULTIPLE_PLAYERS_SUPPORT_ENABLED_PROPERTY, true);
     }
 
     // TODO (apanicke): Remove this prefix later, for now it makes debugging easier.

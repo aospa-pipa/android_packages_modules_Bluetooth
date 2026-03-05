@@ -32,6 +32,8 @@ import android.bluetooth.BluetoothUuid;
 import android.content.res.Resources;
 import android.content.res.Resources.NotFoundException;
 import android.bluetooth.State;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
@@ -56,6 +58,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -118,6 +121,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     private HandlerThread mHandlerThread = null;
     private Handler mHandler = null;
     private final AudioManager mAudioManager;
+    @VisibleForTesting final AudioManagerAudioDeviceCallback mAudioManagerAudioDeviceCallback;
 
     private final Object mLock = new Object();
 
@@ -1207,6 +1211,41 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         }
     }
 
+    /** Notifications of audio device connection and disconnection events. */
+    @VisibleForTesting
+    class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
+        private static boolean isWiredAudioHeadset(AudioDeviceInfo deviceInfo) {
+            return switch (deviceInfo.getType()) {
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                     AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                     AudioDeviceInfo.TYPE_USB_HEADSET -> true;
+                default -> false;
+            };
+        }
+
+        @Override
+        public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+            Log.d(TAG, "onAudioDevicesAdded");
+            if (!Arrays.stream(addedDevices)
+                    .anyMatch(AudioManagerAudioDeviceCallback::isWiredAudioHeadset)) {
+                return;
+            }
+            wiredAudioDeviceConnected();
+        }
+
+        @Override
+        public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
+            Log.d(TAG, "onAudioDevicesRemoved");
+            if (!Arrays.stream(removedDevices)
+                    .anyMatch(AudioManagerAudioDeviceCallback::isWiredAudioHeadset)) {
+                return;
+            }
+            synchronized (mLock) {
+                setFallbackDeviceActiveLocked(null);
+            }
+        }
+    }
+
     class BluetoothOnModeChangedListener implements AudioManager.OnModeChangedListener {
          @Override
         public void onModeChanged(int mode) {
@@ -1227,6 +1266,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             mDatabaseManager = mAdapterService.getDatabaseManager(); // Migrating
         }
         mAudioManager = service.getSystemService(AudioManager.class);
+        mAudioManagerAudioDeviceCallback = new AudioManagerAudioDeviceCallback();
         mBluetoothOnModeChangedListener = new BluetoothOnModeChangedListener();
     }
 
@@ -1238,6 +1278,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         mp.threadStart(mHandlerThread);
         mHandler = new Handler(mp.handlerThreadGetLooper(mHandlerThread));
 
+        mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
         mAdapterService.registerBluetoothStateCallback((command) -> mHandler.post(command), this);
         mAudioManager.addOnModeChangedListener(
                     Executors.newSingleThreadExecutor(), mBluetoothOnModeChangedListener);
@@ -1249,6 +1290,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     void cleanup() {
         Log.i(TAG, "cleanup()");
 
+        mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         mAdapterService.unregisterBluetoothStateCallback(this);
         if (mHandlerThread != null) {
             mHandlerThread.quitSafely();
@@ -1912,6 +1954,35 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
         Log.d(TAG, "isBroadcastingAudio: true");
         return true;
+    }
+
+    private boolean stopBroadcastingAudio() {
+        Log.d(TAG, "stopBroadcastingAudio");
+        if (!isBroadcastingAudio()) {
+            Log.w(TAG, "Broadcast audio is not active");
+            return false;
+        }
+
+        final var leAudio = mAdapterService.getLeAudioService();
+        if (leAudio.isEmpty()) {
+            return false;
+        }
+        leAudio.get().setInactiveForBroadcast();
+        return true;
+    }
+
+    /**
+     * Called when a wired audio device is connected. It might be called multiple times each time a
+     * wired audio device is connected.
+     */
+    @VisibleForTesting
+    void wiredAudioDeviceConnected() {
+        Log.d(TAG, "wiredAudioDeviceConnected");
+        setA2dpActiveDevice(null, true);
+        setHfpActiveDevice(null);
+        setHearingAidActiveDevice(null, true);
+        setLeAudioActiveDevice(null, true);
+        stopBroadcastingAudio();
     }
 
     private void getDevicesInfo(

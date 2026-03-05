@@ -517,18 +517,29 @@ public class AvrcpTargetService extends ProfileService {
             status = getPlayState();
         }
         boolean musicActive = mAudioManager.isMusicActive();
-        // Some devices will send a play event upon SCO disconnection and some will also send a
-        // stop event upon SCO connection resulting in music starting even if the call is still
-        // ongoing. As this is a BT specific issue we handle it here.
-        if ((keyCode == KeyEvent.KEYCODE_MEDIA_PLAY || KeyEvent.KEYCODE_MEDIA_STOP == keyCode)
+        // Some devices will send a play event upon SCO disconnection
+        // resulting in music starting even if the call is ongoing or some
+        // music is being played. As this is a BT specific issue we handle it here.
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
             && (voiceCommunicationActive
                 || (status.state == PlayStatus.PLAYING && musicActive))) {
             Log.w(
                     TAG,
                     "Received "
                             + KeyEvent.keyCodeToString(keyCode)
-                            + " event while call is active, not sending it to AudioManager");
+                            + " event while call is active/music, not sending it to AudioManager");
             return;
+        }
+        // Some devices will send a stop event upon SCO connection
+        // while call is just started resulting in unexpected behavior from
+        // music app.As this is a BT specific issue we handle it here.
+        if(keyCode == KeyEvent.KEYCODE_MEDIA_STOP && voiceCommunicationActive) {
+           Log.w(
+                    TAG,
+                    "Received "
+                            + KeyEvent.keyCodeToString(keyCode)
+                            + " event while call is active, not sending it to AudioManager");
+           return;
         }
         if (keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
             && status.state != PlayStatus.PLAYING

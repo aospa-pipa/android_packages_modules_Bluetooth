@@ -133,7 +133,7 @@ public final class BluetoothCodecConfig implements Parcelable {
      * Represents the count of valid source codec types.
      */
     @SuppressLint("UnflaggedApi")
-    public static final int SOURCE_CODEC_TYPE_MAX = 7;
+    public static final int SOURCE_CODEC_TYPE_MAX = 8;
 
     @SuppressLint("UnflaggedApi")
     public static final int SOURCE_CODEC_TYPE_APTX_ADAPTIVE = SOURCE_CODEC_TYPE_MAX;

@@ -503,7 +503,7 @@ public class ScanController {
             }
 
             try {
-                app.getAppScanStats().addResults(client.getScannerId(), 1);
+                app.getAppScanStats().addResults(client.getScannerId(), 1, false /* isBatch */);
                 if (app.getCallback() != null) {
                     app.getCallback().onScanResult(result);
                 } else {
@@ -759,7 +759,8 @@ public class ScanController {
             return;
         }
         try {
-            app.getAppScanStats().addResults(client.getScannerId(), results.size());
+            app.getAppScanStats()
+                    .addResults(client.getScannerId(), results.size(), true /* isBatch */);
             if (app.getCallback() != null) {
                 if (ScanUtil.isAutoBatchScanClientEnabled(client)) {
                     Log.d(TAG, "sendBatchScanResults() to onScanResult() for " + client);

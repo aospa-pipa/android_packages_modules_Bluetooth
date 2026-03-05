@@ -2629,7 +2629,7 @@ bool BtifAvStateMachine::StateOpened::ProcessEvent(uint32_t event, void* p_data)
       const std::vector<btav_a2dp_codec_config_t> codec_preferences = {codec_config};
       std::promise<void> peer_ready_promise;
       btif_av_source.UpdateCodecConfig(peer_.PeerAddress(), codec_preferences,
-                                       std::move(peer_ready_promise), false);
+                                       std::move(peer_ready_promise), true);
     } break;
 
     case BTIF_AV_RECONFIGURE_REQ_EVT: {
@@ -2929,7 +2929,7 @@ bool BtifAvStateMachine::StateStarted::ProcessEvent(uint32_t event, void* p_data
         const std::vector<btav_a2dp_codec_config_t> codec_preferences = {codec_config};
         std::promise<void> peer_ready_promise;
         btif_av_source.UpdateCodecConfig(peer_.PeerAddress(), codec_preferences,
-                                         std::move(peer_ready_promise), false);
+                                         std::move(peer_ready_promise), true);
       }
     } break;
 

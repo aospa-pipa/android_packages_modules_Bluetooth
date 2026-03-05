@@ -614,7 +614,6 @@ static void pin_request_cb(RawAddress *remote_bd_addr, bt_bdname_t *bd_name, uin
     }
 }
 #endif
-
 static void ssp_request_cb(RawAddress remote_bd_addr, int transport,
                            PairingVariant pairing_variant,
                            uint32_t pass_key, int pairing_algo) {
