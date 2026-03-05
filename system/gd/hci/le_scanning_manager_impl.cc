@@ -193,7 +193,7 @@ struct LeScanningManagerImpl::impl : public LeAddressManagerCallback {
     le_address_manager_ = le_address_manager;
     le_scanning_interface_ = hci_layer_->GetLeScanningInterface(
             handler_->BindOn(this, &LeScanningManagerImpl::impl::handle_scan_results));
-    periodic_sync_manager_.Init(le_scanning_interface_, handler_);
+    periodic_sync_manager_.Init(le_scanning_interface_, handler_, controller_);
     /* Check to see if the opcode is supported and C19 (support for extended advertising). */
     if (controller_->IsSupported(OpCode::LE_SET_EXTENDED_SCAN_PARAMETERS) &&
         controller->SupportsBleExtendedAdvertising()) {
