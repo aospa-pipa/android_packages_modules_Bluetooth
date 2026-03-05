@@ -31,7 +31,7 @@
 #include "le_audio_set_configuration_provider.h"
 #include "stack/include/btm_client_interface.h"
 #include "osi/include/properties.h"
-#include "test/mock/mock_legacy_hci_interface.h"
+#include "stack/mock/mock_stack_hcic_layer.h"
 #include "test/mock/mock_main_shim_entry.h"
 #include "stack/mock/mock_stack_btm_interface.h"
 
@@ -384,6 +384,7 @@ static auto PrepareStackProviderInfo(bool is_encoding, bool with_vendor, bool op
 class CodecManagerTest : public ::testing::TestWithParam<std::vector<const char*>> {
 public:
   virtual void SetUp() override {
+    set_mock_btm_client_interface(&mock_btm_client_interface_);
     osi_property_set_bool(kPropLeAudioOffloadSupported, false);
     osi_property_set_bool(kPropLeAudioOffloadDisabled, false);
     osi_property_set_bool(kPropLeAudioBidirSwbSupported, false);
@@ -400,7 +401,7 @@ public:
     set_com_android_bluetooth_flags_leaudio_codec_id_support(true);
     set_mock_offload_capabilities(offload_capabilities_none);
 
-    bluetooth::legacy::hci::testing::SetMock(legacy_hci_mock_);
+    hcic::SetMockHcicInterface(&legacy_hci_mock_);
 
     bluetooth::hci::testing::mock_controller_ =
             std::make_unique<NiceMock<bluetooth::hci::testing::MockController>>();
@@ -409,8 +410,8 @@ public:
     ON_CALL(*bluetooth::hci::testing::mock_controller_, IsSupported(OpCode::CONFIGURE_DATA_PATH))
             .WillByDefault(Return(true));
 
-    mock_btm_client_interface.vendor.BTM_GetQllLocalSupportedFeatures =
-            [](uint8_t* p) -> bt_device_qll_local_supported_features_t* { return nullptr; };
+    ON_CALL(mock_btm_client_interface_, BTM_GetQllLocalSupportedFeatures(_))
+            .WillByDefault(Return(nullptr));
 
     codec_manager = CodecManager::GetInstance();
     provider_info = std::nullopt;
@@ -441,13 +442,15 @@ public:
     owned_mock_le_audio_sink_hal_client_.reset();
     mock_le_audio_sink_hal_client_ = nullptr;
 
+    reset_mock_btm_client_interface();
     codec_manager->Stop();
     bluetooth::hci::testing::mock_controller_.release();
   }
 
   std::vector<const char*> properties_;
   CodecManager* codec_manager;
-  bluetooth::legacy::hci::testing::MockInterface legacy_hci_mock_;
+  hcic::MockHcicInterface legacy_hci_mock_;
+  NiceMock<MockBtmClientInterface> mock_btm_client_interface_;
 
 protected:
   void RegisterSourceHalClientMock() {
