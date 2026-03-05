@@ -1845,7 +1845,6 @@ public class BluetoothInCallService extends InCallService {
                     }
                 }
             }
-            return true;
         }
         return false;
     }
