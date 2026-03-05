@@ -543,7 +543,7 @@ public:
                 group, get_remote_directions_for_context_type_manager(
                                bluetooth::le_audio::types::kLeAudioDirectionSink));
         // Note in the config we are having remote directions, this is why it is oposite.
-        UpdateSinkLocalMetadataContextTypes(remote_metadata.source);
+        local_metadata_context_types_.sink = remote_metadata.source;
       }
     }
 
@@ -1638,13 +1638,26 @@ public:
                     !(group->IsSuspendedForReconfiguration() &&
                              configuration_context_type_ != LeAudioContextType::CONVERSATIONAL))) {
       log::debug("{} is not streaming or not configuring to other contexts", active_group_id_);
+      if (!in_call) {
+        log::info("Clear decoding session metadata while call ended");
+        std::vector<record_track_metadata_v7> empty_tracks = {};
+        audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
+      }
       return;
     }
 
     bool reconfigure = false;
 
     if (in_call_) {
-      in_call_metadata_context_types_ = local_metadata_context_types_;
+      log::info("configuration_context_type_: {}", ToString(configuration_context_type_));
+      if (group->IsDirectionAvailableForConfiguration(
+          configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+        in_call_metadata_context_types_.source = local_metadata_context_types_.source;
+      }
+      if (group->IsDirectionAvailableForConfiguration(
+          configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+        in_call_metadata_context_types_.sink = local_metadata_context_types_.sink;
+      }
 
       log::debug("in_call_metadata_context_types_ sink: {}  source: {}",
                  in_call_metadata_context_types_.sink.to_string(),
