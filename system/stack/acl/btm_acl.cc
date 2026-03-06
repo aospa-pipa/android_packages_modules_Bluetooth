@@ -47,6 +47,7 @@
 #include "device/include/device_iot_config.h"
 #include "device/include/interop.h"
 #include "hci/controller.h"
+#include "device/include/interop_config.h"
 #include "include/l2cap_hci_link_interface.h"
 #include "internal_include/bt_target.h"
 #include "main/shim/acl_api.h"
@@ -405,6 +406,7 @@ void btm_acl_created(const AclLinkSpec& link_spec, uint16_t hci_handle, tHCI_ROL
   p_acl->sca = 0xFF;
   p_acl->switch_role_failed_attempts = 0;
   p_acl->switch_role_state_ = BtmAclSwitchKeyState::kIdle;
+  p_acl->switch_role_attempts = 0;
 
   log::debug("Created new ACL connection peer:{} role:{} handle:0x{:04x}", link_spec,
              RoleText(p_acl->link_role), hci_handle);
@@ -554,8 +556,13 @@ tBTM_STATUS BTM_SwitchRoleToCentral(const RawAddress& remote_bd_addr) {
   }
 
   if (interop_match_addr(INTEROP_DYNAMIC_ROLE_SWITCH, remote_bd_addr)) {
-    log::debug("Device restrict listed under INTEROP_DYNAMIC_ROLE_SWITCH");
-    return tBTM_STATUS::BTM_DEV_RESTRICT_LISTED;
+    if (p_acl->switch_role_attempts == BTM_MAX_BL_SW_ROLE_ATTEMPTS) {
+      log::debug("Device restrict listed under INTEROP_DYNAMIC_ROLE_SWITCH");
+      return tBTM_STATUS::BTM_DEV_RESTRICT_LISTED;
+    } else {
+      log::debug("Device blacklisted, try role change again");
+      p_acl->switch_role_attempts++;
+    }
   }
 
   tBTM_PM_MODE pwr_mode;
@@ -1282,6 +1289,11 @@ void StackAclBtmAcl::btm_acl_role_changed(tHCI_STATUS hci_status, const RawAddre
 
 void btm_acl_role_changed(tHCI_STATUS hci_status, const RawAddress& bd_addr, tHCI_ROLE new_role) {
   btm_rejectlist_role_change_device(bd_addr, hci_status);
+  tACL_CONN* p = internal_.btm_bda_to_acl(bd_addr, BT_TRANSPORT_BR_EDR);
+  if (hci_status == HCI_SUCCESS && new_role == HCI_ROLE_CENTRAL) {
+    interop_database_remove_addr(INTEROP_DYNAMIC_ROLE_SWITCH, bd_addr);
+    p->switch_role_attempts = 0;
+  }
 
   if (hci_status == HCI_SUCCESS) {
     l2c_link_role_changed(&bd_addr, new_role, hci_status);

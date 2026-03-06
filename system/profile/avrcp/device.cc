@@ -2315,6 +2315,16 @@ void Device::DeviceDisconnected() {
   log::info("{} : Device was disconnected", address_);
   play_pos_update_cb_.Cancel();
 
+  // Clear all notification registrations to prevent callbacks after disconnect
+  track_changed_ = Notification(false, 0);
+  play_status_changed_ = Notification(false, 0);
+  play_pos_changed_ = Notification(false, 0);
+  player_setting_changed_ = Notification(false, 0);
+  now_playing_changed_ = Notification(false, 0);
+  addr_player_changed_ = Notification(false, 0);
+  avail_players_changed_ = Notification(false, 0);
+  uids_changed_ = Notification(false, 0);
+
   set_vol_cmd_in_progress_ = false;
   pending_volume_.reset();
 

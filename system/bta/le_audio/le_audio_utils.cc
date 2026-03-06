@@ -140,10 +140,9 @@ bluetooth::le_audio::btle_audio_codec_index_t translateLeAudioCodecIdToCodecType
         const types::LeAudioCodecId& codecId, std::optional<uint32_t> sampling_frequency_hz) {
   if (codecId == types::LeAudioCodecIdLc3) {
     return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_LC3;
-  } else if (codecId == types::LeAudioCodecIdAptxLe) {
-    return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LE;
-  } else if (codecId == types::LeAudioCodecIdAptxLeX) {
-    return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_APTX_LEX;
+  } else if (codecId == types::LeAudioCodecIdAptxLe ||
+             codecId == types::LeAudioCodecIdAptxLeX) {
+    return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_VENDOR_SPECIFIC;
   } else if (codecId == types::LeAudioCodecIdOpus) {
     if (sampling_frequency_hz.has_value() &&
         sampling_frequency_hz.value() > LeAudioCodecConfiguration::kSampleRate48000) {
@@ -278,6 +277,11 @@ void fillStreamParamsToBtLeAudioCodecConfig(
   if (out_config.codec_type == bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_INVALID) {
     log::error("Invalid codec identifier: {}", common::ToString(config.id));
     return;
+  }
+
+  if (out_config.codec_type ==
+      bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_VENDOR_SPECIFIC) {
+    out_config.codec_id = config.id.getCodecIdRaw();
   }
 
   out_config.sample_rate =

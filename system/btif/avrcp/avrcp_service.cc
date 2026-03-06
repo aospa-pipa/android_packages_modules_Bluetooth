@@ -596,10 +596,21 @@ void AvrcpService::SendPlayerSettingsChanged(std::vector<PlayerAttribute> attrib
 
   log::info("{}", ss.str());
 
-  // Ensure that the update is posted to the correct thread
+  // Ensure that the update is posted to the correct thread with weak pointer validation.
+  // This prevents use-after-free if device disconnects before callback executes.
+  // The lambda validates the weak pointer before accessing the device to prevent
+  // crashes when the device is destroyed during callback execution.
   for (const auto& device : instance_->connection_handler_->GetListOfDevices()) {
-    do_in_main_thread(base::BindOnce(&Device::HandlePlayerSettingChanged, device.get()->Get(),
-                                     attributes, values));
+    do_in_main_thread(base::BindOnce(
+        [](base::WeakPtr<Device> device, std::vector<PlayerAttribute> attrs,
+            std::vector<uint8_t> vals) {
+          if (!device) {
+            log::verbose("Device cleaned-up before player setting notification could be sent");
+            return;
+          }
+          device->HandlePlayerSettingChanged(std::move(attrs), std::move(vals));
+        },
+        device.get()->Get(), attributes, values));
   }
 }
 
