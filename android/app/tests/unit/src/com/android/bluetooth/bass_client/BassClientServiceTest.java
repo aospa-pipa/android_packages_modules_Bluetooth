@@ -415,19 +415,9 @@ public class BassClientServiceTest {
             return;
         }
 
-        if (Flags.scanRegisterAndStart()) {
-            mInOrderScanController
-                    .verify(mScanController)
-                    .registerAndStartScanInternal(any(), any(), any(), any());
-        } else {
-            int scannerId = 1;
-            mInOrderScanController
-                    .verify(mScanController)
-                    .registerScannerInternal(any(), any(), any());
-            mInOrderScanController
-                    .verify(mScanController)
-                    .startScanInternal(eq(scannerId), any(), any());
-        }
+        mInOrderScanController
+                .verify(mScanController)
+                .registerAndStartScanInternal(any(), any(), any(), any());
     }
 
     @Before
@@ -509,38 +499,21 @@ public class BassClientServiceTest {
         doReturn(Optional.of(mMcpService)).when(mAdapterService).getMcpService();
 
         mBassScanCallbackCaptor = ArgumentCaptor.forClass(IScannerCallback.class);
-        if (Flags.scanRegisterAndStart()) {
-            doAnswer(
-                            invocation -> {
-                                try {
-                                    int scannerId = 1;
-                                    mBassScanCallbackCaptor
-                                            .getValue()
-                                            .onScannerRegistered(0, scannerId);
-                                } catch (RemoteException e) {
-                                    // the mocked onScannerRegistered doesn't throw RemoteException
-                                }
-                                return null;
-                            })
-                    .when(mScanController)
-                    .registerAndStartScanInternal(
-                            mBassScanCallbackCaptor.capture(), any(), any(), any());
-        } else {
-            doAnswer(
-                            invocation -> {
-                                try {
-                                    int scannerId = 1;
-                                    mBassScanCallbackCaptor
-                                            .getValue()
-                                            .onScannerRegistered(0, scannerId);
-                                } catch (RemoteException e) {
-                                    // the mocked onScannerRegistered doesn't throw RemoteException
-                                }
-                                return null;
-                            })
-                    .when(mScanController)
-                    .registerScannerInternal(mBassScanCallbackCaptor.capture(), any(), any());
-        }
+        doAnswer(
+                        invocation -> {
+                            try {
+                                int scannerId = 1;
+                                mBassScanCallbackCaptor
+                                        .getValue()
+                                        .onScannerRegistered(0, scannerId);
+                            } catch (RemoteException e) {
+                                // the mocked onScannerRegistered doesn't throw RemoteException
+                            }
+                            return null;
+                        })
+                .when(mScanController)
+                .registerAndStartScanInternal(
+                        mBassScanCallbackCaptor.capture(), any(), any(), any());
 
         doReturn(mBinder).when(mCallback).asBinder();
         mBassClientService.registerCallback(mCallback);
@@ -675,7 +648,6 @@ public class BassClientServiceTest {
     public void testStartSearchingForSources() {
         prepareConnectedDeviceGroup();
         List<ScanFilter> scanFilters = new ArrayList<>();
-        int scannerId = 1;
 
         assertThat(mStateMachines).hasSize(2);
         for (BassClientStateMachine sm : mStateMachines.values()) {
@@ -684,18 +656,9 @@ public class BassClientServiceTest {
 
         assertThat(mBassClientService.isSearchInProgress()).isFalse();
         mBassClientService.startSearchingForSources(scanFilters);
-        if (Flags.scanRegisterAndStart()) {
-            mInOrderScanController
-                    .verify(mScanController)
-                    .registerAndStartScanInternal(any(), any(), any(), any());
-        } else {
-            mInOrderScanController
-                    .verify(mScanController)
-                    .registerScannerInternal(any(), any(), any());
-            mInOrderScanController
-                    .verify(mScanController)
-                    .startScanInternal(eq(scannerId), any(), any());
-        }
+        mInOrderScanController
+                .verify(mScanController)
+                .registerAndStartScanInternal(any(), any(), any(), any());
         assertThat(mBassClientService.isSearchInProgress()).isTrue();
         for (BassClientStateMachine sm : mStateMachines.values()) {
             verify(sm).sendMessage(BassClientStateMachine.START_SCAN_OFFLOAD);
@@ -752,7 +715,6 @@ public class BassClientServiceTest {
 
     private void startSearchingForSourcesWithAutoSync(BluetoothDevice device) {
         List<ScanFilter> scanFilters = new ArrayList<>();
-        int scannerId = 1;
 
         assertThat(mStateMachines).hasSize(2);
         for (BassClientStateMachine sm : mStateMachines.values()) {
@@ -767,18 +729,9 @@ public class BassClientServiceTest {
             verifyRegisterSyncCalled(device);
         }
         if (!mBassClientService.isAnySearchInProgress()) {
-            if (Flags.scanRegisterAndStart()) {
-                mInOrderScanController
-                        .verify(mScanController)
-                        .registerAndStartScanInternal(any(), any(), any(), any());
-            } else {
-                mInOrderScanController
-                        .verify(mScanController)
-                        .registerScannerInternal(any(), any(), any());
-                mInOrderScanController
-                        .verify(mScanController)
-                        .startScanInternal(eq(scannerId), any(), any());
-            }
+            mInOrderScanController
+                    .verify(mScanController)
+                    .registerAndStartScanInternal(any(), any(), any(), any());
             for (BassClientStateMachine sm : mStateMachines.values()) {
                 verify(sm).sendMessage(BassClientStateMachine.START_SCAN_OFFLOAD);
             }
@@ -9206,7 +9159,7 @@ public class BassClientServiceTest {
 
     @Test
     @EnableFlags(Flags.FLAG_LEAUDIO_BROADCAST_SOURCE_CHANNEL_MAP_CLASSIFICATION)
-    public void testNotifyReceiveStateChanged_addClientForBigChannelMap() {
+    public void testNotifyReceiveStateChanged_addClientForBigChannelMapwhenPaSynced() {
         // Mock that the broadcast is local
         doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(anyInt());
         prepareConnectedDeviceGroup();
@@ -9216,6 +9169,30 @@ public class BassClientServiceTest {
 
         injectRemoteSourceStateChanged(
                 mBroadcastMetadata1, /* isPaSynced */ true, /* isBisSynced */ false);
+
+        // Verify that setBigChannelMapClassification is called with ADD action
+        verify(mLeAudioService)
+                .setBigChannelMapClassification(
+                        eq(BassClientService.SetBigChannelMapClassificationAction.ADD.getValue()),
+                        eq(mCurrentDevice),
+                        eq(mBroadcastMetadata1.getBroadcastId()));
+    }
+
+    @Test
+    @EnableFlags({
+        Flags.FLAG_LEAUDIO_BROADCAST_SOURCE_CHANNEL_MAP_CLASSIFICATION,
+        Flags.FLAG_LEAUDIO_BROADCAST_SOURCE_CHANNEL_MAP_CLASSIFICATION_IMPROVEMENT
+    })
+    public void testNotifyReceiveStateChanged_addClientForBigChannelMapwhenBisSynced() {
+        // Mock that the broadcast is local
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(anyInt());
+        prepareConnectedDeviceGroup();
+
+        injectRemoteSourceStateChanged(
+                mBroadcastMetadata1, /* isPaSynced */ false, /* isBisSynced */ false);
+
+        injectRemoteSourceStateChanged(
+                mBroadcastMetadata1, /* isPaSynced */ false, /* isBisSynced */ true);
 
         // Verify that setBigChannelMapClassification is called with ADD action
         verify(mLeAudioService)

@@ -644,29 +644,37 @@ public class BluetoothManagerService {
                         + (" AutoOnEnabled=" + mConfigAllowAutoOn));
     }
 
-    Unit onBluetoothDisallowed() {
+    Unit onRestrictionChange() {
         if (mSharingRestriction != null) {
             mSharingRestriction.updateRestriction();
         }
+        if (!BluetoothRestriction.isBluetoothAllowed()) {
+            autoOnSetupTimer();
+            if (mState.oneOf(State.OFF)) {
+                return Unit.INSTANCE;
+            }
 
-        autoOnSetupTimer();
+            Log.i(TAG, "onRestrictionChange: Shutting down");
 
-        if (mState.oneOf(State.OFF)) {
-            return Unit.INSTANCE;
-        }
+            mBleAppManager.clearBleApps();
 
-        Log.i(TAG, "onBluetoothDisallowed: Shutting down");
+            mEnable = false;
+            mEnableExternal = false;
+            mActiveLogs.add(ENABLE_DISABLE_REASON_DISALLOWED, false);
 
-        mBleAppManager.clearBleApps();
-
-        mEnable = false;
-        mEnableExternal = false;
-        mActiveLogs.add(ENABLE_DISABLE_REASON_DISALLOWED, false);
-
-        if (mState.oneOf(State.BLE_ON)) {
-            bleOnToOff();
-        } else if (mState.oneOf(State.ON)) {
-            onToBleOn();
+            if (mState.oneOf(State.BLE_ON)) {
+                bleOnToOff();
+            } else if (mState.oneOf(State.ON)) {
+                onToBleOn();
+            }
+        } else {
+            if (!isBluetoothPersistedStateOnBluetooth()) {
+                Log.i(TAG, "onRestrictionChange: Bluetooth not started");
+                autoOnSetupTimer();
+            } else {
+                Log.i(TAG, "onRestrictionChange: Re-enabling Bluetooth for " + mUser);
+                sendEnableMsg(mQuietEnableExternal, ENABLE_DISABLE_REASON_DISALLOWED);
+            }
         }
         return Unit.INSTANCE;
     }
@@ -964,19 +972,6 @@ public class BluetoothManagerService {
         } else {
             Log.i(TAG, "continueFromBleOnState: Staying in BLE_ON");
         }
-    }
-
-    /**
-     * Inform BluetoothAdapter instances that BREDR part is down and turn off all service and stack
-     * if no LE app needs it
-     */
-    private void sendBrEdrDownCallback() {
-        if (mAdapter == null) {
-            Log.d(TAG, "sendBrEdrDownCallback: mAdapter is null");
-            return;
-        }
-        Log.i(TAG, "sendBrEdrDownCallback: going to OFF");
-        bleOnToOff();
     }
 
     private Unit enableFromAutoOn() {
@@ -1468,17 +1463,8 @@ public class BluetoothManagerService {
                     if (mState.oneOf(State.TURNING_ON, State.ON)) {
                         bluetoothStateChangeHandler(mState.get(), State.TURNING_OFF);
                     }
-                    if (Flags.skipBleOnWhenTurningOff()) {
-                        if (mState.oneOf(State.TURNING_OFF, State.BLE_ON)) {
-                            bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
-                        }
-                    } else {
-                        if (mState.oneOf(State.TURNING_OFF)) {
-                            bluetoothStateChangeHandler(mState.get(), State.BLE_ON);
-                        }
-                        if (mState.oneOf(State.BLE_ON)) {
-                            bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
-                        }
+                    if (mState.oneOf(State.TURNING_OFF, State.BLE_ON)) {
+                        bluetoothStateChangeHandler(mState.get(), State.BLE_TURNING_OFF);
                     }
                     if (mState.oneOf(State.BLE_TURNING_ON, State.BLE_TURNING_OFF)) {
                         bluetoothStateChangeHandler(mState.get(), State.OFF);
@@ -1807,9 +1793,6 @@ public class BluetoothManagerService {
             broadcastIntentStateChange(ACTION_STATE_CHANGED, prevBrEdrState, newBrEdrState);
             if (newBrEdrState == State.OFF) {
                 sendBluetoothOffCallback();
-                if (!Flags.skipBleOnWhenTurningOff()) {
-                    sendBrEdrDownCallback();
-                }
             }
         }
 

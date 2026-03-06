@@ -838,10 +838,9 @@ public class HeadsetService extends ConnectableProfile {
                         + connectionPolicy
                         + ", "
                         + Util.getUidPidString());
-        if (!getAdapterService()
-                .setProfileConnectionPolicy(device, getProfileId(), connectionPolicy)) {
-            return false;
-        }
+
+        getAdapterService().setProfileConnectionPolicy(device, getProfileId(), connectionPolicy);
+
         if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
             connect(device);
         } else if (connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
@@ -2987,12 +2986,8 @@ public class HeadsetService extends ConnectableProfile {
     /** Retrieves the most recently connected device in the A2DP connected devices list. */
     public BluetoothDevice getFallbackDevice() {
         BluetoothDevice mostRecentDevice;
-        if (Flags.mainlineBetaStorage()) {
-            mostRecentDevice = getStorage().getMostRecentlyConnectedDeviceInList(getFallbackCandidates());
-        } else {
-            mostRecentDevice = getDatabaseManager() // Migrating
-                    .getMostRecentlyConnectedDevicesInList(getFallbackCandidates());
-        }
+        mostRecentDevice = getStorage().getMostRecentlyConnectedDeviceInList(getFallbackCandidates());
+
         if (mostRecentDevice != null) {
             return mostRecentDevice.equals(getActiveDevice()) ? null : mostRecentDevice;
         }

@@ -23,6 +23,10 @@ package {
 rust_defaults {
     name: "libbluetooth_rs_defaults",
     min_sdk_version: "36",
+    rustlibs: [
+        "libbytes",
+        "libpdl_runtime",
+    ],
     apex_available: [
         "//apex_available:platform",
         "com.android.bt",
@@ -35,6 +39,29 @@ rust_ffi_static {
     defaults: ["libbluetooth_rs_defaults"],
     srcs: [
         "src/lib.rs",
+
+        ":bluetooth_hci_rust_packets",
     ],
     host_supported: true,
+}
+
+rust_test {
+    name: "libbluetooth_rs_test",
+    defaults: ["libbluetooth_rs_defaults"],
+    srcs: [
+        "src/lib.rs",
+
+        ":bluetooth_hci_rust_packets",
+    ],
+    host_supported: true,
+    test_suites: [
+        "general-tests",
+    ],
+    target: {
+        android: {
+            test_suites: [
+                "mts-bt",
+            ],
+        },
+    },
 }

@@ -40,24 +40,6 @@ import com.android.bluetooth.telephony.BluetoothInCallService;
 //      {@link TurningBleOn} : Off to BleOn
 //      {@link TurningBleOff} : BleOn to Off
 //      {@link TurningOn} : BleOn to On
-//      {@link TurningOff} : On to BleOn
-//
-//        +------   Off  <-----+
-//        |                    |
-//        v                    |
-// TurningBleOn   TO--->   TurningBleOff
-//        |                  ^ ^
-//        |                  | |
-//        +----->        ----+ |
-//                 BleOn       |
-//        +------        <---+ O
-//        v                  | T
-//    TurningOn  TO---->  TurningOff
-//        |                    ^
-//        |                    |
-//        +----->   On   ------+
-//
-// Once skip_ble_on_when_turning_off is released it will be:
 //      {@link TurningOff} : On to TurningBleOff
 //
 //           OFF ⮜─────────────────╮
@@ -113,7 +95,7 @@ final class AdapterState extends StateMachine {
                     SystemProperties.getInt("ro.bluetooth.ble_stop_timeout_delay", defaultDelay);
         } else {
             // Validate the configuration when property is enabled or for new devices after 25Q4.
-            if ((DEGRADED_PERFORMANCE || !isAtMost25Q4)
+            if ((DEGRADED_PERFORMANCE)
                     && (!SystemProperties.get("ro.bluetooth.ble_start_timeout_delay").isEmpty()
                             || !SystemProperties.get("ro.bluetooth.ble_stop_timeout_delay")
                                     .isEmpty()
@@ -418,13 +400,7 @@ final class AdapterState extends StateMachine {
         @Override
         public boolean processMessage(Message msg) {
             switch (msg.what) {
-                case BREDR_STOPPED -> {
-                    if (Flags.skipBleOnWhenTurningOff()) {
-                        transitionTo(mTurningBleOff);
-                    } else {
-                        transitionTo(mBleOn);
-                    }
-                }
+                case BREDR_STOPPED -> transitionTo(mTurningBleOff);
 
                 case BREDR_STOP_TIMEOUT -> {
                     errorLog(messageString(msg.what));

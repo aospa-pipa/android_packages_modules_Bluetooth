@@ -98,7 +98,6 @@ import android.companion.CompanionDeviceManager;
 import android.content.AttributionSource;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.hardware.devicestate.DeviceStateManager;
 import android.net.MacAddress;
@@ -142,8 +141,6 @@ import com.android.bluetooth.btservice.InteropUtil.InteropFeature;
 import com.android.bluetooth.btservice.RemoteDevices.DeviceProperties;
 import com.android.bluetooth.btservice.bluetoothkeystore.BluetoothKeystoreNativeInterface;
 import com.android.bluetooth.btservice.bluetoothkeystore.BluetoothKeystoreService;
-import com.android.bluetooth.btservice.storage.DatabaseManager;
-import com.android.bluetooth.btservice.storage.MetadataDatabase;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.gatt.AdvertiseManagerNativeInterface;
@@ -316,7 +313,6 @@ public class AdapterService extends Service {
     private final SdpManagerNativeInterface mSdpManagerNativeInterface;
     private final SilenceDeviceManager mSilenceDeviceManager;
     private final BluetoothStorageManager mStorage;
-    private final DatabaseManager mDatabaseManager; // Migrating
 
     /**
      * Predicate that tests if the given {@link BluetoothDevice} is well-known to be used for
@@ -505,13 +501,7 @@ public class AdapterService extends Service {
         mDistanceMeasurementNativeInterface = distanceMeasurementNativeInterface;
         mSdpManagerNativeInterface = sdpManagerNativeInterface;
         mSilenceDeviceManager = new SilenceDeviceManager(this, mLooper);
-        if (Flags.mainlineBetaStorage()) {
-            mStorage = new BluetoothStorageManager(this);
-            mDatabaseManager = null;
-        } else {
-            mStorage = null;
-            mDatabaseManager = new DatabaseManager(this);
-        }
+        mStorage = new BluetoothStorageManager(this);
         mLocationDenylistPredicate =
                 (device) -> {
                     final MacAddress parsedAddress = MacAddress.fromString(device.getAddress());
@@ -776,33 +766,23 @@ public class AdapterService extends Service {
         return mHandler;
     }
 
-    public DatabaseManager getDatabaseManager() {
-        if (Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
-        return mDatabaseManager;
-    }
-
     List<BluetoothDevice> getMostRecentlyConnectedDevices() {
-        if (!Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
         return mStorage.getMostRecentlyConnectedDevices();
     }
 
     void setActiveAudioPolicy(BluetoothDevice device, int policy) {
-        if (!Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
         mStorage.setActiveAudioPolicy(device, policy);
     }
 
     int getActiveAudioPolicy(BluetoothDevice device) {
-        if (!Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
         return mStorage.getActiveAudioPolicy(device);
     }
 
     void setMicrophonePreferredForCalls(BluetoothDevice device, boolean enabled) {
-        if (!Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
         mStorage.setMicrophonePreferredForCalls(device, enabled);
     }
 
     boolean isMicrophonePreferredForCalls(BluetoothDevice device) {
-        if (!Flags.mainlineBetaStorage()) throw new IllegalStateException("mainlineBetaStorage");
         return mStorage.isMicrophonePreferredForCalls(device);
     }
 
@@ -1036,15 +1016,7 @@ public class AdapterService extends Service {
         Log.d(TAG, "init(instance=" + hciInstanceName + ")");
 
         factoryResetIfNeeded();
-        if (!Flags.mainlineBetaStorage()) {
-            try {
-                DataMigration.run(this);
-            } catch (Exception e) {
-                Log.e(TAG, "Migration failure: ", e);
-            }
-        } else {
-            mStorage.initialize();
-        }
+        mStorage.initialize();
 
         Config.init(this);
         mDeviceConfigListener.start();
@@ -1098,10 +1070,6 @@ public class AdapterService extends Service {
         mBluetoothHciVendorSpecificNativeInterface.init();
 
         mSdpManager = Optional.of(new SdpManager(this, mSdpManagerNativeInterface, mLooper));
-
-        if (!Flags.mainlineBetaStorage()) {
-            mDatabaseManager.start(MetadataDatabase.createDatabase(this)); // Migrating
-        }
 
         var isAutomotiveDevice = Util.isAutomotive(getApplicationContext());
 
@@ -1625,11 +1593,7 @@ public class AdapterService extends Service {
             }
         }
 
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.cleanup();
-        } else {
-            mDatabaseManager.cleanup(); // Migrating
-        }
+        mStorage.cleanup();
 
         if (mAdapterStateMachine != null) {
             mAdapterStateMachine.doQuit();
@@ -2079,15 +2043,8 @@ public class AdapterService extends Service {
      * @return false if one of profile is enabled or disabled, true otherwise
      */
     boolean isAllProfilesUnknown(BluetoothDevice device) {
-        if (Flags.mainlineBetaStorage()) {
-            return !getStartedConnectableProfiles()
-                    .anyMatch(p -> p.getConnectionPolicy(device) != CONNECTION_POLICY_UNKNOWN);
-        }
-        return !mStartedProfiles.values().stream()
-                .anyMatch(
-                        profile ->
-                                getProfileConnectionPolicy(device, profile.getProfileId())
-                                        != CONNECTION_POLICY_UNKNOWN);
+        return !getStartedConnectableProfiles()
+                .anyMatch(p -> p.getConnectionPolicy(device) != CONNECTION_POLICY_UNKNOWN);
     }
 
     /**
@@ -2342,35 +2299,16 @@ public class AdapterService extends Service {
         return !mCleaningUp;
     }
 
-    /**
-     * Wrapper to facilitate DatabaseManager migration see {@link
-     * DatabaseManager#setProfileConnectionPolicy}
-     */
-    public boolean setProfileConnectionPolicy(BluetoothDevice device, int profile, int policy) {
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.setProfileConnectionPolicy(device, profile, policy);
-            return true;
-        }
-        return mDatabaseManager.setProfileConnectionPolicy(device, profile, policy); // Migrating
+    public void setProfileConnectionPolicy(BluetoothDevice device, int profile, int policy) {
+        mStorage.setProfileConnectionPolicy(device, profile, policy);
     }
 
-    /**
-     * Wrapper to facilitate DatabaseManager migration see {@link
-     * DatabaseManager#getProfileConnectionPolicy}
-     */
     public int getProfileConnectionPolicy(BluetoothDevice device, int profile) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getProfileConnectionPolicy(device, profile);
-        }
-        return mDatabaseManager.getProfileConnectionPolicy(device, profile); // Migrating
+        return mStorage.getProfileConnectionPolicy(device, profile);
     }
 
-    /** see {@link DatabaseManager#getKeyMissingCount} */
     public int getKeyMissingCount(BluetoothDevice device) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getKeyMissingCount(device);
-        }
-        return mDatabaseManager.getKeyMissingCount(device); // Migrating
+        return mStorage.getKeyMissingCount(device);
     }
 
     /**
@@ -2384,13 +2322,8 @@ public class AdapterService extends Service {
         return getKeyMissingCount(device) > 0;
     }
 
-    /** see {@link DatabaseManager#updateKeyMissingCount} */
     public void updateKeyMissingCount(BluetoothDevice device, boolean isKeyMissingDetected) {
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.updateKeyMissingCount(device, isKeyMissingDetected);
-            return;
-        }
-        mDatabaseManager.updateKeyMissingCount(device, isKeyMissingDetected); // Migrating
+        mStorage.updateKeyMissingCount(device, isKeyMissingDetected);
     }
 
     /**
@@ -2403,16 +2336,12 @@ public class AdapterService extends Service {
             return false;
         }
         logManufacturerInfo(device, key, value);
-        if (Flags.mainlineBetaStorage()) {
-            boolean status = mStorage.setCustomMetadata(device, key, value);
-            if (key == BluetoothDevice.METADATA_SOFTWARE_VERSION
-                    && getBondState(device) == BOND_BONDED) {
-                mCompanionManager.setCompanionDevice(device, value);
-            }
-            return status;
-        } else {
-            return mDatabaseManager.setCustomMeta(device, key, value); // Migrating
+        boolean status = mStorage.setCustomMetadata(device, key, value);
+        if (key == BluetoothDevice.METADATA_SOFTWARE_VERSION
+                && getBondState(device) == BOND_BONDED) {
+            mCompanionManager.setCompanionDevice(device, value);
         }
+        return status;
     }
 
     private void logManufacturerInfo(BluetoothDevice device, int key, byte[] bytesValue) {
@@ -2458,11 +2387,7 @@ public class AdapterService extends Service {
      * @return value of given device and key combination
      */
     public byte[] getMetadata(BluetoothDevice device, int key) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getCustomMetadata(device, key);
-        } else {
-            return mDatabaseManager.getCustomMeta(device, key); // Migrating
-        }
+        return mStorage.getCustomMetadata(device, key);
     }
 
     /** Update Adapter Properties when BT profiles connection state changes. */
@@ -2501,13 +2426,7 @@ public class AdapterService extends Service {
         // If there are no preferences stored, return the defaults
         Bundle storedBundle = Bundle.EMPTY;
         for (BluetoothDevice groupDevice : groupDevices) {
-            Bundle groupDevicePreferences;
-            if (Flags.mainlineBetaStorage()) {
-                groupDevicePreferences = mStorage.getPreferredAudioProfiles(groupDevice);
-            } else {
-                groupDevicePreferences =
-                        mDatabaseManager.getPreferredAudioProfiles(groupDevice); // Migrating
-            }
+            Bundle groupDevicePreferences = mStorage.getPreferredAudioProfiles(groupDevice);
             if (!groupDevicePreferences.isEmpty()) {
                 storedBundle = groupDevicePreferences;
                 break;
@@ -2619,17 +2538,7 @@ public class AdapterService extends Service {
             Log.d(TAG, "setPreferredAudioProfiles: Fetching prev pref from DB");
             Bundle previousPreferences = getPreferredAudioProfiles(device);
 
-            if (Flags.mainlineBetaStorage()) {
-                mStorage.setPreferredAudioProfiles(groupDevices, strippedPreferences);
-            } else {
-                int dbResult =
-                        mDatabaseManager // Migrating
-                                .setPreferredAudioProfiles(groupDevices, strippedPreferences);
-                if (dbResult != BluetoothStatusCodes.SUCCESS) {
-                    Log.d(TAG, "setPreferredAudioProfiles: dbResult wasn't set ");
-                    return dbResult;
-                }
-            }
+            mStorage.setPreferredAudioProfiles(groupDevices, strippedPreferences);
 
             int outputOnlyPreference =
                     strippedPreferences.getInt(BluetoothAdapter.AUDIO_MODE_OUTPUT_ONLY);
@@ -3276,25 +3185,16 @@ public class AdapterService extends Service {
 
         for (BluetoothDevice dev : devices) {
             getBondAttemptCallerInfo().remove(dev.getAddress());
-            if (Flags.mainlineBetaStorage()) {
-                getStartedConnectableProfiles()
-                        .filter(p -> p.getConnectionPolicy(dev) == CONNECTION_POLICY_ALLOWED)
-                        .forEach(
-                                p -> {
-                                    Log.d(TAG, "removeBond: " + dev + " Manually disable " + p);
-                                    setProfileConnectionPolicy(
-                                            dev, p.getProfileId(), CONNECTION_POLICY_FORBIDDEN);
-                                });
+            getStartedConnectableProfiles()
+                    .filter(p -> p.getConnectionPolicy(dev) == CONNECTION_POLICY_ALLOWED)
+                    .forEach(
+                            p -> {
+                                Log.d(TAG, "removeBond: " + dev + " Manually disable " + p);
+                                setProfileConnectionPolicy(
+                                        dev, p.getProfileId(), CONNECTION_POLICY_FORBIDDEN);
+                            });
 
-                mBondStateMachine.dispatchMessage(BondStateMachine.MESSAGE_REMOVE_BOND, dev);
-            } else {
-                getPhonePolicy().ifPresent(policy -> policy.onRemoveBondRequest(dev));
-
-                Message msg =
-                        getBondStateMachine().obtainMessage(BondStateMachine.MESSAGE_REMOVE_BOND);
-                msg.obj = dev;
-                getBondStateMachine().sendMessage(msg);
-            }
+            mBondStateMachine.dispatchMessage(BondStateMachine.MESSAGE_REMOVE_BOND, dev);
         }
         return true;
     }
@@ -4158,75 +4058,27 @@ public class AdapterService extends Service {
     }
 
     public int getPhonebookAccessPermission(BluetoothDevice device) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getPhonebookAccessPermission(device);
-        }
-        return getDeviceAccessFromPrefs(device, PHONEBOOK_ACCESS_PERMISSION_PREFERENCE_FILE);
+        return mStorage.getPhonebookAccessPermission(device);
     }
 
     public int getMessageAccessPermission(BluetoothDevice device) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getMessageAccessPermission(device);
-        }
-        return getDeviceAccessFromPrefs(device, MESSAGE_ACCESS_PERMISSION_PREFERENCE_FILE);
+        return mStorage.getMessageAccessPermission(device);
     }
 
     public int getSimAccessPermission(BluetoothDevice device) {
-        if (Flags.mainlineBetaStorage()) {
-            return mStorage.getSimAccessPermission(device);
-        }
-        return getDeviceAccessFromPrefs(device, SIM_ACCESS_PERMISSION_PREFERENCE_FILE);
-    }
-
-    private int getDeviceAccessFromPrefs(BluetoothDevice device, String prefFile) {
-        SharedPreferences prefs = getSharedPreferences(prefFile, Context.MODE_PRIVATE);
-        if (!prefs.contains(device.getAddress())) {
-            return BluetoothDevice.ACCESS_UNKNOWN;
-        }
-        return prefs.getBoolean(device.getAddress(), false)
-                ? BluetoothDevice.ACCESS_ALLOWED
-                : BluetoothDevice.ACCESS_REJECTED;
-    }
-
-    private void setDeviceAccessFromPrefs(BluetoothDevice device, int value, String prefFile) {
-        SharedPreferences pref = getSharedPreferences(prefFile, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = pref.edit();
-        if (value == BluetoothDevice.ACCESS_UNKNOWN) {
-            editor.remove(device.getAddress());
-        } else {
-            editor.putBoolean(device.getAddress(), value == BluetoothDevice.ACCESS_ALLOWED);
-        }
-        editor.apply();
+        return mStorage.getSimAccessPermission(device);
     }
 
     public void setPhonebookAccessPermission(BluetoothDevice device, int value) {
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.setPhonebookAccessPermission(device, value);
-            return;
-        }
-        Log.d(
-                TAG,
-                "setPhonebookAccessPermission "
-                        + ("(device=" + ((device == null) ? "null" : device.getAnonymizedAddress()))
-                        + (", value=" + value)
-                        + (", callingUid=" + Binder.getCallingUid()));
-        setDeviceAccessFromPrefs(device, value, PHONEBOOK_ACCESS_PERMISSION_PREFERENCE_FILE);
+        mStorage.setPhonebookAccessPermission(device, value);
     }
 
     public void setMessageAccessPermission(BluetoothDevice device, int value) {
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.setMessageAccessPermission(device, value);
-            return;
-        }
-        setDeviceAccessFromPrefs(device, value, MESSAGE_ACCESS_PERMISSION_PREFERENCE_FILE);
+        mStorage.setMessageAccessPermission(device, value);
     }
 
     public void setSimAccessPermission(BluetoothDevice device, int value) {
-        if (Flags.mainlineBetaStorage()) {
-            mStorage.setSimAccessPermission(device, value);
-            return;
-        }
-        setDeviceAccessFromPrefs(device, value, SIM_ACCESS_PERMISSION_PREFERENCE_FILE);
+        mStorage.setSimAccessPermission(device, value);
     }
 
     public int getNumOfOffloadedScanFilterSupported() {
@@ -4552,21 +4404,6 @@ public class AdapterService extends Service {
         return mGattService == null ? null : mGattService.getDistanceMeasurement();
     }
 
-    IBinder getProfile(int id) {
-        if (getState() == State.TURNING_ON) {
-            return null;
-        }
-
-        Log.d(TAG, "profileId: " + id);
-
-        // LE_AUDIO_BROADCAST is not associated with a service and use LE_AUDIO's Binder
-        if (id == BluetoothProfile.LE_AUDIO_BROADCAST) {
-            id = BluetoothProfile.LE_AUDIO;
-        }
-
-        return getStartedProfile(id).flatMap(ProfileService::getBinder).orElse(null);
-    }
-
     void getProfile(int id, IBluetoothProfileCallback callback) {
         if (getState() == State.TURNING_ON) {
             return;
@@ -4638,10 +4475,6 @@ public class AdapterService extends Service {
             default -> Log.e(TAG, "getConnectedDevicesForProfile: profile value is not valid");
         }
         return connectedDevices;
-    }
-
-    void updatePhonePolicyOnAclConnect(BluetoothDevice device) {
-        mPhonePolicy.ifPresent(policy -> policy.handleAclConnected(device));
     }
 
     /**
@@ -4741,12 +4574,8 @@ public class AdapterService extends Service {
         handleBondStateChange(BluetoothProfile.VOLUME_CONTROL, device, fromState, toState);
         handleBondStateChange(BluetoothProfile.PBAP, device, fromState, toState);
         handleBondStateChange(BluetoothProfile.CSIP_SET_COORDINATOR, device, fromState, toState);
-        if (Flags.mainlineBetaStorage()) {
-            if (toState == BOND_NONE) {
-                mStorage.removeDevice(device);
-            }
-        } else {
-            mDatabaseManager.handleBondStateChanged(device, fromState, toState); // Migrating
+        if (toState == BOND_NONE) {
+            mStorage.removeDevice(device);
         }
 
         if (toState == BOND_NONE || fromState == BOND_BONDED) {
@@ -5006,14 +4835,9 @@ public class AdapterService extends Service {
         final var stringBuilder = new StringBuilder();
         mSilenceDeviceManager.dump(stringBuilder);
 
-        if (Flags.mainlineBetaStorage()) {
-            stringBuilder.append("\n");
-            mStorage.dump(stringBuilder);
-            stringBuilder.append("\n");
-        } else {
-            mDatabaseManager.dump(stringBuilder); // Migrating
-            stringBuilder.append("\n");
-        }
+        stringBuilder.append("\n");
+        mStorage.dump(stringBuilder);
+        stringBuilder.append("\n");
 
         for (ProfileService profile : mRegisteredProfiles) {
             profile.dump(stringBuilder);

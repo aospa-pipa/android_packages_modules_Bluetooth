@@ -327,28 +327,20 @@ public class BassClientService extends ConnectableProfile {
                 mScannerId = SCANNER_ID_INITIALIZING;
                 var source = getAttributionSource();
 
-                if (Flags.scanRegisterAndStart()) {
-                    ScanSettings settings =
-                            new ScanSettings.Builder()
-                                    .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-                                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                                    .setLegacy(false)
-                                    .build();
-                    if (mScanController.isOnScanThread()) {
-                        mScanController.registerAndStartScanInternal(
-                                            this, source, settings, mBaasUuidFilters);
-                    } else {
-                    runOnScanThread(
-                            () ->
-                                    mScanController.registerAndStartScanInternal(
-                                            this, source, settings, mBaasUuidFilters));
-                    }
-                    return;
-                }
+                ScanSettings settings =
+                        new ScanSettings.Builder()
+                                .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                                .setLegacy(false)
+                                .build();
                 if (mScanController.isOnScanThread()) {
-                    mScanController.registerScannerInternal(this, null, source);
+                    mScanController.registerAndStartScanInternal(
+                                        this, source, settings, mBaasUuidFilters);
                 } else {
-                runOnScanThread(() -> mScanController.registerScannerInternal(this, null, source));
+                    runOnScanThread(
+                        () ->
+                                mScanController.registerAndStartScanInternal(
+                                        this, source, settings, mBaasUuidFilters));
                 }
             }
         }
@@ -394,26 +386,7 @@ public class BassClientService extends ConnectableProfile {
                 }
                 mScannerId = scannerId;
 
-                if (Flags.scanRegisterAndStart()) {
-                    // `ScanController#onScannerRegistered` starts the scan for us
-                    if (mIsForegroundScan) {
-                        mCallbacks.notifySearchStarted(
-                                BluetoothStatusCodes.REASON_LOCAL_APP_REQUEST);
-                    }
-                    return;
-                }
-
-                ScanSettings settings =
-                        new ScanSettings.Builder()
-                                .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-                                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                                .setLegacy(false)
-                                .build();
-
-                runOnScanThread(
-                        () ->
-                                mScanController.startScanInternal(
-                                        scannerId, settings, mBaasUuidFilters));
+                // `ScanController#onScannerRegistered` starts the scan for us
                 if (mIsForegroundScan) {
                     mCallbacks.notifySearchStarted(BluetoothStatusCodes.REASON_LOCAL_APP_REQUEST);
                 }
@@ -1600,8 +1573,10 @@ public class BassClientService extends ConnectableProfile {
             return action;
         }
 
-        if (newSyncStatus == SyncStatus.PA_SYNCED) {
-            /* PA state transitioned to PA_SYNCED and synced to own broadcast source
+        if ((newSyncStatus == SyncStatus.PA_SYNCED)
+                || (Flags.leaudioBroadcastSourceChannelMapClassificationImprovement()
+                        && newSyncStatus == SyncStatus.BIS_SYNCED)) {
+            /* PA state transitioned to PA_SYNCED or BIS_SYNCED and synced to own broadcast source
              * action determined: ADD */
             action = SetBigChannelMapClassificationAction.ADD.getValue();
 
@@ -2420,15 +2395,15 @@ public class BassClientService extends ConnectableProfile {
     @Override
     public boolean setConnectionPolicy(BluetoothDevice device, int connectionPolicy) {
         Log.d(TAG, "Saved connectionPolicy " + device + " = " + connectionPolicy);
-        boolean setSuccessfully =
-                getAdapterService()
-                        .setProfileConnectionPolicy(device, getProfileId(), connectionPolicy);
-        if (setSuccessfully && connectionPolicy == CONNECTION_POLICY_ALLOWED) {
+
+        getAdapterService().setProfileConnectionPolicy(device, getProfileId(), connectionPolicy);
+
+        if (connectionPolicy == CONNECTION_POLICY_ALLOWED) {
             connect(device);
-        } else if (setSuccessfully && connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
+        } else if (connectionPolicy == CONNECTION_POLICY_FORBIDDEN) {
             disconnect(device);
         }
-        return setSuccessfully;
+        return true;
     }
 
     /**
@@ -5620,9 +5595,10 @@ public class BassClientService extends ConnectableProfile {
     }
 
     private void resumeReceiversSourceSynchronization(int broadcastIdToResumeFlagged) {
-        final int broadcastIdToResume = (!Flags.leaudioBroadcastAutoSwitchAnnouncement())
-            ? LeAudioConstants.INVALID_BROADCAST_ID
-            : broadcastIdToResumeFlagged;
+        final int broadcastIdToResume =
+                (!Flags.leaudioBroadcastAutoSwitchAnnouncement())
+                        ? LeAudioConstants.INVALID_BROADCAST_ID
+                        : broadcastIdToResumeFlagged;
 
         sEventLogger.logd(
                 TAG,
