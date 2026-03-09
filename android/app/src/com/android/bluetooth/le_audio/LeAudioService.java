@@ -79,7 +79,6 @@ import android.os.RemoteException;
 import android.os.SystemProperties;
 import android.os.SystemClock;
 import android.os.SystemProperties;
-import android.os.UserHandle;
 import android.sysprop.BluetoothProperties;
 import android.util.Log;
 import android.util.Pair;
@@ -2260,12 +2259,7 @@ public class LeAudioService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        if (Flags.onlyBroadcastToLocalUser()) {
-            sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
-        } else {
-            sendBroadcastAsUser(
-                    intent, UserHandle.ALL, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
-        }
+        sendBroadcast(intent, BLUETOOTH_CONNECT, Util.getTempBroadcastBundle());
     }
 
     void sendActiveDeviceChangeIntent(BluetoothDevice device) {
@@ -2274,15 +2268,9 @@ public class LeAudioService extends ConnectableProfile {
         intent.addFlags(
                 Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                         | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        if (Flags.onlyBroadcastToLocalUser()) {
-            getBaseContext()
-                    .sendBroadcastWithMultiplePermissions(
-                            intent, new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED});
-        } else {
-            createContextAsUser(UserHandle.ALL, /* flags= */ 0)
-                    .sendBroadcastWithMultiplePermissions(
-                            intent, new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED});
-        }
+        getBaseContext()
+                .sendBroadcastWithMultiplePermissions(
+                        intent, new String[] {BLUETOOTH_CONNECT, BLUETOOTH_PRIVILEGED});
         mEventLogger.logd(
                 TAG, "[Intent] Active Device Changed:" + mExposedActiveDevice + " -> " + device);
         mExposedActiveDevice = device;
@@ -3831,33 +3819,21 @@ public class LeAudioService extends ConnectableProfile {
             return true;
         }
 
-        if ((previous.getOutputCodecConfig() == null) && (next.getOutputCodecConfig() == null)) {
-            /* Nothing changed here.*/
+        if (previous.getOutputCodecConfig() == null
+                && next.getOutputCodecConfig() == null
+                && previous.getInputCodecConfig() == null
+                && next.getInputCodecConfig() == null) {
+            Log.d(TAG, "There is no input and output");
             return false;
         }
 
-        if ((previous.getOutputCodecConfig() == null || next.getOutputCodecConfig() == null)) {
-            Log.d(
-                    TAG,
-                    "New output codec: "
-                            + (previous.getOutputCodecConfig()
-                                    + " != "
-                                    + next.getOutputCodecConfig()));
+        if (previous.getOutputCodecConfig() == null || next.getOutputCodecConfig() == null) {
+            Log.d(TAG, "Output differs: " + previous + " != " + next);
             return true;
         }
 
-        if ((previous.getInputCodecConfig() == null) && (next.getInputCodecConfig() == null)) {
-            /* Nothing changed here.*/
-            return false;
-        }
-
-        if ((previous.getInputCodecConfig() == null || next.getInputCodecConfig() == null)) {
-            Log.d(
-                    TAG,
-                    "New input codec: "
-                            + (previous.getOutputCodecConfig()
-                                    + " != "
-                                    + next.getOutputCodecConfig()));
+        if (previous.getInputCodecConfig() == null || next.getInputCodecConfig() == null) {
+            Log.d(TAG, "Input differs: " + previous + " != " + next);
             return true;
         }
 

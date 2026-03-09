@@ -2560,9 +2560,9 @@ private:
         if (ases_pair.source) {
           ases_pair.source->cis_state = CisState::CONNECTING;
         }
-        uint16_t acl_handle =
-            BTM_GetHCIConnHandle(leAudioDevice->address_, BT_TRANSPORT_LE);
-        conn_pairs.push_back({.cis_conn_handle = ase->cis_conn_hdl,
+        uint16_t acl_handle = get_btm_client_interface().peer.BTM_GetHCIConnHandle(
+                leAudioDevice->address_, BT_TRANSPORT_LE);
+	conn_pairs.push_back({.cis_conn_handle = ase->cis_conn_hdl,
                               .acl_conn_handle = acl_handle});
         log::debug("cis handle: {} acl handle : 0x{:x}", ase->cis_conn_hdl,
                    acl_handle);
