@@ -340,7 +340,7 @@ void l2cble_start_conn_update(tL2C_LCB* p_lcb) {
           uint16_t timeout_bond =
               (1 + p_lcb->latency) * p_lcb->SubrateFactor() * p_lcb->max_interval * 1.25 * 2;
           log::info("timeout: {}, timeout_bond: {}", p_lcb->timeout, timeout_bond);
-          if (p_lcb->timeout < timeout_bond) {
+          if (p_lcb->timeout * 10 < timeout_bond) {
               log::verbose("Sending HCI cmd for subrate req to reset first");
               bluetooth::shim::ACL_LeSubrateRequest(
                 p_lcb->Handle(), 1, 1, p_lcb->PeriphLatency(), 0, p_lcb->timeout);
