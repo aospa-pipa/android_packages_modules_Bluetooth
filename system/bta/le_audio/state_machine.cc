@@ -135,7 +135,8 @@ constexpr uint8_t LTV_LEN_MAX_FT = 0X01;
 
 constexpr uint8_t ENCODER_LIMITS_SUB_OP = 0x24;
 constexpr uint8_t HCI_VS_SET_CIG_CONTEXT_TYPE = 0x3C;
-
+static constexpr char kPtsCapAudioContextProp[] =
+  "persist.bluetooth.leaudio.pts.set.capAudio.context";
 // Constants for HDT rates
 #define HDT_RATE_2 (1 << 0) // HDT rate 2
 #define HDT_RATE_3 (1 << 1) // HDT rate 3
@@ -4032,8 +4033,17 @@ private:
         new_metadata = leAudioDevice->GetMetadata(directional_audio_context,
                                                   ccid_lists.get(ase->direction));
       } else {
-        new_metadata = leAudioDevice->GetMetadata(AudioContexts(LeAudioContextType::UNSPECIFIED),
-                                                  std::vector<uint8_t>());
+        uint64_t requiredCapAudioContext = 1; //UNSPECIFIED
+        requiredCapAudioContext = osi_property_get_int32(kPtsCapAudioContextProp, requiredCapAudioContext);
+        if (osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false)) {
+           log::debug("PTS execution for cap");
+           log::debug("required audio context is {}", requiredCapAudioContext);
+           new_metadata = leAudioDevice->GetMetadata(AudioContexts(requiredCapAudioContext),
+                                                     std::vector<uint8_t>());
+        } else {
+           new_metadata = leAudioDevice->GetMetadata(AudioContexts(LeAudioContextType::UNSPECIFIED),
+                                                     std::vector<uint8_t>());
+        }
       }
 
       /* Do not update if metadata did not changed. */
