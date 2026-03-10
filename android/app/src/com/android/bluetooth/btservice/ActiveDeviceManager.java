@@ -1288,7 +1288,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         mp.threadStart(mHandlerThread);
         mHandler = new Handler(mp.handlerThreadGetLooper(mHandlerThread));
 
-        mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
         mAdapterService.registerBluetoothStateCallback((command) -> mHandler.post(command), this);
         if (Flags.admCentralizeActiveDeviceHandling()) {
             mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
@@ -1303,7 +1302,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     void cleanup() {
         Log.i(TAG, "cleanup()");
 
-        mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         mAdapterService.unregisterBluetoothStateCallback(this);
         if (Flags.admCentralizeActiveDeviceHandling()) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
@@ -1328,7 +1326,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
             if (!Flags.admCentralizeActiveDeviceHandling()) {
-                return;
+                throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             if (!mAdapterService.isAvailable()) {
                 Log.e(TAG, "Callback called when AdapterService is stopped");
