@@ -1493,16 +1493,16 @@ public:
       log::info("input codec type: {}, input codec priority: {}",
                    input_codec_config->codec_type, input_codec_config->codec_priority);
       le_audio_sink_hal_client_->SetCodecPriority(
-              bluetooth::le_audio::utils::translateCodecTypeToLeAudioCodecId(
-                      input_codec_config->codec_type),
+              bluetooth::le_audio::utils::translateCodecIdToLeAudioCodecId(
+                      input_codec_config->codec_id),
               input_codec_config->codec_priority);
     }
     if (le_audio_source_hal_client_ && output_codec_config) {
       log::info("output codec type: {}, output codec priority: {}",
                    output_codec_config->codec_type, output_codec_config->codec_priority);
       le_audio_source_hal_client_->SetCodecPriority(
-              bluetooth::le_audio::utils::translateCodecTypeToLeAudioCodecId(
-                      output_codec_config->codec_type),
+              bluetooth::le_audio::utils::translateCodecIdToLeAudioCodecId(
+                      output_codec_config->codec_id),
               output_codec_config->codec_priority);
     }
   }
