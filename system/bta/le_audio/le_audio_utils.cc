@@ -170,6 +170,14 @@ bluetooth::le_audio::btle_audio_codec_index_t translateBluetoothCodecFormatToCod
   return bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_INVALID;
 }
 
+types::LeAudioCodecId translateCodecIdToLeAudioCodecId(uint64_t codec_id) {
+   bluetooth::le_audio::types::LeAudioCodecId codec_id_;
+   codec_id_.coding_format = static_cast<uint8_t>(codec_id);
+   codec_id_.vendor_company_id = static_cast<uint16_t>(codec_id >> 8);
+   codec_id_.vendor_codec_id = static_cast<uint16_t>(codec_id >> 24);
+   return codec_id_;
+}
+
 types::LeAudioCodecId translateCodecTypeToLeAudioCodecId(btle_audio_codec_index_t codecIndex) {
   switch (codecIndex) {
     case bluetooth::le_audio::LE_AUDIO_CODEC_INDEX_SOURCE_LC3:
