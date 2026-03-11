@@ -1536,6 +1536,15 @@ public class LeAudioService extends ConnectableProfile {
             return Optional.empty();
         }
 
+        // Check if output codec selectable capabilities is empty
+        if (cs.getOutputCodecSelectableCapabilities().isEmpty()) {
+            Log.d(
+                    TAG,
+                    "isCapableToReceiveHighQualityBroadcastAudio: Output codec selectable capabilities is empty for groupId "
+                        + groupId + ", returning unknown");
+            return Optional.empty();
+        }
+
         return Optional.of(cs.isOutputCodecConfigSelectable(BROADCAST_HIGH_QUALITY_CONFIG));
     }
 
