@@ -533,14 +533,12 @@ public:
       return true;  // Nothing has changed
     }
 
-    if (com_android_bluetooth_flags_a2dp_reject_sho_request()) {
-      if (!peer_address.IsEmpty() && peer && (peer->IsSink() && AllowedToConnect(peer_address)) &&
-          !active_peer_.IsEmpty() && active_peer &&
-          active_peer->CheckFlags(BtifAvPeer::kFlagPendingStart)) {
-        log::error("Pending Start Response on {}, Return Fail",
-                   peer_address.ToRedactedStringForLogging());
-        return false;
-      }
+    if (!peer_address.IsEmpty() && peer && (peer->IsSink() && AllowedToConnect(peer_address)) &&
+        !active_peer_.IsEmpty() && active_peer &&
+        active_peer->CheckFlags(BtifAvPeer::kFlagPendingStart)) {
+      log::error("Pending Start Response on {}, Return Fail",
+                 peer_address.ToRedactedStringForLogging());
+      return false;
     }
     if (peer_address.IsEmpty()) {
       log::info("peer address is empty, shutdown the Audio source");
@@ -4122,10 +4120,13 @@ BtStatus btif_av_sink_execute_service(bool enable) {
     // be initiated by the app/audioflinger layers.
 
     tBTA_AV_FEAT features = BTA_AV_FEAT_NO_SCO_SSPD | BTA_AV_FEAT_RCCT | BTA_AV_FEAT_METADATA |
-                            BTA_AV_FEAT_VENDOR | BTA_AV_FEAT_ADV_CTRL | BTA_AV_FEAT_RCTG |
-                            BTA_AV_FEAT_BROWSE;
+                            BTA_AV_FEAT_VENDOR | BTA_AV_FEAT_ADV_CTRL | BTA_AV_FEAT_RCTG;
+
     if (avrcp_controller_cover_art_enabled()) {
       features |= BTA_AV_FEAT_COVER_ARTWORK;
+    }
+    if (avrcp_controller_browsing_enabled()) {
+      features |= BTA_AV_FEAT_BROWSE;
     }
     if (delay_reporting_enabled()) {
       features |= BTA_AV_FEAT_DELAY_RPT;
