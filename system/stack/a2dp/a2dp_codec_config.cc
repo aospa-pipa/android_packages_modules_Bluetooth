@@ -170,6 +170,8 @@ A2dpCodecConfig::A2dpCodecConfig(btav_a2dp_codec_index_t codec_index, a2dp::Code
 A2dpCodecConfig::~A2dpCodecConfig() {}
 
 void A2dpCodecConfig::setCodecPriority(btav_a2dp_codec_priority_t codec_priority) {
+  log::verbose("setCodecPriority: requested={}, current={}", codec_priority, codec_priority_);
+
   if (codec_priority == BTAV_A2DP_CODEC_PRIORITY_DEFAULT) {
     // Compute the default codec priority
     setDefaultCodecPriority();
@@ -180,6 +182,8 @@ void A2dpCodecConfig::setCodecPriority(btav_a2dp_codec_priority_t codec_priority
 }
 
 void A2dpCodecConfig::setDefaultCodecPriority() {
+  log::verbose("setDefaultCodecPriority: default={}, index={}",
+             default_codec_priority_, codec_index_);
   if (default_codec_priority_ != BTAV_A2DP_CODEC_PRIORITY_DEFAULT) {
     codec_priority_ = default_codec_priority_;
   } else {
@@ -369,8 +373,8 @@ bool A2dpCodecConfig::copyOutOtaCodecConfig(uint8_t* p_codec_info) {
 
 btav_a2dp_codec_config_t A2dpCodecConfig::getCodecConfig() {
   std::lock_guard<std::recursive_mutex> lock(codec_mutex_);
-
-  // TODO: We should check whether the codec config is valid
+  log::verbose("getCodecConfig:: codec={}, type={}, priority={}, codec_priority_={}",
+             name_, codec_config_.codec_type, codec_config_.codec_priority, codec_priority_);
   return codec_config_;
 }
 
@@ -896,6 +900,8 @@ bool A2dpCodecs::setCodecUserConfig(const btav_a2dp_codec_config_t& codec_user_c
     // Update the codec priority
     btav_a2dp_codec_priority_t old_priority = a2dp_codec_config->codecPriority();
     btav_a2dp_codec_priority_t new_priority = codec_user_config.codec_priority;
+    log::debug("Priority update: old={}, requested={}", old_priority, new_priority);
+
     a2dp_codec_config->setCodecPriority(new_priority);
     // Get the actual (recomputed) priority
     new_priority = a2dp_codec_config->codecPriority();
@@ -938,6 +944,8 @@ bool A2dpCodecs::setCodecUserConfig(const btav_a2dp_codec_config_t& codec_user_c
     if (new_priority >= last_codec_config->codecPriority()) {
       // The new priority is higher than the current codec. Restart the
       // connection to select a new codec.
+      log::verbose("New codec priority ({}) >= current codec priority ({}) - switching codec",
+                 new_priority, last_codec_config->codecPriority());
       current_codec_config_ = a2dp_codec_config;
       last_codec_config->setDefaultCodecPriority();
       *p_restart_input = true;
