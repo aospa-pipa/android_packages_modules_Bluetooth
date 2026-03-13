@@ -10,6 +10,14 @@ flag {
 }
 
 flag {
+    name: "a2dp_lhdc_api"
+    namespace: "bluetooth"
+    description: "API change for LHDC codec support"
+    is_exported: true
+    bug: "380118954"
+}
+
+flag {
     name: "lhdc_codec_support"
     namespace: "bluetooth"
     description: "Implement support for the LHDCv5 codec"
