@@ -373,13 +373,6 @@ public class LeAudioServiceTest {
     }
 
     @Test
-    @DisableFlags(Flags.FLAG_LEAUDIO_BROADCAST_CREATION_TIMEOUT_FIX)
-    public void initAndTeardown() {
-        mService.cleanup();
-        assertThat(LeAudioService.getLeAudioService()).isNull();
-    }
-
-    @Test
     public void tmapRoleMask_whenSupportLeCallControl_isCG() {
         assertTmapRole(TMAP_ROLE_FLAG_CG, LE_CALL_CONTROL);
     }
@@ -426,7 +419,7 @@ public class LeAudioServiceTest {
         }
         int mask =
                 Flags.leaudioCentralizeTmap()
-                        ? LeAudioTmapService.calculateTmapRoleMask()
+                        ? LeAudioTmapGattServer.calculateTmapRoleMask()
                         : new LeAudioService(
                                         mAdapterService,
                                         mStorage,
@@ -439,13 +432,6 @@ public class LeAudioServiceTest {
                                         mPackageManager)
                                 .getTmapRoleMask();
         assertThat(mask).isEqualTo(expectedMasks);
-    }
-
-    /** Test getting LeAudio Service: getLeAudioService() */
-    @Test
-    @DisableFlags(Flags.FLAG_LEAUDIO_BROADCAST_CREATION_TIMEOUT_FIX)
-    public void testGetLeAudioService() {
-        assertThat(mService).isEqualTo(LeAudioService.getLeAudioService());
     }
 
     /** Test enabling disabling device autoconnections when connection policy is set */
