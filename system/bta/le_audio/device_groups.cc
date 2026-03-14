@@ -2173,7 +2173,11 @@ bool LeAudioDeviceGroup::IsAudioSetConfigurationSupported(
             GetLatestAvailableContexts().source.test(requirements.audio_context_type))) {
         log::error("Remote does not supports context::{} in both direction",
                    bluetooth::common::ToString(requirements.audio_context_type));
-        return false;
+        if (osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false)) {
+          log::debug("CAP pts execution. need unidirectional LIVE");
+        } else {
+          return false;
+        }
       }
     }
   }
@@ -2489,7 +2493,8 @@ bool LeAudioDeviceGroup::ConfigureAses(
         return false;
       }
 
-      if (!dev->GetAvailableContexts().test(context_type)) {
+      if (!dev->GetAvailableContexts().test(context_type) &&
+          !(osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false))) {
         log::debug("Device {} not available for context {}", dev->address_,
                    bluetooth::common::ToString(context_type));
         return false;
