@@ -27,7 +27,6 @@ import com.android.bluetooth.TestUtils.getTestDevice
 import com.android.bluetooth.TestUtils.mockGetSystemService
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.flags.Flags
-import com.android.bluetooth.mockGetSystemService
 import com.android.tests.bluetooth.MockitoRule
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
@@ -67,7 +66,8 @@ class AvrcpControllerVolumeHandlerTest {
         doReturn(25).whenever(audioManager).getStreamVolume(eq(AudioManager.STREAM_MUSIC))
 
         doReturn(packageManager).whenever(adapterService).packageManager
-        adapterService.mockGetSystemService(audioManager)
+
+        mockGetSystemService(adapterService, AudioManager::class.java, audioManager)
     }
 
     @After

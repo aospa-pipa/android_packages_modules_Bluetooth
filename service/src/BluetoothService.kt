@@ -72,16 +72,29 @@ class BluetoothService(context: Context) : SystemService(context) {
     }
 
     override fun onUserStarting(user: TargetUser) {
-        val isUserVisible =
-            context
-                .createContextAsUser(user.userHandle, 0)
-                .getSystemService(UserManager::class.java)!!
-                .isUserVisible
-        if (!isUserVisible) {
-            Log.i(TAG, "onUserStarting($user): Skipping non visible user")
-            return
+        if (Flags.userVisibleOnUserStarting()) {
+            val isUserVisible =
+                context
+                    .createContextAsUser(user.userHandle, 0)
+                    .getSystemService(UserManager::class.java)!!
+                    .isUserVisible
+            if (!isUserVisible) {
+                Log.i(TAG, "onUserStarting($user): Skipping non visible user")
+                return
+            }
+            Log.i(TAG, "onUserStarting($user): Initializing for visible user")
+        } else {
+            val isForeground =
+                context
+                    .createContextAsUser(user.userHandle, 0)
+                    .getSystemService(UserManager::class.java)!!
+                    .isUserForeground
+            if (!isForeground) {
+                Log.i(TAG, "onUserStarting($user): Skipping non foreground user")
+                return
+            }
+            Log.i(TAG, "onUserStarting($user): Initializing for foreground user")
         }
-        Log.i(TAG, "onUserStarting($user): Initializing for visible user")
         launchOnServerThread { supervisor.onUserStarting(user.userHandle) }
     }
 

@@ -302,7 +302,6 @@ public class AdapterService extends Service {
             };
 
     private final Looper mLooper;
-    private final AdapterState mAdapterState;
     private final AdapterServiceHandler mHandler;
     private final AdapterNativeInterface mNativeInterface;
     private final BluetoothKeystoreService mBluetoothKeystoreService;
@@ -356,6 +355,7 @@ public class AdapterService extends Service {
 
     private BluetoothAdapter mAdapter;
     private AdapterProperties mAdapterProperties;
+    private AdapterState mAdapterStateMachine;
     private BondStateMachine mBondStateMachine;
     private RemoteDevices mRemoteDevices;
     private Vendor mVendor;
@@ -487,7 +487,6 @@ public class AdapterService extends Service {
             SdpManagerNativeInterface sdpManagerNativeInterface) {
         mLooper = requireNonNull(looper);
         mHandler = new AdapterServiceHandler(mLooper);
-        mAdapterState = new AdapterState(this, mLooper);
         mNativeInterface = requireNonNull(nativeInterface);
         mBluetoothKeystoreService = new BluetoothKeystoreService(bluetoothKeystoreNativeInterface);
         var bQRnativeCallback = new BluetoothQualityReportNativeCallback(this);
@@ -665,7 +664,7 @@ public class AdapterService extends Service {
                         refreshBondedDeviceUuids();
                         mNativeInterface.getAdapterProperty(
                                 AbstractionLayer.BT_PROPERTY_DYNAMIC_AUDIO_BUFFER);
-                        mAdapterState.sendMessage(AdapterState.BREDR_STARTED);
+                        mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
                         mCompanionManager.loadCompanionInfo();
                     }
                 }
@@ -682,7 +681,7 @@ public class AdapterService extends Service {
 
                     if (Flags.onlyStartScanDuringBleOn()) {
                         if (mRunningProfiles.size() == 0) {
-                            mAdapterState.sendMessage(AdapterState.BREDR_STOPPED);
+                            mAdapterStateMachine.sendMessage(AdapterState.BREDR_STOPPED);
                         }
                     } else {
                         // TODO(b/228875190): GATT is assumed supported. GATT is expected to be the
@@ -691,7 +690,7 @@ public class AdapterService extends Service {
                         if (mRunningProfiles.size() == 1
                                 && mRunningProfiles.get(0).getProfileId()
                                         == BluetoothProfile.GATT) {
-                            mAdapterState.sendMessage(AdapterState.BREDR_STOPPED);
+                            mAdapterStateMachine.sendMessage(AdapterState.BREDR_STOPPED);
                         }
                     }
                 }
@@ -726,6 +725,7 @@ public class AdapterService extends Service {
 
         mRemoteDevices = new RemoteDevices(this, mLooper);
         mAdapterProperties = new AdapterProperties(this, mRemoteDevices, mLooper);
+        mAdapterStateMachine = new AdapterState(this, mLooper);
 
         // Media Audio Server is enabled when any of the various sink media or audio profiles are
         // enabled. It allows protocols to register and contribute to our outward MediaSession,
@@ -1025,12 +1025,12 @@ public class AdapterService extends Service {
         mHandler.post(() -> init(hciInstanceName));
         Log.i(TAG, "offToBleOn(quietMode=" + quietMode + ", instance=" + hciInstanceName + ")");
 
-        mAdapterState.sendMessage(AdapterState.BLE_TURN_ON);
+        mAdapterStateMachine.sendMessage(AdapterState.BLE_TURN_ON);
     }
 
     void onToBleOn() {
         Log.d(TAG, "onToBleOn(): Called with mRunningProfiles.size()=" + mRunningProfiles.size());
-        mAdapterState.sendMessage(AdapterState.USER_TURN_OFF);
+        mAdapterStateMachine.sendMessage(AdapterState.USER_TURN_OFF);
     }
 
     @VisibleForTesting
@@ -1351,7 +1351,7 @@ public class AdapterService extends Service {
             if (supportedProfiles.length == 0) {
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 refreshBondedDeviceUuids();
-                mAdapterState.sendMessage(AdapterState.BREDR_STARTED);
+                mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
             } else {
                 setAllProfileServiceStates(supportedProfiles, State.ON);
             }
@@ -1362,7 +1362,7 @@ public class AdapterService extends Service {
             if (supportedProfiles.length == 1 && supportedProfiles[0] == BluetoothProfile.GATT) {
                 setScanMode(SCAN_MODE_CONNECTABLE, "startProfileServices");
                 refreshBondedDeviceUuids();
-                mAdapterState.sendMessage(AdapterState.BREDR_STARTED);
+                mAdapterStateMachine.sendMessage(AdapterState.BREDR_STARTED);
             } else {
                 setAllProfileServiceStates(supportedProfiles, State.ON);
             }
@@ -1497,7 +1497,7 @@ public class AdapterService extends Service {
      * Notify AdapterService that a ProfileService has started or stopped.
      *
      * @param profile the service being removed.
-     * @param state {@link State#ON} or {@link State#OFF}
+     * @param state {@link BluetoothAdapter#STATE_ON} or {@link BluetoothAdapter#STATE_OFF}
      */
     @VisibleForTesting
     void onProfileServiceStateChanged(ProfileService profile, int state) {
@@ -1566,7 +1566,7 @@ public class AdapterService extends Service {
             // Scanning is always supported, started separately, and is not a profile service.
             // This will check other profile services.
             if (supportedProfiles.length == 0) {
-                mAdapterState.sendMessage(AdapterState.BREDR_STOPPED);
+                mAdapterStateMachine.sendMessage(AdapterState.BREDR_STOPPED);
             } else {
                 setAllProfileServiceStates(supportedProfiles, State.OFF);
             }
@@ -1579,7 +1579,7 @@ public class AdapterService extends Service {
                 Log.d(
                         TAG,
                         "stopProfileServices(): No profiles services to stop or already stopped.");
-                mAdapterState.sendMessage(AdapterState.BREDR_STOPPED);
+                mAdapterStateMachine.sendMessage(AdapterState.BREDR_STOPPED);
             } else {
                 setAllProfileServiceStates(supportedProfiles, State.OFF);
             }
@@ -1619,7 +1619,9 @@ public class AdapterService extends Service {
         mMediaAudioServer.ifPresent(MediaAudioServer::cleanup);
         mMediaAudioServer = Optional.empty();
 
-        mAdapterState.doQuit();
+        if (mAdapterStateMachine != null) {
+            mAdapterStateMachine.doQuit();
+        }
 
         if (mBondStateMachine != null) {
             mBondStateMachine.doQuit();
@@ -1790,9 +1792,9 @@ public class AdapterService extends Service {
     void stateChangeCallback(int status) {
         if (status == AbstractionLayer.BT_STATE_OFF) {
             Log.d(TAG, "stateChangeCallback: disableNative() completed");
-            mAdapterState.sendMessage(AdapterState.BLE_STOPPED);
+            mAdapterStateMachine.sendMessage(AdapterState.BLE_STOPPED);
         } else if (status == AbstractionLayer.BT_STATE_ON) {
-            mAdapterState.sendMessage(AdapterState.BLE_STARTED);
+            mAdapterStateMachine.sendMessage(AdapterState.BLE_STARTED);
         } else {
             Log.e(TAG, "Incorrect status " + status + " in stateChangeCallback");
         }
@@ -1852,6 +1854,8 @@ public class AdapterService extends Service {
     }
 
     void updateAdapterState(int from, int to) {
+        mAdapterProperties.setState(to);
+
         broadcastToSystemServerCallbacks(
                 "updateAdapterState(" + nameForState(from) + ", " + nameForState(to) + ")",
                 (c) -> c.onBluetoothStateChange(from, to));
@@ -2821,7 +2825,10 @@ public class AdapterService extends Service {
     }
 
     public int getState() {
-        return mAdapterState.getState();
+        if (mAdapterProperties != null) {
+            return mAdapterProperties.getState();
+        }
+        return State.OFF;
     }
 
     void disconnectAllAcls() {
@@ -3297,16 +3304,10 @@ public class AdapterService extends Service {
      */
     public void deviceUuidsUpdated(BluetoothDevice device, ParcelUuid[] uuids, boolean success) {
         int state = getState();
-        if (state != State.ON
-                && state != State.BLE_ON
-                && state != State.TURNING_ON
-                && state != State.BLE_TURNING_ON) {
+        if (state != BluetoothAdapter.STATE_ON && state != BluetoothAdapter.STATE_BLE_ON) {
             // Silently dropping UUIDs and with no intent
             MetricsLogger.getInstance().cacheCount(BluetoothProtoEnums.SDP_DROP_UUID, 1);
-            Log.e(
-                    TAG,
-                    "deviceUuidsUpdated: Ignoring UUID update in adapter state: "
-                            + nameForState(state));
+            Log.e(TAG, "deviceUuidsUpdated: Adapter State:" + state);
             return;
         }
 
@@ -3318,13 +3319,10 @@ public class AdapterService extends Service {
             sendUuidsInternal(device, uuids);
         }
 
-        if (state != State.ON) {
+        if (state == BluetoothAdapter.STATE_BLE_ON) {
             MetricsLogger.getInstance()
                     .cacheCount(BluetoothProtoEnums.SDP_ADD_UUID_WITH_NO_INTENT, 1);
-            Log.w(
-                    TAG,
-                    "deviceUuidsUpdated: Not broadcasting ACTION_UUID in adapter state: "
-                            + nameForState(state));
+            Log.w(TAG, "deviceUuidsUpdated: Adapter State: BLE_ON, not sending intent");
             return;
         }
 
@@ -3896,7 +3894,11 @@ public class AdapterService extends Service {
            Log.e(TAG,"isDelayA2dpDiscDevice sleep 400ms");
               SystemClock.sleep(400);
         }
-        disconnectEnabledA2dpProfile(device);
+        if (Flags.a2dpDelayDisconnect()) {
+            disconnectEnabledA2dpProfile(device);
+        } else {
+            disconnectEnabledProfile(BluetoothProfile.A2DP, device);
+        }
         disconnectEnabledProfile(BluetoothProfile.A2DP_SINK, device);
         disconnectEnabledProfile(BluetoothProfile.MAP_CLIENT, device);
         disconnectEnabledProfile(BluetoothProfile.MAP, device);
@@ -4179,15 +4181,6 @@ public class AdapterService extends Service {
         return mAdapterProperties.isLeConnectedIsochronousStreamPeripheralSupported();
     }
 
-    /**
-     * Check if the LE BIG Channel Classification feature is supported.
-     *
-     * @return true, if the LE BIG Channel Classification is supported
-     */
-    public boolean isLeBigSetChannelClassificationSupported() {
-        return mAdapterProperties.isLeBigSetChannelClassificationSupported();
-    }
-
     public int getLeMaximumAdvertisingDataLength() {
         return mAdapterProperties.getLeMaximumAdvertisingDataLength();
     }
@@ -4234,11 +4227,11 @@ public class AdapterService extends Service {
     }
 
     void bleOnToOn() {
-        mAdapterState.sendMessage(AdapterState.USER_TURN_ON);
+        mAdapterStateMachine.sendMessage(AdapterState.USER_TURN_ON);
     }
 
     void bleOnToOff() {
-        mAdapterState.sendMessage(AdapterState.BLE_TURN_OFF);
+        mAdapterStateMachine.sendMessage(AdapterState.BLE_TURN_OFF);
     }
 
     private static void recursivelyDeleteDirectory(File file, boolean deleteDirectory) {
@@ -4351,7 +4344,8 @@ public class AdapterService extends Service {
     }
 
     BluetoothActivityEnergyInfo requestActivityInfo() {
-        if (getState() != State.ON || !mAdapterProperties.isActivityAndEnergyReportingSupported()) {
+        if (mAdapterProperties.getState() != State.ON
+                || !mAdapterProperties.isActivityAndEnergyReportingSupported()) {
             return null;
         }
 
@@ -4387,7 +4381,7 @@ public class AdapterService extends Service {
      *
      * @return {@code BluetoothStatusCodes.FEATURE_SUPPORTED} if supported
      */
-    public int getOffloadedTransportDiscoveryDataScanSupported() {
+    int getOffloadedTransportDiscoveryDataScanSupported() {
         if (mAdapterProperties.isOffloadedTransportDiscoveryDataScanSupported()) {
             return BluetoothStatusCodes.FEATURE_SUPPORTED;
         }
@@ -4849,7 +4843,7 @@ public class AdapterService extends Service {
         }
         writer.println();
 
-        mAdapterState.dump(fd, writer, args);
+        mAdapterStateMachine.dump(fd, writer, args);
         writer.println();
 
         final var stringBuilder = new StringBuilder();
@@ -4880,7 +4874,7 @@ public class AdapterService extends Service {
 
         writer.write(stringBuilder.toString());
 
-        final int currentState = mAdapterState.getState();
+        final int currentState = mAdapterProperties.getState();
         if (currentState == State.OFF
                 || currentState == State.BLE_TURNING_ON
                 || currentState == State.TURNING_OFF

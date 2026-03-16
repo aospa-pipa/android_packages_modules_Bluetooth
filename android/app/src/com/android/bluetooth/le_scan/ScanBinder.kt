@@ -22,7 +22,6 @@ import android.Manifest.permission.UPDATE_DEVICE_STATS
 import android.annotation.RequiresPermission
 import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothStatusCodes.FEATURE_SUPPORTED
 import android.bluetooth.IBluetoothScan
 import android.bluetooth.State
 import android.bluetooth.le.IPeriodicAdvertisingCallback
@@ -57,10 +56,7 @@ class ScanBinder(
         source: AttributionSource,
         method: String,
         block: ScanController.() -> Unit,
-    ) =
-        getController(source, method)?.let { controller ->
-            controller.doOnScanThread { controller.block() }
-        }
+    ) = getController(source, method)?.let { it.runOrDoOnScanThread(it, block) }
 
     @RequiresPermission(BLUETOOTH_SCAN)
     private fun getController(source: AttributionSource, method: String): ScanController? {
@@ -76,7 +72,6 @@ class ScanBinder(
         workSource: WorkSource?,
         source: AttributionSource,
     ) {
-        enforceTransportBlockFilterSupported(filters)
         enforcePrivilegedPermissionIfNeeded(settings, filters)
         if (workSource != null) {
             adapterService.enforceCallingOrSelfPermission(UPDATE_DEVICE_STATS, null)
@@ -104,7 +99,6 @@ class ScanBinder(
         filters: List<ScanFilter>,
         source: AttributionSource,
     ) {
-        enforceTransportBlockFilterSupported(filters)
         enforcePrivilegedPermissionIfNeeded(settings, filters)
         withControllerRunOnScanThread(source, "registerPiAndStartScan") {
             registerPiAndStartScan(intent, settings, filters, source)
@@ -166,16 +160,7 @@ class ScanBinder(
 
     override fun numHwTrackFiltersAvailable(source: AttributionSource): Int {
         val scan = getController(source, "numHwTrackFiltersAvailable") ?: return 0
-        return scan.fetchOnScanThread({ scan.numHwTrackFiltersAvailable() }, 0)
-    }
-
-    private fun enforceTransportBlockFilterSupported(filters: List<ScanFilter>) {
-        val hasTdsFilter = filters.any { it.transportBlockFilter != null }
-        if (hasTdsFilter) {
-            if (adapterService.offloadedTransportDiscoveryDataScanSupported != FEATURE_SUPPORTED) {
-                throw IllegalArgumentException("Transport Discovery Data filter is not supported")
-            }
-        }
+        return scan.runOrFetchOnScanThread(scan, 0) { scan.numHwTrackFiltersAvailable() }
     }
 
     @RequiresPermission(value = BLUETOOTH_PRIVILEGED, conditional = true)
@@ -234,5 +219,27 @@ class ScanBinder(
         }
 
         enforcePrivilegedPermissionIfNeeded(filters)
+    }
+
+    // TODO(b/444010402) Delete on Flags.leaudioBroadcastImproveSourceOperations() cleanup
+    private fun <T> ScanController.runOrDoOnScanThread(target: T, block: T.() -> Unit) {
+        if (isOnScanThread) {
+            target.block()
+        } else {
+            doOnScanThread { target.block() }
+        }
+    }
+
+    // TODO(b/444010402) Delete on Flags.leaudioBroadcastImproveSourceOperations() cleanup
+    private fun <T, R> ScanController.runOrFetchOnScanThread(
+        target: T,
+        defaultValue: R,
+        block: T.() -> R,
+    ): R {
+        return if (isOnScanThread) {
+            target.block()
+        } else {
+            fetchOnScanThread<R>({ target.block() }, defaultValue)
+        }
     }
 }

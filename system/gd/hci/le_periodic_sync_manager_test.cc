@@ -238,12 +238,12 @@ TEST_F(PeriodicSyncManagerTest, startup_teardown) {}
 
 TEST_F(PeriodicSyncManagerTest, start_sync_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
-  int reg_id = 0x01;
+  int request_id = 0x01;
   uint8_t advertiser_sid = 0x02;
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   uint16_t sync_handle = 0x03;
   PeriodicSyncStates request{
-          .reg_id = reg_id,
+          .request_id = request_id,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -274,7 +274,7 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -313,7 +313,7 @@ TEST_F(PeriodicSyncManagerTest,
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -351,7 +351,7 @@ TEST_F(PeriodicSyncManagerTest, stop_sync_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -398,7 +398,7 @@ TEST_F(PeriodicSyncManagerTest, cancel_create_sync_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -518,7 +518,7 @@ TEST_F(PeriodicSyncManagerTest, handle_sync_lost_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -567,9 +567,9 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // First request which will finish with error
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -587,10 +587,11 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
   test_le_scanning_interface_->CommandStatusCallback(
           LePeriodicAdvertisingCreateSyncStatusBuilder::Create(ErrorCode::SUCCESS, 0x00));
 
-  EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(
-                      reg_id_1, static_cast<uint8_t>(ErrorCode::CONNECTION_FAILED_ESTABLISHMENT), _,
-                      _, _, _, _))
+  EXPECT_CALL(
+          mock_callbacks_,
+          OnPeriodicSyncStarted(request_id_1,
+                                static_cast<uint8_t>(ErrorCode::CONNECTION_FAILED_ESTABLISHMENT), _,
+                                _, _, _, _))
           .Times(1);
 
   // Get LePeriodicAdvertisingSyncEstablished
@@ -604,8 +605,8 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
           [&] { periodic_sync_manager_->HandleLePeriodicAdvertisingSyncEstablished(event_view); });
 
   // Second request with the same data but different id
-  int reg_id_2 = 0x02;
-  request.reg_id = reg_id_2;
+  int request_id_2 = 0x02;
+  request.request_id = request_id_2;
   ASSERT_NO_FATAL_FAILURE(test_le_scanning_interface_->SetCommandFuture());
   DoInThread([&] { periodic_sync_manager_->StartSync(request, 0x04, 0x0A); });
   packet = test_le_scanning_interface_->GetCommand(OpCode::LE_PERIODIC_ADVERTISING_CREATE_SYNC);
@@ -616,9 +617,9 @@ TEST_F(PeriodicSyncManagerTest, handle_advertising_sync_established_after_error_
   test_le_scanning_interface_->CommandStatusCallback(
           LePeriodicAdvertisingCreateSyncStatusBuilder::Create(ErrorCode::SUCCESS, 0x00));
 
-  EXPECT_CALL(
-          mock_callbacks_,
-          OnPeriodicSyncStarted(reg_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _, _, _, _, _))
+  EXPECT_CALL(mock_callbacks_,
+              OnPeriodicSyncStarted(request_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _, _, _,
+                                    _, _))
           .Times(1);
 
   // Get LePeriodicAdvertisingSyncEstablished
@@ -640,10 +641,10 @@ TEST_F(PeriodicSyncManagerTest,
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // First request which will finish with error
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   uint8_t advertiser_sid_1 = 0x02;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid_1,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -657,10 +658,10 @@ TEST_F(PeriodicSyncManagerTest,
           LePeriodicAdvertisingCreateSyncView::Create(LeScanningCommandView::Create(packet));
   ASSERT_TRUE(temp_view.IsValid());
 
-  EXPECT_CALL(
-          mock_callbacks_,
-          OnPeriodicSyncStarted(reg_id_1, static_cast<uint8_t>(ErrorCode::MEMORY_CAPACITY_EXCEEDED),
-                                _, advertiser_sid_1, _, _, _))
+  EXPECT_CALL(mock_callbacks_,
+              OnPeriodicSyncStarted(request_id_1,
+                                    static_cast<uint8_t>(ErrorCode::MEMORY_CAPACITY_EXCEEDED), _,
+                                    advertiser_sid_1, _, _, _))
           .Times(1);
 
   // Get command status
@@ -669,9 +670,9 @@ TEST_F(PeriodicSyncManagerTest,
                                                                0x00));
 
   // Second request
-  int reg_id_2 = 0x02;
+  int request_id_2 = 0x02;
   uint8_t advertiser_sid_2 = 0x03;
-  request.reg_id = reg_id_2;
+  request.request_id = request_id_2;
   request.advertiser_sid = advertiser_sid_2;
   ASSERT_NO_FATAL_FAILURE(test_le_scanning_interface_->SetCommandFuture());
   DoInThread([&] { periodic_sync_manager_->StartSync(request, 0x04, 0x0A); });
@@ -684,7 +685,7 @@ TEST_F(PeriodicSyncManagerTest,
           LePeriodicAdvertisingCreateSyncStatusBuilder::Create(ErrorCode::SUCCESS, 0x00));
 
   EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(reg_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _,
+              OnPeriodicSyncStarted(request_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _,
                                     advertiser_sid_2, _, _, _))
           .Times(1);
 
@@ -708,9 +709,9 @@ TEST_F(PeriodicSyncManagerTest,
 
   // First request which will finish with timeout error
   uint8_t advertiser_sid_1 = 0x02;
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid_1,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -728,9 +729,10 @@ TEST_F(PeriodicSyncManagerTest,
   test_le_scanning_interface_->CommandStatusCallback(
           LePeriodicAdvertisingCreateSyncStatusBuilder::Create(ErrorCode::SUCCESS, 0x00));
 
-  EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(reg_id_1, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
-                                    _, advertiser_sid_1, _, _, _))
+  EXPECT_CALL(
+          mock_callbacks_,
+          OnPeriodicSyncStarted(request_id_1, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
+                                _, advertiser_sid_1, _, _, _))
           .Times(1);
 
   ASSERT_NO_FATAL_FAILURE(test_le_scanning_interface_->SetCommandFuture());
@@ -747,9 +749,9 @@ TEST_F(PeriodicSyncManagerTest,
                   0x00, ErrorCode::COMMAND_DISALLOWED));
 
   // Second request
-  int reg_id_2 = 0x02;
+  int request_id_2 = 0x02;
   uint8_t advertiser_sid_2 = 0x03;
-  request.reg_id = reg_id_2;
+  request.request_id = request_id_2;
   request.advertiser_sid = advertiser_sid_2;
   ASSERT_NO_FATAL_FAILURE(test_le_scanning_interface_->SetCommandFuture());
   DoInThread([&] { periodic_sync_manager_->StartSync(request, 0x04, 0x0A); });
@@ -762,7 +764,7 @@ TEST_F(PeriodicSyncManagerTest,
           LePeriodicAdvertisingCreateSyncStatusBuilder::Create(ErrorCode::SUCCESS, 0x00));
 
   EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(reg_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _,
+              OnPeriodicSyncStarted(request_id_2, static_cast<uint8_t>(ErrorCode::SUCCESS), _,
                                     advertiser_sid_2, _, _, _))
           .Times(1);
 
@@ -788,10 +790,10 @@ TEST_F(PeriodicSyncManagerTest, onStartSyncTimeout_callWithoutPeriodicSyncs) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   uint8_t advertiser_sid_1 = 0x02;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid_1,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -812,10 +814,10 @@ TEST_F(PeriodicSyncManagerTest,
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   uint8_t advertiser_sid_1 = 0x02;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid_1,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -910,9 +912,9 @@ TEST_F(PeriodicSyncManagerTest, syncEstablished_pendingCheckToCorrectTheOrder) {
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
 
   // start scan
-  int reg_id_1 = 0x01;
+  int request_id_1 = 0x01;
   PeriodicSyncStates request{
-          .reg_id = reg_id_1,
+          .request_id = request_id_1,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -920,17 +922,18 @@ TEST_F(PeriodicSyncManagerTest, syncEstablished_pendingCheckToCorrectTheOrder) {
   };
   DoInThread([&] { periodic_sync_manager_->StartSync(request, 0x04, 0x0A); });
 
-  EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(reg_id_1, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
-                                    _, _, _, _, _))
+  EXPECT_CALL(
+          mock_callbacks_,
+          OnPeriodicSyncStarted(request_id_1, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
+                                _, _, _, _, _))
           .Times(1);
 
   // First timeout
   DoInThread([&] { periodic_sync_manager_->OnStartSyncTimeout(); });
 
   // Second request with the same data but different id
-  int reg_id_2 = 0x02;
-  request.reg_id = reg_id_2;
+  int request_id_2 = 0x02;
+  request.request_id = request_id_2;
   DoInThread([&] { periodic_sync_manager_->StartSync(request, 0x04, 0x0A); });
 
   // Get LePeriodicAdvertisingSyncEstablished for the first request
@@ -943,9 +946,10 @@ TEST_F(PeriodicSyncManagerTest, syncEstablished_pendingCheckToCorrectTheOrder) {
   DoInThread(
           [&] { periodic_sync_manager_->HandleLePeriodicAdvertisingSyncEstablished(event_view); });
 
-  EXPECT_CALL(mock_callbacks_,
-              OnPeriodicSyncStarted(reg_id_2, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
-                                    _, _, _, _, _))
+  EXPECT_CALL(
+          mock_callbacks_,
+          OnPeriodicSyncStarted(request_id_2, static_cast<uint8_t>(ErrorCode::ADVERTISING_TIMEOUT),
+                                _, _, _, _, _))
           .Times(1);
 
   // Second timeout
@@ -970,7 +974,7 @@ TEST_F(PeriodicSyncManagerTest, handle_periodic_advertising_report_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,
@@ -1021,7 +1025,7 @@ TEST_F(PeriodicSyncManagerTest, handle_biginfo_advertising_report_test) {
   Address address = Address::FromString("00:11:22:33:44:55").value();
   AddressWithType address_with_type = AddressWithType(address, AddressType::PUBLIC_DEVICE_ADDRESS);
   PeriodicSyncStates request{
-          .reg_id = 0x01,
+          .request_id = 0x01,
           .advertiser_sid = advertiser_sid,
           .address_with_type = address_with_type,
           .sync_handle = sync_handle,

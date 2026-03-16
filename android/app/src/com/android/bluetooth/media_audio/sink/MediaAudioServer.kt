@@ -32,7 +32,6 @@ import com.android.bluetooth.R
 import com.android.bluetooth.Util
 import com.android.bluetooth.a2dpsink.A2dpSinkService
 import com.android.bluetooth.avrcpcontroller.AvrcpControllerService
-import com.android.bluetooth.mcp.McpClientService
 import com.android.internal.annotations.VisibleForTesting
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -126,7 +125,7 @@ class MediaAudioServer(private val context: Context) {
         }
 
         private fun isMediaEnabled(): Boolean {
-            return AvrcpControllerService.isEnabled() || McpClientService.isEnabled()
+            return AvrcpControllerService.isEnabled()
         }
 
         private fun isAudioEnabled(): Boolean {

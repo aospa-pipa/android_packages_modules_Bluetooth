@@ -343,7 +343,7 @@ static std::pair<uint16_t /* interval */, uint16_t /* window */> get_low_latency
  *
  ******************************************************************************/
 tBTM_STATUS BTM_BleObserve(bool start, uint8_t duration, tBTM_INQ_RESULTS_CB* p_results_cb,
-                           tBTM_INQUIRY_CMPL_CB* p_cmpl_cb) {
+                           tBTM_CMPL_CB* p_cmpl_cb) {
   tBTM_STATUS status = tBTM_STATUS::BTM_WRONG_MODE;
   uint8_t scan_phy = btm_cb.ble_ctr_cb.inq_var.scan_phy | BTM_BLE_DEFAULT_PHYS;
 
@@ -521,8 +521,6 @@ void BTM_BleReadControllerFeatures(tBTM_BLE_CTRL_FEATURES_CBACK* p_vsc_cback) {
   btm_cb.cmn_ble_vsc_cb.dynamic_audio_buffer_support =
           vendor_capabilities.dynamic_audio_buffer_support_;
   btm_cb.cmn_ble_vsc_cb.a2dp_offload_v2_support = vendor_capabilities.a2dp_offload_v2_support_;
-  btm_cb.cmn_ble_vsc_cb.big_set_channel_map_classification_support =
-          vendor_capabilities.big_set_channel_map_classification_support_;
 
   if (vendor_capabilities.dynamic_audio_buffer_support_) {
     std::array<bluetooth::hci::DynamicAudioBufferCodecCapability, BTM_CODEC_TYPE_MAX_RECORDS>
@@ -1776,7 +1774,7 @@ void btm_ble_stop_inquiry(void) {
  *
  ******************************************************************************/
 static void btm_ble_stop_observe(void) {
-  tBTM_INQUIRY_CMPL_CB* p_obs_cb = btm_cb.ble_ctr_cb.p_obs_cmpl_cb;
+  tBTM_CMPL_CB* p_obs_cb = btm_cb.ble_ctr_cb.p_obs_cmpl_cb;
 
   alarm_cancel(btm_cb.ble_ctr_cb.observer_timer);
 

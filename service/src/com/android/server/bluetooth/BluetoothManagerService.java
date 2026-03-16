@@ -75,6 +75,7 @@ import android.os.UserHandle;
 import android.provider.Settings;
 import android.sysprop.BluetoothProperties;
 
+import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.util.Text;
 import com.android.bluetooth.util.TimeProvider;
 import com.android.internal.annotations.VisibleForTesting;
@@ -1728,8 +1729,7 @@ public class BluetoothManagerService {
                         + State.$.toString(newState)
                         + "): ";
         if (mState.oneOf(newState)) {
-            // Unreachable. We should be able to delete the if entirely
-            Log.e(TAG, header + "Already in state " + mState);
+            Log.d(TAG, header + "Already in state " + mState);
             return;
         }
 

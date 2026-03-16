@@ -32,6 +32,7 @@ import android.util.Log;
 
 import com.android.bluetooth.ActionOnDeathRecipient;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.flags.Flags;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Collections;
@@ -165,7 +166,9 @@ public class PeriodicScanManager {
                                             status));
 
                 } else {
-                    it.remove();
+                    if (Flags.leaudioBroadcastImproveSourceOperations()) {
+                        it.remove();
+                    }
                     callbackToApp(
                             () ->
                                     callback.onSyncEstablished(
@@ -177,6 +180,9 @@ public class PeriodicScanManager {
                                             status));
                     IBinder binder = e.getKey();
                     binder.unlinkToDeath(e.getValue().deathRecipient, 0);
+                    if (!Flags.leaudioBroadcastImproveSourceOperations()) {
+                        it.remove();
+                    }
                 }
             }
         }

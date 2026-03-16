@@ -661,11 +661,14 @@ public class SapService extends ConnectableProfile
 
     @Override
     public void onBluetoothStateChange(int prevState, int newState) {
-        if (newState != State.ON) {
-            return;
+        if (newState == State.TURNING_OFF) {
+            Log.d(TAG, "STATE_TURNING_OFF");
+            sendShutdownMessage();
+        } else if (newState == State.ON) {
+            Log.d(TAG, "STATE_ON");
+            // start RFCOMM listener
+            mSessionStatusHandler.sendMessage(mSessionStatusHandler.obtainMessage(START_LISTENER));
         }
-        // start RFCOMM listener
-        mSessionStatusHandler.sendMessage(mSessionStatusHandler.obtainMessage(START_LISTENER));
     }
 
     private void setUserTimeoutAlarm() {

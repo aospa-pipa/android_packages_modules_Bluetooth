@@ -2563,6 +2563,7 @@
   "flags": [
     {
       "flags": [
+        "a2dp_cancel_acceptor_alarm_for_avdt_init",
         "a2dp_adjust_sbc_bitpool"
       ],
       "tests": [

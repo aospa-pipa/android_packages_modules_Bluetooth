@@ -577,7 +577,7 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
       } else {
         flow_spec.peak_bandwidth = (165 * 1000) / 8; /* bytes/second */
       }
-      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, (tBTM_FLOW_SPEC_CMPL_CB*)NULL);
+      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
       if (status != tBTM_STATUS::BTM_CMD_STARTED) {
         log::warn("Cannot send FlowSpec: status {}", status);
       }
@@ -586,7 +586,7 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
       uint32_t bitrate = 0;
       bitrate = a2dp_codec_config->getTrackBitRate();
       flow_spec.peak_bandwidth = bitrate / 8; /* bytes/second */
-      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, (tBTM_FLOW_SPEC_CMPL_CB*)NULL);
+      tBTM_STATUS status = BTM_FlowSpec(peer_address, &flow_spec, NULL);
       if (status != tBTM_STATUS::BTM_CMD_STARTED) {
         log::warn("Cannot send FlowSpec: status {}", status);
       }
@@ -622,7 +622,9 @@ static void btif_a2dp_source_start_session_delayed(const RawAddress& peer_addres
     bluetooth::audio::a2dp::set_remote_delay(btif_av_get_audio_delay(A2dpType::kSource));
   }
 
-  bta_av_co_report_codec_config_changed(peer_address);
+  if (com_android_bluetooth_flags_a2dp_control_codec_state_reports()) {
+    bta_av_co_report_codec_config_changed(peer_address);
+  }
   peer_ready_promise.set_value();
 }
 

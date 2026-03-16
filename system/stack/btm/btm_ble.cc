@@ -33,7 +33,6 @@
 #include "base/functional/bind.h"
 #include "btif/include/btif_storage.h"
 #include "hci/controller.h"
-#include "hci/hci_packets.h"
 #include "main/shim/entry.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int_types.h"
@@ -106,13 +105,13 @@ void BTM_BleTestEnd(tBTM_CMPL_CB* p_cmd_cmpl_cback) {
 /*******************************************************************************
  * Internal Functions
  ******************************************************************************/
-void btm_ble_test_command_complete(bluetooth::hci::CommandCompleteView view) {
+void btm_ble_test_command_complete(uint8_t* p) {
   tBTM_CMPL_CB* p_cb = btm_cb.devcb.p_le_test_cmd_cmpl_cb;
 
   btm_cb.devcb.p_le_test_cmd_cmpl_cb = NULL;
 
   if (p_cb) {
-    (*p_cb)(view);
+    (*p_cb)(p);
   }
 }
 

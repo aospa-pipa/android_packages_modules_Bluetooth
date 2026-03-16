@@ -134,6 +134,9 @@ public class LeAudioService extends ConnectableProfile {
     /* 5 seconds timeout for Broadcast streaming state transition */
     @VisibleForTesting static final int CREATE_BROADCAST_TIMEOUT_MS = 5000;
 
+    // TODO Delete on leaudioBroadcastCreationTimeoutFix flag cleanup
+    @Deprecated private static LeAudioService sLeAudioService;
+
     /** Indicates group audio support for none direction */
     private static final int AUDIO_DIRECTION_NONE = 0x00;
 
@@ -415,6 +418,11 @@ public class LeAudioService extends ConnectableProfile {
 
         if (!Flags.admCentralizeActiveDeviceHandling()) {
             mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
+        }
+
+        if (!Flags.leaudioBroadcastCreationTimeoutFix()) {
+            // Mark service as started
+            setLeAudioService(this);
         }
 
         Map<String, ?> allKeys = getLeAudioCodecMap().getAll();
@@ -818,12 +826,13 @@ public class LeAudioService extends ConnectableProfile {
         if (mTmapGattServer != null) {
             throw new IllegalStateException("TMAP GATT server started before start() is called");
         }
+        mTmapGattServer = LeAudioObjectsFactory.getInstance().getTmapGattServer(this);
 
         try {
-            mTmapGattServer =
-                    LeAudioObjectsFactory.getInstance().getTmapGattServer(getAdapterService());
+            mTmapGattServer.start(mTmapRoleMask);
         } catch (IllegalStateException e) {
             Log.e(TAG, "Fail to start TmapGattServer", e);
+            mTmapGattServer = null;
             return false;
         }
 
@@ -884,6 +893,11 @@ public class LeAudioService extends ConnectableProfile {
     public void cleanup() {
         Log.i(TAG, "cleanup()");
 
+        if (!Flags.leaudioBroadcastCreationTimeoutFix() && sLeAudioService == null) {
+            Log.w(TAG, "cleanup() called before initialization");
+            return;
+        }
+
         mInCall = false;
         mQueuedInCallValue = Optional.empty();
         mAudioManager.removeOnModeChangedListener(mAudioModeChangeListener);
@@ -907,7 +921,7 @@ public class LeAudioService extends ConnectableProfile {
             if (mTmapGattServer == null) {
                 Log.w(TAG, "TMAP GATT server should never be null before stop() is called");
             } else {
-                mTmapGattServer.close();
+                mTmapGattServer.stop();
                 mTmapGattServer = null;
                 mTmapStarted = false;
             }
@@ -978,6 +992,11 @@ public class LeAudioService extends ConnectableProfile {
         mAudioManagerAddedOutDevice = null;
         mUnicastSourceStreamStatus = Optional.empty();
 
+        if (!Flags.leaudioBroadcastCreationTimeoutFix()) {
+            // Set the service and BLE devices as inactive
+            setLeAudioService(null);
+        }
+
         // Unregister broadcast callbacks
         synchronized (mBroadcastCallbacks) {
             mBroadcastCallbacks.kill();
@@ -1005,6 +1024,27 @@ public class LeAudioService extends ConnectableProfile {
         if (!Flags.admCentralizeActiveDeviceHandling()) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         }
+    }
+
+    @VisibleForTesting
+    @Deprecated // TODO Delete on leaudioBroadcastCreationTimeoutFix flag cleanup
+    static synchronized LeAudioService getLeAudioService() {
+        if (sLeAudioService == null) {
+            Log.w(TAG, "getLeAudioService(): service is NULL");
+            return null;
+        }
+        if (!sLeAudioService.isAvailable()) {
+            Log.w(TAG, "getLeAudioService(): service is not available");
+            return null;
+        }
+        return sLeAudioService;
+    }
+
+    @VisibleForTesting
+    @Deprecated // TODO Delete on leaudioBroadcastCreationTimeoutFix flag cleanup
+    static synchronized void setLeAudioService(LeAudioService instance) {
+        Log.d(TAG, "setLeAudioService(): set to: " + instance);
+        sLeAudioService = instance;
     }
 
     @VisibleForTesting
@@ -6387,30 +6427,44 @@ public class LeAudioService extends ConnectableProfile {
         public void run() {
             Log.w(TAG, "Failed to start Broadcast in time");
 
-            mCreateBroadcastTimeoutEvent = null;
-            mCreateBroadcastQueue.remove();
-            mAwaitingBroadcastCreateResponse = false;
-
-            /* Disconnect Broadcast device which was connected to avoid non LE Audio sound
-             * leak in handover scenario.
-             */
-            if (Flags.leaudioFallbackGroupSelection()
-                    || (mBroadcastToUnicastFallbackGroup != LE_AUDIO_GROUP_ID_INVALID)) {
-                if (mCreateBroadcastQueue.isEmpty() && (mActiveBroadcastAudioDevice != null)) {
-                    transitionFromBroadcastToUnicast();
+            if (!Flags.leaudioBroadcastCreationTimeoutFix()) {
+                if (getLeAudioService() == null) {
+                    Log.e(TAG, "CreateBroadcastTimeoutEvent: No LE Audio service");
+                    return;
                 }
-            }
 
-            mHandler.post(() -> notifyBroadcastStartFailed(BluetoothStatusCodes.ERROR_TIMEOUT));
-            logBroadcastSessionStatsWithStatus(
-                    INVALID_BROADCAST_ID,
-                    BluetoothStatsLog
-                            .BROADCAST_AUDIO_SESSION_REPORTED__SESSION_SETUP_STATUS__SETUP_STATUS_CREATE_FAILED);
+                if (sLeAudioService.mHandler == null) {
+                    Log.w(TAG, "CreateBroadcastTimeoutEvent: No handler");
+                    return;
+                }
 
-            // In case if there were additional calls to create broadcast
-            if (!mCreateBroadcastQueue.isEmpty()) {
-                BluetoothLeBroadcastSettings settings = mCreateBroadcastQueue.remove();
-                createBroadcast(settings);
+                mHandler.post(() -> notifyBroadcastStartFailed(BluetoothStatusCodes.ERROR_TIMEOUT));
+            } else {
+                mCreateBroadcastTimeoutEvent = null;
+                mCreateBroadcastQueue.remove();
+                mAwaitingBroadcastCreateResponse = false;
+
+                /* Disconnect Broadcast device which was connected to avoid non LE Audio sound
+                 * leak in handover scenario.
+                 */
+                if (Flags.leaudioFallbackGroupSelection()
+                        || (mBroadcastToUnicastFallbackGroup != LE_AUDIO_GROUP_ID_INVALID)) {
+                    if (mCreateBroadcastQueue.isEmpty() && (mActiveBroadcastAudioDevice != null)) {
+                        transitionFromBroadcastToUnicast();
+                    }
+                }
+
+                mHandler.post(() -> notifyBroadcastStartFailed(BluetoothStatusCodes.ERROR_TIMEOUT));
+                logBroadcastSessionStatsWithStatus(
+                        INVALID_BROADCAST_ID,
+                        BluetoothStatsLog
+                                .BROADCAST_AUDIO_SESSION_REPORTED__SESSION_SETUP_STATUS__SETUP_STATUS_CREATE_FAILED);
+
+                // In case if there were additional calls to create broadcast
+                if (!mCreateBroadcastQueue.isEmpty()) {
+                    BluetoothLeBroadcastSettings settings = mCreateBroadcastQueue.remove();
+                    createBroadcast(settings);
+                }
             }
         }
     }

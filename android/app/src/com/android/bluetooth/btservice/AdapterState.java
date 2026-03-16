@@ -131,7 +131,6 @@ final class AdapterState extends StateMachine {
     private final Off mOff = new Off(State.OFF);
     private final BleOn mBleOn = new BleOn(State.BLE_ON);
 
-    private int mState = State.OFF;
     private int mPrevState = State.OFF;
 
     AdapterState(AdapterService service, Looper looper) {
@@ -146,10 +145,6 @@ final class AdapterState extends StateMachine {
         mAdapterService = service;
         setInitialState(mOff);
         start();
-    }
-
-    int getState() {
-        return mState;
     }
 
     private static String messageString(int message) {
@@ -191,13 +186,6 @@ final class AdapterState extends StateMachine {
     }
 
     private abstract class BaseAdapterState extends com.android.internal.util.State {
-        private static boolean isStableState(int state) {
-            return switch (state) {
-                case State.ON, State.OFF, State.BLE_ON -> true;
-                default -> false;
-            };
-        }
-
         private final int mStateValue;
 
         BaseAdapterState(int state) {
@@ -206,20 +194,10 @@ final class AdapterState extends StateMachine {
 
         @Override
         public void enter() {
-            infoLog("State entered");
-            mState = mStateValue;
-            if (isStableState(mPrevState)) {
-                // The SystemServer initiates transition from stable states
-                // AdapterStates notifies only when initiating transitiong from any other state.
-                // The destination transition may not be stable (ex: TURNING_OFF -> BLE_TURNING_OFF)
-                return;
-            }
-            mAdapterService.updateAdapterState(mPrevState, mState);
-        }
-
-        @Override
-        public void exit() {
-            mPrevState = mState;
+            int currState = mStateValue;
+            infoLog("entered ");
+            mAdapterService.updateAdapterState(mPrevState, currState);
+            mPrevState = currState;
         }
 
         void infoLog(String msg) {
@@ -238,8 +216,9 @@ final class AdapterState extends StateMachine {
 
         @Override
         public void enter() {
+            int prevState = mPrevState;
             super.enter();
-            if (mPrevState == State.BLE_TURNING_OFF) {
+            if (prevState == State.BLE_TURNING_OFF) {
                 mAdapterService.cleanup();
             }
         }

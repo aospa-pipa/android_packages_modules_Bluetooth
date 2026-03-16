@@ -1381,7 +1381,7 @@ std::optional<PairingType> btif_storage_get_bredr_pairing_type(const RawAddress&
 
   if (pairing_type.algorithm == PairingAlgorithm::BREDR_LEGACY) {
     pairing_type.legacy_variant = static_cast<LegacyPairingVariant>(variant);
-  } else {
+  } else if (pairing_type.algorithm == PairingAlgorithm::SC) {
     pairing_type.variant = static_cast<PairingVariant>(variant);
   }
 

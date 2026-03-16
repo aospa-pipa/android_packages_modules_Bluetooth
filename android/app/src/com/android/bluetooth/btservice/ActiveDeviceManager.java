@@ -188,9 +188,6 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
     @Override
     public void onBluetoothStateChange(int prevState, int newState) {
-        if (newState != State.ON) {
-            return;
-        }
         mHandler.post(() -> handleAdapterStateChanged(newState));
     }
 
@@ -473,7 +470,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
     private void handleAdapterStateChanged(int currentState) {
         Log.d(TAG, "handleAdapterStateChanged: currentState=" + currentState);
-        resetState();
+        if (currentState == State.ON) {
+            resetState();
+        }
     }
 
     private boolean isLeAudioHearingAidDevice(BluetoothDevice dev) {

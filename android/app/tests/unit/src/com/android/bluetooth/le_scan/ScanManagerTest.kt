@@ -96,7 +96,6 @@ import org.mockito.Mockito.mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
-import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.spy
 import org.mockito.kotlin.verify
@@ -2650,7 +2649,7 @@ class ScanManagerTest() {
         doReturn(arrayOf(TEST_PRIVILEGED_PACKAGE_NAME))
             .whenever(packageManager)
             .getPackagesForUid(any())
-        val mockUserContext = mock<Context>()
+        val mockUserContext = mock(Context::class.java)
         doReturn(mockUserContext).whenever(adapterService).createContextAsUser(any(), any())
         doReturn(packageManager).whenever(mockUserContext).packageManager
         val privilegedPackageInfo =
