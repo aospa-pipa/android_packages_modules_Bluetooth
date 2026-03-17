@@ -301,7 +301,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     } else {
                         if (a2dp.isPresent() && a2dp.get().getActiveDevice() != null) {
                             // TODO:  b/312396770
-                            a2dp.get().removeActiveDevice(false);
+                            if(!Utils.isDualModeAudioEnabled()){
+                                a2dp.get().removeActiveDevice(false);
+                            }
                         }
                         if (headset.isPresent() && headset.get().getActiveDevice() != null) {
                             headset.get().setActiveDevice(null);
@@ -332,7 +334,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     } else {
                         if (a2dp.isPresent() && a2dp.get().getActiveDevice() != null) {
                             // TODO:  b/312396770
-                            a2dp.get().removeActiveDevice(false);
+                            if(!Utils.isDualModeAudioEnabled()){
+                                a2dp.get().removeActiveDevice(false);
+                            }
                         }
                         leAudio.get().setActiveDevice(device);
                     }
@@ -365,7 +369,9 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                  */
                 if (leAudio.isPresent()) {
                     List<BluetoothDevice> activeLeAudioDevices = leAudio.get().getActiveDevices();
-                    if (activeLeAudioDevices.get(0) != null) {
+                    //In dumo mode both a2dp and leaudio devices should be active.
+                    if (activeLeAudioDevices.get(0) != null
+                            && !Utils.isDualModeAudioEnabled()) {
                         if (Flags.admUseSetActiveDeviceHelpers()) {
                             setLeAudioActiveDevice(null, false);
                         } else {
