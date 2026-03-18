@@ -1539,6 +1539,7 @@ public:
 
     if (!group) {
       log::error("Unknown group id: %d", group_id);
+      return;
     }
 
     bool lex_enablement_changed = false;
