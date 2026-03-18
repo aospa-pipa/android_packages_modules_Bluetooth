@@ -1229,20 +1229,22 @@ void service_added_cb(int status, int server_if,
 
 static btgatt_server_callbacks_t sGattServer_cb = {
     register_server_cb,
-    server_connection_cb,  // connection_callback             connection_cb;
-    NULL,      // service_added_callback          service_added_cb;
-    NULL,  // included_service_added_callback included_service_added_cb;
-    NULL,  // characteristic_added_callback   characteristic_added_cb;
-    request_read_cb,   // request_read_callback request_read_characteristic_cb
-    request_read_cb,   // request_read_callback request_read_characteristic_cb
-    request_write_cb,  // request_write_callback          request_write_cb;
-    request_write_cb,  // request_write_callback          request_write_cb;
-    request_exec_write_cb,     // request_exec_write_callback
-                               // request_exec_write_cb;
-    response_confirmation_cb,  // response_confirmation_callback
-                               // response_confirmation_cb;
-    indication_sent_cb,  // indication_sent_callback        indication_sent_cb;
-    NULL, NULL, NULL, NULL, NULL /*subrate_chg_cb*/
+    server_connection_cb,      // connection_callback             connection_cb;
+    NULL,                      // service_added_callback          service_added_cb;
+    NULL,                      // service_deleted_callback        service_deleted_cb;
+    request_read_cb,           // request_read_callback           request_read_characteristic_cb
+    request_read_cb,           // request_read_callback           request_read_descriptor_cb
+    request_write_cb,          // request_write_callback          request_write_characteristic_cb
+    request_write_cb,          // request_write_callback          request_write_descriptor_cb
+    request_exec_write_cb,     // request_exec_write_callback     request_exec_write_cb;
+    response_confirmation_cb,  // response_confirmation_callback  response_confirmation_cb;
+    indication_sent_cb,        // indication_sent_callback        indication_sent_cb;
+    NULL,                      // congestion_callback             congestion_cb;
+    NULL,                      // mtu_changed_callback            mtu_changed_cb;
+    NULL,                      // phy_updated_callback            phy_updated_cb;
+    NULL,                      // conn_updated_callback           conn_updated_cb;
+    NULL,                      // subrate_change_callback         subrate_chg_cb;
+    NULL                       // characteristics_unoffloaded_callback characteristics_unoffloaded_cb;
 };
 
 /************************************************************************************
