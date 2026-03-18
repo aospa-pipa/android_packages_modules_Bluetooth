@@ -416,7 +416,7 @@ public class LeAudioService extends ConnectableProfile {
         mLeAudioInbandRingtoneSupportedByPlatform =
                 BluetoothProperties.isLeAudioInbandRingtoneSupported().orElse(true);
 
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
         }
 
@@ -1021,7 +1021,7 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         mHandler.removeCallbacksAndMessages(null);
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         }
     }
@@ -2612,7 +2612,7 @@ public class LeAudioService extends ConnectableProfile {
 
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             if (!isAvailable()) {
@@ -2650,7 +2650,7 @@ public class LeAudioService extends ConnectableProfile {
 
         @Override
         public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             if (!isAvailable()) {
