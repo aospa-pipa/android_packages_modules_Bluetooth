@@ -173,7 +173,7 @@ public class ActiveDeviceManagerTest {
         mActiveDeviceManager = new ActiveDeviceManager(mAdapterService, mStorage);
         mActiveDeviceManager.start();
         // Capture the Audio Manager callback
-        if (Flags.admCentralizeActiveDeviceHandling()) {
+        if (true) {
             ArgumentCaptor<AudioDeviceCallback> captor =
                     ArgumentCaptor.forClass(AudioDeviceCallback.class);
             verify(mAudioManager).registerAudioDeviceCallback(captor.capture(), any(Handler.class));

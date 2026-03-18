@@ -4578,7 +4578,7 @@ public class AdapterService extends Service {
 
     /** Handle Bluetooth app state when active device changes for a given {@code profile}. */
     public void handleActiveDeviceChange(int profile, BluetoothDevice device) {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mActiveDeviceManager.profileActiveDeviceChanged(profile, device);
         }
         mSilenceDeviceManager.profileActiveDeviceChanged(profile, device);
