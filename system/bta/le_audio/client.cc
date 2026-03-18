@@ -2381,6 +2381,14 @@ public:
         prev_group->ClearReconfigStartPendingDirs(
                 bluetooth::le_audio::types::kLeAudioDirectionSink |
                 bluetooth::le_audio::types::kLeAudioDirectionSource);
+        if (prev_group->IsDirectionAvailableForConfiguration(
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink) &&
+            prev_group->IsDirectionAvailableForConfiguration(
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource) &&
+            (audio_sender_state_ == AudioState::IDLE ||
+             audio_receiver_state_ == AudioState::IDLE)) {
+          SuspendedForReconfiguration();
+        }
         GroupStop(previous_active_group);
       } else {
         log::info(" Previous group not streaming");
