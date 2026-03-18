@@ -160,7 +160,7 @@ public class HearingAidService extends ConnectableProfile {
 
         mHandler.removeCallbacksAndMessages(null);
 
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerOnAudioDevicesAddedCallback);
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerOnAudioDevicesRemovedCallback);
         }
@@ -567,7 +567,7 @@ public class HearingAidService extends ConnectableProfile {
     private class AudioManagerOnAudioDevicesRemovedCallback extends AudioDeviceCallback {
         @Override
         public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             for (AudioDeviceInfo deviceInfo : removedDevices) {
@@ -588,7 +588,7 @@ public class HearingAidService extends ConnectableProfile {
     private class AudioManagerOnAudioDevicesAddedCallback extends AudioDeviceCallback {
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             for (AudioDeviceInfo deviceInfo : addedDevices) {
@@ -611,7 +611,7 @@ public class HearingAidService extends ConnectableProfile {
      * @return true if the success, otherwise false
      */
     public boolean handleAudioDeviceAdded() {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return false;
         }
         if (mAudioManager == null) {
@@ -628,7 +628,7 @@ public class HearingAidService extends ConnectableProfile {
      * @return true if the success, otherwise false
      */
     public boolean handleAudioDeviceRemoved() {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return false;
         }
         if (mAudioManager == null) {
@@ -707,7 +707,7 @@ public class HearingAidService extends ConnectableProfile {
                         + ". Stop audio: "
                         + stopAudio);
 
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             if (device != null) {
                 mAudioManager.registerAudioDeviceCallback(
                         mAudioManagerOnAudioDevicesAddedCallback, mHandler);

@@ -180,7 +180,7 @@ public class A2dpService extends ConnectableProfile {
         mA2dpOffloadEnabled = getAdapterService().isA2dpOffloadEnabled();
         Log.d(TAG, "A2DP offload flag set to " + mA2dpOffloadEnabled);
 
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
         }
     }
@@ -202,7 +202,7 @@ public class A2dpService extends ConnectableProfile {
         removeActiveDevice(true);
 
         // Step 7: Unregister Audio Device Callback
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         }
 
@@ -1124,7 +1124,7 @@ public class A2dpService extends ConnectableProfile {
     private class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             synchronized (mStateMachines) {
@@ -1176,7 +1176,7 @@ public class A2dpService extends ConnectableProfile {
 
         @Override
         public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             synchronized (mStateMachines) {
@@ -1212,7 +1212,7 @@ public class A2dpService extends ConnectableProfile {
      * @return true if the exposed active device changed, otherwise false
      */
     public boolean handleAudioDeviceAdded(BluetoothDevice device) {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return false;
         }
         synchronized (mStateMachines) {
@@ -1241,7 +1241,7 @@ public class A2dpService extends ConnectableProfile {
 
     /** Handle when AudioManager remove audio device. */
     public void handleAudioDeviceRemoved() {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return;
         }
         synchronized (mStateMachines) {
