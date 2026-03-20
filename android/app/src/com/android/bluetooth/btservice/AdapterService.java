@@ -41,7 +41,6 @@ import static android.bluetooth.IBluetoothLeAudio.LE_AUDIO_GROUP_ID_INVALID;
 
 import static com.android.bluetooth.Util.isPackageNameAccurate;
 import static com.android.bluetooth.Utils.callbackToApp;
-import static com.android.bluetooth.Utils.getBytesFromAddress;
 import static com.android.bluetooth.Utils.isDualModeAudioEnabled;
 
 import static java.util.Objects.requireNonNull;
@@ -1124,9 +1123,8 @@ public class AdapterService extends Service {
                             && SystemProperties.getBoolean(
                                     AdapterSuspend.BLUETOOTH_SUSPEND_STOP_LE_SCAN, false);
             var pauseAdvertisement =
-                    Flags.adapterSuspendAdvertisement()
-                            && SystemProperties.getBoolean(
-                                    AdapterSuspend.BLUETOOTH_SUSPEND_PAUSE_ADVERTISEMENT, false);
+                    SystemProperties.getBoolean(
+                            AdapterSuspend.BLUETOOTH_SUSPEND_PAUSE_ADVERTISEMENT, false);
             if (disconnectAcl || scanModeNone || stopLeScan || pauseAdvertisement) {
                 mAdapterSuspend =
                         Optional.of(
@@ -2953,7 +2951,7 @@ public class AdapterService extends Service {
     public byte[] getByteIdentityAddress(BluetoothDevice device) {
         DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
         if (deviceProp != null && deviceProp.getIdentityAddress().getAddress() != null) {
-            return Utils.getBytesFromAddress(deviceProp.getIdentityAddress().getAddress());
+            return Util.getBytesFromAddress(deviceProp.getIdentityAddress().getAddress());
         }
 
         // Return null if identity address unknown
@@ -3015,7 +3013,7 @@ public class AdapterService extends Service {
         // Otherwise, BR/EDR address will be same address as in BluetoothDevice#getAddress
         byte[] address = getByteIdentityAddress(device);
         if (address == null) {
-            address = Utils.getByteAddress(device);
+            address = Util.getByteAddress(device);
         }
         return address;
     }
@@ -3561,13 +3559,30 @@ public class AdapterService extends Service {
     }
 
     public int getConnectionState(BluetoothDevice device) {
-        final String address = device.getAddress();
-        int connectionState = mNativeInterface.getConnectionState(getBytesFromAddress(address));
-        final String identityAddress = getIdentityAddress(address);
-        if (identityAddress != null) {
-            connectionState |=
-                    mNativeInterface.getConnectionState(getBytesFromAddress(identityAddress));
+        DeviceProperties deviceProp = mRemoteDevices.getDeviceProperties(device);
+        if (deviceProp == null) {
+            return BluetoothDevice.CONNECTION_STATE_DISCONNECTED;
         }
+
+        int connectionState = 0;
+        DeviceProperties.LinkState leLinkState =
+                deviceProp.getLinkState(BluetoothDevice.TRANSPORT_LE);
+        if (leLinkState != null) {
+            connectionState |= BluetoothDevice.CONNECTION_STATE_CONNECTED;
+            if (leLinkState.getEncryptionStatus() != null) {
+                connectionState |= BluetoothDevice.CONNECTION_STATE_ENCRYPTED_LE;
+            }
+        }
+
+        DeviceProperties.LinkState bredrLinkState =
+                deviceProp.getLinkState(BluetoothDevice.TRANSPORT_BREDR);
+        if (bredrLinkState != null) {
+            connectionState |= BluetoothDevice.CONNECTION_STATE_CONNECTED;
+            if (bredrLinkState.getEncryptionStatus() != null) {
+                connectionState |= BluetoothDevice.CONNECTION_STATE_ENCRYPTED_BREDR;
+            }
+        }
+
         return connectionState;
     }
 
@@ -5166,7 +5181,7 @@ public class AdapterService extends Service {
         if (device == null) {
             return new byte[0];
         }
-        return mNativeInterface.obfuscateAddress(Utils.getByteAddress(device));
+        return mNativeInterface.obfuscateAddress(Util.getByteAddress(device));
     }
 
     /**
@@ -5211,7 +5226,7 @@ public class AdapterService extends Service {
         if (device == null) {
             return 0;
         }
-        return mNativeInterface.getMetricId(Utils.getByteAddress(device));
+        return mNativeInterface.getMetricId(Util.getByteAddress(device));
     }
 
     public CompanionManager getCompanionManager() {
@@ -5291,7 +5306,7 @@ public class AdapterService extends Service {
      */
     public boolean allowLowLatencyAudio(boolean allowed, BluetoothDevice device) {
         Log.i(TAG, "allowLowLatencyAudio");
-        return mNativeInterface.allowLowLatencyAudio(allowed, Utils.getByteAddress(device));
+        return mNativeInterface.allowLowLatencyAudio(allowed, Util.getByteAddress(device));
     }
 
     /**

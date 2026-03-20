@@ -2597,7 +2597,7 @@ public class LeAudioService extends ConnectableProfile {
                     continue;
                 }
 
-                byte[] addressBytes = Utils.getBytesFromAddress(address);
+                byte[] addressBytes = Util.getBytesFromAddress(address);
                 BluetoothDevice device = getAdapterService().getDeviceFromByte(addressBytes);
 
                 if (deviceInfo.isSink()) {
@@ -2638,7 +2638,7 @@ public class LeAudioService extends ConnectableProfile {
                     continue;
                 }
 
-                byte[] addressBytes = Utils.getBytesFromAddress(address);
+                byte[] addressBytes = Util.getBytesFromAddress(address);
                 BluetoothDevice device = getAdapterService().getDeviceFromByte(addressBytes);
 
                 mExposedActiveDevice = null;
@@ -3289,8 +3289,7 @@ public class LeAudioService extends ConnectableProfile {
     }
 
     private BluetoothDevice getBroadcastBluetoothDevice() {
-        return getAdapterService()
-                .getDeviceFromByte(Utils.getBytesFromAddress("FF:FF:FF:FF:FF:FF"));
+        return getAdapterService().getDeviceFromByte(Util.getBytesFromAddress("FF:FF:FF:FF:FF:FF"));
     }
 
     private void handleGroupTransitToInactive(int groupId) {
@@ -3517,7 +3516,7 @@ public class LeAudioService extends ConnectableProfile {
             if (isBroadcastActive()) {
                 BluetoothDevice device =
                     getAdapterService().getDeviceFromByte(
-                        Utils.getBytesFromAddress("FF:FF:FF:FF:FF:FF"));
+                        Util.getBytesFromAddress("FF:FF:FF:FF:FF:FF"));
                 if (!device.equals(mActiveBroadcastAudioDevice)) {
                     Log.d(TAG, "Update Broadcast Active to MM-Framework in Media Context");
                     updateBroadcastActiveDevice(device, mActiveBroadcastAudioDevice, true);
