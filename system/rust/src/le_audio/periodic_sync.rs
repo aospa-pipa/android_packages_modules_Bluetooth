@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright (C) 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,10 @@
  * limitations under the License.
  */
 
-#pragma once
+//! Periodic sync module.
 
-#include <type_traits>
+mod ffi;
+pub mod manager;
+pub mod traits;
 
-namespace bluetooth {
-namespace common {
-
-// Check whether T is a specialization of TemplateType
-template <typename T, template <typename...> class TemplateType>
-struct is_specialization_of : std::false_type {};
-template <template <typename...> class TemplateType, typename... Args>
-struct is_specialization_of<TemplateType<Args...>, TemplateType> : std::true_type {};
-
-}  // namespace common
-}  // namespace bluetooth
+pub use traits::PeriodicSyncManager;
