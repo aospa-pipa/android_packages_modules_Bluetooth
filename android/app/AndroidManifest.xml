@@ -171,6 +171,12 @@
                 <action android:name="android.telecom.ConnectionService"/>
             </intent-filter>
         </service>
+        <service
+            android:name="com.android.bluetooth.agClient.BluetoothAgClientService"
+            android:process="@string/process"
+            android:enabled="true"
+            android:exported="true">
+        </service>
 
         <provider android:name="com.android.bluetooth.map.MmsFileProvider"
              android:authorities="com.android.bluetooth.map.MmsFileProvider"
