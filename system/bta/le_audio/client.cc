@@ -5061,12 +5061,15 @@ public:
     le_audio_sink_hal_client_->UpdateRemoteDelay(remote_delay_ms);
 
     /* We update the target audio allocation before streamStarted so that the CodecManager would
-     * already know how to configure the encoder once we confirm the streaming request. */
+     * already know how to configure the encoder once we confirm the streaming request.*/
+    /* Updating both Sink and Source config as start for decoding may come first and both
+     * direction config would be required. */
     CodecManager::GetInstance()->UpdateActiveAudioConfig(
             group->stream_conf.stream_params, group->stream_conf.codec_id,
             std::bind(&LeAudioClientImpl::UpdateAudioConfigToHal, weak_factory_.GetWeakPtr(),
                       std::placeholders::_1, std::placeholders::_2),
-            ::bluetooth::le_audio::types::kLeAudioDirectionSource, force_update);
+            (::bluetooth::le_audio::types::kLeAudioDirectionSource |
+             ::bluetooth::le_audio::types::kLeAudioDirectionSink), force_update);
 
     ConfirmLocalAudioSinkStreamingRequest(false);
 
