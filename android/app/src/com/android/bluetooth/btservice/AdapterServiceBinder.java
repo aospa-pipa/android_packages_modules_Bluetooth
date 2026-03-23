@@ -1534,6 +1534,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED;
         }
 
+        Util.enforceCallingUidIsNotPcc("AdapterServiceBinder.startRfcommListener");
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         return service.startRfcommListener(name, uuid, pendingIntent, source);
     }
