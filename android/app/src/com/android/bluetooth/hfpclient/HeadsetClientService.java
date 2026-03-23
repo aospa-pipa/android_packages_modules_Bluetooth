@@ -48,6 +48,7 @@ import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.profile.ConnectableProfile;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.bluetooth.agClient.BluetoothAgClientService;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,6 +72,16 @@ public class HeadsetClientService extends ConnectableProfile {
     @GuardedBy("mStateMachineMap")
     private final HashMap<BluetoothDevice, HeadsetClientStateMachine> mStateMachineMap =
             new HashMap<>();
+    
+    private boolean mAgClientConnected;
+    public static final int INCOMING_INDICATORS = 1;
+    public static final int OUTGOING_INDICATORS = 2;
+    public static final int CALL_ACTIVE_INDICATORS = 3;
+    public static final int CALL_HELD_INDICATORS = 4;
+
+    public static final int EVENT_TYPE_CALL = 9;
+    public static final int EVENT_TYPE_CALLSETUP = 10;
+    public static final int EVENT_TYPE_CALLHELD = 11;
 
     private final HandlerThread mSmThread;
     private final AudioManager mAudioManager;
@@ -496,8 +507,82 @@ public class HeadsetClientService extends ConnectableProfile {
         return BluetoothStatusCodes.FEATURE_NOT_CONFIGURED;
     }
 
+    /**
+      * Set HF & AG client connection status.
+      *
+      * Set to true if both AG and Client are connected.
+    */
+    public void SetAGClientConnectionStatus() {
+          mAgClientConnected = true;
+    }
+
+    public boolean getAGClientConnectionStatus() {
+         return mAgClientConnected;
+    }
+
+    public void CallStatesDuringSlc(BluetoothDevice device, int eventType, int eventValue) {
+         BluetoothAgClientService mBluetoothAgClientService = 
+                                               BluetoothAgClientService.getBluetoothAgClientService();
+         Log.e(TAG, "CallStates During SLC:  event is: " + eventType);
+         if (eventType == EVENT_TYPE_CALL) {
+             if (eventValue != 0) {
+                 if (mBluetoothAgClientService != null) {
+                   Log.e(TAG, "CallStates During SLC: callactive event");
+                    mBluetoothAgClientService.dispatchFakeCallIndicators(device, CALL_ACTIVE_INDICATORS);
+                 }
+             }
+         } else if (eventType == EVENT_TYPE_CALLSETUP) {
+             if (eventValue == 1) {
+                if (mBluetoothAgClientService != null) {
+                   Log.e(TAG, "CallStates During SLC: EVENT_TYPE_CALLSETUP");
+                   mBluetoothAgClientService.dispatchFakeCallIndicators(device, INCOMING_INDICATORS);
+                }
+             } else if (eventValue == 2 || eventValue == 3) {
+                if (mBluetoothAgClientService != null) {
+                   Log.e(TAG, "CallStates During SLC: OUTGOING_INDICATORS");
+                   mBluetoothAgClientService.dispatchFakeCallIndicators(device, OUTGOING_INDICATORS);
+                 }
+             }
+         } else if(eventType == EVENT_TYPE_CALLHELD) {
+             if (eventValue != 0) {
+                if (mBluetoothAgClientService != null) {
+                   mBluetoothAgClientService.dispatchFakeCallIndicators(device, CALL_HELD_INDICATORS);
+                }
+             }
+         }
+    }
+
     boolean connectAudio(BluetoothDevice device) {
         Log.i(TAG, "connectAudio: device=" + device + ", " + Util.getUidPidString());
+        HeadsetClientStateMachine sm = getStateMachine(device);
+        if (sm == null) {
+            Log.e(TAG, "SM does not exist for device " + device);
+            return false;
+        }
+
+        if (!sm.isConnected()) {
+            return false;
+        }
+        if (sm.isAudioOn()) {
+            return false;
+        }
+        if (mAgClientConnected) {
+            Log.w(TAG, "Sending to AG client service for serialization");
+            BluetoothAgClientService mBluetoothAgClientService = 
+                             BluetoothAgClientService.getBluetoothAgClientService();
+            if (mBluetoothAgClientService != null) {
+               mBluetoothAgClientService.connectClientAudio(device);
+               return true;
+            } else {
+               return false;
+            }
+        } else {
+           sm.sendMessage(HeadsetClientStateMachine.CONNECT_AUDIO);
+           return true;
+        }
+    }
+
+    public boolean connectAudioFromAgClient(BluetoothDevice device) {
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
             Log.e(TAG, "SM does not exist for device " + device);
@@ -635,7 +720,7 @@ public class HeadsetClientService extends ConnectableProfile {
         return true;
     }
 
-    HfpClientCall dial(BluetoothDevice device, String number) {
+    public HfpClientCall dial(BluetoothDevice device, String number) {
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
             Log.e(TAG, "SM does not exist for device " + device);
@@ -700,6 +785,27 @@ public class HeadsetClientService extends ConnectableProfile {
             return null;
         }
         return sm.getCurrentCalls();
+    }
+
+    public List<BluetoothHeadsetClientCall> getCurrentHfCalls(BluetoothDevice device) {
+       HeadsetClientStateMachine sm = getStateMachine(device);
+       if (sm == null) {
+          Log.e(TAG, "SM does not exist for device " + device);
+          return null;
+       }
+    
+       int connectionState = sm.getConnectionState();
+       if (connectionState != BluetoothProfile.STATE_CONNECTED) {
+           return null;
+       }
+       List<BluetoothHeadsetClientCall> currentHFCalls = new ArrayList<>();
+       List<HfpClientCall> calls = sm.getCurrentHFCalls();
+       if (calls != null) {
+         for (HfpClientCall call : calls) {
+            currentHFCalls.add(toLegacyCall(call));
+         }
+       }
+       return currentHFCalls;
     }
 
     boolean explicitCallTransfer(BluetoothDevice device) {
