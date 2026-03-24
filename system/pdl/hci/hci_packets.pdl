@@ -944,7 +944,7 @@ enum SubeventCode : 8 {
   LE_CS_SUBEVENT_RESULT = 0x31,
   LE_CS_SUBEVENT_RESULT_CONTINUE = 0x32,
   LE_CS_TEST_END_COMPLETE = 0x33,
-  LE_CIS_ESTABLISHED_V4 = 0xF5,
+  LE_CIS_ESTABLISHED_V3 = 0xF5,
   LE_CREATE_BIG_COMPLETE_V2 = 0xF9,
   DATA_LENGTH_CHANGE_V2 = 0xF8,
   LE_TEST_REPORT_HDT_LINK_QUALITY = 0xF3,
@@ -7678,7 +7678,7 @@ packet LeSetBigChannelMapClassificationComplete : CommandComplete(command_op_cod
 
  // HDT Events
 
-packet LeCisEstablishedV4 : LeMetaEvent (subevent_code = LE_CIS_ESTABLISHED_V4) {
+packet LeCisEstablishedV3 : LeMetaEvent (subevent_code = LE_CIS_ESTABLISHED_V3) {
   status : ErrorCode,
   connection_handle : 12,
   _reserved_ : 4,

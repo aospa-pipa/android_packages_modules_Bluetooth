@@ -64,7 +64,6 @@ static acl_interface_t acl_interface_ = {
         .link.le.on_read_remote_version_information_complete = nullptr,
         .link.le.on_phy_update = nullptr,
         .link.le.on_le_subrate_change = nullptr,
-        .link.le.read_tx_data_length = nullptr,
 };
 
 const acl_interface_t& GetAclInterface() { return acl_interface_; }

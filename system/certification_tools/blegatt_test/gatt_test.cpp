@@ -1804,7 +1804,7 @@ const t_cmd console_cmd_list[] = {
      ":: all_phys(hex), tx_phys(hex), rx_phys(hex)", 0},
     {"btsnd_hcic_refresh_enc_key_v2", do_send_refresh_enc_key_v2,
      ":: handle(hex), hdt_mic_length(hex)", 0},
-     {"btsnd_hcic_ble_set_data_length_v2", do_send_ble_set_data_length,
+     {"btsnd_hcic_ble_set_data_length_v2", do_send_ble_set_data_length_v2,
      ":: handle(hex) tx_pdu_length(hex) tx_time(hex) phys(hex)", 0},
      {"reset_rcv_iteration", reset_rcv_iteration,
      ":: ", 0},
