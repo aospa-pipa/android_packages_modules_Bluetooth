@@ -1675,6 +1675,10 @@ public:
         std::vector<record_track_metadata_v7> empty_tracks = {};
         audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
       }
+      if (group && group->IsSuspendedForReconfiguration()) {
+        log::error("AHAL is still in suspend state, send resume.");
+        reconfigurationComplete();
+      }
       return;
     }
 
