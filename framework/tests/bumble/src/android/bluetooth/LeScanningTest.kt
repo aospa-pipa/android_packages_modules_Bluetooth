@@ -29,6 +29,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.ParcelUuid
+import android.platform.test.annotations.RequiresFlagsEnabled
 import android.platform.test.flag.junit.DeviceFlagsValueProvider
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
@@ -300,6 +301,7 @@ class LeScanningTest {
     }
 
     @Test
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.use_filter_for_each_manufacturer_data_block")
     fun startBleScan_scanFilterOnManufacturerDataInScanResponse() {
         val payloadInAdvData = byteArrayOf(0x01, 0x02)
         // first 2 bytes are the manufacturer ID 0x00E0 (Google) in little endian
@@ -335,6 +337,7 @@ class LeScanningTest {
     }
 
     @Test
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.use_filter_for_each_manufacturer_data_block")
     fun startBleScan_scanFilterOnManufacturerDataInAdvertisingData() {
         val payloadInAdvData = byteArrayOf(0x01, 0x02)
         // first 2 bytes are the manufacturer ID 0x00E0 (Google) in little endian
@@ -370,6 +373,7 @@ class LeScanningTest {
     }
 
     @Test
+    @RequiresFlagsEnabled("com.android.bluetooth.flags.use_filter_for_each_manufacturer_data_block")
     fun startBleScan_scanFilterOnConcatenatedManufacturerData() {
         val payloadInAdvData = byteArrayOf(0x01, 0x02)
         // first 2 bytes are the manufacturer ID 0x00E0 (Google) in little endian

@@ -289,13 +289,6 @@ public class CoverArt {
         return mImage != null ? mImage.getAllocationByteCount() : 0;
     }
 
-    /** Recycle the Bitmap before loosing reference */
-    public void recycle() {
-        if (mImage != null) {
-            mImage.recycle();
-        }
-    }
-
     @Override
     public String toString() {
         return "{handle=" + mImageHandle + ", size=" + size() + " }";

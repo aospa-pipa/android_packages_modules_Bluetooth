@@ -20,7 +20,6 @@
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_transport.h>
-#include <com_android_bluetooth_flags.h>
 
 #include <cstdint>
 

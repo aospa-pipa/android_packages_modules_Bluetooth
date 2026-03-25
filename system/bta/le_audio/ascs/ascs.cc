@@ -160,7 +160,7 @@ struct Ascs::service_impl {
 
     callbacks_ = callbacks;
 
-    static bluetooth::stack::tGATT_REQ_CBACK ascs_req_cb = {
+    static bluetooth::stack::tGATT_REQ_CBACK ascs_server_cbacks = {
             .read_characteristic_cb = OnGattReadCharacteristicStatic,
             .read_descriptor_cb = OnGattReadDescriptorStatic,
             .write_characteristic_cb = OnGattWriteCharacteristicStatic,
@@ -168,21 +168,22 @@ struct Ascs::service_impl {
             .exec_write_cb = tGATT_REQ_CBACK::do_nothing,
             .mtu_changed_cb = tGATT_REQ_CBACK::do_nothing,
             .conf_cb = tGATT_REQ_CBACK::do_nothing,
+            .conf_send_fail_cb = tGATT_REQ_CBACK::do_nothing,
     };
-    static const stack::tGATT_CBACK ascs_ops = {
+    static const tBTA_GATTS_CBACK ascs_ops = {
             .p_conn_cb = OnGattConnStatic,
-            .p_req_cb = &ascs_req_cb,
+            .server_cbacks = &ascs_server_cbacks,
     };
 
-    server_if_ = BTA_GATTS_AppRegister(uuid::kAudioStreamControlServiceUuid, &ascs_ops, false);
-    log::assert_that(server_if_ != stack::GATT_IF_INVALID, "Failed to register GATT Server");
-    log::info("GATT Server Registered with server_if: {}", server_if_);
+    BTA_GATTS_AppRegister(uuid::kAudioStreamControlServiceUuid, &ascs_ops, false,
+                          &OnGattRegisterStatic);
+  }
 
-    auto gatt_db = BuildGattDatabase(service_descriptor_);
-
-    log::info("Adding LE Audio Service {} service to GATT database.", gatt_db.begin()->uuid);
-    auto status = BTA_GATTS_AddService(server_if_, &gatt_db);
-    OnGattServiceAdded(status, server_if_, std::move(gatt_db));
+  static void OnGattRegisterStatic(tGATT_STATUS status, tGATT_IF server_if,
+                                   const bluetooth::Uuid& uuid) {
+    if (instance) {
+      instance->service_impl_->OnGattServerAppRegistered(status, server_if, uuid);
+    }
   }
 
   static void OnGattConnStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
@@ -297,6 +298,22 @@ struct Ascs::service_impl {
     return ascs_service_db;
   }
 
+  void OnGattServerAppRegistered(tGATT_STATUS status, tGATT_IF server_if,
+                                 const bluetooth::Uuid& /*uuid*/) {
+    log::assert_that(status == tGATT_STATUS::GATT_SUCCESS,
+                     "Failed to register GATT Server, status: {}", gatt_status_text(status));
+
+    server_if_ = server_if;
+    log::info("GATT Server Registered with server_if: {}", server_if_);
+
+    auto gatt_db = BuildGattDatabase(service_descriptor_);
+
+    log::info("Adding LE Audio Service {} service to GATT database.", gatt_db.begin()->uuid);
+    BTA_GATTS_AddService(server_if_, gatt_db,
+                         base::BindRepeating(&Ascs::service_impl::OnGattServiceAdded,
+                                             weak_factory_.GetWeakPtr()));
+  }
+
   void OnGattServiceAdded(tGATT_STATUS status, int server_if,
                           std::vector<btgatt_db_element_t> service_elements) {
     log::info("GATT Service Add status: {}, server_if: {}", gatt_status_text(status), server_if);
@@ -304,7 +321,7 @@ struct Ascs::service_impl {
                             "GATT Service Add status: {}, server_if: {}", gatt_status_text(status),
                             server_if);
 
-    log::assert_that(status == GATT_SERVICE_STARTED, "Unable to add GATT service");
+    log::assert_that(status == GATT_SUCCESS, "Unable to add GATT service");
     log::assert_that(service_elements.size() != 0, "Service is empty");
     log::assert_that(service_elements.begin()->uuid == uuid::kAudioStreamControlServiceUuid,
                      "Service not mine!");

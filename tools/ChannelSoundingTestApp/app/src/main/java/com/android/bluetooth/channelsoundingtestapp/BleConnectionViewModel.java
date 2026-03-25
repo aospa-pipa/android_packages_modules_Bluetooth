@@ -175,9 +175,9 @@ public class BleConnectionViewModel extends AndroidViewModel {
         }
 
         BluetoothLeAdvertiser advertiser = mBluetoothAdapter.getBluetoothLeAdvertiser();
-        if (advertiser == null) {
-            printLog("Failed to start advertising: Bluetooth is OFF.");
-            return;
+        if(advertiser == null) {
+           printLog("Please turn on Bluetooth to use this App");
+           return;
         }
         AdvertisingSetParameters parameters =
                 new AdvertisingSetParameters.Builder()
@@ -393,7 +393,7 @@ public class BleConnectionViewModel extends AndroidViewModel {
     private void connectGattByScanning() {
         BluetoothLeScanner bluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner();
         if (bluetoothLeScanner == null) {
-            printLog("Cannot scan: Bluetooth is OFF.");
+            printLog("Please turn on Bluetooth to use this App");
             return;
         }
 

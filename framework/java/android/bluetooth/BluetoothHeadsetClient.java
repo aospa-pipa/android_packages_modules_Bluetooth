@@ -50,7 +50,6 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -853,7 +852,7 @@ public final class BluetoothHeadsetClient implements BluetoothProfile, AutoClose
                 Log.e(TAG, e.toString() + "\n" + Log.getStackTraceString(new Throwable()));
             }
         }
-        return new ArrayList<>();
+        return null;
     }
 
     /**

@@ -179,7 +179,6 @@ class ScanNativeCallback(
         onMsftAdvMonitorEnable(enable, status)
     }
 
-    private fun doOnScanThread(block: ScanController.() -> Unit) = scanController.doOnScanThread {
-        scanController.block()
-    }
+    private fun doOnScanThread(block: ScanController.() -> Unit) =
+        scanController.doOnScanThread { scanController.block() }
 }

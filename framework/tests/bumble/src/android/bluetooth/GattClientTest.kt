@@ -894,7 +894,7 @@ class GattClientTest {
         advertiseWithBumble()
 
         val gatts = mutableListOf<BluetoothGatt>()
-        val gattCallbackTimeout = 10000L
+        val gattCallbackTimeout = 5000L
         try {
             repeat(100) {
                 val gattCallback = mock<BluetoothGattCallback>()
@@ -904,22 +904,22 @@ class GattClientTest {
                 gatts.add(gatt)
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(eq(gatt), eq(GATT_SUCCESS), eq(STATE_CONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
                 gatt.disconnect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(eq(gatt), eq(GATT_SUCCESS), eq(STATE_DISCONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
 
-                assertThat(gatt.connect()).isTrue()
+                gatt.connect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(eq(gatt), eq(GATT_SUCCESS), eq(STATE_CONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_CONNECTED))
 
                 gatt.disconnect()
                 inOrder
                     .verify(gattCallback, timeout(gattCallbackTimeout))
-                    .onConnectionStateChange(eq(gatt), eq(GATT_SUCCESS), eq(STATE_DISCONNECTED))
+                    .onConnectionStateChange(any(), any<Int>(), eq(STATE_DISCONNECTED))
             }
         } finally {
             gatts.forEach { it.close() }

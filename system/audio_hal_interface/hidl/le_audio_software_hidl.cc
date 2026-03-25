@@ -20,7 +20,6 @@
 #include "le_audio_software_hidl.h"
 
 #include <bluetooth/log.h>
-#include <com_android_bluetooth_flags.h>
 
 namespace bluetooth {
 namespace audio {

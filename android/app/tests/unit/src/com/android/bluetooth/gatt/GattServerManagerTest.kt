@@ -761,13 +761,15 @@ class GattServerManagerTest {
         callback: IBluetoothGattServerCallback,
         onRegistered: Boolean = false,
     ): ContextApp<IBluetoothGattServerCallback> {
-        serverManager.registerServer(callback, true, transport, source)
-        val serverApp = serverManager.serverMap.getByCallbackId(callback)
+        val uuid = UUID.randomUUID()
+        serverManager.registerServer(uuid, callback, true, transport, source)
+        val serverApp = serverManager.serverMap.getByUuid(uuid)
         assertThat(serverApp).isNotNull()
-        assertThat(serverApp!!.id).isEqualTo(0)
+        assertThat(serverApp!!.uuid).isEqualTo(uuid)
+        assertThat(serverApp.id).isEqualTo(0)
         assertThat(serverApp.callback).isEqualTo(callback)
 
-        if (onRegistered) onRegistered(serverApp.uuid, serverIf, serverApp, callback)
+        if (onRegistered) onRegistered(uuid, serverIf, serverApp, callback)
 
         return serverApp
     }

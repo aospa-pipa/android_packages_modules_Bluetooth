@@ -754,7 +754,7 @@ static void cleanup(void) {
   btif_queue_cleanup(UUID_SERVCLASS_HF_HANDSFREE);
   if (bt_hf_client_callbacks) {
     btif_disable_service(BTA_HFP_HS_SERVICE_ID);
-    do_in_jni_thread(base::BindOnce([]() { bt_hf_client_callbacks = NULL; }));
+    bt_hf_client_callbacks = NULL;
   }
 }
 

@@ -323,7 +323,6 @@ class GattNativeCallback(
 
     private fun doOnGattThread(block: GattService.() -> Unit) = gatt.doOnGattThread { gatt.block() }
 
-    private fun serverDoOnGattThread(block: GattServerManager.() -> Unit) = gatt.doOnGattThread {
-        gattServer.block()
-    }
+    private fun serverDoOnGattThread(block: GattServerManager.() -> Unit) =
+        gatt.doOnGattThread { gattServer.block() }
 }

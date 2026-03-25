@@ -35,10 +35,10 @@ pub struct PaCreateSyncParams {
     pub broadcast_id: u32,
     /// The advertising SID.
     pub advertising_sid: u8,
-    /// The address type of the broadcaster.
-    pub advertiser_addr_type: AddressType,
     /// The address of the broadcaster.
     pub advertiser_addr: Address,
+    /// The address type of the broadcaster.
+    pub advertiser_addr_type: AddressType,
     /// The skip interval (number of PA events that can be skipped).
     pub skip: u16,
     /// The synchronization timeout.
@@ -52,7 +52,7 @@ pub struct PaCreateSyncParams {
 pub struct PeriodicSyncInfo {
     /// Registration ID.
     pub reg_id: i32,
-    /// Identify the periodic advertising train.
+    /// Sync handle.
     pub sync_handle: u16,
     /// Advertising SID.
     pub advertising_sid: u8,
@@ -60,18 +60,18 @@ pub struct PeriodicSyncInfo {
     pub advertiser_addr_type: AddressType,
     /// Address.
     pub advertiser_addr: Address,
-    /// Phy.
-    pub advertiser_phy: u8,
-    /// Interval.
-    pub periodic_advertising_interval: Duration,
+    /// PHY.
+    pub phy: u8,
+    /// PA Interval.
+    pub sync_interval: u16,
 }
 
 /// Event types for Periodic Sync.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeriodicSyncEvent {
-    /// Report carries periodic advertising data.
-    PeriodicAdvertisingReport {
-        /// Identify the periodic advertising train.
+    /// Periodic sync report received.
+    PaReport {
+        /// Sync handle.
         sync_handle: u16,
         /// TX power.
         tx_power: i8,
@@ -82,17 +82,17 @@ pub enum PeriodicSyncEvent {
         /// Data.
         data: Vec<u8>,
     },
-    /// Periodic advertising sync lost.
-    PeriodicAdvertisingSyncLost {
-        /// Identify the periodic advertising train.
+    /// Periodic sync lost.
+    PaSyncLost {
+        /// Sync handle.
         sync_handle: u16,
     },
-    /// Report carries BIG Info advertising data.
-    BigInfoAdvertisingReport {
-        /// Identify the periodic advertising train.
+    /// BIG Info report received.
+    BigInfoReport {
+        /// Sync handle.
         sync_handle: u16,
-        /// Indicate whether BIG carries encrypted data.
-        encryption: bool,
+        /// Encrypted.
+        encrypted: bool,
     },
 }
 
@@ -102,12 +102,9 @@ pub enum PeriodicSyncError {
     /// Operation timed out.
     #[error("operation timed out")]
     Timeout,
-    /// A communication channel (oneshot/mpsc) was closed unexpectedly.
-    #[error("channel closed")]
-    ChannelClosed,
-    /// A synchronization request for this source is already in progress.
-    #[error("already in progress")]
-    AlreadyInProgress,
+    /// Internal error (e.g. channel closed unexpectedly).
+    #[error("internal error")]
+    Internal,
     /// HCI Error status code.
     #[error("HCI error: {0:?}")]
     HciError(HciStatus),

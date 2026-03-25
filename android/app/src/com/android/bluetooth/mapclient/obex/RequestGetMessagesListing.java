@@ -22,7 +22,6 @@ import com.android.obex.HeaderSet;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -138,7 +137,7 @@ class RequestGetMessagesListing extends Request {
 
     public List<Message> getList() {
         if (mResponse == null) {
-            return Collections.emptyList();
+            return null;
         }
 
         return mResponse.getList();

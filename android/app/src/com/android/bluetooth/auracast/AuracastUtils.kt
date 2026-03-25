@@ -22,13 +22,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.util.Base64
 import android.util.Log
-import com.android.bluetooth.R
 
 object AuracastUtils {
     const val CHANNEL_ID = "auracast_nfc_channel"
     const val NOTIFICATION_ID = 1001
-    // 5mins
-    const val NOTIF_AUTO_DISMISS_MILLIS = 300000L
     const val AURACAST_PREFIX = "BLUETOOTH:UUID:184F"
     const val ACTION_CONNECT_STREAM = "com.android.bluetooth.auracast.action.CONNECT_STREAM"
     const val EXTRA_METADATA = "extra_metadata"
@@ -91,7 +88,7 @@ object AuracastUtils {
      *
      * @param context The [Context] used to retrieve resources and system services.
      * @param nm The [NotificationManager] instance responsible for posting the notification.
-     * @param title The human-readable name of the Auracast broadcast (e.g., "Airport TV").
+     * @param streamName The human-readable name of the Auracast broadcast (e.g., "Airport TV").
      * @param message The descriptive text body of the notification, often indicating the target
      *   device.
      * @param connectPending An optional [PendingIntent] to be triggered when the user taps the
@@ -101,24 +98,21 @@ object AuracastUtils {
     fun showNotification(
         context: Context,
         nm: NotificationManager,
-        title: String,
+        streamName: String,
         message: String,
         connectPending: PendingIntent?,
     ) {
         val builder =
             Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_bt_le_audio_sharing)
-                .setSubText(context.getString(R.string.auracast_notification_subtext))
-                .setLocalOnly(true)
-                .setContentTitle(title)
+                .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+                .setSubText("Bluetooth LE Audio")
+                .setContentTitle("$streamName audio stream available")
                 .setContentText(message)
-                .setTimeoutAfter(NOTIF_AUTO_DISMISS_MILLIS)
+                .setStyle(Notification.BigTextStyle().bigText(message))
+                .setAutoCancel(true)
 
         if (connectPending != null) {
-            val connectText = context.getString(R.string.auracast_connect_action)
-            builder.addAction(
-                Notification.Action.Builder(null, connectText, connectPending).build()
-            )
+            builder.addAction(Notification.Action.Builder(null, "Connect", connectPending).build())
         }
 
         nm.notify(NOTIFICATION_ID, builder.build())

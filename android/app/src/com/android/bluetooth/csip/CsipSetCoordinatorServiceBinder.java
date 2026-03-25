@@ -178,7 +178,7 @@ class CsipSetCoordinatorServiceBinder extends IBluetoothCsipSetCoordinator.Stub
             BluetoothDevice device, AttributionSource source) {
         CsipSetCoordinatorService service = getService(source);
         if (service == null) {
-            return Collections.emptyMap();
+            return null;
         }
         return service.getGroupUuidMapByDevice(device);
     }

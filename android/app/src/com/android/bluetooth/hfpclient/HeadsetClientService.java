@@ -51,7 +51,6 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.bluetooth.agClient.BluetoothAgClientService;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -778,12 +777,12 @@ public class HeadsetClientService extends ConnectableProfile {
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
             Log.e(TAG, "SM does not exist for device " + device);
-            return Collections.emptyList();
+            return null;
         }
 
         int connectionState = sm.getConnectionState();
         if (connectionState != STATE_CONNECTED) {
-            return Collections.emptyList();
+            return null;
         }
         return sm.getCurrentCalls();
     }
@@ -792,12 +791,12 @@ public class HeadsetClientService extends ConnectableProfile {
        HeadsetClientStateMachine sm = getStateMachine(device);
        if (sm == null) {
           Log.e(TAG, "SM does not exist for device " + device);
-          return new ArrayList<>();
+          return null;
        }
-
+    
        int connectionState = sm.getConnectionState();
        if (connectionState != BluetoothProfile.STATE_CONNECTED) {
-           return new ArrayList<>();
+           return null;
        }
        List<BluetoothHeadsetClientCall> currentHFCalls = new ArrayList<>();
        List<HfpClientCall> calls = sm.getCurrentHFCalls();
@@ -876,11 +875,11 @@ public class HeadsetClientService extends ConnectableProfile {
         HeadsetClientStateMachine sm = getStateMachine(device);
         if (sm == null) {
             Log.e(TAG, "SM does not exist for device " + device);
-            return Collections.emptySet();
+            return null;
         }
         int connectionState = sm.getConnectionState();
         if (connectionState != STATE_CONNECTED) {
-            return Collections.emptySet();
+            return null;
         }
         return sm.getCurrentAgFeatures();
     }

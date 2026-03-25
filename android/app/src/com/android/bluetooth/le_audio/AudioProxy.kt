@@ -225,10 +225,7 @@ open class AudioProxy(
     }
 
     private fun onAudioDeviceAdded(deviceInfo: AudioDeviceInfo) {
-        if (
-            deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEADSET &&
-                deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEARING_AID
-        ) {
+        if (deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEADSET) {
             return
         }
 
@@ -371,10 +368,7 @@ open class AudioProxy(
     }
 
     private fun onAudioDeviceRemoved(deviceInfo: AudioDeviceInfo) {
-        if (
-            deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEADSET &&
-                deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEARING_AID
-        ) {
+        if (deviceInfo.type != AudioDeviceInfo.TYPE_BLE_HEADSET) {
             return
         }
 

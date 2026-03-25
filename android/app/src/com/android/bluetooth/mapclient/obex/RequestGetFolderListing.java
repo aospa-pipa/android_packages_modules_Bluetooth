@@ -22,11 +22,14 @@ import com.android.obex.HeaderSet;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 /* Get a listing of subdirectories. */
 final class RequestGetFolderListing extends Request {
 
     private static final String TYPE = "x-obex/folder-listing";
+
+    private FolderListing mResponse = null;
 
     RequestGetFolderListing(int maxListCount, int listStartOffset) {
         if (maxListCount < 0 || maxListCount > 65535) {
@@ -53,7 +56,17 @@ final class RequestGetFolderListing extends Request {
     }
 
     @Override
-    protected void readResponse(InputStream stream) {}
+    protected void readResponse(InputStream stream) {
+        mResponse = new FolderListing(stream);
+    }
+
+    public List<String> getList() {
+        if (mResponse == null) {
+            return null;
+        }
+
+        return mResponse.getList();
+    }
 
     @Override
     public void execute(ClientSession session) throws IOException {

@@ -33,7 +33,6 @@ import android.nfc.NdefMessage
 import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.util.Log
-import com.android.bluetooth.R
 import com.android.bluetooth.flags.Flags
 
 /**
@@ -136,9 +135,7 @@ class NfcAuracastActivity : Activity() {
                 val connectedDevice = assistant.connectedDevices.firstOrNull()
                 // If no connected device, deviceName is null.
                 // If device exists, it resolves the alias, name, or falls back to "devices".
-                val defaultDeviceName =
-                    applicationContext.getString(R.string.auracast_default_device_name)
-                val deviceName = connectedDevice?.let { it.alias ?: it.name ?: defaultDeviceName }
+                val deviceName = connectedDevice?.let { it.alias ?: it.name ?: "devices" }
                 postNotification(applicationContext, metadataStr, streamName, deviceName)
 
                 bluetoothAdapter?.closeProfileProxy(
@@ -161,20 +158,18 @@ class NfcAuracastActivity : Activity() {
     ) {
         val nm = notificationManagerProvider(context)
 
-        val channelName = context.getString(R.string.auracast_notification_channel)
         val channel =
             NotificationChannel(
                 AuracastUtils.CHANNEL_ID,
-                channelName,
+                "Auracast",
                 NotificationManager.IMPORTANCE_HIGH,
             )
         nm.createNotificationChannel(channel)
 
-        val title = context.getString(R.string.auracast_notification_title, streamName)
         if (deviceName == null) {
             // No device connected: Pass the testable 'nm' and null for the pending intent
-            val message = context.getString(R.string.auracast_connect_device_message)
-            AuracastUtils.showNotification(context, nm, title, message, null)
+            val message = "Connect an LE Audio device to start listening"
+            AuracastUtils.showNotification(context, nm, streamName, message, null)
             return
         }
 
@@ -193,9 +188,8 @@ class NfcAuracastActivity : Activity() {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
 
-        val message =
-            context.getString(R.string.auracast_listen_on_device_message, streamName, deviceName)
-        AuracastUtils.showNotification(context, nm, title, message, connectPending)
+        val message = "Listen to $streamName audio stream on your $deviceName"
+        AuracastUtils.showNotification(context, nm, streamName, message, connectPending)
     }
 
     companion object {

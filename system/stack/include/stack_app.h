@@ -54,6 +54,7 @@ struct tGATT_REQ_CBACK {
                         tGATT_EXEC_FLAG exec_write);
   void (&mtu_changed_cb)(tCONN_ID conn_id, const RawAddress& remote_bda, uint16_t mtu);
   void (&conf_cb)(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda);
+  void (&conf_send_fail_cb)(tCONN_ID conn_id, tGATT_STATUS status);
 
   /* in case your server implementation needs to do nothing... */
   template <typename... Args>
@@ -99,8 +100,6 @@ typedef struct {
   tGATT_OFFLOADED_SERVICE_CHG_CB* p_offloaded_service_chg_cb{nullptr};
 } tGATT_CBACK;
 
-inline constexpr tGATT_IF GATT_IF_INVALID = static_cast<tGATT_IF>(0);
-
 /*******************************************************************************
  *
  * Function         stack::appRegister
@@ -112,12 +111,12 @@ inline constexpr tGATT_IF GATT_IF_INVALID = static_cast<tGATT_IF>(0);
  *                  p_cb_info: callback functions.
  *                  eatt_support: set support for eatt
  *
- * Returns          GATT_IF_INVALID for error, otherwise the index of the client registered
+ * Returns          0 for error, otherwise the index of the client registered
  *                  with GATT
  *
  ******************************************************************************/
 [[nodiscard]] tGATT_IF appRegister(const bluetooth::Uuid& p_app_uuid128, const std::string& name,
-                                   const tGATT_CBACK* p_cb_info, bool eatt_support);
+                                   tGATT_CBACK* p_cb_info, bool eatt_support);
 
 /*******************************************************************************
  *

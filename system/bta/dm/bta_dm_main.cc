@@ -21,8 +21,6 @@
  *  This is the main implementation file for the BTA device manager.
  *
  ******************************************************************************/
-
-#include <com_android_bluetooth_flags.h>
 #include <stddef.h>
 
 #include "bta/dm/bta_dm_device_search.h"

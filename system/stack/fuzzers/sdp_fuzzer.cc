@@ -21,8 +21,6 @@
 #include <string>
 #include <vector>
 
-#include "bta/ag/bta_ag_int.h"
-#include "bta/sys/bta_sys.h"
 #include "osi/include/allocator.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/l2cdefs.h"
@@ -35,10 +33,6 @@
 
 using ::testing::NiceMock;
 using ::testing::Unused;
-
-// TODO: remove dependency on BTA symbols.
-bool bta_ag_get_swb_supported() { return false; }
-void bta_sys_add_uuid(uint16_t) {}
 
 namespace {
 

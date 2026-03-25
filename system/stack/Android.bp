@@ -63,7 +63,13 @@ cc_library_static {
         "external/libldac/inc",
         "external/libopus/include",
         "packages/modules/Bluetooth/system",
+        "packages/modules/Bluetooth/system/bta/ag",
+        "packages/modules/Bluetooth/system/bta/include",
+        "packages/modules/Bluetooth/system/bta/sys",
+        "packages/modules/Bluetooth/system/btif/include",
         "packages/modules/Bluetooth/system/gd",
+        "packages/modules/Bluetooth/system/gd/hal",
+        "packages/modules/Bluetooth/system/udrv/include",
         "packages/modules/Bluetooth/system/btconfigstore",
     ],
     srcs: [
@@ -300,6 +306,11 @@ cc_defaults {
                 "libutils",
             ],
         },
+        host: {
+            cflags: [
+                "-DOS_GENERIC",
+            ],
+        },
     },
     fuzz_config: {
         // Options for performance improvement
@@ -325,6 +336,8 @@ cc_fuzz {
         ":LegacyStackSdp",
         ":TestCommonMockFunctions",
         ":TestFakeOsi",
+        ":TestMockBtaAg",
+        ":TestMockBtaSys",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -363,6 +376,8 @@ cc_defaults {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
         "packages/modules/Bluetooth/system/stack/test/common",
         "packages/modules/Bluetooth/system/stack/test/rfcomm",
@@ -410,6 +425,8 @@ cc_fuzz {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
     ],
     srcs: [
@@ -463,6 +480,8 @@ cc_defaults {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
     ],
     srcs: [
@@ -518,6 +537,8 @@ cc_defaults {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
     ],
     srcs: [
@@ -564,6 +585,8 @@ cc_defaults {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
     ],
     srcs: [
@@ -616,6 +639,8 @@ cc_defaults {
         "fluoride_defaults",
     ],
     include_dirs: [
+        "external/flatbuffers/include",
+        "external/rust/android-crates-io/crates/quiche/deps/boringssl/src/include",
         "packages/modules/Bluetooth/system/stack/btm",
     ],
     srcs: [
@@ -748,6 +773,7 @@ cc_test {
         "liblc3",
         "libopus",
         "libosi",
+        "libprotobuf-cpp-lite",
         "libudrv-uipc",
     ],
     target: {
@@ -792,6 +818,7 @@ cc_test {
     include_dirs: [
         "packages/modules/Bluetooth/system",
         "packages/modules/Bluetooth/system/gd",
+        "packages/modules/Bluetooth/system/gd/hal",
     ],
     srcs: [
         ":TestCommonMockFunctions",
@@ -838,6 +865,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
         "server_configurable_flags",
     ],
     sanitize: {
@@ -1077,6 +1105,7 @@ cc_test {
     srcs: [
         ":TestCommonMockFunctions",
         ":TestFakeOsi",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         "avct/avct_api.cc",
@@ -1112,6 +1141,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
     ],
     sanitize: {
         address: true,
@@ -1139,6 +1169,7 @@ cc_test {
     ],
     srcs: [
         ":TestCommonMockFunctions",
+        ":TestMockBta",
         ":TestMockDevice",
         ":TestMockBtif",
         "avdt/avdt_ad.cc",
@@ -1176,6 +1207,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
     ],
     target: {
         android: {
@@ -1236,6 +1268,7 @@ cc_test {
     srcs: [
         ":TestCommonMockFunctions",
         ":TestMockAudioHalInterface",
+        ":TestMockBta",
         ":TestMockBtif",
         "a2dp/a2dp_aac.cc",
         "a2dp/a2dp_aac_decoder.cc",
@@ -1299,8 +1332,8 @@ cc_test {
         "liblog",
         "libopus",
         "libosi",
+        "libprotobuf-cpp-lite",
         "bluetooth_flags_c_lib",
-
     ],
     whole_static_libs: [
         "libaptx_enc",
@@ -1336,6 +1369,7 @@ cc_test {
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestCommonSyncMainHandler",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -1501,6 +1535,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
         "server_configurable_flags",
     ],
     sanitize: {
@@ -1538,6 +1573,7 @@ cc_test {
         ":TestFakeLooper",
         ":TestFakeOsi",
         ":TestFakeThread",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -1611,6 +1647,7 @@ cc_test {
         "liblc3",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
         "libudrv-uipc",
     ],
     shared_libs: [
@@ -1743,6 +1780,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
@@ -1780,6 +1818,7 @@ cc_test {
     ],
     srcs: [
         ":TestCommonMockFunctions",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockMainShim",
         ":TestMockMainShimEntry",
@@ -1848,6 +1887,7 @@ cc_test {
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestCommonSyncMainHandler",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockMainShim",
         ":TestMockMainShim",
@@ -1894,6 +1934,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
@@ -1939,6 +1980,7 @@ cc_test {
         ":OsiCompatSources",
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -2024,6 +2066,7 @@ cc_test {
 //         ":TestCommonMockFunctions",
 //         ":TestCommonStackConfig",
 //         ":TestCommonSyncMainHandler",
+//         ":TestMockBta",
 //         ":TestMockBtif",
 //         ":TestMockMainShim",
 //         ":TestMockMainShim",
@@ -2068,6 +2111,7 @@ cc_test {
 //         "libgmock",
 //         "liblog",
 //         "libosi",
+//         "libprotobuf-cpp-lite",
 //     ],
 //     shared_libs: [
 //         "libaconfig_storage_read_api_cc",
@@ -2113,6 +2157,7 @@ cc_test {
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestCommonSyncMainHandler",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockJni",
         ":TestMockMainShim",
@@ -2145,6 +2190,7 @@ cc_test {
         "libgmock",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
     ],
     shared_libs: [
         "libaconfig_storage_read_api_cc",
@@ -2197,6 +2243,7 @@ cc_test {
         ":TestCommonMockFunctions",
         ":TestCommonStackConfig",
         ":TestCommonSyncMainHandler",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -2276,6 +2323,7 @@ cc_test {
         ":TestFakeLooper",
         ":TestFakeOsi",
         ":TestFakeThread",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockDevice",
         ":TestMockMainShim",
@@ -2307,6 +2355,7 @@ cc_test {
         "liblc3",
         "liblog",
         "libosi",
+        "libprotobuf-cpp-lite",
         "libudrv-uipc",
     ],
     shared_libs: [
@@ -2350,6 +2399,7 @@ cc_test {
         ":LegacyStackSdp",
         ":TestCommonMockFunctions",
         ":TestFakeOsi",
+        ":TestMockBta",
         ":TestMockBtif",
         ":TestMockMainShim",
         "test/sdp/stack_sdp_api_test.cc",
@@ -2386,15 +2436,37 @@ cc_test {
 cc_library_static {
     name: "libbt-stack-mock",
     defaults: ["fluoride_defaults"],
-    apex_available: ["com.android.bt"],
     host_supported: true,
-    min_sdk_version: "36",
+    local_include_dirs: [
+        "ais",
+        "avct",
+        "avdt",
+        "avrc",
+        "bnep",
+        "btm",
+        "eatt",
+        "gap",
+        "gatt",
+        "hid",
+        "include",
+        "l2cap",
+        "pan",
+        "sdp",
+        "smp",
+        "srvc",
+    ],
     include_dirs: [
         "packages/modules/Bluetooth/system",
+        "packages/modules/Bluetooth/system/bta/ag",
+        "packages/modules/Bluetooth/system/bta/include",
+        "packages/modules/Bluetooth/system/bta/sys",
+        "packages/modules/Bluetooth/system/btif/include",
         "packages/modules/Bluetooth/system/gd",
+        "packages/modules/Bluetooth/system/gd/hal",
+        "packages/modules/Bluetooth/system/udrv/include",
     ],
     srcs: [
-        "mock/*.cc",
+        "mock/mock_stack_*.cc",
     ],
     static_libs: [
         "libbluetooth_hci_pdl", // TODO: remove this dependency
@@ -2404,7 +2476,12 @@ cc_library_static {
         "libchrome",
         "libgmock",
     ],
+    export_static_lib_headers: [
+        "libbluetooth_hci_pdl",
+    ],
     header_libs: [
         "libbluetooth_headers",
     ],
+    apex_available: ["com.android.bt"],
+    min_sdk_version: "36",
 }

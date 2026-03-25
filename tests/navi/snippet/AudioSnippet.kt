@@ -483,15 +483,16 @@ class AudioSnippet : Snippet {
                 throw IllegalArgumentException("Unable to set preferred device $preferredDevice")
             }
         }
-        val deferred = coroutineScope.async {
-            val outputBuffer = mutableListOf<Byte>()
-            val buffer = ByteArray(bufferSize)
-            while (recorder.read(buffer, 0, buffer.size) > 0) {
-                outputBuffer.addAll(buffer.asList())
+        val deferred =
+            coroutineScope.async {
+                val outputBuffer = mutableListOf<Byte>()
+                val buffer = ByteArray(bufferSize)
+                while (recorder.read(buffer, 0, buffer.size) > 0) {
+                    outputBuffer.addAll(buffer.asList())
+                }
+                Log.d(TAG, "Recording ${outputPath} stopped")
+                outputBuffer
             }
-            Log.d(TAG, "Recording ${outputPath} stopped")
-            outputBuffer
-        }
         recorder.startRecording()
         recorders[outputPath] = Pair(recorder, deferred)
     }

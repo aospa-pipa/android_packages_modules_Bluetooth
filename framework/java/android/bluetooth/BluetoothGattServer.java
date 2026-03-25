@@ -70,6 +70,7 @@ import android.bluetooth.annotations.RequiresBluetoothConnectPermission;
 import android.bluetooth.annotations.RequiresLegacyBluetoothPermission;
 import android.content.AttributionSource;
 import android.os.IBinder;
+import android.os.ParcelUuid;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -582,6 +583,8 @@ public final class BluetoothGattServer implements BluetoothProfile {
             Log.e(TAG, "GATT service not available");
             return false;
         }
+        UUID uuid = UUID.randomUUID();
+        Log.d(TAG, "registerCallback(): UUID=" + uuid);
 
         synchronized (mServerIfLock) {
             if (mCallback != null) {
@@ -592,6 +595,7 @@ public final class BluetoothGattServer implements BluetoothProfile {
             mCallback = callback;
             try {
                 mService.registerServer(
+                        new ParcelUuid(uuid),
                         mBluetoothGattServerCallback,
                         eattSupport,
                         mTransport,

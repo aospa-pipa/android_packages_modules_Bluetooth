@@ -18,7 +18,6 @@ package com.android.bluetooth.media_audio.sink;
 
 import static android.Manifest.permission.BLUETOOTH_CONNECT;
 
-import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -1010,7 +1009,7 @@ public class BluetoothMediaBrowserService extends MediaBrowserServiceCompat {
         return builder.build();
     }
 
-    public static @Nullable List<MediaSessionCompat.QueueItem> toQueueItemList(
+    public static List<MediaSessionCompat.QueueItem> toQueueItemList(
             List<MediaSource.Metadata> queue) {
         if (queue == null || queue.size() == 0) {
             return null;
@@ -1026,8 +1025,7 @@ public class BluetoothMediaBrowserService extends MediaBrowserServiceCompat {
         return queueItems;
     }
 
-    public static @Nullable List<MediaItem> toMediaItemList(
-            List<MediaSource.BrowseNode> browseItems) {
+    public static List<MediaItem> toMediaItemList(List<MediaSource.BrowseNode> browseItems) {
         if (browseItems == null) {
             return null;
         }
