@@ -116,7 +116,7 @@ void GmapServer::Initialize(std::bitset<8> UGG_feature) {
             UGG_feature.to_string());
   characteristics_.clear();
 
-  static bluetooth::stack::tGATT_REQ_CBACK gmap_server_cbacks = {
+  static bluetooth::stack::tGATT_REQ_CBACK gmap_req_cb = {
           .read_characteristic_cb = GmapServer::OnReadCharacteristic,
           .read_descriptor_cb = tGATT_REQ_CBACK::do_nothing,
           .write_characteristic_cb = tGATT_REQ_CBACK::do_nothing,
@@ -124,67 +124,20 @@ void GmapServer::Initialize(std::bitset<8> UGG_feature) {
           .exec_write_cb = tGATT_REQ_CBACK::do_nothing,
           .mtu_changed_cb = tGATT_REQ_CBACK::do_nothing,
           .conf_cb = tGATT_REQ_CBACK::do_nothing,
-          .conf_send_fail_cb = tGATT_REQ_CBACK::do_nothing,
   };
 
-  static const tBTA_GATTS_CBACK gmap_ops = {
-          .p_conn_cb = GmapServer::OnGattConn,
-          .server_cbacks = &gmap_server_cbacks,
+  static const stack::tGATT_CBACK gmap_ops = {
+          .p_req_cb = &gmap_req_cb,
   };
 
-  BTA_GATTS_AppRegister(bluetooth::le_audio::uuid::kGamingAudioServiceUuid, &gmap_ops, false,
-                        &GmapServer::OnGattServerRegister);
-}
+  server_if_ = BTA_GATTS_AppRegister(bluetooth::le_audio::uuid::kGamingAudioServiceUuid, &gmap_ops,
+                                     false);
+  log::info("server_if: {}", server_if_);
 
-std::bitset<8> GmapServer::GetRole() { return GmapServer::role_; }
-
-uint16_t GmapServer::GetRoleHandle() {
-  for (auto &[attribute_handle, characteristic] : characteristics_) {
-    if (characteristic.uuid_ == bluetooth::le_audio::uuid::kRoleCharacteristicUuid) {
-      return attribute_handle;
-    }
-  }
-  log::warn("no valid UGG feature handle");
-  return 0;
-}
-
-std::bitset<8> GmapServer::GetUGGFeature() { return GmapServer::UGG_feature_; }
-
-uint16_t GmapServer::GetUGGFeatureHandle() {
-  for (auto &[attribute_handle, characteristic] : characteristics_) {
-    if (characteristic.uuid_ == bluetooth::le_audio::uuid::kUnicastGameGatewayCharacteristicUuid) {
-      return attribute_handle;
-    }
-  }
-  log::warn("no valid UGG feature handle");
-  return 0;
-}
-
-std::unordered_map<uint16_t, GmapCharacteristic> &GmapServer::GetCharacteristics() {
-  return GmapServer::characteristics_;
-}
-
-void GmapServer::OnGattConn(tGATT_IF /*server_if*/, const RawAddress& remote_bda, tCONN_ID conn_id,
-                            bool connected, tGATT_DISCONN_REASON /*reason*/,
-                            tBT_TRANSPORT transport) {
-  log::info("Address: {}, conn_id:{} connected: {}", remote_bda, conn_id, connected);
-  if (connected) {
-    if (transport == BT_TRANSPORT_BR_EDR) {
-      log::warn("Skip BE/EDR connection");
-      return;
-    }
-  }
-}
-
-void GmapServer::OnGattServerRegister(tGATT_STATUS status, tGATT_IF server_if,
-                                      const bluetooth::Uuid& /*uuid*/) {
-  log::info("status: {}", gatt_status_text(status));
-
-  if (status != tGATT_STATUS::GATT_SUCCESS) {
+  if (server_if_ == stack::GATT_IF_INVALID) {
     log::warn("Register Server fail");
     return;
   }
-  server_if_ = server_if;
 
   std::vector<btgatt_db_element_t> service;
 
@@ -212,11 +165,36 @@ void GmapServer::OnGattServerRegister(tGATT_STATUS status, tGATT_IF server_if,
   service.push_back(UGG_feature_characteristic);
 
   log::info("add service");
-  BTA_GATTS_AddService(server_if_, service,
-                       base::BindOnce([](tGATT_STATUS status, int server_if,
-                                         std::vector<btgatt_db_element_t> service) {
-                         OnServiceAdded(status, server_if, service);
-                       }));
+  auto status = BTA_GATTS_AddService(server_if_, &service);
+  OnServiceAdded(status, server_if_, std::move(service));
+}
+
+std::bitset<8> GmapServer::GetRole() { return GmapServer::role_; }
+
+uint16_t GmapServer::GetRoleHandle() {
+  for (auto& [attribute_handle, characteristic] : characteristics_) {
+    if (characteristic.uuid_ == bluetooth::le_audio::uuid::kRoleCharacteristicUuid) {
+      return attribute_handle;
+    }
+  }
+  log::warn("no valid UGG feature handle");
+  return 0;
+}
+
+std::bitset<8> GmapServer::GetUGGFeature() { return GmapServer::UGG_feature_; }
+
+uint16_t GmapServer::GetUGGFeatureHandle() {
+  for (auto& [attribute_handle, characteristic] : characteristics_) {
+    if (characteristic.uuid_ == bluetooth::le_audio::uuid::kUnicastGameGatewayCharacteristicUuid) {
+      return attribute_handle;
+    }
+  }
+  log::warn("no valid UGG feature handle");
+  return 0;
+}
+
+std::unordered_map<uint16_t, GmapCharacteristic>& GmapServer::GetCharacteristics() {
+  return GmapServer::characteristics_;
 }
 
 void GmapServer::OnServiceAdded(tGATT_STATUS status, int server_if,

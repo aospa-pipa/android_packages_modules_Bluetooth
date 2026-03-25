@@ -106,7 +106,7 @@ impl PeriodicSyncManager for PeriodicSyncManagerImpl {
             let mut sync_registry = self.sync_registry.lock().unwrap();
             if sync_registry.pending_requests.start_sync.contains_key(&reg_id) {
                 warn!("Sync request for reg_id {} is already in progress", reg_id);
-                return Err(PeriodicSyncError::Internal);
+                return Err(PeriodicSyncError::AlreadyInProgress);
             }
             sync_registry.pending_requests.start_sync.insert(reg_id, sender);
         }
@@ -122,7 +122,7 @@ impl PeriodicSyncManager for PeriodicSyncManagerImpl {
 
         let result = match timeout(DEFAULT_TIMEOUT, receiver).await {
             Ok(Ok(res)) => res,
-            Ok(Err(_)) => Err(PeriodicSyncError::Internal),
+            Ok(Err(_)) => Err(PeriodicSyncError::ChannelClosed),
             Err(_) => Err(PeriodicSyncError::Timeout),
         };
 
@@ -180,17 +180,21 @@ mod test {
         let mut stream2 = manager.subscribe_events();
 
         // Broadcast a simulated event.
-        let event = PeriodicSyncEvent::PaSyncLost { sync_handle: 42 };
+        let event = PeriodicSyncEvent::PeriodicAdvertisingSyncLost { sync_handle: 42 };
         manager.sync_registry.lock().unwrap().broadcast_event(event);
 
         // Verify both subscribers receive it.
         expect_that!(
             timeout(DEFAULT_TIMEOUT, stream1.next()).await,
-            ok(some(matches_pattern!(&PeriodicSyncEvent::PaSyncLost { sync_handle: eq(42) })))
+            ok(some(matches_pattern!(&PeriodicSyncEvent::PeriodicAdvertisingSyncLost {
+                sync_handle: eq(42)
+            })))
         );
         expect_that!(
             timeout(DEFAULT_TIMEOUT, stream2.next()).await,
-            ok(some(matches_pattern!(&PeriodicSyncEvent::PaSyncLost { sync_handle: eq(42) })))
+            ok(some(matches_pattern!(&PeriodicSyncEvent::PeriodicAdvertisingSyncLost {
+                sync_handle: eq(42)
+            })))
         );
     }
 
@@ -212,7 +216,7 @@ mod test {
             .sync_registry
             .lock()
             .unwrap()
-            .broadcast_event(PeriodicSyncEvent::PaSyncLost { sync_handle: 0 });
+            .broadcast_event(PeriodicSyncEvent::PeriodicAdvertisingSyncLost { sync_handle: 0 });
 
         // Verify dead subscriber is removed.
         expect_that!(manager.sync_registry.lock().unwrap().event_subscribers.len(), eq(0));
@@ -227,8 +231,8 @@ mod test {
         let params = PaCreateSyncParams {
             broadcast_id: 99,
             advertising_sid: 1,
-            advertiser_addr: Address::default(),
             advertiser_addr_type: AddressType::PublicDeviceAddress,
+            advertiser_addr: Address::default(),
             skip: 0,
             sync_timeout: Duration::from_millis(2000),
         };
@@ -277,8 +281,8 @@ mod test {
         let params = PaCreateSyncParams {
             broadcast_id: 1,
             advertising_sid: 1,
-            advertiser_addr: Address::from_be_bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
             advertiser_addr_type: AddressType::PublicDeviceAddress,
+            advertiser_addr: Address::from_be_bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
             skip: 0,
             sync_timeout: Duration::from_secs(2),
         };
@@ -295,13 +299,13 @@ mod test {
     #[tokio::test]
     async fn test_start_sync_fails_when_duplicate_broadcast_id_provided() {
         // Verify that attempting to start a second synchronization with the same broadcast ID
-        // while one is already in progress returns an internal error.
+        // while one is already in progress returns an `AlreadyInProgress` error.
         let manager = Arc::new(PeriodicSyncManagerImpl::new());
         let params = PaCreateSyncParams {
             broadcast_id: 1,
             advertising_sid: 1,
-            advertiser_addr: Address::from_be_bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
             advertiser_addr_type: AddressType::PublicDeviceAddress,
+            advertiser_addr: Address::from_be_bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
             skip: 0,
             sync_timeout: Duration::from_secs(2),
         };
@@ -319,6 +323,6 @@ mod test {
         // Attempt a second sync with the same broadcast_id.
         let second_sync_result = timeout(DEFAULT_TIMEOUT, manager.start_sync(params)).await;
 
-        expect_that!(second_sync_result, ok(err(eq(&PeriodicSyncError::Internal))));
+        expect_that!(second_sync_result, ok(err(eq(&PeriodicSyncError::AlreadyInProgress))));
     }
 }

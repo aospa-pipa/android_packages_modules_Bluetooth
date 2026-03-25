@@ -2588,7 +2588,8 @@ public class LeAudioService extends ConnectableProfile {
 
             for (AudioDeviceInfo deviceInfo : addedDevices) {
                 if ((deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_HEADSET)
-                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_SPEAKER)) {
+                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_SPEAKER)
+                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_HEARING_AID)) {
                     continue;
                 }
 
@@ -2629,7 +2630,8 @@ public class LeAudioService extends ConnectableProfile {
                 }
 
                 if ((deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_HEADSET)
-                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_SPEAKER)) {
+                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_SPEAKER)
+                        && (deviceInfo.getType() != AudioDeviceInfo.TYPE_BLE_HEARING_AID)) {
                     continue;
                 }
 

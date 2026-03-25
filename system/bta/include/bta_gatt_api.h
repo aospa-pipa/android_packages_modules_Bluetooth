@@ -289,31 +289,6 @@ typedef void(tBTA_GATTC_CBACK)(tBTA_GATTC_EVT event, tBTA_GATTC* p_data);
 
 #define BTA_GATTS_INVALID_IF 0
 
-#ifndef BTA_GATTC_CHAR_DESCR_MAX
-#define BTA_GATTC_CHAR_DESCR_MAX 7
-#endif
-
-/* GATTS enable callback function */
-typedef void(tBTA_GATTS_ENB_CBACK)(tGATT_STATUS status);
-
-/* Server callback function */
-typedef struct {
-  void (*p_conn_cb)(tGATT_IF server_if, const RawAddress& remote_bda, tCONN_ID conn_id,
-                    bool connected, tGATT_DISCONN_REASON reason, tBT_TRANSPORT transport);
-  void (*p_congestion_cb)(tCONN_ID conn_id, bool congested);
-  void (*p_phy_update_cb)(tGATT_IF server_if, tCONN_ID conn_id, uint8_t tx_phy, uint8_t rx_phy,
-                          tGATT_STATUS status);
-  void (*p_conn_update_cb)(tGATT_IF server_if, tCONN_ID conn_id, uint16_t interval,
-                           uint16_t latency, uint16_t timeout, tGATT_STATUS status);
-  void (*p_subrate_chg_cb)(tGATT_IF server_if, tCONN_ID conn_id, uint16_t subrate_factor,
-                           uint16_t latency, uint16_t cont_num, uint16_t timeout,
-                           tGATT_SUBRATE_MODE subrate_mode, tGATT_STATUS status);
-  void (*p_characteristics_unoffloaded_cb)(tGATT_IF server_if, tCONN_ID conn_id,
-                                           uint32_t session_id, tGATT_STATUS status);
-
-  bluetooth::stack::tGATT_REQ_CBACK* server_cbacks;
-} tBTA_GATTS_CBACK;
-
 /*****************************************************************************
  *  External Function Declarations
  ****************************************************************************/
@@ -799,13 +774,11 @@ void BTA_GATTS_Disable(void);
  *                  p_cback - pointer to the application callback function.
  *                  eatt_support: indicate eatt support.
  *
- * Returns          None
+ * Returns          GATT_IF_INVALID for error, otherwise the app id
  *
  ******************************************************************************/
-void BTA_GATTS_AppRegister(const bluetooth::Uuid& app_uuid, const tBTA_GATTS_CBACK* p_cback,
-                           bool eatt_support,
-                           void (*p_reg_cb)(tGATT_STATUS status, tGATT_IF server_if,
-                                            const bluetooth::Uuid& uuid));
+tGATT_IF BTA_GATTS_AppRegister(const bluetooth::Uuid& app_uuid,
+                               const bluetooth::stack::tGATT_CBACK* p_cback, bool eatt_support);
 
 /*******************************************************************************
  *
@@ -831,16 +804,11 @@ void BTA_GATTS_AppDeregister(tGATT_IF server_if);
  * Parameters       server_if: server interface.
  *                  service: pointer to vector describing service.
  *
- * Returns          Returns |GATT_SUCCESS| on success or |GATT_ERROR| if the
+ * Returns          Returns |GATT_SERVICE_STARTED| on success or error if the
  *                  service cannot be added.
  *
  ******************************************************************************/
-typedef base::OnceCallback<void(tGATT_STATUS status, int server_if,
-                                std::vector<btgatt_db_element_t> service)>
-        BTA_GATTS_AddServiceCb;
-
-void BTA_GATTS_AddService(tGATT_IF server_if, std::vector<btgatt_db_element_t> service,
-                          BTA_GATTS_AddServiceCb cb);
+tGATT_STATUS BTA_GATTS_AddService(tGATT_IF server_if, std::vector<btgatt_db_element_t>* service);
 
 /*******************************************************************************
  *
@@ -852,12 +820,10 @@ void BTA_GATTS_AddService(tGATT_IF server_if, std::vector<btgatt_db_element_t> s
  *
  * Parameters       service_id: service_id to be deleted.
  *
- * Returns          returns none.
+ * Returns          returns true on success, false otherwise.
  *
  ******************************************************************************/
-void BTA_GATTS_DeleteService(tGATT_IF server_if, uint16_t service_id,
-                             void (*p_delete_service_cb)(tGATT_STATUS status, tGATT_IF server_if,
-                                                         uint16_t service_id));
+bool BTA_GATTS_DeleteService(tGATT_IF server_if, uint16_t service_id);
 
 /*******************************************************************************
  *
@@ -872,11 +838,11 @@ void BTA_GATTS_DeleteService(tGATT_IF server_if, uint16_t service_id,
  *                  need_confirm - if this indication expects a confirmation or
  *                                 not.
  *
- * Returns          None
+ * Returns          GATT_SUCCESS or error code
  *
  ******************************************************************************/
-void BTA_GATTS_HandleValueIndication(tCONN_ID conn_id, uint16_t attr_id, std::vector<uint8_t> value,
-                                     bool need_confirm);
+tGATT_STATUS BTA_GATTS_HandleValueIndication(tCONN_ID conn_id, uint16_t attr_id,
+                                             std::vector<uint8_t> value, bool need_confirm);
 
 /*******************************************************************************
  *
@@ -895,88 +861,8 @@ void BTA_GATTS_HandleValueIndication(tCONN_ID conn_id, uint16_t attr_id, std::ve
 void BTA_GATTS_SendRsp(tCONN_ID conn_id, uint32_t trans_id, tGATT_STATUS status,
                        std::unique_ptr<tGATTS_RSP> rsp);
 
-/*******************************************************************************
- *
- * Function         BTA_GATTS_Open
- *
- * Description      Open a direct open connection or add a background auto
- *                  connection bd address
- *
- * Parameters       server_if: server interface.
- *                  remote_bda: remote device BD address.
- *                  addr_type: remote device address type
- *                  is_direct: direct connection or background auto connection
- *                  transport: transport to use in this connection
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_GATTS_Open(tGATT_IF server_if, const RawAddress& remote_bda, tBLE_ADDR_TYPE addr_type,
-                    bool is_direct, tBT_TRANSPORT transport);
-
-/*******************************************************************************
- *
- * Function         BTA_GATTS_CancelOpen
- *
- * Description      Cancel a direct open connection or remove a background auto
- *                  connection bd address
- *
- * Parameters       server_if: server interface.
- *                  remote_bda: remote device BD address.
- *                  is_direct: direct connection or background auto connection
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_GATTS_CancelOpen(tGATT_IF server_if, const RawAddress& remote_bda, bool is_direct);
-
-/*******************************************************************************
- *
- * Function         BTA_GATTS_Close
- *
- * Description      Close a connection  a remote device.
- *
- * Parameters       conn_id: connection ID to be closed.
- *
- * Returns          void
- *
- ******************************************************************************/
-void BTA_GATTS_Close(tCONN_ID conn_id);
-
 // Adds bonded device for GATT server tracking service changes
 void BTA_GATTS_InitBonded(void);
-
-/*******************************************************************************
- *
- * Function         BTA_GATTS_OffloadCharacteristics
- *
- * Description      This function is called to offload a service.
- *
- * Parameters       conn_id - connection ID.
- *                  service - vector describing service.
- *                  endpoint_id - ID of the hub end point.
- *                  hub_id - ID of the hub to which the end point belongs.
- *                  uid - UID of the app.
- *                  attribution_tag - attribution tag of the app.
- *                  promise - object used to signal the completion status.
- *
- ******************************************************************************/
-void BTA_GATTS_OffloadCharacteristics(tCONN_ID conn_id, std::vector<btgatt_db_element_t> service,
-                                      uint64_t endpoint_id, uint64_t hub_id, int uid,
-                                      std::string attribution_tag,
-                                      std::promise<btgatt_offload_result_t> promise);
-
-/*******************************************************************************
- *
- * Function         BTA_GATTS_UnoffloadCharacteristics
- *
- * Description      This function is called to unoffload a session.
- *
- * Parameters       conn_id - connection ID.
- *                  session_id - session ID.
- *
- ******************************************************************************/
-void BTA_GATTS_UnoffloadCharacteristics(tCONN_ID conn_id, int session_id);
 
 /* Initialize power management callbacks for GATT */
 extern void BTA_GATT_Init_gatt_pm_callbacks();
