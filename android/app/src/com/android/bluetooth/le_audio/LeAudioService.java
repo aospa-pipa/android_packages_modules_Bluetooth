@@ -1388,6 +1388,15 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
 
+        if (mInCall || !isBroadcastAllowedToActivateInCurrentMode()) {
+            Log.w(TAG, "Call is ongoing, skip broadcast creation.");
+            mHandler.post(
+                        () ->
+                            notifyBroadcastStartFailed(
+                                    BluetoothStatusCodes.ERROR_LOCAL_NOT_ENOUGH_RESOURCES));
+            return;
+        }
+
         int canBroadcastBeCreatedReturnCode = canBroadcastBeCreated(broadcastSettings);
         if (canBroadcastBeCreatedReturnCode != BluetoothStatusCodes.SUCCESS) {
             mHandler.post(() -> notifyBroadcastStartFailed(canBroadcastBeCreatedReturnCode));
