@@ -111,9 +111,9 @@ void StackImpl::StartEverything() {
       start_timeout = std::chrono::milliseconds(8000) * hw_timeout_multiplier;
     } else if (bluetooth::os::GetSystemPropertyUint32("ro.build.version.sdk", 99) < 37) {
       start_timeout = std::chrono::milliseconds(
-              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 3000));
+              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 8000));
     } else {
-      start_timeout = std::chrono::milliseconds(3000);
+      start_timeout = std::chrono::milliseconds(8000);
     }
 
     auto init_status = future.wait_for(start_timeout);
