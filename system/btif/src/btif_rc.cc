@@ -388,6 +388,7 @@ static void handle_rc_ctrl_features(btif_rc_device_cb_t* p_dev) {
   log::verbose("Update rc features to CTRL: {}", rc_features);
   CTRL_HAL_CBACK(bt_rc_ctrl_callbacks->getrcfeatures_cb, p_dev->rc_addr, rc_features);
 }
+
 void btif_rc_check_pending_cmd(const RawAddress& peer_address) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(peer_address);
   if (p_dev == nullptr) {
@@ -441,8 +442,7 @@ static void handle_rc_ctrl_psm(btif_rc_device_cb_t* p_dev) {
 static void handle_rc_browse_connect(tBTA_AV_RC_BROWSE_OPEN* p_rc_br_open) {
   log::verbose("rc_handle {} status {}", p_rc_br_open->rc_handle, p_rc_br_open->status);
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_rc_br_open->rc_handle);
-
-  if (!p_dev) {
+  if (p_dev == nullptr) {
     log::error("p_dev is null");
     return;
   }
@@ -479,12 +479,12 @@ static void handle_rc_connect(tBTA_AV_RC_OPEN* p_rc_open) {
   log::info("handle_rc_connect(handle={}, addr={})", p_rc_open->rc_handle, p_rc_open->peer_addr);
 
   btif_rc_device_cb_t* p_dev = alloc_device();
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev is NULL");
     return;
   }
 
-  if (!(p_rc_open->status == BTA_AV_SUCCESS)) {
+  if (p_rc_open->status != BTA_AV_SUCCESS) {
     log::error("Connect failed with error code: {}", p_rc_open->status);
     dealloc_device(p_dev);
     BTA_AvCloseRc(p_rc_open->rc_handle);
@@ -544,12 +544,11 @@ static void handle_rc_connect(tBTA_AV_RC_OPEN* p_rc_open) {
  *
  ***************************************************************************/
 static void handle_rc_disconnect(tBTA_AV_RC_CLOSE* p_rc_close) {
-  btif_rc_device_cb_t* p_dev = NULL;
   log::info("handle_rc_disconnect(handle={}, addr={})", p_rc_close->rc_handle,
                p_rc_close->peer_addr);
 
-  p_dev = btif_rc_get_device_by_handle(p_rc_close->rc_handle);
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_rc_close->rc_handle);
+  if (p_dev == nullptr) {
     log::error("Got disconnect from invalid rc handle");
     return;
   }
@@ -578,10 +577,8 @@ static void handle_rc_disconnect(tBTA_AV_RC_CLOSE* p_rc_close) {
  *
  ***************************************************************************/
 static void handle_rc_passthrough_rsp(tBTA_AV_REMOTE_RSP* p_remote_rsp) {
-  btif_rc_device_cb_t* p_dev = NULL;
-
-  p_dev = btif_rc_get_device_by_handle(p_remote_rsp->rc_handle);
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_remote_rsp->rc_handle);
+  if (p_dev == nullptr) {
     log::error("passthrough response for Invalid rc handle");
     return;
   }
@@ -608,12 +605,11 @@ static void handle_rc_passthrough_rsp(tBTA_AV_REMOTE_RSP* p_remote_rsp) {
  *
  ***************************************************************************/
 static void handle_rc_vendorunique_rsp(tBTA_AV_REMOTE_RSP* p_remote_rsp) {
-  btif_rc_device_cb_t* p_dev = NULL;
   const char* status;
   uint8_t vendor_id = 0;
 
-  p_dev = btif_rc_get_device_by_handle(p_remote_rsp->rc_handle);
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_remote_rsp->rc_handle);
+  if (p_dev == nullptr) {
     log::error("Got vendorunique rsp from invalid rc handle");
     return;
   }
@@ -652,7 +648,6 @@ static void handle_rc_vendorunique_rsp(tBTA_AV_REMOTE_RSP* p_remote_rsp) {
  ***************************************************************************/
 void btif_rc_handler(tBTA_AV_EVT event, tBTA_AV* p_data) {
   log::verbose("event: {}", dump_rc_event(event));
-  btif_rc_device_cb_t* p_dev = NULL;
   switch (event) {
     case BTA_AV_RC_OPEN_EVT: {
       log::verbose("Peer_features: 0x{:x} Cover Art PSM: 0x{:x}", p_data->rc_open.peer_features,
@@ -691,8 +686,8 @@ void btif_rc_handler(tBTA_AV_EVT event, tBTA_AV* p_data) {
 
     case BTA_AV_RC_FEAT_EVT: {
       log::verbose("Peer_features: {:x}", p_data->rc_feat.peer_features);
-      p_dev = btif_rc_get_device_by_handle(p_data->rc_feat.rc_handle);
-      if (p_dev == NULL) {
+      btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_data->rc_feat.rc_handle);
+      if (p_dev == nullptr) {
         log::error("RC Feature event for Invalid rc handle");
         break;
       }
@@ -716,8 +711,8 @@ void btif_rc_handler(tBTA_AV_EVT event, tBTA_AV* p_data) {
 
     case BTA_AV_RC_PSM_EVT: {
       log::verbose("Peer cover art PSM: {:x}", p_data->rc_cover_art_psm.cover_art_psm);
-      p_dev = btif_rc_get_device_by_handle(p_data->rc_cover_art_psm.rc_handle);
-      if (p_dev == NULL) {
+      btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(p_data->rc_cover_art_psm.rc_handle);
+      if (p_dev == nullptr) {
         log::error("RC PSM event for Invalid rc handle");
         break;
       }
@@ -785,10 +780,9 @@ bool btif_rc_is_connected_peer(const RawAddress& peer_addr) {
  **
  ***************************************************************************/
 uint8_t btif_rc_get_connected_peer_handle(const RawAddress& peer_addr) {
-  btif_rc_device_cb_t* p_dev = NULL;
-  p_dev = btif_rc_get_device_by_bda(peer_addr);
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(peer_addr);
 
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return BTRC_HANDLE_NONE;
   }
@@ -874,7 +868,7 @@ static BtStatus init_ctrl(btrc_ctrl_callbacks_t* callbacks) {
 }
 
 static void rc_ctrl_procedure_complete(btif_rc_device_cb_t* p_dev) {
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -922,7 +916,7 @@ static bool iterate_supported_event_list_for_interim_rsp(void* data, void* cb_da
  **************************************************************************/
 static void rc_notification_interim_timeout(btif_rc_device_cb_t* p_dev, uint8_t event_id) {
   /* Device disconnections clear the event list but can't free the timer */
-  if (p_dev == NULL || p_dev->rc_supported_event_list == NULL) {
+  if (p_dev == nullptr || p_dev->rc_supported_event_list == NULL) {
     log::warn("timeout for null device or event list");
     return;
   }
@@ -1170,8 +1164,7 @@ static bool rc_is_track_id_valid(tAVRC_UID uid) {
  **************************************************************************/
 static void handle_notification_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_REG_NOTIF_RSP* p_rsp) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -1358,8 +1351,7 @@ static void handle_notification_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_REG_
 static void handle_app_attr_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_LIST_APP_ATTR_RSP* p_rsp) {
   uint8_t xx;
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL || p_rsp->status != AVRC_STS_NO_ERROR) {
+  if (p_dev == nullptr || p_rsp->status != AVRC_STS_NO_ERROR) {
     log::error("Error getting Player application settings: 0x{:2X}", p_rsp->status);
     rc_ctrl_procedure_complete(p_dev);
     return;
@@ -1409,7 +1401,7 @@ static void handle_app_val_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_LIST_APP_
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
 
   /* Todo: Do we need to retry on command timeout */
-  if (p_dev == NULL || p_rsp->status != AVRC_STS_NO_ERROR) {
+  if (p_dev == nullptr || p_rsp->status != AVRC_STS_NO_ERROR) {
     log::error("Error fetching attribute values: 0x{:02X}", p_rsp->status);
     return;
   }
@@ -1474,15 +1466,15 @@ static void handle_app_cur_val_response(tBTA_AV_META_MSG* pmeta_msg,
                                         tAVRC_GET_CUR_APP_VALUE_RSP* p_rsp) {
   btrc_player_settings_t app_settings;
   uint16_t xx;
-  btif_rc_device_cb_t* p_dev = NULL;
 
   /* Todo: Do we need to retry on command timeout */
   if (p_rsp->status != AVRC_STS_NO_ERROR) {
     log::error("Error fetching current settings: 0x{:02X}", p_rsp->status);
     return;
   }
-  p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-  if (p_dev == NULL) {
+
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+  if (p_dev == nullptr) {
     log::error("Error in getting Device Address");
     osi_free_and_reset((void**)&p_rsp->p_vals);
     return;
@@ -1525,9 +1517,9 @@ static void handle_app_attr_txt_response(tBTA_AV_META_MSG* pmeta_msg,
   uint8_t xx;
   uint8_t vals[AVRC_MAX_APP_ATTR_SIZE];
   btif_rc_player_app_settings_t* p_app_settings;
-  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
 
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -1594,9 +1586,9 @@ static void handle_app_attr_val_txt_response(tBTA_AV_META_MSG* pmeta_msg,
   uint8_t vals[AVRC_MAX_APP_ATTR_SIZE];
   uint8_t attrs[AVRC_MAX_APP_ATTR_SIZE];
   btif_rc_player_app_settings_t* p_app_settings;
-  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
 
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -1715,9 +1707,9 @@ static void cleanup_app_attr_val_txt_response(btif_rc_player_app_settings_t* p_a
  **************************************************************************/
 static void handle_set_app_attr_val_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_RSP* /*p_rsp*/) {
   uint8_t accepted = 0;
-  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
 
-  if (p_dev == NULL) {
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -1748,7 +1740,7 @@ static void handle_get_metadata_attr_response(tBTA_AV_META_MSG* pmeta_msg,
     size_t buf_size = p_rsp->num_attrs * sizeof(btrc_element_attr_val_t);
     btrc_element_attr_val_t* p_attr = (btrc_element_attr_val_t*)osi_calloc(buf_size);
 
-    if (p_dev == NULL) {
+    if (p_dev == nullptr) {
       log::error("p_dev NULL");
       return;
     }
@@ -1790,8 +1782,7 @@ static void handle_get_metadata_attr_response(tBTA_AV_META_MSG* pmeta_msg,
 static void handle_get_playstatus_response(tBTA_AV_META_MSG* pmeta_msg,
                                            tAVRC_GET_PLAY_STATUS_RSP* p_rsp) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -1817,8 +1808,7 @@ static void handle_get_playstatus_response(tBTA_AV_META_MSG* pmeta_msg,
  **************************************************************************/
 static void handle_set_addressed_player_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_RSP* p_rsp) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -2102,8 +2092,7 @@ static void get_folder_item_type_player(const tAVRC_ITEM* avrc_item,
  **************************************************************************/
 static void handle_change_path_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_CHG_PATH_RSP* p_rsp) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("Invalid rc handle");
     return;
   }
@@ -2127,8 +2116,7 @@ static void handle_change_path_response(tBTA_AV_META_MSG* pmeta_msg, tAVRC_CHG_P
 static void handle_set_browsed_player_response(tBTA_AV_META_MSG* pmeta_msg,
                                                tAVRC_SET_BR_PLAYER_RSP* p_rsp) {
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("Invalid rc handle");
     return;
   }
@@ -2179,11 +2167,10 @@ static void handle_avk_rc_metamsg_rsp(tBTA_AV_META_MSG* pmeta_msg) {
   uint8_t scratch_buf[512] = {0};  // this variable is unused
   uint16_t buf_len;
   tAVRC_STS status;
-  btif_rc_device_cb_t* p_dev = NULL;
 
   log::verbose("opcode: {} rsp_code: {}", pmeta_msg->p_msg->hdr.opcode, pmeta_msg->code);
 
-  p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
   status = AVRC_Ctrl_ParsResponse(pmeta_msg->p_msg, &avrc_response, scratch_buf, &buf_len);
   if ((AVRC_OP_VENDOR == pmeta_msg->p_msg->hdr.opcode) && (pmeta_msg->code >= AVRC_RSP_NOT_IMPL) &&
       (pmeta_msg->code <= AVRC_RSP_INTERIM)) {
@@ -2280,7 +2267,6 @@ static void handle_avk_rc_metamsg_rsp(tBTA_AV_META_MSG* pmeta_msg) {
 static void handle_avk_rc_metamsg_cmd(tBTA_AV_META_MSG* pmeta_msg) {
   tAVRC_COMMAND avrc_cmd = {0};
   tAVRC_STS status = BT_STATUS_UNSUPPORTED;
-  btif_rc_device_cb_t* p_dev = NULL;
 
   log::verbose("opcode: {} rsp_code: {}", pmeta_msg->p_msg->hdr.opcode, pmeta_msg->code);
   status = AVRC_Ctrl_ParsCommand(pmeta_msg->p_msg, &avrc_cmd);
@@ -2302,8 +2288,8 @@ static void handle_avk_rc_metamsg_cmd(tBTA_AV_META_MSG* pmeta_msg) {
       send_reject_response(pmeta_msg->rc_handle, pmeta_msg->label, avrc_cmd.pdu, status,
                            pmeta_msg->p_msg->hdr.opcode);
     } else {
-      p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
-      if (p_dev == NULL) {
+      btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_handle(pmeta_msg->rc_handle);
+      if (p_dev == nullptr) {
         log::error("avk rc meta msg cmd for Invalid rc handle");
         return;
       }
@@ -2493,7 +2479,7 @@ static BtStatus get_player_app_setting_cmd(uint8_t num_attrib, uint8_t* attrib_i
 static BtStatus get_current_metadata_cmd(const RawAddress& bd_addr) {
   log::verbose("");
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(bd_addr);
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return BtifStatus(DEVICE_NOT_FOUND);
   }
@@ -3082,9 +3068,8 @@ static BtStatus send_groupnavigation_cmd(const RawAddress& bd_addr, uint8_t key_
 static BtStatus send_passthrough_cmd(const RawAddress& bd_addr, uint8_t key_code,
                                      uint8_t key_state) {
   BtStatus status = BtifStatus(UNSUPPORTED);
-  btif_rc_device_cb_t* p_dev = NULL;
   log::error("calling btif_rc_get_device_by_bda");
-  p_dev = btif_rc_get_device_by_bda(bd_addr);
+  btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(bd_addr);
 
   CHECK_RC_CONNECTED(p_dev);
 
@@ -3237,7 +3222,7 @@ rc_transaction_t* get_transaction_by_lbl(btif_rc_device_cb_t* p_dev, uint8_t lbl
  ******************************************************************************/
 static BtStatus get_transaction(btif_rc_device_cb_t* p_dev, rc_transaction_context_t& context,
                                 rc_transaction_t** ptransaction) {
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     return BtifStatus(PARM_INVALID);
   }
   rc_transaction_set_t* transaction_set = &(p_dev->transaction_set);
@@ -3371,7 +3356,7 @@ static std::string dump_transaction(const rc_transaction_t* const transaction) {
  **************************************************************************/
 static void vendor_cmd_timeout_handler(btif_rc_device_cb_t* p_dev, uint8_t label,
                                        rc_vendor_context_t* p_context) {
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -3452,7 +3437,7 @@ static void vendor_cmd_timeout_handler(btif_rc_device_cb_t* p_dev, uint8_t label
  **************************************************************************/
 static void browse_cmd_timeout_handler(btif_rc_device_cb_t* p_dev, uint8_t label,
                                        rc_browse_context_t* p_context) {
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -3504,7 +3489,7 @@ static void browse_cmd_timeout_handler(btif_rc_device_cb_t* p_dev, uint8_t label
  **************************************************************************/
 static void passthru_cmd_timeout_handler(btif_rc_device_cb_t* p_dev, uint8_t label,
                                          rc_passthru_context_t* p_context) {
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev NULL");
     return;
   }
@@ -3535,7 +3520,7 @@ static void btif_rc_transaction_timeout_handler(uint16_t /* event */, char* data
   }
 
   btif_rc_device_cb_t* p_dev = btif_rc_get_device_by_bda(p_context->rc_addr);
-  if (p_dev == NULL) {
+  if (p_dev == nullptr) {
     log::error("p_dev is null");
     return;
   }
