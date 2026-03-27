@@ -1715,8 +1715,14 @@ public:
           log::info("stack is pending configuration, defer call reconfig.");
           defer_call_reconfig_ = true;
         }
-        log::info("Call is coming, but CIG already set for a call");
-        return;
+        if (configuration_context_type_ == LeAudioContextType::VOICEASSISTANTS) {
+          // does NOT return — allows reconfiguration to proceed
+          log::info("Call is coming, do reconfiguration for a call");
+        } else {
+          // already in CONVERSATIONAL or other stable state, no reconfig needed
+          log::info("Call is coming, but CIG already set for a call");
+          return;
+        }
       }
       log::info("Call is coming, speed up reconfiguration for a call");
       local_metadata_context_types_.sink.clear();
@@ -5368,14 +5374,27 @@ public:
 
     auto const dsa_reconfigure_needed = DsaReconfigureNeeded(group, context_type);
     if (group->IsGroupConfiguredTo(*audio_set_conf) && !dsa_reconfigure_needed) {
+      bool force_reconfiguration = false;
       // Assign the new configuration context as it reprents the current
       // use case even when it eventually ends up being the exact same
       // codec and qos configuration.
       if (configuration_context_type_ != context_type) {
+        if ((configuration_context_type_ == LeAudioContextType::VOICEASSISTANTS ||
+             configuration_context_type_ == LeAudioContextType::CONVERSATIONAL) &&
+            (context_type == LeAudioContextType::CONVERSATIONAL ||
+             context_type == LeAudioContextType::VOICEASSISTANTS)) {
+          force_reconfiguration = true;
+        }
         setConfigurationContextType(context_type);
         group->SetConfigurationContextType(context_type);
       }
-      return AudioReconfigurationResult::RECONFIGURATION_NOT_NEEDED;
+
+      log::info("force_reconfiguration: {}", force_reconfiguration);
+      if (force_reconfiguration) {
+        log::info("Forcing reconfiguration for context: {}", ToString(context_type));
+      } else {
+        return AudioReconfigurationResult::RECONFIGURATION_NOT_NEEDED;
+      }
     }
 
     log::info("Session reconfiguration needed group: {} for context type: {}", group->group_id_,
