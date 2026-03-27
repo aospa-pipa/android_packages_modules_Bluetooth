@@ -1675,6 +1675,10 @@ public:
         std::vector<record_track_metadata_v7> empty_tracks = {};
         audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
       }
+      if (group && group->IsSuspendedForReconfiguration()) {
+        log::error("AHAL is still in suspend state, send resume.");
+        reconfigurationComplete();
+      }
       return;
     }
 
@@ -1682,6 +1686,15 @@ public:
 
     if (in_call_) {
       log::info("configuration_context_type_: {}", ToString(configuration_context_type_));
+      log::debug("local_metadata_context_types_ sink: {}  source: {}",
+                 local_metadata_context_types_.sink.to_string(),
+                 local_metadata_context_types_.source.to_string());
+      //Below check is to handle the use-cases like Media->Live->Call
+      if (local_metadata_context_types_.source != local_metadata_context_types_.sink) {
+        log::info("Different local_metadata_context_types_ on source and sink, clear sink");
+        local_metadata_context_types_.sink.clear();
+      }
+
       if (group->IsDirectionAvailableForConfiguration(
           configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
         in_call_metadata_context_types_.source = local_metadata_context_types_.source;
