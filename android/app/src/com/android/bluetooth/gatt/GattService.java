@@ -1077,8 +1077,7 @@ public class GattService extends ProfileService {
                         + (" transport=" + transportToString(transport)));
         var appName = Util.appNameOrUnknown(getAdapterService(), uid);
         mClientMap.add(uid, appName, uuid, callback, transport, tag);
-        mNativeInterface.gattClientRegisterApp(
-                uuid.getLeastSignificantBits(), uuid.getMostSignificantBits(), name, eattSupport);
+        mNativeInterface.gattClientRegisterApp(uuid, name, eattSupport);
     }
 
     void unregisterClient(
@@ -1301,7 +1300,7 @@ public class GattService extends ProfileService {
         Log.d(TAG, "discoverServices(): device=" + device + ", connId=" + connId);
 
         if (connId != null) {
-            mNativeInterface.gattClientSearchService(connId, true, 0, 0);
+            mNativeInterface.gattClientSearchService(connId, true, new UUID(0, 0));
         } else {
             Log.e(TAG, "discoverServices(): No connection for " + device);
         }
@@ -1317,8 +1316,7 @@ public class GattService extends ProfileService {
         final var clientIf = clientApp.getId();
         final var connId = getFirstConnectionIdForDevice(clientIf, device);
         if (connId != null) {
-            mNativeInterface.gattClientDiscoverServiceByUuid(
-                    connId, uuid.getLeastSignificantBits(), uuid.getMostSignificantBits());
+            mNativeInterface.gattClientDiscoverServiceByUuid(connId, uuid);
         } else {
             Log.e(TAG, "discoverServiceByUuid(): No connection for " + device);
         }
@@ -1365,12 +1363,7 @@ public class GattService extends ProfileService {
         }
 
         mNativeInterface.gattClientReadUsingCharacteristicUuid(
-                connId,
-                uuid.getLeastSignificantBits(),
-                uuid.getMostSignificantBits(),
-                startHandle,
-                endHandle,
-                authReq);
+                connId, uuid, startHandle, endHandle, authReq);
     }
 
     int writeCharacteristic(

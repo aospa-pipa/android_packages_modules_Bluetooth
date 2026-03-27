@@ -1675,6 +1675,10 @@ public:
         std::vector<record_track_metadata_v7> empty_tracks = {};
         audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
       }
+      if (group && group->IsSuspendedForReconfiguration()) {
+        log::error("AHAL is still in suspend state, send resume.");
+        reconfigurationComplete();
+      }
       return;
     }
 
@@ -1682,6 +1686,15 @@ public:
 
     if (in_call_) {
       log::info("configuration_context_type_: {}", ToString(configuration_context_type_));
+      log::debug("local_metadata_context_types_ sink: {}  source: {}",
+                 local_metadata_context_types_.sink.to_string(),
+                 local_metadata_context_types_.source.to_string());
+      //Below check is to handle the use-cases like Media->Live->Call
+      if (local_metadata_context_types_.source != local_metadata_context_types_.sink) {
+        log::info("Different local_metadata_context_types_ on source and sink, clear sink");
+        local_metadata_context_types_.sink.clear();
+      }
+
       if (group->IsDirectionAvailableForConfiguration(
           configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSink)) {
         in_call_metadata_context_types_.source = local_metadata_context_types_.source;
@@ -6771,12 +6784,17 @@ public:
     auto const is_missing_source_ase_context =
             remote_contexts.source.none() && has_source_ase_config;
 
-    is_configuration_changed = is_configuration_changed || is_missing_sink_ase_config ||
-                               is_missing_source_ase_config || is_missing_sink_ase_context ||
-                               is_missing_source_ase_context;
+    bool direction_misalignment = is_missing_sink_ase_config || is_missing_source_ase_config ||
+                                   is_missing_sink_ase_context || is_missing_source_ase_context;
+
+    is_configuration_changed = is_configuration_changed || direction_misalignment;
 
     // Clear DSA configuration cache when DSA mode has changed
-    if (is_configuration_changed || is_dsa_reconfig_needed) {
+    if ((!com_android_bluetooth_flags_leaudio_improve_configuration_caching() &&
+         is_configuration_changed) ||
+        (com_android_bluetooth_flags_leaudio_improve_configuration_caching() &&
+         direction_misalignment) ||
+        is_dsa_reconfig_needed) {
       group->InvalidateCachedConfigurations(new_configuration_context);
     }
 
