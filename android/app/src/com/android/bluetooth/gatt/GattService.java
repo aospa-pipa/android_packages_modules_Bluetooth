@@ -1007,7 +1007,6 @@ public class GattService extends ProfileService {
     }
 
     void registerClient(
-            UUID uuid,
             IBluetoothGattCallback callback,
             boolean eattSupport,
             int transport,
@@ -1030,6 +1029,7 @@ public class GattService extends ProfileService {
             name = name + "[" + tag + "]";
         }
 
+        final var uuid = UUID.randomUUID();
         Log.d(
                 TAG,
                 ("registerClient(): UUID=" + uuid + " name=" + name)
