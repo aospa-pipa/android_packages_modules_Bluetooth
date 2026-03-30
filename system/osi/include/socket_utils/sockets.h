@@ -28,32 +28,6 @@
 #define ANDROID_SOCKET_DIR "/dev/socket"
 
 /*
- * osi_android_get_control_socket - simple helper function to get the file
- * descriptor of our init-managed Unix domain socket. `name' is the name of the
- * socket, as given in init.rc. Returns -1 on error.
- *
- * This is inline and not in libcutils proper because we want to use this in
- * third-party daemons with minimal modification.
- */
-static inline int osi_android_get_control_socket(const char* name) {
-  char key[64];
-  snprintf(key, sizeof(key), ANDROID_SOCKET_ENV_PREFIX "%s", name);
-
-  const char* val = getenv(key);
-  if (!val) {
-    return -1;
-  }
-
-  errno = 0;
-  int fd = strtol(val, NULL, 10);
-  if (errno) {
-    return -1;
-  }
-
-  return fd;
-}
-
-/*
  * See also android.os.LocalSocketAddress.Namespace
  */
 // Linux "abstract" (non-filesystem) namespace
@@ -63,7 +37,4 @@ static inline int osi_android_get_control_socket(const char* name) {
 // Normal filesystem namespace
 #define ANDROID_SOCKET_NAMESPACE_FILESYSTEM 2
 
-int osi_socket_local_server(const char* name, int namespaceId, int type);
 int osi_socket_local_server_bind(int s, const char* name, int namespaceId);
-int osi_socket_local_client_connect(int fd, const char* name, int namespaceId, int type);
-int osi_socket_local_client(const char* name, int namespaceId, int type);
