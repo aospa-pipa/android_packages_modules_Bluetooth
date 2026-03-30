@@ -33,17 +33,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <string>
 
 #include "bta/hh/bta_hh_int.h"
 #include "bta/include/bta_hh_api.h"
 #include "bta/include/bta_hh_co.h"
 #include "bta/sys/bta_sys.h"
-#include "bta_api.h"
 #include "bta_gatt_api.h"
 #include "osi/include/allocator.h"
+#include "osi/include/osi.h"
 #include "stack/include/bt_hdr.h"
-#include "stack/include/btm_client_interface.h"
 #include "stack/include/btm_log_history.h"
 #include "stack/include/hiddefs.h"
 #include "stack/include/hidh_api.h"
@@ -707,7 +705,7 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
   memset(&bta_hh, 0, sizeof(tBTA_HH));
 
   switch (p_cb->w4_evt) {
-    /* GET_ transsaction, handshake indicate unsupported request */
+    /* GET_ transaction, handshake indicate unsupported request */
     case BTA_HH_GET_PROTO_EVT:
       bta_hh.hs_data.rsp_data.proto_mode = BTA_HH_PROTO_UNKNOWN;
       FALLTHROUGH_INTENDED; /* FALLTHROUGH */
@@ -723,7 +721,7 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
       p_cb->w4_evt = BTA_HH_EMPTY_EVT;
       break;
 
-    /* acknoledgement from HID device for SET_ transaction */
+    /* acknowledgement from HID device for SET_ transaction */
     case BTA_HH_SET_RPT_EVT:
     case BTA_HH_SET_PROTO_EVT:
     case BTA_HH_SET_IDLE_EVT:
@@ -744,12 +742,12 @@ void bta_hh_handsk_act(tBTA_HH_DEV_CB* p_cb, const tBTA_HH_DATA* p_data) {
       break;
 
     default:
-      /* unknow transaction handshake response */
+      /* unknown transaction handshake response */
       log::verbose("unknown transaction type {}", bta_hh_event_text(p_cb->w4_evt));
       break;
   }
 
-  /* transaction achknoledgement received, inform PM for mode change */
+  /* transaction acknowledgement received, inform PM for mode change */
   bta_sys_idle(BTA_ID_HH, p_cb->app_id, p_cb->link_spec.addrt.bda);
   return;
 }
