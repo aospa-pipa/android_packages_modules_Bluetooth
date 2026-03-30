@@ -100,7 +100,10 @@ public:
     }
 
     auto init_status = init_promise_.get_future().wait_for(start_timeout);
-    log::assert_that(init_status == std::future_status::ready, "Can't start HAL");
+    if (init_status != std::future_status::ready) {
+      log::warn("Can't start HAL, kill process");
+      kill(getpid(), SIGKILL);
+    }
   }
 
   void hciEventReceived(const std::vector<uint8_t>& packet) override {
