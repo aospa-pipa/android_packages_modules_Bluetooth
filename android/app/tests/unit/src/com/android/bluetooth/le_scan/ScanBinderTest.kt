@@ -23,6 +23,7 @@ import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.State
 import android.bluetooth.le.IPeriodicAdvertisingCallback
 import android.bluetooth.le.IScannerCallback
+import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED
 import android.bluetooth.le.ScanCallback.SCAN_FAILED_INTERNAL_ERROR
 import android.bluetooth.le.ScanFilter
@@ -57,6 +58,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.doAnswer
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
@@ -288,6 +290,36 @@ class ScanBinderTest {
     }
 
     @Test
+    @EnableFlags(Flags.FLAG_CHECK_SCAN_HARDWARE_RESOURCES_AVAILABILITY_IN_BINDER)
+    fun registerAndStartScan_noHardwareResources_failsEarly() {
+        val settings =
+            ScanSettings.Builder().setCallbackType(ScanSettings.CALLBACK_TYPE_FIRST_MATCH).build()
+        val callback = mock<IScannerCallback>()
+        doReturn(0).whenever(scanController).numHwTrackFiltersAvailable()
+
+        binder.registerAndStartScan(callback, settings, listOf(), null, source)
+        verify(callback).onScannerRegistered(ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES, -1)
+        verify(scanController, never())
+            .registerAndStartScan(any(), any(), any(), any(), any(), any())
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_CHECK_SCAN_HARDWARE_RESOURCES_AVAILABILITY_IN_BINDER)
+    fun registerAndStartScan_withHardwareResources_succeeds() {
+        val settings =
+            ScanSettings.Builder().setCallbackType(ScanSettings.CALLBACK_TYPE_FIRST_MATCH).build()
+        val callback = mock<IScannerCallback>()
+        doReturn(5).whenever(scanController).numHwTrackFiltersAvailable()
+        doReturn(DEFAULT_NUM_OFFLOAD_SCAN_FILTER)
+            .whenever(adapterService)
+            .numOfOffloadedScanFilterSupported
+
+        binder.registerAndStartScan(callback, settings, listOf(), null, source)
+        verify(scanController)
+            .registerAndStartScan(eq(callback), anyOrNull(), eq(source), any(), eq(settings), any())
+    }
+
+    @Test
     fun registerPiAndStartScan() {
         val intent = PendingIntent.getBroadcast(context, 0, Intent(), PendingIntent.FLAG_IMMUTABLE)
         val settings = ScanSettings.Builder().build()
@@ -396,5 +428,9 @@ class ScanBinderTest {
         assertThrows(IllegalArgumentException::class.java) {
             binder.registerAndStartScan(callback, settings, filters, null, source)
         }
+    }
+
+    private companion object {
+        private const val DEFAULT_NUM_OFFLOAD_SCAN_FILTER = 16
     }
 }

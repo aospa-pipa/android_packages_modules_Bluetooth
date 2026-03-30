@@ -29,6 +29,7 @@ import android.bluetooth.le.IPeriodicAdvertisingCallback
 import android.bluetooth.le.IScannerCallback
 import android.bluetooth.le.ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED
 import android.bluetooth.le.ScanCallback.SCAN_FAILED_INTERNAL_ERROR
+import android.bluetooth.le.ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
@@ -46,6 +47,7 @@ import com.android.bluetooth.Util.checkCallerTargetSdk
 import com.android.bluetooth.Util.enforceScanPermissionForDataDelivery
 import com.android.bluetooth.btservice.AdapterService
 import com.android.bluetooth.flags.Flags
+import com.android.bluetooth.le_scan.ScanUtil.isOffloadedFilteringSupported
 import com.android.bluetooth.le_scan.ScanUtil.toStringShort
 
 private const val TAG = ScanUtil.TAG_PREFIX + "ScanBinder"
@@ -70,6 +72,14 @@ class ScanBinder(
         source: AttributionSource,
     ) {
         val method = "registerAndStartScan"
+
+        if (
+            Flags.checkScanHardwareResourcesAvailabilityInBinder() &&
+                !isHardwareResourcesAvailableForScan(source, settings)
+        ) {
+            callback.onScannerRegistered(SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES, -1)
+            return
+        }
 
         val hasPrivilegedPermission = adapterService.checkCallerHasPrivilegedPermission()
         if (!isBluetoothOn() && !hasPrivilegedPermission) {
@@ -187,6 +197,23 @@ class ScanBinder(
         val scan = getController(source, "numHwTrackFiltersAvailable") ?: return 0
         return scan.fetchOnScanThread({ scan.numHwTrackFiltersAvailable() }, 0)
     }
+}
+
+@RequiresPermission(BLUETOOTH_SCAN)
+private fun ScanBinder.isHardwareResourcesAvailableForScan(
+    source: AttributionSource,
+    settings: ScanSettings,
+): Boolean {
+    val callbackType = settings.callbackType
+    if (
+        (callbackType and ScanSettings.CALLBACK_TYPE_FIRST_MATCH) != 0 ||
+            (callbackType and ScanSettings.CALLBACK_TYPE_MATCH_LOST) != 0
+    ) {
+        // For onlost/onfound, we required hardware support be available
+        val isHardwareTrackingFiltersAvailable = numHwTrackFiltersAvailable(source) != 0
+        return isOffloadedFilteringSupported(adapterService) && isHardwareTrackingFiltersAvailable
+    }
+    return true
 }
 
 private fun ScanBinder.enforceTransportBlockFilterSupported(filters: List<ScanFilter>) {
