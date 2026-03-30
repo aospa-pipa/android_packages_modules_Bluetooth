@@ -187,7 +187,6 @@ constructor(
 
         val cachedAddresses = synchronized(memoryOnlyCache) { memoryOnlyCache.keys.toSet() }
         for ((address, device) in storage.devicesMap.toSortedMap()) {
-            val isInMemory = cachedAddresses.contains(address)
             val locationTag =
                 when {
                     cachedAddresses.contains(address) -> "[Memory Cache]"
