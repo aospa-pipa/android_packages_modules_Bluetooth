@@ -32,7 +32,6 @@
 #include "osi/include/config.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/future.h"
-#include "osi/include/hash_map_utils.h"
 #include "osi/include/list.h"
 #include "osi/include/mutex.h"
 #include "osi/include/properties.h"
