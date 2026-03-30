@@ -22,15 +22,11 @@ package {
 
 rust_defaults {
     name: "libbluetooth_rs_defaults",
-    crate_name: "bluetooth",
     min_sdk_version: "36",
-    edition: "2024",
-    host_supported: true,
     proc_macros: [
         "libbluetooth_macros",
     ],
     rustlibs: [
-        "libbitflags",
         "libbytes",
         "libcxx",
         "libfutures",
@@ -49,26 +45,29 @@ rust_defaults {
     ],
 }
 
-rust_library {
+rust_ffi_static {
     name: "libbluetooth_rs",
+    crate_name: "bluetooth_rs",
     defaults: ["libbluetooth_rs_defaults"],
     srcs: [
         "src/lib.rs",
-        // Generated sources must come second, this comment prevents bpfmt from breaking us.
+
         ":bluetooth_hci_rust_packets",
     ],
+    host_supported: true,
 }
 
 rust_test {
     name: "libbluetooth_rs_test",
     defaults: ["libbluetooth_rs_defaults"],
-    test_suites: [
-        "general-tests",
-    ],
     srcs: [
         "src/lib.rs",
-        // Generated sources must come second, this comment prevents bpfmt from breaking us.
+
         ":bluetooth_hci_rust_packets",
+    ],
+    host_supported: true,
+    test_suites: [
+        "general-tests",
     ],
     target: {
         android: {
