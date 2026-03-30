@@ -455,15 +455,15 @@ impl IsoCigCallbacks {
         let cis_conn_handle = IsoConnectionHandle::try_from(cis_conn_handle_raw).unwrap();
         let mut iso_registry = self.iso_registry.lock().unwrap();
 
-        if let Some(state) = iso_registry.cis.get(&cis_conn_handle)
-            && !state.data_subscribers.is_empty()
-        {
-            iso_registry.dispatch_cis_data(
-                cis_conn_handle,
-                Some(Duration::from_micros(time_stamp as u64)),
-                seq_nb,
-                data,
-            );
+        if let Some(state) = iso_registry.cis.get(&cis_conn_handle) {
+            if !state.data_subscribers.is_empty() {
+                iso_registry.dispatch_cis_data(
+                    cis_conn_handle,
+                    Some(Duration::from_micros(time_stamp as u64)),
+                    seq_nb,
+                    data,
+                );
+            }
         }
     }
 
@@ -607,15 +607,15 @@ impl IsoBigCallbacks {
         let bis_conn_handle = IsoConnectionHandle::try_from(bis_conn_handle_raw).unwrap();
         let mut iso_registry = self.iso_registry.lock().unwrap();
 
-        if let Some(state) = iso_registry.bis.get(&bis_conn_handle)
-            && !state.data_subscribers.is_empty()
-        {
-            iso_registry.dispatch_bis_data(
-                bis_conn_handle,
-                Some(Duration::from_micros(time_stamp as u64)),
-                seq_nb,
-                data,
-            );
+        if let Some(state) = iso_registry.bis.get(&bis_conn_handle) {
+            if !state.data_subscribers.is_empty() {
+                iso_registry.dispatch_bis_data(
+                    bis_conn_handle,
+                    Some(Duration::from_micros(time_stamp as u64)),
+                    seq_nb,
+                    data,
+                );
+            }
         }
     }
 

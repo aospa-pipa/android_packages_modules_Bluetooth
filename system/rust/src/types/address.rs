@@ -14,13 +14,9 @@
  * limitations under the License.
  */
 
-//! Bluetooth Address Information
-
 use std::fmt;
 
-/// Bluetooth Device address
-///
-/// [Specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-60/out/en/host/generic-access-profile.html#UUID-1452376a-2dce-70b5-d3cf-ee3e83ac820b)
+/// Represents Bluetooth address.
 #[repr(transparent)]
 #[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Address {
@@ -37,7 +33,7 @@ unsafe impl cxx::ExternType for Address {
 
 impl Address {
     /// Creates an Address from big-endian bytes (6 bytes).
-    pub const fn from_be_bytes(bytes: [u8; 6]) -> Self {
+    pub fn from_be_bytes(bytes: [u8; 6]) -> Self {
         let val = ((bytes[0] as u64) << 40)
             | ((bytes[1] as u64) << 32)
             | ((bytes[2] as u64) << 24)
@@ -48,7 +44,7 @@ impl Address {
     }
 
     /// Returns the address as big-endian bytes (6 bytes).
-    pub const fn to_be_bytes(&self) -> [u8; 6] {
+    pub fn to_be_bytes(&self) -> [u8; 6] {
         [
             (self.value >> 40) as u8,
             (self.value >> 32) as u8,

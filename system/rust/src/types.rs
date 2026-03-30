@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 
-//! Common types used throughout the Bluetooth stack.
+//! Common Bluetooth data types.
 
+/// Bluetooth address types.
 pub mod address;
-pub mod psm;
-pub mod uuid;
 
-pub use address::Address;
-pub use psm::Psm;
-pub use uuid::Uuid;
+pub use address::*;
