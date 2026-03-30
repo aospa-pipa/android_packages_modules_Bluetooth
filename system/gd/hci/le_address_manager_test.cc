@@ -310,22 +310,21 @@ TEST_F(LeAddressManagerTest, generate_nrpa_with_invalid_random) {
   auto mock_random_generator = new bluetooth::os::testing::MockRandomDataGenerator;
   bluetooth::os::SetRandomDataGeneratorForTesting(mock_random_generator);
   {
-    ::testing::InSequence s;
-    // First return all zeros, which is invalid
     EXPECT_CALL(*mock_random_generator, GenerateBytes(::testing::_, 6))
+            // First return all zeros, which is invalid
             .WillOnce(::testing::SetArrayArgument<0>(invalid_random_zeros.begin(),
-                                                     invalid_random_zeros.end()));
-    // Next return all ones, which is invalid
-    EXPECT_CALL(*mock_random_generator, GenerateBytes(::testing::_, 6))
+                                                     invalid_random_zeros.end()))
+            // Next return all ones, which is invalid
             .WillOnce(::testing::SetArrayArgument<0>(invalid_random_ones.begin(),
-                                                     invalid_random_ones.end()));
-    // Next return the public address, which is invalid
-    EXPECT_CALL(*mock_random_generator, GenerateBytes(::testing::_, 6))
+                                                     invalid_random_ones.end()))
+            // Next return the public address, which is invalid
             .WillOnce(::testing::SetArrayArgument<0>(public_address_raw.begin(),
-                                                     public_address_raw.end()));
-    // Finally, return a valid random value
-    EXPECT_CALL(*mock_random_generator, GenerateBytes(::testing::_, 6))
-            .WillOnce(::testing::SetArrayArgument<0>(valid_random.begin(), valid_random.end()));
+                                                     public_address_raw.end()))
+            // Finally, return a valid random value. WillRepeatedly ensures that
+            // any subsequent calls also return this valid value, accommodating
+            // potential retries within generate_nrpa().
+            .WillRepeatedly(
+                    ::testing::SetArrayArgument<0>(valid_random.begin(), valid_random.end()));
   }
 
   // Trigger a new address generation by setting the policy again.
