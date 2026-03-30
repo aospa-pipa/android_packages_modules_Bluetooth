@@ -661,6 +661,9 @@ provider::get_a2dp_configuration(
   a2dp_configuration.codec_parameters.codec_type =
           is_source ? provider_info->SourceCodecIndex(result->id).value()
                     : provider_info->SinkCodecIndex(result->id).value();
+  if (hint.codecId.has_value() && hint.codecId.value() == result->id) {
+    a2dp_configuration.codec_parameters.codec_specific_1 = user_preferences.codec_specific_1;
+  }
   return std::make_optional(a2dp_configuration);
 }
 
