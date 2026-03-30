@@ -202,16 +202,6 @@ flag {
 }
 
 flag {
-    name: "leaudio_vaps_improvements"
-    namespace: "bluetooth"
-    description: "LE Audio VAPS improvements"
-    bug: "444029563"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "leaudio_always_use_group_size_to_check_audio_config"
     namespace: "bluetooth"
     description: "When checking support for audio configuration, take into account all the devices"
@@ -256,16 +246,6 @@ flag {
     namespace: "bluetooth"
     description: "Always use the scanner when trying to sync to a broadcaster"
     bug: "467625545"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
-    name: "leaudio_improve_unicast_monitor"
-    namespace: "bluetooth"
-    description: "Improve unicast monitor mode robustness"
-    bug: "440506873"
     metadata {
         purpose: PURPOSE_BUGFIX
     }
@@ -455,6 +435,16 @@ flag {
     namespace: "bluetooth"
     description: "Improve broadcast channel classification"
     bug: "487242521"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}
+
+flag {
+    name: "leaudio_auracast_credential_extension"
+    namespace: "bluetooth"
+    description: "Extending Auracast credential sharing"
+    bug: "490092067"
     metadata {
         purpose: PURPOSE_BUGFIX
     }

@@ -26,13 +26,13 @@
 #include <bluetooth/types/address.h>
 #include <com_android_bluetooth_flags.h>
 
+#include "btif/include/btif_debug_conn.h"
 #include "btif/include/btif_storage.h"
 #include "device/include/interop.h"
 #include "internal_include/stack_config.h"
 #include "internal_include/bt_target.h"
 #include "osi/include/properties.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/btm/btm_sec.h"
 #include "stack/connection_manager/connection_manager.h"
 #include "stack/eatt/eatt.h"
 #include "stack/gatt/gatt_int.h"
@@ -42,7 +42,6 @@
 #include "stack/include/btm_client_interface.h"
 #include "stack/include/gatt_api.h"
 #include "stack/include/hci_error_code.h"
-#include "stack/include/l2cap_acl_interface.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
 
@@ -515,6 +514,10 @@ void gatt_send_conn_cback(tGATT_TCB* p_tcb) {
     gatt_set_idle_timeout(p_tcb->peer_bda, is_active);
   }
 
+  if (gatt_cb.debug_conn_state) {
+    gatt_cb.debug_conn_state(p_tcb->peer_bda, true, GATT_CONN_OK);
+  }
+
   /* notifying all applications for the connection up event */
   for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
     if (!p_reg->in_use || !p_reg->app_cb.p_conn_cb) {
@@ -652,8 +655,7 @@ void gatt_chk_srv_chg(tGATTS_SRV_CHG* p_srv_chg_clt) {
   log::verbose("srv_changed={}, start_handle: {:#x}", p_srv_chg_clt->srv_changed,
                p_srv_chg_clt->start_handle);
 
-  if (com_android_bluetooth_flags_gatt_not_send_service_change_indication_iop() &&
-      p_srv_chg_clt->srv_changed) {
+  if (p_srv_chg_clt->srv_changed) {
     char remote_name[BD_NAME_LEN] = "";
 
     if (btif_storage_get_stored_remote_name(p_srv_chg_clt->bda, remote_name)) {

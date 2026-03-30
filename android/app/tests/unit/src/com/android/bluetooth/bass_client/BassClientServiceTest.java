@@ -53,6 +53,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import android.app.BroadcastOptions;
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -89,7 +91,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.MediumTest;
 
 import com.android.bluetooth.TestLooper;
+import com.android.bluetooth.auracast.AuracastUtils;
 import com.android.bluetooth.btservice.AdapterService;
+import com.android.bluetooth.btservice.RemoteDevices;
 import com.android.bluetooth.csip.CsipSetCoordinatorService;
 import com.android.bluetooth.flags.Flags;
 import com.android.bluetooth.le_audio.LeAudioConstants;
@@ -9720,5 +9724,90 @@ public class BassClientServiceTest {
                 throw new AssertionError("Unexpected device");
             }
         }
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_AURACAST_CREDENTIAL_EXTENSION)
+    public void testAddSourceByBroadcastName_emptyName() {
+        mBassClientService.addSourceByBroadcastName(mCurrentDevice, "", null);
+        // Since the name is empty, it should return early and not add to the pending list
+        assertThat(mBassClientService.mPendingNfcJoiningDevices).isEmpty();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_AURACAST_CREDENTIAL_EXTENSION)
+    public void testNfcJoinReceiver_missingMetadata() {
+        Intent intent = new Intent(AuracastUtils.ACTION_CONNECT_STREAM);
+        mBassClientService.mNfcJoinReceiver.onReceive(
+                ApplicationProvider.getApplicationContext(), intent);
+
+        // Should not crash and pending list should remain empty
+        assertThat(mBassClientService.mPendingNfcJoiningDevices).isEmpty();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_AURACAST_CREDENTIAL_EXTENSION)
+    public void testLocalNotifySourceAdded_clearsPendingNfcDevices() {
+        // Preparation: A connected device and a mock LeAudioService.
+        prepareConnectedDeviceGroup();
+        doReturn(Optional.of(mLeAudioService)).when(mAdapterService).getLeAudioService();
+        doReturn(new ArrayList<>()).when(mLeAudioService).getConnectedDevices();
+        doReturn(mBroadcastMetadata1).when(mLeAudioService).getBroadcastMetadata(TEST_BROADCAST_ID);
+
+        // Simulate adding a broadcast receiver. This triggers the update logic twice.
+        // The first call is from the setup, and the second from this action.
+        mBassClientService.addSource(mCurrentDevice, mBroadcastMetadata1, /* isGroupOp */ false);
+        injectRemoteSourceStateSourceAdded(mBroadcastMetadata1, true, true);
+
+        // Success should clear the pending join list completely
+        assertThat(mBassClientService.mPendingNfcJoiningDevices).isEmpty();
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_LEAUDIO_AURACAST_CREDENTIAL_EXTENSION)
+    public void testLocalNotifySourceAddFailed_showsNotificationWhenEmpty() {
+        NotificationManager mockNm = mock(NotificationManager.class);
+        RemoteDevices mockRemoteDevices = mock(RemoteDevices.class);
+
+        mockGetSystemService(mAdapterService, NotificationManager.class, mockNm);
+        doReturn(ApplicationProvider.getApplicationContext().getResources())
+                .when(mAdapterService)
+                .getResources();
+
+        doReturn(ApplicationProvider.getApplicationContext().getApplicationInfo())
+                .when(mBassClientService.getBaseContext())
+                .getApplicationInfo();
+
+        // Mock the RemoteDevices cache for the new alias/name logic
+        doReturn(mockRemoteDevices).when(mAdapterService).getRemoteDevices();
+
+        BluetoothDevice device = mock(BluetoothDevice.class);
+        doReturn("Test Alias").when(mockRemoteDevices).getAlias(device);
+        doReturn("Test Name").when(mockRemoteDevices).getName(device);
+
+        mBassClientService.mPendingNfcJoiningDevices.add(device);
+
+        BluetoothLeBroadcastMetadata metadata = mock(BluetoothLeBroadcastMetadata.class);
+        doReturn(1).when(metadata).getBroadcastId();
+        doReturn("TestName").when(metadata).getBroadcastName();
+
+        mBassClientService
+                .getCallbacks()
+                .notifySourceAddFailed(device, metadata, BluetoothStatusCodes.ERROR_UNKNOWN);
+
+        assertThat(mBassClientService.mPendingNfcJoiningDevices).isEmpty();
+
+        // Capture the notification passed to the NotificationManager
+        ArgumentCaptor<Notification> notificationCaptor =
+                ArgumentCaptor.forClass(Notification.class);
+        verify(mockNm).notify(eq(AuracastUtils.NOTIFICATION_ID), notificationCaptor.capture());
+
+        // Extract the text from the captured notification's extras
+        Notification notification = notificationCaptor.getValue();
+        String text = notification.extras.getString(Notification.EXTRA_TEXT);
+
+        // Verify the exact text hits the Alias branch properly
+        assertThat(text)
+                .isEqualTo("Failed to connect to TestName audio stream on your Test Alias.");
     }
 }

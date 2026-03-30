@@ -18,13 +18,14 @@
 
 #include <android_bluetooth_sysprop.h>
 #include <bluetooth/log.h>
+#include <bluetooth/types/string_helpers.h>
 #include <com_android_bluetooth_flags.h>
 
+#include <format>
 #include <future>
 #include <mutex>
 
 #include "common/stop_watch.h"
-#include "common/strings.h"
 #include "hal/hci_backend.h"
 #include "hal/hci_hal.h"
 #include "hal/link_clocker.h"
@@ -36,9 +37,8 @@ namespace bluetooth::hal {
 
 template <class VecType>
 static std::string GetTimerText(const char* func_name, VecType vec) {
-  return common::StringFormat(
-          "%s: len %zu, 1st 5 bytes '%s'", func_name, vec.size(),
-          common::ToHexString(vec.begin(), std::min(vec.end(), vec.begin() + 5)).c_str());
+  return std::format("{}: len {}, 1st 5 bytes '{}'", func_name, vec.size(),
+                     common::ToHexString(vec.begin(), std::min(vec.end(), vec.begin() + 5)));
 }
 
 class HciCallbacksImpl : public HciBackendCallbacks {
@@ -93,9 +93,9 @@ public:
       start_timeout = std::chrono::milliseconds(8000);
     } else if (bluetooth::os::GetSystemPropertyUint32("ro.build.version.sdk", 99) < 37) {
       start_timeout = std::chrono::milliseconds(
-              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 3000));
+              os::GetSystemPropertyUint32("bluetooth.gd.start_timeout", 8000));
     } else {
-      start_timeout = std::chrono::milliseconds(3000);
+      start_timeout = std::chrono::milliseconds(8000);
     }
 
     auto init_status = init_promise_.get_future().wait_for(start_timeout);
@@ -186,10 +186,7 @@ void HciHalImpl::sendIsoData(HciPacket packet) {
 }
 
 uint16_t HciHalImpl::getMsftOpcode() {
-  if (com_android_bluetooth_flags_le_scan_msft_support()) {
-    return android::sysprop::bluetooth::Hci::msft_vendor_opcode();
-  }
-  return 0;
+  return android::sysprop::bluetooth::Hci::msft_vendor_opcode();
 }
 
 HciHalImpl::HciHalImpl(os::Handler* handler, LinkClocker& link_clocker, SnoopLogger* btsnoop_logger)

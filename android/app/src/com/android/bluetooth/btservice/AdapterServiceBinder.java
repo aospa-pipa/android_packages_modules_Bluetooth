@@ -32,8 +32,8 @@ import static com.android.bluetooth.ChangeIds.ENFORCE_CONNECT;
 import static com.android.bluetooth.Util.callerIsSystem;
 import static com.android.bluetooth.Util.callerIsSystemOrActiveOrManagedUser;
 import static com.android.bluetooth.Util.enforceConnectPermissionForDataDelivery;
+import static com.android.bluetooth.Util.getBytesFromAddress;
 import static com.android.bluetooth.Util.getUidPidString;
-import static com.android.bluetooth.Utils.getBytesFromAddress;
 
 import static java.util.Objects.requireNonNull;
 
@@ -1534,6 +1534,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return BluetoothStatusCodes.ERROR_BLUETOOTH_NOT_ALLOWED;
         }
 
+        Util.enforceCallingUidIsNotPcc("AdapterServiceBinder.startRfcommListener");
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
         return service.startRfcommListener(name, uuid, pendingIntent, source);
     }

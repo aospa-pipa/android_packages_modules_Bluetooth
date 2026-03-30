@@ -33,36 +33,31 @@
 #include <com_android_bluetooth_flags.h>
 #include <hardware/ble_scanner.h>
 
-#include <bitset>
 #include <cstdint>
 #include <list>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
 #include "ble_appearance.h"
 #include "bta/include/bta_api.h"
-#include "btif/include/btif_gatt.h"
 #include "btif/include/stack_manager_t.h"
 #include "common/time_util.h"
 #include "hci/controller.h"
 #include "main/shim/acl_api.h"
-#include "main/shim/ble_scanner_interface_impl.h"
 #include "main/shim/entry.h"
 #include "main/shim/le_scanning_manager.h"
-#include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "osi/include/stack_power_telemetry.h"
+
 #include "stack/btm/btm_ble_int.h"
 #include "stack/btm/btm_ble_int_types.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
-#include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/advertise_data_parser.h"
+#include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/bt_dev_class.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
@@ -676,6 +671,7 @@ void btm_send_hci_set_scan_params(uint8_t scan_type, uint16_t scan_int_1m, uint1
   }
 }
 
+// TODO(b/459944050): Delete msft related functions when scan multiplexing feature is done.
 /* Whether or not to use MSFT-based scan filtering */
 static bool use_msft_filtering() {
   // We prefer to use APCF-based filtering over MSFT if it's available, so only use MSFT
@@ -683,6 +679,7 @@ static bool use_msft_filtering() {
   return !BTM_BleIsFilteringSupported() && scanner->IsMsftSupported();
 }
 
+// TODO(b/459944050): Delete msft related functions when scan multiplexing feature is done.
 /* MSFT advertisement enable callback */
 static void msft_adv_mon_enable_cb(bool restart_scan, bool enable, uint8_t status) {
   if (status == MSFT_FILTER_ENABLE_CMD_DISALLOWED) {

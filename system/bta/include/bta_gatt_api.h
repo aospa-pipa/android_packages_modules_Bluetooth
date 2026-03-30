@@ -38,6 +38,7 @@
 #include "hardware/bt_gatt_types.h"
 #include "macros.h"
 #include "stack/include/gatt_api.h"
+#include "stack/include/stack_app.h"
 
 #ifndef BTA_GATT_DEBUG
 #define BTA_GATT_DEBUG false
@@ -284,60 +285,6 @@ typedef void(tBTA_GATTC_ENB_CBACK)(tGATT_STATUS status);
 /* Client callback function */
 typedef void(tBTA_GATTC_CBACK)(tBTA_GATTC_EVT event, tBTA_GATTC* p_data);
 
-/* GATT Server Data Structure */
-/* Server callback function events */
-#define BTA_GATTS_REG_EVT 0
-#define BTA_GATTS_READ_CHARACTERISTIC_EVT GATTS_REQ_TYPE_READ_CHARACTERISTIC   /* 1 */
-#define BTA_GATTS_READ_DESCRIPTOR_EVT GATTS_REQ_TYPE_READ_DESCRIPTOR           /* 2 */
-#define BTA_GATTS_WRITE_CHARACTERISTIC_EVT GATTS_REQ_TYPE_WRITE_CHARACTERISTIC /* 3 */
-#define BTA_GATTS_WRITE_DESCRIPTOR_EVT GATTS_REQ_TYPE_WRITE_DESCRIPTOR         /* 4 */
-#define BTA_GATTS_EXEC_WRITE_EVT GATTS_REQ_TYPE_WRITE_EXEC                     /* 5 */
-#define BTA_GATTS_MTU_EVT GATTS_REQ_TYPE_MTU                                   /* 6 */
-#define BTA_GATTS_CONF_EVT GATTS_REQ_TYPE_CONF                                 /* 7 */
-#define BTA_GATTS_DEREG_EVT 8
-#define BTA_GATTS_DELETE_EVT 11
-#define BTA_GATTS_STOP_EVT 13
-#define BTA_GATTS_CONNECT_EVT 14
-#define BTA_GATTS_DISCONNECT_EVT 15
-#define BTA_GATTS_OPEN_EVT 16
-#define BTA_GATTS_CANCEL_OPEN_EVT 17
-#define BTA_GATTS_CLOSE_EVT 18
-#define BTA_GATTS_CONGEST_EVT 20
-#define BTA_GATTS_PHY_UPDATE_EVT 21
-#define BTA_GATTS_CONN_UPDATE_EVT 22
-#define BTA_GATTS_SUBRATE_CHG_EVT 23
-#define BTA_GATTS_CHARACTERISTICS_UNOFFLOADED_EVT 24
-
-typedef uint8_t tBTA_GATTS_EVT;
-
-inline std::string gatt_server_event_text(const tBTA_GATTS_EVT& event) {
-  switch (event) {
-    CASE_RETURN_TEXT(BTA_GATTS_REG_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_READ_CHARACTERISTIC_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_READ_DESCRIPTOR_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_WRITE_CHARACTERISTIC_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_WRITE_DESCRIPTOR_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_EXEC_WRITE_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_MTU_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CONF_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_DEREG_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_DELETE_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_STOP_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CONNECT_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_DISCONNECT_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_OPEN_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CANCEL_OPEN_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CLOSE_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CONGEST_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_PHY_UPDATE_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CONN_UPDATE_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_SUBRATE_CHG_EVT);
-    CASE_RETURN_TEXT(BTA_GATTS_CHARACTERISTICS_UNOFFLOADED_EVT);
-    default:
-      return std::format("UNKNOWN[{}]", event);
-  }
-}
-
 #define BTA_GATTS_INVALID_APP 0xff
 
 #define BTA_GATTS_INVALID_IF 0
@@ -351,30 +298,8 @@ typedef void(tBTA_GATTS_ENB_CBACK)(tGATT_STATUS status);
 
 /* Server callback function */
 typedef struct {
-  void (*p_reg_cb)(tGATT_STATUS status, tGATT_IF server_if, const bluetooth::Uuid& uuid);
-  void (*p_dereg_cb)(tGATT_STATUS status, tGATT_IF server_if);
-  void (*p_connect_cb)(tGATT_IF server_if, const RawAddress& remote_bda, tCONN_ID conn_id,
-                       tBT_TRANSPORT transport);
-  void (*p_disconnect_cb)(tGATT_IF server_if, const RawAddress& remote_bda, tCONN_ID conn_id,
-                          tBT_TRANSPORT transport);
-  void (*p_stop_service_cb)(tGATT_STATUS status, tGATT_IF server_if, uint16_t service_id);
-  void (*p_delete_service_cb)(tGATT_STATUS status, tGATT_IF server_if, uint16_t service_id);
-  void (*p_read_characteristic_cb)(tCONN_ID conn_id, uint32_t trans_id,
-                                   const RawAddress& remote_bda, uint16_t handle, uint16_t offset,
-                                   bool is_long);
-  void (*p_read_descriptor_cb)(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda,
-                               uint16_t handle, uint16_t offset, bool is_long);
-  void (*p_write_characteristic_cb)(tCONN_ID conn_id, uint32_t trans_id,
-                                    const RawAddress& remote_bda, uint16_t handle, uint16_t offset,
-                                    bool need_rsp, bool is_prep, uint8_t* value, uint16_t len);
-  void (*p_write_descriptor_cb)(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda,
-                                uint16_t handle, uint16_t offset, bool need_rsp, bool is_prep,
-                                uint8_t* value, uint16_t len);
-  void (*p_exec_write_cb)(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda,
-                          tGATT_EXEC_FLAG exec_write);
-  void (*p_mtu_changed_cb)(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda,
-                           uint16_t mtu);
-  void (*p_conf_cb)(tCONN_ID conn_id, tGATT_STATUS status);
+  void (*p_conn_cb)(tGATT_IF server_if, const RawAddress& remote_bda, tCONN_ID conn_id,
+                    bool connected, tGATT_DISCONN_REASON reason, tBT_TRANSPORT transport);
   void (*p_congestion_cb)(tCONN_ID conn_id, bool congested);
   void (*p_phy_update_cb)(tGATT_IF server_if, tCONN_ID conn_id, uint8_t tx_phy, uint8_t rx_phy,
                           tGATT_STATUS status);
@@ -383,11 +308,10 @@ typedef struct {
   void (*p_subrate_chg_cb)(tGATT_IF server_if, tCONN_ID conn_id, uint16_t subrate_factor,
                            uint16_t latency, uint16_t cont_num, uint16_t timeout,
                            tGATT_SUBRATE_MODE subrate_mode, tGATT_STATUS status);
-  void (*p_req_open_cb)(tGATT_STATUS status);
-  void (*p_cancel_open_cb)(tGATT_STATUS status);
-  void (*p_close_cb)(tGATT_STATUS status);
-  void (*p_characteristics_unoffloaded_cb)(tCONN_ID conn_id, uint32_t session_id,
-                                           tGATT_STATUS status);
+  void (*p_characteristics_unoffloaded_cb)(tGATT_IF server_if, tCONN_ID conn_id,
+                                           uint32_t session_id, tGATT_STATUS status);
+
+  bluetooth::stack::tGATT_REQ_CBACK* server_cbacks;
 } tBTA_GATTS_CBACK;
 
 /*****************************************************************************
@@ -879,7 +803,9 @@ void BTA_GATTS_Disable(void);
  *
  ******************************************************************************/
 void BTA_GATTS_AppRegister(const bluetooth::Uuid& app_uuid, const tBTA_GATTS_CBACK* p_cback,
-                           bool eatt_support);
+                           bool eatt_support,
+                           void (*p_reg_cb)(tGATT_STATUS status, tGATT_IF server_if,
+                                            const bluetooth::Uuid& uuid));
 
 /*******************************************************************************
  *
@@ -929,7 +855,9 @@ void BTA_GATTS_AddService(tGATT_IF server_if, std::vector<btgatt_db_element_t> s
  * Returns          returns none.
  *
  ******************************************************************************/
-void BTA_GATTS_DeleteService(tGATT_IF server_if, uint16_t service_id);
+void BTA_GATTS_DeleteService(tGATT_IF server_if, uint16_t service_id,
+                             void (*p_delete_service_cb)(tGATT_STATUS status, tGATT_IF server_if,
+                                                         uint16_t service_id));
 
 /*******************************************************************************
  *
@@ -1049,6 +977,9 @@ void BTA_GATTS_OffloadCharacteristics(tCONN_ID conn_id, std::vector<btgatt_db_el
  *
  ******************************************************************************/
 void BTA_GATTS_UnoffloadCharacteristics(tCONN_ID conn_id, int session_id);
+
+/* Initialize power management callbacks for GATT */
+extern void BTA_GATT_Init_gatt_pm_callbacks();
 
 namespace std {
 template <>

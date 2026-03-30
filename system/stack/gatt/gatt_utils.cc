@@ -31,14 +31,13 @@
 #include <cstdint>
 #include <deque>
 
+#include "btif/include/btif_debug_conn.h"
 #include "hardware/bt_gatt_types.h"
 #include "internal_include/bt_target.h"
 #include "internal_include/stack_config.h"
-#include "main/shim/acl_api.h"
 #include "main/shim/dumpsys.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_utils.h"
 #include "stack/connection_manager/connection_manager.h"
@@ -894,32 +893,6 @@ void gatt_sr_get_sec_info(const RawAddress& rem_bda, tBT_TRANSPORT transport,
   *p_key_size = get_security_client_interface().BTM_BleReadSecKeySize(rem_bda);
   *p_sec_flag = flags;
 }
-/*******************************************************************************
- *
- * Function         gatt_sr_send_req_callback
- *
- * Description
- *
- *
- * Returns          void
- *
- ******************************************************************************/
-void gatt_sr_send_req_callback(tCONN_ID conn_id, uint32_t trans_id, tGATTS_REQ_TYPE type,
-                               tGATTS_DATA* p_data) {
-  tGATT_IF gatt_if = gatt_get_gatt_if(conn_id);
-  tGATT_REG* p_reg = gatt_get_regcb(gatt_if);
-
-  if (!p_reg) {
-    log::error("p_reg not found discard request");
-    return;
-  }
-
-  if (p_reg->in_use && p_reg->app_cb.p_req_cb) {
-    (*p_reg->app_cb.p_req_cb)(conn_id, trans_id, type, p_data);
-  } else {
-    log::warn("Call back not found for application conn_id={}", conn_id);
-  }
-}
 
 /*******************************************************************************
  *
@@ -1763,9 +1736,18 @@ void gatt_end_operation(tGATT_CLCB* p_clcb, tGATT_STATUS status, void* p_data) {
   }
 }
 
+void gatt_set_debug_conn_state_cb(void (*debug_conn_state)(
+        const RawAddress& bda, bool connected, const tGATT_DISCONN_REASON disconnect_reason)) {
+  gatt_cb.debug_conn_state = debug_conn_state;
+}
+
 static void gatt_disconnect_complete_notify_user(const RawAddress& bda, tGATT_DISCONN_REASON reason,
                                                  tBT_TRANSPORT transport) {
   tGATT_TCB* p_tcb = gatt_find_tcb_by_addr(bda, transport);
+
+  if (gatt_cb.debug_conn_state) {
+    gatt_cb.debug_conn_state(bda, false, reason);
+  }
 
   for (auto& [i, p_reg] : gatt_cb.cl_rcb_map) {
     if (p_reg->in_use && p_reg->app_cb.p_conn_cb) {

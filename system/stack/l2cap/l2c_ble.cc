@@ -43,10 +43,8 @@
 #include "main/shim/entry.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "stack/btm/btm_int_types.h"
 #include "stack/btm/btm_sec.h"
 #include "stack/btm/btm_sec_int_types.h"
-#include "stack/btm/internal/btm_api.h"
 #include "stack/connection_manager/connection_manager.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/bt_psm_types.h"
@@ -56,7 +54,6 @@
 #include "stack/include/btm_log_history.h"
 #include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_status.h"
-#include "stack/include/l2cap_acl_interface.h"
 #include "stack/include/l2cap_controller_interface.h"
 #include "stack/include/l2cap_hci_link_interface.h"
 #include "stack/include/l2cap_interface.h"
@@ -637,8 +634,15 @@ void l2cble_process_sig_cmd(tL2C_LCB* p_lcb, uint8_t* p, uint16_t pkt_len) {
        * good*/
       num_of_channels = (p_pkt_end - p) / sizeof(uint16_t);
       if (num_of_channels != p_lcb->pending_ecoc_conn_cnt) {
-        log::error("Incorrect response.expected num of channels = {}received num of channels = {}",
-                   num_of_channels, p_lcb->pending_ecoc_conn_cnt);
+        log::error(
+                "Incorrect response.expected num of channels = {} received num of "
+                "channels = {}",
+                num_of_channels, p_lcb->pending_ecoc_conn_cnt);
+        if (com_android_bluetooth_flags_reject_invalid_eatt_channels_in_response()) {
+            con_info.l2cap_result =
+              static_cast<tL2CAP_CONN>(tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_INVALID_PARAMETERS);
+            l2cble_handle_connect_rsp_neg(p_lcb, &con_info);
+        }
         return;
       }
 
@@ -1269,11 +1273,6 @@ void l2cble_process_data_length_change_event(uint16_t handle, uint16_t tx_data_l
             p_lcb->remote_bd_addr, tx_data_len);
   }
   /* ignore rx_data len for now */
-}
-
-uint16_t l2cble_read_tx_data_length(uint16_t handle) {
-  tL2C_LCB* p_lcb = l2cu_find_lcb_by_handle(handle);
-  return p_lcb->tx_data_len;
 }
 
 /*******************************************************************************

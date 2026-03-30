@@ -51,6 +51,7 @@ using namespace bluetooth;
 using namespace ::ras;
 using namespace ::ras::uuid;
 using bluetooth::ras::VendorSpecificCharacteristic;
+using bluetooth::stack::tGATT_REQ_CBACK;
 
 namespace {
 
@@ -106,17 +107,15 @@ public:
     }
   }
 
-  static void OnGattConnectStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
-                                  tCONN_ID conn_id, tBT_TRANSPORT transport) {
+  static void OnGattConnStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
+                               tCONN_ID conn_id, bool connected, tGATT_DISCONN_REASON /*reason*/,
+                               tBT_TRANSPORT transport) {
     if (instance) {
-      instance->OnGattConnect(remote_bda, conn_id, transport);
-    }
-  }
-
-  static void OnGattDisconnectStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
-                                     tCONN_ID conn_id, tBT_TRANSPORT /*transport*/) {
-    if (instance) {
-      instance->OnGattDisconnect(remote_bda, conn_id);
+      if (connected) {
+        instance->OnGattConnect(remote_bda, conn_id, transport);
+      } else {
+        instance->OnGattDisconnect(remote_bda, conn_id);
+      }
     }
   }
 
@@ -156,8 +155,7 @@ public:
     }
   }
 
-  static void OnGattMtuChangedStatic(tCONN_ID conn_id, uint32_t /*trans_id*/,
-                                     const RawAddress& remote_bda, uint16_t mtu) {
+  static void OnGattMtuChangedStatic(tCONN_ID conn_id, const RawAddress& remote_bda, uint16_t mtu) {
     if (instance) {
       instance->OnGattMtuChanged(conn_id, remote_bda, mtu);
     }
@@ -173,18 +171,23 @@ public:
     app_uuid_ = uuid;
     log::info("Register server with uuid:{}", app_uuid_.ToString());
 
-    static const tBTA_GATTS_CBACK ras_ops = {
-            .p_reg_cb = OnGattRegisterStatic,
-            .p_connect_cb = OnGattConnectStatic,
-            .p_disconnect_cb = OnGattDisconnectStatic,
-            .p_read_characteristic_cb = OnGattReadCharacteristicStatic,
-            .p_read_descriptor_cb = OnGattReadDescriptorStatic,
-            .p_write_characteristic_cb = OnGattWriteCharacteristicStatic,
-            .p_write_descriptor_cb = OnGattWriteDescriptorStatic,
-            .p_mtu_changed_cb = OnGattMtuChangedStatic,
+    static bluetooth::stack::tGATT_REQ_CBACK ras_server_cbacks = {
+            .read_characteristic_cb = OnGattReadCharacteristicStatic,
+            .read_descriptor_cb = OnGattReadDescriptorStatic,
+            .write_characteristic_cb = OnGattWriteCharacteristicStatic,
+            .write_descriptor_cb = OnGattWriteDescriptorStatic,
+            .exec_write_cb = tGATT_REQ_CBACK::do_nothing,
+            .mtu_changed_cb = OnGattMtuChangedStatic,
+            .conf_cb = tGATT_REQ_CBACK::do_nothing,
+            .conf_send_fail_cb = tGATT_REQ_CBACK::do_nothing,
     };
 
-    BTA_GATTS_AppRegister(app_uuid_, &ras_ops, false);
+    static const tBTA_GATTS_CBACK ras_ops = {
+            .p_conn_cb = OnGattConnStatic,
+            .server_cbacks = &ras_server_cbacks,
+    };
+
+    BTA_GATTS_AppRegister(app_uuid_, &ras_ops, false, OnGattRegisterStatic);
   }
 
   void RegisterCallbacks(bluetooth::ras::RasServerCallbacks* callbacks) { callbacks_ = callbacks; }
@@ -507,8 +510,8 @@ public:
   }
 
   void OnWriteCharacteristic(tCONN_ID conn_id, uint32_t trans_id, const RawAddress& remote_bda,
-                             uint16_t handle, uint16_t offset, bool need_rsp, bool is_prep,
-                             uint8_t* value, uint16_t len) {
+                             uint16_t handle, uint16_t /* offset */, bool need_rsp,
+                             bool /* is_prep */, uint8_t* value, uint16_t len) {
     log::info("conn_id:{}, handle:0x{:04x}, need_rsp{}, len:{}", conn_id, handle, need_rsp, len);
 
     std::unique_ptr<tGATTS_RSP> p_msg = std::make_unique<tGATTS_RSP>();
@@ -522,16 +525,8 @@ public:
     auto uuid = characteristics_[handle].uuid_;
     auto vendor_specific_characteristic = GetVendorSpecificCharacteristic(uuid);
     if (vendor_specific_characteristic != nullptr) {
-      tGATT_WRITE_REQ write_req = {
-          .handle = handle,
-          .offset = offset,
-          .len = len,
-          .need_rsp = need_rsp,
-          .is_prep = is_prep,
-      };
-      memcpy(write_req.value, value, len);
       WriteVendorSpecificCharacteristic(vendor_specific_characteristic, conn_id, trans_id,
-                                        remote_bda, &write_req, std::move(p_msg));
+                                        remote_bda, value, len, std::move(p_msg));
       return;
     }
     log::info("Write uuid, {}", getUuidName(uuid));
@@ -548,15 +543,7 @@ public:
         if (need_rsp) {
           BTA_GATTS_SendRsp(conn_id, trans_id, GATT_SUCCESS, std::move(p_msg));
         }
-        tGATT_WRITE_REQ write_req = {
-          .handle = handle,
-          .offset = offset,
-          .len = len,
-          .need_rsp = need_rsp,
-          .is_prep = is_prep,
-        };
-        memcpy(write_req.value, value, len);
-        HandleControlPoint(tracker, &write_req);
+        HandleControlPoint(tracker, value, len);
       } break;
       default:
         log::warn("Unhandled uuid {}", uuid.ToString());
@@ -567,10 +554,9 @@ public:
 
   void WriteVendorSpecificCharacteristic(
           VendorSpecificCharacteristic* vendor_specific_characteristic, tCONN_ID conn_id,
-          uint32_t trans_id, const RawAddress& remote_bda, const tGATT_WRITE_REQ* write_req,
+          uint32_t trans_id, const RawAddress& remote_bda, uint8_t* value, uint16_t len,
           std::unique_ptr<tGATTS_RSP> p_msg) {
     log::debug("uuid {}", vendor_specific_characteristic->characteristicUuid_);
-    uint16_t len = write_req->len;
 
     if (trackers_.find(remote_bda) == trackers_.end()) {
       BTA_GATTS_SendRsp(conn_id, trans_id, GATT_INVALID_HANDLE, std::move(p_msg));
@@ -580,7 +566,6 @@ public:
 
     // Update reply value
     auto& tracker = trackers_[remote_bda];
-    auto value = write_req->value;
     vendor_specific_characteristic->reply_value_.clear();
     vendor_specific_characteristic->reply_value_.reserve(len);
     vendor_specific_characteristic->reply_value_.assign(value, value + len);
@@ -651,9 +636,9 @@ public:
     BTA_GATTS_SendRsp(conn_id, trans_id, GATT_SUCCESS, std::move(p_msg));
   }
 
-  void HandleControlPoint(ClientTracker* tracker, tGATT_WRITE_REQ* write_req) {
+  void HandleControlPoint(ClientTracker* tracker, uint8_t* value, uint16_t len) {
     ControlPointCommand command;
-    ParseControlPointCommand(&command, write_req->value, write_req->len);
+    ParseControlPointCommand(&command, value, len);
 
     if (!command.isValid_) {
       SendResponseCode(ResponseCodeValue::INVALID_PARAMETER, tracker);

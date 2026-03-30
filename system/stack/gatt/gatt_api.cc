@@ -37,20 +37,16 @@
 #include <string>
 
 #include "internal_include/bt_target.h"
-#include "internal_include/stack_config.h"
-#include "main/shim/helpers.h"
 #include "os/system_properties.h"
 #include "osi/include/allocator.h"
 #include "stack/arbiter/acl_arbiter.h"
 #include "stack/btm/btm_dev.h"
-#include "stack/connection_manager/connection_manager.h"
 #include "stack/gatt/gatt_int.h"
 #include "stack/include/ais_api.h"
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_psm_types.h"
 #include "stack/include/bt_uuid16.h"
 #include "stack/include/btm_client_interface.h"
-#include "stack/include/l2cap_acl_interface.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cdefs.h"
 #include "stack/include/sdp_api.h"
@@ -1434,8 +1430,6 @@ bool GATT_BR_Connect(tGATT_IF gatt_if, const RawAddress& bd_addr) {
  *
  ******************************************************************************/
 tGATT_STATUS GATT_Disconnect(tCONN_ID conn_id) {
-  log::info("conn_id={}", conn_id);
-
   uint8_t tcb_idx = gatt_get_tcb_idx(conn_id);
   tGATT_TCB* p_tcb = gatt_get_tcb_by_idx(tcb_idx);
   if (!p_tcb) {
@@ -1444,13 +1438,15 @@ tGATT_STATUS GATT_Disconnect(tCONN_ID conn_id) {
   }
 
   tGATT_IF gatt_if = gatt_get_gatt_if(conn_id);
+
+  log::info("gatt_if={}, remote_bda={}, transport={}", gatt_if, p_tcb->peer_bda, p_tcb->transport);
+
   gatt_update_app_use_link_flag(gatt_if, p_tcb, false, true);
 
   if (p_tcb->transport == BT_TRANSPORT_LE && p_tcb->app_hold_link.empty()) {
     bluetooth::metrics::LogMetricLeConnectionLifecycle(p_tcb->peer_bda, false /* is_connect */,
                                                        false /* is_direct */);
   }
-
   return GATT_SUCCESS;
 }
 

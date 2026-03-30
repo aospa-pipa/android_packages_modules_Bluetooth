@@ -45,9 +45,7 @@
 #include "internal_include/bt_target.h"
 #include "main/shim/hci_layer.h"
 #include "osi/include/allocator.h"
-#include "stack/include/acl_api.h"
 #include "stack/btm/btm_int.h"
-#include "stack/include/acl_api.h"
 #include "stack/include/acl_hci_link_interface.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/bt_hdr.h"
@@ -236,7 +234,7 @@ static void btu_hcif_log_event_metrics(uint8_t evt_code, const uint8_t* p_event)
 static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_msg) {
   uint8_t* p = (uint8_t*)(p_msg + 1) + p_msg->offset;
   uint8_t hci_evt_code, hci_evt_len;
-  uint8_t sub_code, ble_hdt_sub_code;
+  uint8_t sub_code;
   STREAM_TO_UINT8(hci_evt_code, p);
   STREAM_TO_UINT8(hci_evt_len, p);
 
@@ -353,7 +351,6 @@ static void btu_hcif_process_event(uint8_t /* controller_id */, const BT_HDR* p_
         case HCI_BLE_CIS_REQ_EVT:
         case HCI_BLE_BIG_SYNC_EST_EVT:
         case HCI_BLE_BIG_SYNC_LOST_EVT:
-        case HCI_BLE_CIS_EST_EVT_V4:
         case HCI_BLE_CREATE_BIG_CPL_EVT_V2:
           IsoManager::GetInstance()->HandleHciEvent(sub_code, p, ble_evt_len);
           break;

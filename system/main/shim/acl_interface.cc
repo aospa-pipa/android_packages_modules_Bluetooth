@@ -81,7 +81,6 @@ const acl_interface_t& GetAclInterface() {
           .link.le.on_read_remote_version_information_complete = btm_read_remote_version_complete,
           .link.le.on_phy_update = gatt_notify_phy_updated,
           .link.le.on_le_subrate_change = on_le_subrate_change,
-          .link.le.read_tx_data_length = l2cble_read_tx_data_length,
   };
   return acl_interface;
 }

@@ -51,6 +51,7 @@
 #include "packet/packet_view.h"
 #include "packet/raw_builder.h"
 #include "stack/include/bt_uuid16.h"
+#include "stack/include/gatt_api.h"
 #include "stack/include/main_thread.h"
 #include "stack/l2cap/internal/l2c_api.h"
 #include "stack/mock/mock_stack_btm_interface.h"
@@ -61,6 +62,8 @@
 #include "test/mock/mock_main_shim_entry.h"
 #include "test/mock/mock_osi_properties.h"
 #include "test/mock/mock_osi_thread.h"
+
+void gatt_set_debug_conn_state_cb(void (*)(const RawAddress&, bool, const tGATT_DISCONN_REASON)) {}
 
 namespace bluetooth::testing {
 void set_hal_cbacks(bt_callbacks_t* callbacks);
@@ -651,60 +654,6 @@ TEST_F(BtifUtilsTest, dump_rc_pdu) {
     ASSERT_TRUE(dump_rc_pdu(pdu.first).starts_with(pdu.second));
   }
   ASSERT_TRUE(dump_rc_pdu(std::numeric_limits<uint8_t>::max()).starts_with("Unknown"));
-}
-
-TEST_F(BtifCoreWithControllerTest, btif_dm_get_connection_state__unconnected) {
-  ASSERT_EQ(0, btif_dm_get_connection_state(kRawAddress));
-}
-
-TEST_F(BtifCoreWithConnectionTest, btif_dm_get_connection_state__connected_no_encryption) {
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(_, BT_TRANSPORT_AUTO)).Times(0);
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_BR_EDR))
-          .WillOnce(Return(false));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_LE))
-          .WillOnce(Return(false));
-
-  ASSERT_EQ(1, btif_dm_get_connection_state_sync(kRawAddress));
-}
-
-TEST_F(BtifCoreWithConnectionTest, btif_dm_get_connection_state__connected_classic_encryption) {
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(_, BT_TRANSPORT_AUTO)).Times(0);
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_BR_EDR))
-          .WillOnce(Return(true));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_LE))
-          .WillOnce(Return(false));
-
-  ASSERT_EQ(3, btif_dm_get_connection_state_sync(kRawAddress));
-}
-
-TEST_F(BtifCoreWithConnectionTest, btif_dm_get_connection_state__connected_le_encryption) {
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(_, BT_TRANSPORT_AUTO)).Times(0);
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_BR_EDR))
-          .WillOnce(Return(false));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_LE))
-          .WillOnce(Return(true));
-
-  ASSERT_EQ(5, btif_dm_get_connection_state_sync(kRawAddress));
-}
-
-TEST_F(BtifCoreWithConnectionTest, btif_dm_get_connection_state__connected_both_encryption) {
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(_, BT_TRANSPORT_AUTO)).Times(0);
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_BR_EDR))
-          .WillOnce(Return(true));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_LE))
-          .WillOnce(Return(true));
-
-  ASSERT_EQ(7, btif_dm_get_connection_state_sync(kRawAddress));
-}
-
-TEST_F(BtifCoreWithConnectionTest, btif_dm_get_connection_state_sync) {
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_BR_EDR))
-          .WillOnce(Return(true));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(kRawAddress, BT_TRANSPORT_LE))
-          .WillOnce(Return(true));
-  EXPECT_CALL(mock_btm_security_, BTM_IsEncrypted(_, BT_TRANSPORT_AUTO)).Times(0);
-
-  ASSERT_EQ(7, btif_dm_get_connection_state_sync(kRawAddress));
 }
 
 auto get_properties = [](const char* key, char* value, const char* /* default_value */) -> size_t {

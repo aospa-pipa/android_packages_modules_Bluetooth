@@ -30,6 +30,8 @@
 // Generated packet headers:
 #include "pacs/pacs_packets.h"
 
+using bluetooth::stack::tGATT_REQ_CBACK;
+
 namespace bluetooth::le_audio {
 
 using types::AudioContexts;
@@ -98,7 +100,7 @@ struct Pacs::service_impl {
   struct CtpRequest {
     uint32_t trans_id;
     tCONN_ID conn_id;
-    tGATT_WRITE_REQ write_req;
+    bool need_rsp;
   };
   std::map<RawAddress, CtpRequest> pending_request_by_address_;
 
@@ -153,18 +155,24 @@ struct Pacs::service_impl {
 
     callbacks_ = callbacks;
 
+    static bluetooth::stack::tGATT_REQ_CBACK pacs_callbacks = {
+            .read_characteristic_cb = OnGattReadCharacteristicStatic,
+            .read_descriptor_cb = OnGattReadDescriptorStatic,
+            .write_characteristic_cb = OnGattWriteCharacteristicStatic,
+            .write_descriptor_cb = OnGattWriteDescriptorStatic,
+            .exec_write_cb = tGATT_REQ_CBACK::do_nothing,
+            .mtu_changed_cb = tGATT_REQ_CBACK::do_nothing,
+            .conf_cb = tGATT_REQ_CBACK::do_nothing,
+            .conf_send_fail_cb = tGATT_REQ_CBACK::do_nothing,
+    };
+
     static const tBTA_GATTS_CBACK pacs_ops = {
-            .p_reg_cb = OnGattRegisterStatic,
-            .p_connect_cb = OnGattConnectStatic,
-            .p_disconnect_cb = OnGattDisconnectStatic,
-            .p_read_characteristic_cb = OnGattReadCharacteristicStatic,
-            .p_read_descriptor_cb = OnGattReadDescriptorStatic,
-            .p_write_characteristic_cb = OnGattWriteCharacteristicStatic,
-            .p_write_descriptor_cb = OnGattWriteDescriptorStatic,
+            .p_conn_cb = OnGattConnStatic,
+            .server_cbacks = &pacs_callbacks,
     };
 
     BTA_GATTS_AppRegister(uuid::kPublishedAudioCapabilityServiceUuid, &pacs_ops,
-                          true /* eatt_support */);
+                          true /* eatt_support */, &OnGattRegisterStatic);
   }
 
   static void OnGattRegisterStatic(tGATT_STATUS status, tGATT_IF server_if,
@@ -174,17 +182,15 @@ struct Pacs::service_impl {
     }
   }
 
-  static void OnGattConnectStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
-                                  tCONN_ID conn_id, tBT_TRANSPORT transport) {
+  static void OnGattConnStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
+                               tCONN_ID conn_id, bool connected, tGATT_DISCONN_REASON /*reason*/,
+                               tBT_TRANSPORT transport) {
     if (instance) {
-      instance->service_impl_->OnGattConnect(remote_bda, conn_id, transport);
-    }
-  }
-
-  static void OnGattDisconnectStatic(tGATT_IF /*server_if*/, const RawAddress& remote_bda,
-                                     tCONN_ID conn_id, tBT_TRANSPORT /*transport*/) {
-    if (instance) {
-      instance->service_impl_->OnGattDisconnect(remote_bda, conn_id);
+      if (connected) {
+        instance->service_impl_->OnGattConnect(remote_bda, conn_id, transport);
+      } else {
+        instance->service_impl_->OnGattDisconnect(remote_bda, conn_id);
+      }
     }
   }
 
@@ -573,16 +579,15 @@ struct Pacs::service_impl {
     }
   }
 
-  void OnWriteAudioLocationCharacteristic(tCONN_ID conn_id, uint32_t trans_id,
-                                          const tGATT_WRITE_REQ& write_req) {
-    auto char_uuid = char_metadata_by_value_handle_.at(write_req.handle).uuid;
+  void OnWriteAudioLocationCharacteristic(tCONN_ID conn_id, uint32_t trans_id, uint16_t handle,
+                                          bool need_rsp, uint8_t* value, uint16_t len) {
+    auto char_uuid = char_metadata_by_value_handle_.at(handle).uuid;
 
-    auto value = std::make_shared<std::vector<uint8_t>>(write_req.value,
-                                                        write_req.value + write_req.len);
-    auto char_view = pacs::AudioLocationsCharValueView::Create(packet::PacketView<true>(value));
+    auto value_vec = std::make_shared<std::vector<uint8_t>>(value, value + len);
+    auto char_view = pacs::AudioLocationsCharValueView::Create(packet::PacketView<true>(value_vec));
     if (!char_view.IsValid()) {
       log::warn("Invalid value for Audio Location write.");
-      if (write_req.need_rsp) {
+      if (need_rsp) {
         BTA_GATTS_SendRsp(conn_id, trans_id, GATT_WRITE_REQ_REJECTED, nullptr);
       }
       return;
@@ -593,7 +598,7 @@ struct Pacs::service_impl {
 
     if (pending_request_by_address_.count(pac_device->pseudo_addr)) {
       log::warn("Device {} has a pending request, rejecting new one.", pac_device->pseudo_addr);
-      if (write_req.need_rsp) {
+      if (need_rsp) {
         BTA_GATTS_SendRsp(conn_id, trans_id, GATT_BUSY, nullptr);
       }
       return;
@@ -605,13 +610,14 @@ struct Pacs::service_impl {
 
     AudioLocations new_locations(char_view.GetAudioLocations());
 
-    pending_request_by_address_[pac_device->pseudo_addr] = CtpRequest{trans_id, conn_id, write_req};
+    pending_request_by_address_[pac_device->pseudo_addr] = CtpRequest{trans_id, conn_id, need_rsp};
     callbacks_->OnAudioLocationsWritten(pac_device->pseudo_addr, direction, new_locations);
   }
 
   void OnGattWriteCharacteristic(tCONN_ID conn_id, uint32_t trans_id,
-                                 const RawAddress& /*remote_bda*/, uint16_t handle, uint16_t offset,
-                                 bool need_rsp, bool is_prep, uint8_t* value, uint16_t len) {
+                                 const RawAddress& /*remote_bda*/, uint16_t handle,
+                                 uint16_t /* offset */, bool need_rsp, bool /* is_prep */,
+                                 uint8_t* value, uint16_t len) {
     log::info("handle: 0x{:04x}", handle);
 
     if (char_metadata_by_value_handle_.count(handle) == 0) {
@@ -625,15 +631,7 @@ struct Pacs::service_impl {
     auto char_uuid = char_metadata_by_value_handle_.at(handle).uuid;
     if (char_uuid == uuid::kSinkAudioLocationCharacteristicUuid.As16Bit() ||
         char_uuid == uuid::kSourceAudioLocationCharacteristicUuid.As16Bit()) {
-      tGATT_WRITE_REQ write_req = {
-          .handle = handle,
-          .offset = offset,
-          .len = len,
-          .need_rsp = need_rsp,
-          .is_prep = is_prep,
-      };
-      memcpy(write_req.value, value, len);
-      OnWriteAudioLocationCharacteristic(conn_id, trans_id, write_req);
+      OnWriteAudioLocationCharacteristic(conn_id, trans_id, handle, need_rsp, value, len);
     } else {
       log::warn("Unhandled characteristic write request for handle 0x{:04x}, char_uuid: {}.",
                 handle, Uuid::From16Bit(char_uuid).ToString());
@@ -825,7 +823,7 @@ struct Pacs::service_impl {
     if (request != pending_request_by_address_.end()) {
       log::warn("Device {} has a pending request, rejecting new one.", pac_device->pseudo_addr);
       const auto& req = request->second;
-      if (req.write_req.need_rsp) {
+      if (req.need_rsp) {
         BTA_GATTS_SendRsp(req.conn_id, req.trans_id,
                           is_accepted ? GATT_SUCCESS : GATT_WRITE_REQ_REJECTED, nullptr);
       }
