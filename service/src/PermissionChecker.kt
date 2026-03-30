@@ -300,17 +300,7 @@ internal class PermissionChecker(
     }
 
     private fun isProfileOwner(source: AttributionSource): Boolean {
-        val userContext =
-            try {
-                context.createPackageContextAsUser(
-                    context.packageName,
-                    0,
-                    UserHandle.getUserHandleForUid(source.uid),
-                )
-            } catch (e: NameNotFoundException) {
-                Log.e(TAG, "Unknown package name")
-                return false
-            }
+        val userContext = context.createContextAsUser(UserHandle.getUserHandleForUid(source.uid), 0)
         // DevicePolicyManager is started after Bluetooth and cannot be passed in constructor
         val devicePolicyManager = userContext.getSystemService(DevicePolicyManager::class.java)
         if (devicePolicyManager == null) {
