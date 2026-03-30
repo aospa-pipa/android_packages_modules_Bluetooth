@@ -580,14 +580,6 @@ void* list_node(const list_node_t* node) {
   return nullptr;
 }
 
-int osi_socket_local_client(const char* name, int namespaceId, int type) {
-  inc_func_call_count(__func__);
-  return 0;
-}
-int osi_socket_local_client_connect(int fd, const char* name, int namespaceId, int type) {
-  inc_func_call_count(__func__);
-  return 0;
-}
 int osi_socket_local_server_bind(int s, const char* name, int namespaceId) {
   inc_func_call_count(__func__);
   return 0;
