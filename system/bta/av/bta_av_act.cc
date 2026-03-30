@@ -40,8 +40,6 @@
 #include "bta_sys.h"
 #include "btif/avrcp/avrcp_service.h"
 #include "btif/include/btif_av.h"
-#include "common/bind.h"
-#include "device/include/device_iot_conf_defs.h"
 #include "device/include/device_iot_config.h"
 #include "device/include/interop.h"
 #include "internal_include/bt_target.h"
@@ -58,7 +56,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
-#include "stack/include/btm_client_interface.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cap_types.h"
 #include "stack/include/sdp_api.h"
@@ -2025,7 +2022,7 @@ static uint16_t bta_avk_get_cover_art_psm() {
                 } else if (param_type == UINT_DESC_TYPE) {
                   protocol_param = (param_len == 2) ? p_protocol_param->attr_value.v.u16
                                                     : p_protocol_param->attr_value.v.u8;
-                } /* else dont care */
+                } /* else don't care */
                 p_protocol_param = p_protocol_param->p_next_attr;  // next
               }
               // If we've found L2CAP then the parameter is a PSM

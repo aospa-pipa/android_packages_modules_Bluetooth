@@ -78,7 +78,7 @@ static uint16_t get_bta_avk_rc_supf_ct() {
  *	4. GetCapabilities supported event_ids count
  */
 
-/* Note: Android doesnt support AVRC_SUPF_TG_GROUP_NAVI  */
+/* Note: Android doesn't support AVRC_SUPF_TG_GROUP_NAVI  */
 /* Note: if AVRC_SUPF_TG_GROUP_NAVI is set, bta_av_cfg.avrc_group should be true
  */
 #ifndef BTA_AV_RC_SUPF_TG

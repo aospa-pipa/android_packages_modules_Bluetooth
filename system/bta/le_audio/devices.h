@@ -20,10 +20,8 @@
 #include <bluetooth/types/address.h>
 
 #include <memory>
-#include <utility>  // for std::pair
 #include <vector>
 
-#include "audio_hal_client/audio_hal_client.h"
 #include "bta_groups.h"
 #include "gmap_client.h"
 #include "le_audio_types.h"
@@ -65,11 +63,11 @@ enum class DeviceConnectState : uint8_t {
 enum class SubrateState : uint8_t {
   /* Initial state*/
   DISABLED,
-  /* Pending on the LE Audio aggresive connection parameter update */
+  /* Pending on the LE Audio aggressive connection parameter update */
   PENDING_ENABLING_CONN_UPDATE,
-  /* Pending on the LE Audio aggresive connection parameter update complete */
+  /* Pending on the LE Audio aggressive connection parameter update complete */
   PENDING_ENABLING_CONN_UPDATE_COMPLETE,
-  /* Pending on the subrate update proceduce complete */
+  /* Pending on the subrate update procedure complete */
   PENDING_ENABLING_SUBRATE_UPDATE,
   /* When the host receive the subrate change event with success */
   ENABLED,
