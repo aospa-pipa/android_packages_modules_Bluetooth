@@ -22,16 +22,6 @@ flag {
 }
 
 flag {
-    name: "adm_remove_hap_variables"
-    namespace: "bluetooth"
-    description: "For LE Audio hearing aids it's sufficient to listen to only LE Audio events."
-    bug: "450220555"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-
-flag {
     name: "adm_suspend_fallback_during_change"
     namespace: "bluetooth"
     description: "Suspend active device disconnection fallback mechanism when active device change is pending"
