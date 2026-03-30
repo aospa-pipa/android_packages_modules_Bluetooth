@@ -44,6 +44,8 @@ import android.os.RemoteException;
 import android.os.WorkSource;
 import android.util.Log;
 
+import com.android.bluetooth.flags.Flags;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -329,7 +331,8 @@ public final class BluetoothLeScanner {
                 return postCallbackErrorOrReturn(
                         callback, ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED);
             }
-            if (!isHardwareResourcesAvailableForScan(settings)) {
+            if (!Flags.checkScanHardwareResourcesAvailabilityInBinder()
+                    && !isHardwareResourcesAvailableForScan(settings)) {
                 return postCallbackErrorOrReturn(
                         callback, ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES);
             }
@@ -675,6 +678,7 @@ public final class BluetoothLeScanner {
         return true;
     }
 
+    // TODO(b/497584056): Delete on check_scan_hardware_resources_availability_in_binder cleanup
     @RequiresPermission(BLUETOOTH_SCAN)
     private boolean isHardwareResourcesAvailableForScan(ScanSettings settings) {
         final int callbackType = settings.getCallbackType();
