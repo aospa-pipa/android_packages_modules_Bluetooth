@@ -2765,7 +2765,13 @@ class ScanManagerTest() {
     }
 
     private fun setScreenOn(isScreenOn: Boolean) = executeOnScanThread {
-        if (isScreenOn) scanManager.handleScreenOn() else scanManager.handleScreenOff()
+        AppScanStats.setScreenState(isScreenOn)
+        scanRadioStats.setScreenState(isScreenOn)
+        if (isScreenOn) {
+            scanManager.handleScreenOn()
+        } else {
+            scanManager.handleScreenOff()
+        }
     }
 
     private fun setLocationOn(isLocationOn: Boolean) = executeOnScanThread {
