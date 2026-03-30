@@ -23,9 +23,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "osi/include/osi.h"
-#include "osi/include/socket_utils/socket_local.h"
-#include "osi/include/socket_utils/sockets.h"
+#include "socket_local.h"
+#include "sockets.h"
 
 #define LISTEN_BACKLOG 4
 

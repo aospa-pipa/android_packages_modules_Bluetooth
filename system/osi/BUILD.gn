@@ -28,11 +28,6 @@ static_library("osi") {
     "src/properties.cc",
     "src/reactor.cc",
     "src/socket.cc",
-
-    # TODO(mcchou): Remove these sources after platform specific
-    # dependencies are abstracted.
-    "src/socket_utils/socket_local_client.cc",
-    "src/socket_utils/socket_local_server.cc",
     "src/thread.cc",
     "src/wakelock.cc",
 

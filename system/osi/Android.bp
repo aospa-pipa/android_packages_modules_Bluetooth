@@ -40,8 +40,6 @@ cc_library_static {
         "fluoride_defaults",
         "fluoride_osi_defaults",
     ],
-    // TODO(mcchou): Remove socket_utils sources after platform specific
-    // dependencies are abstracted.
     srcs: [
         ":OsiCompatSources",
         "src/alarm.cc",
@@ -55,8 +53,6 @@ cc_library_static {
         "src/properties.cc",
         "src/reactor.cc",
         "src/socket.cc",
-        "src/socket_utils/socket_local_client.cc",
-        "src/socket_utils/socket_local_server.cc",
         "src/thread.cc",
         "src/wakelock.cc",
 
