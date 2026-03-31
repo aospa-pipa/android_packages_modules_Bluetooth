@@ -97,6 +97,7 @@ import com.android.bluetooth.btservice.ActiveDeviceManager;
 import com.android.bluetooth.btservice.AdapterService;
 import com.android.bluetooth.btservice.Config;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.hfp.HeadsetService;
 import com.android.bluetooth.le_scan.ScanController;
 import com.android.bluetooth.metrics.MetricsLogger;
 import com.android.bluetooth.profile.ConnectableProfile;
@@ -179,6 +180,7 @@ public class LeAudioService extends ConnectableProfile {
 
     private final LeAudioNativeInterface mNativeInterface;
     private final Optional<LeAudioBroadcasterNativeInterface> mLeAudioBroadcasterNativeInterface;
+    private final CallAudio mCallAudio;
     private final ActiveDeviceManager mActiveDeviceManager;
     private final ScanController mScanController;
     private final HandlerThread mStateMachinesThread;
@@ -334,6 +336,7 @@ public class LeAudioService extends ConnectableProfile {
                 requireNonNullElseGet(
                         nativeInterface, () -> new LeAudioNativeInterface(adapterService, this));
         mAudioManager = requireNonNull(obtainSystemService(AudioManager.class));
+        mCallAudio = CallAudio.init(adapterService);
         mActiveDeviceManager = activeDeviceManager;
         mScanController = requireNonNull(scanController);
 
@@ -915,6 +918,9 @@ public class LeAudioService extends ConnectableProfile {
         }
 
         mScanCallback.stopBackgroundScan();
+        if (mCallAudio != null) {
+            mCallAudio.cleanup();
+        }
 
         // Don't wait for async call with INACTIVE group status, clean active
         // device for active group.
@@ -2231,6 +2237,27 @@ public class LeAudioService extends ConnectableProfile {
      * Send broadcast intent about LeAudio connection state changed. This is called by
      * LeAudioStateMachine.
      */
+    boolean isVoipLeaWarEnabled() {
+        Log.d(TAG, "isVoipLeaWarEnabled");
+        CallAudio mCallAudio = CallAudio.get();
+        if (mCallAudio != null) {
+            return mCallAudio.isVoipLeaWarEnabled();
+        }
+        return false;
+    }
+
+    void notifyConnectionStateChanged(
+            BluetoothDevice device, int newState, int prevState, boolean isVoIPWarEnabled) {
+        Log.d(TAG, "notifyConnectionStateChanged, isVoIPWarEnabled:" + isVoIPWarEnabled);
+        if (isVoIPWarEnabled) {
+            CallAudio mCallAudio = CallAudio.get();
+            if (mCallAudio != null) {
+                mCallAudio.onConnStateChange(device, newState, mCallAudio.LE_AUDIO_VOICE);
+            }
+        }
+        notifyConnectionStateChanged(device, newState, prevState);
+    }
+
     void notifyConnectionStateChanged(BluetoothDevice device, int newState, int prevState) {
         Log.d(
                 TAG,
@@ -2867,6 +2894,14 @@ public class LeAudioService extends ConnectableProfile {
              * When adding new device, wait with notification until AudioManager is ready
              * with adding the device.
              */
+            if (isVoipLeaWarEnabled()) {
+                CallAudio mCallAudio = CallAudio.get();
+                if (mCallAudio != null && mCallAudio.isVirtualCallStarted()) {
+                    if (!mCallAudio.stopScoUsingVirtualVoiceCall()) {
+                        Log.w(TAG, "updateActiveDevices: fail to stopScoUsingVirtualVoiceCall");
+                    }
+                }
+            }
             notifyActiveDeviceChanged(null);
         }
 
@@ -2916,6 +2951,28 @@ public class LeAudioService extends ConnectableProfile {
      */
     private boolean setActiveGroupWithDevice(BluetoothDevice device, boolean hasFallbackDevice) {
         int groupId = LE_AUDIO_GROUP_ID_INVALID;
+
+        if (isVoipLeaWarEnabled()) {
+            CallAudio mCallAudio = CallAudio.get();
+            if (device == null) {
+                if (mCallAudio != null && mCallAudio.isVirtualCallStarted()) {
+                    if (!mCallAudio.stopScoUsingVirtualVoiceCall()) {
+                        Log.w(
+                                TAG,
+                                "setActiveGroupWithDevice: fail to"
+                                        + " stopScoUsingVirtualVoiceCall");
+                    }
+                }
+            } else if (mCallAudio != null
+                    && !device.equals(mCallAudio.getActiveDevice())
+                    && mCallAudio.getActiveProfile() == mCallAudio.HFP) {
+                var headsetService = getAdapterService().getHeadsetService();
+                if (headsetService.isPresent() && headsetService.get().isVirtualCallStarted()) {
+                    Log.w(TAG, "setActiveGroupWithDevice: stop VoIP in HFP");
+                    headsetService.get().stopScoUsingVirtualVoiceCall();
+                }
+            }
+        }
 
         if (device != null) {
             LeAudioDeviceDescriptor descriptor = getDeviceDescriptor(device);

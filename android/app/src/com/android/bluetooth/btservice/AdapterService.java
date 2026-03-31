@@ -153,6 +153,7 @@ import com.android.bluetooth.hfp.HeadsetService;
 import com.android.bluetooth.hfpclient.HeadsetClientService;
 import com.android.bluetooth.hid.HidDeviceService;
 import com.android.bluetooth.hid.HidHostService;
+import com.android.bluetooth.le_audio.CallAudio;
 import com.android.bluetooth.le_audio.LeAudioBroadcast;
 import com.android.bluetooth.le_audio.LeAudioPeripheralService;
 import com.android.bluetooth.le_audio.LeAudioService;
@@ -386,6 +387,7 @@ public class AdapterService extends Service {
 
     private GattService mGattService;
     private ScanController mScanController;
+    private CallAudio mCallAudio;
 
     private volatile boolean mTestModeEnabled = false;
 
@@ -1103,6 +1105,7 @@ public class AdapterService extends Service {
 
         mActiveDeviceManager = new ActiveDeviceManager(this, mStorage);
         mActiveDeviceManager.start();
+        mCallAudio = CallAudio.get();
 
         mCompanionManager = new CompanionManager(this);
 
@@ -3717,11 +3720,17 @@ public class AdapterService extends Service {
                     Log.e(TAG, "getActiveDevices: HeadsetService is null");
                     break;
                 }
-                BluetoothDevice device = headset.get().getActiveDevice();
+                BluetoothDevice device;
+                if (mCallAudio != null && mCallAudio.isVoipLeaWarEnabled()) {
+                    device = mCallAudio.getActiveDevice();
+                    Log.i(TAG, "getActiveDevices: CallAudio device: " + device);
+                } else {
+                    device = headset.get().getActiveDevice();
+                    Log.i(TAG, "getActiveDevices: Headset device: " + device);
+                }
                 if (device != null) {
                     activeDevices.add(device);
                 }
-                Log.i(TAG, "getActiveDevices: Headset device: " + device);
             }
             case BluetoothProfile.A2DP -> {
                 final var a2dp = getA2dpService();

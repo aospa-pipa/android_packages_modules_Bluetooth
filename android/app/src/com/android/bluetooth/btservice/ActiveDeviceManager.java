@@ -49,6 +49,7 @@ import com.android.bluetooth.Utils;
 import com.android.bluetooth.R;
 import com.android.bluetooth.a2dp.A2dpService;
 import com.android.bluetooth.flags.Flags;
+import com.android.bluetooth.le_audio.CallAudio;
 import com.android.bluetooth.storage.BluetoothStorageManager;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
@@ -1112,6 +1113,11 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
             }
 
+            CallAudio mCallAudio = CallAudio.get();
+            if (mCallAudio != null && isVoipLeaWarEnabled()) {
+                mCallAudio.updateActiveDevice(device, mCallAudio.HFP);
+            }
+
             if (!Objects.equals(mHfpActiveDevice, device)) {
                 if (device != null) {
                     setHearingAidActiveDevice(null, /* stopAudio= */ false);
@@ -1239,11 +1245,18 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 return;
             }
 
+            CallAudio mCallAudio = CallAudio.get();
+            if (mCallAudio != null && isVoipLeaWarEnabled()) {
+                mCallAudio.updateActiveDevice(device, mCallAudio.LE_AUDIO_VOICE);
+            }
+
             // Just assign locally the new value
             if (device != null && !Objects.equals(mLeAudioActiveDevice, device)) {
                 if (!Utils.isDualModeAudioEnabled()) {
                     setA2dpActiveDevice(null, /* stopAudio= */ false);
-                    setHfpActiveDevice(null);
+                    if (mHfpActiveDevice != null) {
+                        setHfpActiveDevice(null);
+                    }
                 } else {
                     boolean isCsipSupported = Util.arrayContains(mAdapterService.getRemoteUuids(device),
                                                        BluetoothUuid.COORDINATED_SET);
@@ -2255,6 +2268,14 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         }
         sb.append(device).append(": ").append(mAdapterService.getRemoteName(device)).append("\n");
     }
+
+    boolean isVoipLeaWarEnabled() {
+        CallAudio mCallAudio = CallAudio.get();
+        if (mCallAudio != null) {
+            return mCallAudio.isVoipLeaWarEnabled();
+        }
+        return false;
+    }    
 
     protected void dump(PrintWriter writer) {
         StringBuilder sb = new StringBuilder();
