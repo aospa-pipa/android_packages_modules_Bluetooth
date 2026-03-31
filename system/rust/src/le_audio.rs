@@ -20,3 +20,4 @@
 
 pub mod iso_manager;
 pub mod periodic_advertising_sync;
+pub mod types;
