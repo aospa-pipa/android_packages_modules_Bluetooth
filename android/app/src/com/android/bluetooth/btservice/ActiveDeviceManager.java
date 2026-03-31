@@ -282,7 +282,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         }
 
         if (leAudioSupported) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 Log.i(TAG, "setActiveDevice: Setting active Le Audio device " + device);
                 if (device == null) {
                     /* If called by BluetoothAdapter it means Audio should not be stopped.
@@ -910,7 +910,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                 }
             }
 
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 /* Look for fallback if all devices from the active group disconnected. */
                 BluetoothDevice leadDevice = leAudio.get().getLeadDevice(device);
 
@@ -1303,7 +1303,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         mHandler = new Handler(mp.handlerThreadGetLooper(mHandlerThread));
 
         mAdapterService.registerBluetoothStateCallback((command) -> mHandler.post(command), this);
-        if (Flags.admCentralizeActiveDeviceHandling()) {
+        if (true) {
             mAudioManager.registerAudioDeviceCallback(mAudioManagerAudioDeviceCallback, mHandler);
         }
         mAudioManager.addOnModeChangedListener(
@@ -1317,7 +1317,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
         Log.i(TAG, "cleanup()");
 
         mAdapterService.unregisterBluetoothStateCallback(this);
-        if (Flags.admCentralizeActiveDeviceHandling()) {
+        if (true) {
             mAudioManager.unregisterAudioDeviceCallback(mAudioManagerAudioDeviceCallback);
         }
         if (mHandlerThread != null) {
@@ -1339,7 +1339,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     private class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
-            if (!Flags.admCentralizeActiveDeviceHandling()) {
+            if (!true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             if (!mAdapterService.isAvailable()) {
@@ -1431,7 +1431,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
 
         @Override
         public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
-            if (!Flags.admCentralizeActiveDeviceHandling()) {
+            if (!true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             if (!mAdapterService.isAvailable()) {
