@@ -2935,12 +2935,9 @@ public class AdapterService extends Service {
     }
 
     /**
-     * Same as API method {@link BluetoothAdapter#getBondedDevices()}
-     *
-     * @return array of bonded {@link BluetoothDevice}
+     * @return set of bonded {@link BluetoothDevice}
      */
-    @NonNull
-    public BluetoothDevice[] getBondedDevices() {
+    public @NonNull Set<BluetoothDevice> getBondedDevices() {
         return mAdapterProperties.getBondedDevices();
     }
 
@@ -3264,8 +3261,7 @@ public class AdapterService extends Service {
 
     private void refreshBondedDeviceUuids() {
         Log.d(TAG, "refreshBondedDeviceUuids() - Retrieving UUIDs for bonded devices");
-        BluetoothDevice[] bondedDevices = getBondedDevices();
-        for (BluetoothDevice device : bondedDevices) {
+        for (BluetoothDevice device : getBondedDevices()) {
             mRemoteDevices.triggerUuidNotification(device);
         }
     }
@@ -3383,6 +3379,7 @@ public class AdapterService extends Service {
          * LeAudio shall be automatically connected to Audio Framework when
          * 1. Remote device expects that - Targeted Announcements are used
          * 2. User is connecting device from Settings application.
+         * 3. Device has been just bonded.
          *
          * Above conditions are tracked by LeAudioService. In here, there is need to notify
          * LeAudioService that connection is made for GATT purposes, so LeAudioService can
