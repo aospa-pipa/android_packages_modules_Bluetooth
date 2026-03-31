@@ -20,6 +20,7 @@
 #include "stack/btm/btm_ble_sec.h"
 
 #include <android_bluetooth_sysprop.h>
+#include <base/functional/callback.h>
 #include <bluetooth/log.h>
 #include <bluetooth/types/address.h>
 #include <bluetooth/types/bt_octets.h>
@@ -33,11 +34,8 @@
 #include "btm_security_record.h"
 #include "crypto_toolbox/crypto_toolbox.h"
 #include "device/include/interop.h"
-#include "hci/controller.h"
-#include "main/shim/entry.h"
 #include "osi/include/allocator.h"
 #include "osi/include/properties.h"
-#include "platform_ssl_mem.h"
 #include "stack/btm/btm_ble_int.h"
 #include "stack/btm/btm_dev.h"
 #include "stack/btm/btm_device_record.h"
@@ -47,7 +45,6 @@
 #include "stack/btm/btm_security.h"
 #include "stack/btm/internal/btm_api.h"
 #include "stack/eatt/eatt.h"
-#include "stack/include/acl_api.h"
 #include "stack/include/ble_hci_link_interface.h"
 #include "stack/include/bt_name.h"
 #include "stack/include/bt_types.h"
@@ -58,11 +55,16 @@
 #include "stack/include/btm_sec_api.h"
 #include "stack/include/btm_status.h"
 #include "stack/include/gatt_api.h"
+#include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cap_security_interface.h"
 #include "stack/include/smp_api.h"
 #include "stack/include/smp_api_types.h"
-#include "stack/l2cap/l2c_api.h"
-#include "stack/l2cap/l2c_int.h"
+
+#ifdef TARGET_FLOSS
+#include <openssl/crypto.h>
+#else
+#include <openssl/mem.h>
+#endif
 
 using namespace bluetooth;
 
