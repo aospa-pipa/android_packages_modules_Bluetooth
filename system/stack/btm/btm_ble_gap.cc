@@ -1842,13 +1842,52 @@ void btm_ble_read_remote_features_complete(uint8_t* p, uint8_t length) {
       }
     }
   }
-
   btsnd_hcic_rmt_ver_req(handle);
 
   return;
 
 err_out:
   log::error("Bogus event packet, too short");
+}
+
+/*******************************************************************************
+ *
+ * Function         btm_ble_read_all_remote_features_complete
+ *
+ * Description      This function is called when the command complete message
+ *                  is received from the HCI for the read all LE remote feature
+ *                  supported complete event.
+ *
+ * Returns          void
+ *
+ ******************************************************************************/
+void btm_ble_read_all_remote_features_complete(uint16_t handle, tHCI_STATUS hci_status,
+                                               uint8_t max_remote_page, uint8_t max_valid_page,
+                                               std::array<uint8_t, 248> le_features){
+  if (hci_status != HCI_SUCCESS) {
+    if (hci_status != HCI_ERR_UNSUPPORTED_REM_FEATURE) {
+      log::error("Failed to read all remote features status:{}",
+                 hci_error_code_text(static_cast<tHCI_STATUS>(hci_status)));
+      return;
+    }
+    log::warn("Remote does not support reading all remote features");
+  }
+  if (hci_status == HCI_SUCCESS) {
+    if (!acl_set_all_peer_le_features_from_handle(handle, le_features)) {
+      log::error("Unable to find existing connection after read remote features");
+      return;
+    }
+
+    if (com::android::bluetooth::flags::le_subrate_manager()) {
+      const BtmDevice* p_device = btm_find_dev_by_handle(handle);
+      if (p_device) {
+          // init when acl connected & remote_feature received
+          gatt_init_subrate_cb(p_device->ble.pseudo_addr);
+      }
+    }
+  }
+  btsnd_hcic_rmt_ver_req(handle);
+  return;
 }
 
 void btm_ble_increment_link_topology_mask(uint8_t link_role) {
