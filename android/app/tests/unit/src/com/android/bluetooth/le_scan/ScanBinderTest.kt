@@ -86,7 +86,9 @@ class ScanBinderTest {
     @Before
     fun setUp() {
         adapterService.mockPackageManager(context.packageManager)
-        doReturn(adapterService).whenever(adapterService).createContextAsUser(any(), any())
+        doReturn(adapterService)
+            .whenever(adapterService)
+            .createPackageContextAsUser(any(), any(), any())
         doReturn(context.attributionSource).whenever(adapterService).attributionSource
         doReturn(context.packageName).whenever(source).packageName
         adapterService.mockGetSystemService(locationManager)
@@ -108,12 +110,7 @@ class ScanBinderTest {
             .whenever(scanController)
             .fetchOnScanThread<Any>(any(), any())
         doReturn(State.ON).whenever(adapterService).state
-        binder =
-            ScanBinder(
-                adapterService,
-                scanController,
-                testModeEnabled = false, // TODO(b/491969072) Remove unused
-            )
+        binder = ScanBinder(adapterService, scanController, testModeEnabled = false)
     }
 
     @Test

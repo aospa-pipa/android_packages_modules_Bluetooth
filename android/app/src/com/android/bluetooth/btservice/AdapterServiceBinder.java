@@ -169,7 +169,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
     @Override
     public List<ParcelUuid> getUuids(AttributionSource source) {
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getUuids");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getUuids");
         if (service == null) {
             return Collections.emptyList();
         }
@@ -343,7 +343,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
             return Collections.emptyList();
         }
 
-        return Arrays.asList(service.getBondedDevices());
+        return List.copyOf(service.getBondedDevices());
     }
 
     @Override
@@ -788,7 +788,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public String getRemoteName(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getRemoteName");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getRemoteName");
         if (service == null) {
             return null;
         }
@@ -799,7 +799,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public int getRemoteType(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getRemoteType");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getRemoteType");
         if (service == null) {
             return BluetoothDevice.DEVICE_TYPE_UNKNOWN;
         }
@@ -810,7 +810,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public String getRemoteAlias(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getRemoteAlias");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getRemoteAlias");
         if (service == null) {
             return null;
         }
@@ -851,7 +851,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public int getRemoteClass(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getRemoteClass");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getRemoteClass");
         if (service == null) {
             return 0;
         }
@@ -864,7 +864,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     public @Nullable List<ParcelUuid> getRemoteUuids(
             BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getRemoteUuids");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getRemoteUuids");
         if (service == null) {
             return Collections.emptyList();
         }
@@ -1196,7 +1196,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
     @Override
     public int getBatteryLevel(BluetoothDevice device, AttributionSource source) {
         requireNonNull(device);
-        var service = getServiceAndEnforceCallerUserAndConnect(source, "getBatteryLevel");
+        var service = getServiceAndEnforceCallerUserAndConnectAllowPcc(source, "getBatteryLevel");
         if (service == null) {
             return BluetoothDevice.BATTERY_LEVEL_UNKNOWN;
         }
@@ -1888,7 +1888,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
 
-        if (!Util.arrayContains(service.getBondedDevices(), device)) {
+        if (!service.getBondedDevices().contains(device)) {
             return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
         }
         service.setActiveAudioPolicy(device, policy);
@@ -1933,7 +1933,7 @@ class AdapterServiceBinder extends IBluetooth.Stub {
 
         service.enforceCallingOrSelfPermission(BLUETOOTH_PRIVILEGED, null);
 
-        if (!Util.arrayContains(service.getBondedDevices(), device)) {
+        if (!service.getBondedDevices().contains(device)) {
             return BluetoothStatusCodes.ERROR_DEVICE_NOT_BONDED;
         }
         service.setMicrophonePreferredForCalls(device, enabled);

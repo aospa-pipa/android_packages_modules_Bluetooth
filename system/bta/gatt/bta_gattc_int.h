@@ -148,7 +148,6 @@ typedef struct {
 
 typedef struct {
   BT_HDR_RIGID hdr;
-  bluetooth::Uuid* p_srvc_uuid;
 } tBTA_GATTC_API_SEARCH;
 
 typedef struct {
@@ -244,7 +243,6 @@ typedef struct {
   bool in_use;
   tGATT_IF client_if; /* client interface with BTE stack for this application */
   uint8_t num_clcb;   /* number of associated CLCB */
-  bool dereg_pending;
   bluetooth::Uuid app_uuid;
   tBTA_GATTC_NOTIF_REG notif_reg[BTA_GATTC_NOTIF_REG_MAX];
 
@@ -360,7 +358,6 @@ void bta_gattc_deregister(tBTA_GATTC_RCB* p_clreg);
 void bta_gattc_conn(tBTA_GATTC_CLCB* p_clcb);
 
 void bta_gattc_close(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data);
-void bta_gattc_close_fail(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data);
 void bta_gattc_disc_close(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data);
 
 void bta_gattc_start_discover(tBTA_GATTC_CLCB* p_clcb, const tBTA_GATTC_DATA* p_data);
@@ -433,7 +430,6 @@ tBTA_GATTC_SERV* bta_gattc_find_srvr_cache(const RawAddress& bda);
 void bta_gattc_disc_res_cback(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type, tGATT_DISC_RES* p_data);
 void bta_gattc_disc_cmpl_cback(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type, tGATT_STATUS status);
 tGATT_STATUS bta_gattc_discover_pri_service(tCONN_ID conn_id, tGATT_DISC_TYPE disc_type);
-void bta_gattc_search_service(tBTA_GATTC_CLCB* p_clcb, bluetooth::Uuid* p_uuid);
 const std::list<gatt::Service>* bta_gattc_get_services(tCONN_ID conn_id);
 const gatt::Service* bta_gattc_get_service_for_handle(tCONN_ID conn_id, uint16_t handle);
 const gatt::Characteristic* bta_gattc_get_characteristic_srcb(tBTA_GATTC_SERV* p_srcb,

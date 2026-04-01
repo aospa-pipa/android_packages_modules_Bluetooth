@@ -1715,8 +1715,14 @@ public:
           log::info("stack is pending configuration, defer call reconfig.");
           defer_call_reconfig_ = true;
         }
-        log::info("Call is coming, but CIG already set for a call");
-        return;
+        if (configuration_context_type_ == LeAudioContextType::VOICEASSISTANTS) {
+          // does NOT return — allows reconfiguration to proceed
+          log::info("Call is coming, do reconfiguration for a call");
+        } else {
+          // already in CONVERSATIONAL or other stable state, no reconfig needed
+          log::info("Call is coming, but CIG already set for a call");
+          return;
+        }
       }
       log::info("Call is coming, speed up reconfiguration for a call");
       local_metadata_context_types_.sink.clear();
@@ -3501,8 +3507,7 @@ public:
       return;
     }
 
-    BTA_GATTC_ServiceSearchRequest(leAudioDevice->conn_id_,
-                                   bluetooth::le_audio::uuid::kPublishedAudioCapabilityServiceUuid);
+    BTA_GATTC_ServiceSearchRequest(leAudioDevice->conn_id_);
   }
 
   void checkGroupConnectionStateAfterMemberDisconnect(int group_id) {
@@ -3820,9 +3825,7 @@ public:
 
     btif_storage_leaudio_clear_service_data(leAudioDevice->address_);
     if (search_request) {
-      BTA_GATTC_ServiceSearchRequest(
-              leAudioDevice->conn_id_,
-              bluetooth::le_audio::uuid::kPublishedAudioCapabilityServiceUuid);
+      BTA_GATTC_ServiceSearchRequest(leAudioDevice->conn_id_);
     }
   }
 
@@ -3920,9 +3923,7 @@ public:
     }
 
     if (!leAudioDevice->known_service_handles_) {
-      BTA_GATTC_ServiceSearchRequest(
-              leAudioDevice->conn_id_,
-              bluetooth::le_audio::uuid::kPublishedAudioCapabilityServiceUuid);
+      BTA_GATTC_ServiceSearchRequest(leAudioDevice->conn_id_);
     }
   }
 
@@ -5368,14 +5369,27 @@ public:
 
     auto const dsa_reconfigure_needed = DsaReconfigureNeeded(group, context_type);
     if (group->IsGroupConfiguredTo(*audio_set_conf) && !dsa_reconfigure_needed) {
+      bool force_reconfiguration = false;
       // Assign the new configuration context as it reprents the current
       // use case even when it eventually ends up being the exact same
       // codec and qos configuration.
       if (configuration_context_type_ != context_type) {
+        if ((configuration_context_type_ == LeAudioContextType::VOICEASSISTANTS ||
+             configuration_context_type_ == LeAudioContextType::CONVERSATIONAL) &&
+            (context_type == LeAudioContextType::CONVERSATIONAL ||
+             context_type == LeAudioContextType::VOICEASSISTANTS)) {
+          force_reconfiguration = true;
+        }
         setConfigurationContextType(context_type);
         group->SetConfigurationContextType(context_type);
       }
-      return AudioReconfigurationResult::RECONFIGURATION_NOT_NEEDED;
+
+      log::info("force_reconfiguration: {}", force_reconfiguration);
+      if (force_reconfiguration) {
+        log::info("Forcing reconfiguration for context: {}", ToString(context_type));
+      } else {
+        return AudioReconfigurationResult::RECONFIGURATION_NOT_NEEDED;
+      }
     }
 
     log::info("Session reconfiguration needed group: {} for context type: {}", group->group_id_,
@@ -7124,7 +7138,7 @@ public:
     }
   }
 
-  void IsoLinkQualityReadCb(uint8_t conn_handle, uint8_t cig_id, uint32_t tx_unacked_packets,
+  void IsoLinkQualityReadCb(uint16_t conn_handle, uint8_t cig_id, uint32_t tx_unacked_packets,
                             uint32_t tx_flushed_packets, uint32_t tx_last_subevent_packets,
                             uint32_t retransmitted_packets, uint32_t crc_error_packets,
                             uint32_t rx_unreceived_packets, uint32_t duplicate_packets) {
@@ -8102,9 +8116,6 @@ void le_audio_gattc_callback(tBTA_GATTC_EVT event, tBTA_GATTC* p_data) {
   log::info("event = {}", gatt_client_event_text(event));
 
   switch (event) {
-    case BTA_GATTC_DEREG_EVT:
-      break;
-
     case BTA_GATTC_NOTIF_EVT:
       instance->LeAudioCharValueHandle(p_data->notify.conn_id, p_data->notify.handle,
                                        p_data->notify.len,
@@ -8218,7 +8229,7 @@ public:
     }
   }
 
-  void OnIsoLinkQualityRead(uint8_t conn_handle, uint8_t cig_id, uint32_t tx_unacked_packets,
+  void OnIsoLinkQualityRead(uint16_t conn_handle, uint8_t cig_id, uint32_t tx_unacked_packets,
                             uint32_t tx_flushed_packets, uint32_t tx_last_subevent_packets,
                             uint32_t retransmitted_packets, uint32_t crc_error_packets,
                             uint32_t rx_unreceived_packets, uint32_t duplicate_packets) {
