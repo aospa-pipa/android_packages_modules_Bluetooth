@@ -344,6 +344,7 @@ constexpr uint16_t kLeAudioVendorCodecIdUndefined = 0x00;
 constexpr uint16_t kLeAudioVendorCompanyIdQualcomm = 0x000A;
 constexpr uint16_t kLeAudioCodingFormatAptxLe = bluetooth::hci::qcom::kIsoCodingFormatAptxLe;
 constexpr uint16_t kLeAudioCodingFormatAptxLeX = bluetooth::hci::qcom::kIsoCodingFormatAptxLeX;
+constexpr uint16_t kLeAudioCodingFormatAptxPlus = bluetooth::hci::qcom::kIsoCodingFormatAptxPlus;
 constexpr uint16_t kLeAudioVendorCompanyIdGoogle = 0x00E0;
 constexpr uint16_t kLeAudioVendorCodecIdOpus = 0x0001;
 constexpr uint16_t kLeAudioVendorCodecIdHeadtracking = 0x0002;
@@ -1530,6 +1531,11 @@ const types::LeAudioCodecId LeAudioCodecIdAptxLeX = {
         .coding_format = types::kLeAudioCodingFormatVendorSpecific,
         .vendor_company_id = types::kLeAudioVendorCompanyIdQualcomm,
         .vendor_codec_id = types::kLeAudioCodingFormatAptxLeX};
+
+const types::LeAudioCodecId LeAudioCodecIdAptxPlus = {
+        .coding_format = types::kLeAudioCodingFormatVendorSpecific,
+        .vendor_company_id = types::kLeAudioVendorCompanyIdQualcomm,
+        .vendor_codec_id = types::kLeAudioCodingFormatAptxPlus};
 
 const types::LeAudioCodecId LeAudioCodecIdOpus = {
         .coding_format = types::kLeAudioCodingFormatVendorSpecific,
