@@ -5829,10 +5829,11 @@ public:
       ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink);
     }
 
+    bool isCapPts = osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false);
     /* Check if the device resume is allowed */
     if (!group->HasCodecConfigurationForDirection(
                 upcoming_configuration_context_type,
-                bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+                bluetooth::le_audio::types::kLeAudioDirectionSink) && !isCapPts) {
       log::error("invalid resume request for context type: {}",
                  ToString(upcoming_configuration_context_type));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
@@ -6225,9 +6226,10 @@ public:
       return;
     }
 
+    bool isCapPts = osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false);
     /* Check if the device resume is allowed */
     if (!group->HasCodecConfigurationForDirection(
-                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource) && !isCapPts) {
       log::error("invalid resume request for context type: {}",
                  ToString(configuration_context_type_));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
