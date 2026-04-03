@@ -266,7 +266,7 @@ public class HeadsetService extends ConnectableProfile {
         enableSwbCodec(
                 HeadsetHalConstants.BTHF_SWB_CODEC_VENDOR_APTX, mIsAptXSwbEnabled, mActiveDevice);
         // Step 6: Register Audio Device callback
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             if (mSystemInterface.isScoManagedByAudioEnabled()) {
                 mSystemInterface
                         .getAudioManager()
@@ -336,7 +336,7 @@ public class HeadsetService extends ConnectableProfile {
         unregisterReceiver(mHeadsetReceiver);
 
         // Step 6: Unregister Audio Device Callback
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             if (mSystemInterface.isScoManagedByAudioEnabled()) {
                 mSystemInterface
                         .getAudioManager()
@@ -793,7 +793,7 @@ public class HeadsetService extends ConnectableProfile {
             if (states == null) {
                 return devices;
             }
-            final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
+            final var bondedDevices = getAdapterService().getBondedDevices();
             for (BluetoothDevice device : bondedDevices) {
                 final ParcelUuid[] featureUuids = getAdapterService().getRemoteUuids(device);
                 if (!BluetoothUuid.containsAnyUuid(featureUuids, HEADSET_UUIDS)) {
@@ -2667,7 +2667,7 @@ public class HeadsetService extends ConnectableProfile {
     class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             synchronized (mStateMachines) {
@@ -2750,7 +2750,7 @@ public class HeadsetService extends ConnectableProfile {
 
         @Override
         public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
-            if (Flags.admCentralizeActiveDeviceHandling()) {
+            if (true) {
                 throw new IllegalStateException("admCentralizeActiveDeviceHandling");
             }
             synchronized (mStateMachines) {
@@ -2814,7 +2814,7 @@ public class HeadsetService extends ConnectableProfile {
      * @return true if the exposed active device changed, otherwise false
      */
     public boolean handleAudioDeviceAdded(BluetoothDevice device) {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return false;
         }
         if (!mSystemInterface.isScoManagedByAudioEnabled()) {
@@ -2882,7 +2882,7 @@ public class HeadsetService extends ConnectableProfile {
      * @param device removed audio device
      */
     public void handleAudioDeviceRemoved(BluetoothDevice device) {
-        if (!Flags.admCentralizeActiveDeviceHandling()) {
+        if (!true) {
             return;
         }
         if (!mSystemInterface.isScoManagedByAudioEnabled()) {

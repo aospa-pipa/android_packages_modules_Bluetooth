@@ -16,6 +16,7 @@ use android_hardware_bluetooth_offload_leaudio::{aidl, binder};
 
 use crate::ffi::{CAudioConfig, CCallbacks, CIsoStream};
 use crate::streamer::{Callbacks, Streamer};
+use aidl::android::hardware::bluetooth::offload::leaudio::DataDirection::DataDirection;
 use aidl::android::hardware::bluetooth::offload::leaudio::IHciProxy::{BpHciProxy, IHciProxy};
 use aidl::android::hardware::bluetooth::offload::leaudio::IHciProxyCallbacks::{
     BnHciProxyCallbacks, IHciProxyCallbacks,
@@ -111,7 +112,12 @@ fn get_service() -> Service {
 impl Interface for HciClient {}
 
 impl IHciProxyCallbacks for HciClient {
-    fn startStream(&self, handle: i32, configuration: &StreamConfiguration) -> BinderResult<()> {
+    fn startStream(
+        &self,
+        handle: i32,
+        _direction: DataDirection,
+        configuration: &StreamConfiguration,
+    ) -> BinderResult<()> {
         let handle: u16 = handle.try_into().map_err(|_| ExceptionCode::ILLEGAL_ARGUMENT)?;
         let iso_interval_us: u32 =
             configuration.isoIntervalUs.try_into().map_err(|_| ExceptionCode::ILLEGAL_ARGUMENT)?;
@@ -152,7 +158,7 @@ impl IHciProxyCallbacks for HciClient {
         Ok(())
     }
 
-    fn stopStream(&self, handle: i32) -> BinderResult<()> {
+    fn stopStream(&self, handle: i32, _direction: DataDirection) -> BinderResult<()> {
         let handle: u16 = handle.try_into().map_err(|_| ExceptionCode::ILLEGAL_ARGUMENT)?;
 
         let mut state = self.state.lock().unwrap();

@@ -1340,7 +1340,7 @@ static char* bta_hf_client_parse_clcc(tBTA_HF_CLIENT_CB* client_cb, char* buffer
     }
   }
 
-  /* Skip any remaing param,as they are not defined by BT HFP spec */
+  /* Skip any remaining param, as they are not defined by BT HFP spec */
   AT_SKIP_REST(buffer);
   AT_CHECK_RN(buffer);
 

@@ -65,7 +65,6 @@ static void bta_dm_pm_stop_timer_by_index(tBTA_PM_TIMER* p_timer, uint8_t timer_
 
 static void bta_dm_pm_timer(const RawAddress& bd_addr, tBTA_DM_PM_ACTION pm_request);
 
-#include "../hh/bta_hh_int.h"
 /* BTA_DM_PM_SSR1 will be dedicated for HH SSR setting entry, no other profile
  * can use it */
 #define BTA_DM_PM_SSR_HH BTA_DM_PM_SSR1
@@ -426,7 +425,7 @@ static void bta_dm_pm_cback(tBTA_SYS_CONN_STATUS status, const tBTA_SYS_ID id, u
   log::verbose("Power management callback status:{}[{}] id:{}[{}], app:{}",
                bta_sys_conn_status_text(status), status, BtaIdSysText(id), id, app_id);
 
-  /* find if there is an power mode entry for the service */
+  /* find if there is a power mode entry for the service */
   for (i = 1; i <= p_bta_dm_pm_cfg[0].app_id; i++) {
     if ((p_bta_dm_pm_cfg[i].id == id) &&
         ((p_bta_dm_pm_cfg[i].app_id == BTA_ALL_APP_ID) || (p_bta_dm_pm_cfg[i].app_id == app_id))) {
@@ -752,7 +751,7 @@ static void bta_dm_pm_set_mode(const RawAddress& peer_addr, tBTA_DM_PM_ACTION pm
   }
 
   if (pm_action & BTA_DM_PM_SNIFF) {
-    /* dont initiate SNIFF, if link_policy has it disabled */
+    /* don't initiate SNIFF, if link_policy has it disabled */
     if (BTM_is_sniff_allowed_for(peer_addr)) {
       log::verbose("Link policy allows sniff mode so setting mode peer:{}", peer_addr);
       p_link->pm_mode_attempted = BTA_DM_PM_SNIFF;
@@ -843,7 +842,7 @@ static void bta_dm_pm_sniff(BtaDmLink* p_link, uint8_t index) {
   if (mode != BTM_PM_MD_SNIFF ||
       (bluetooth::shim::GetController()->SupportsSniffSubrating() && p_rem_feat &&
        HCI_SNIFF_SUB_RATE_SUPPORTED(p_rem_feat) && !(p_link->is_ssr_active()))) {
-    /* Dont initiate Sniff if controller has alreay accepted
+    /* Don't initiate Sniff if controller has already accepted
      * remote sniff params. This avoid sniff loop issue with
      * some agrresive headsets who use sniff latencies more than
      * DUT supported range of Sniff intervals.*/
@@ -1073,7 +1072,7 @@ static void bta_dm_pm_btm_status(const RawAddress& bd_addr, tBTM_PM_STATUS statu
         }
       } else {
         if (p_link->prev_low) {
-          /* need to send the SSR paramaters to controller again */
+          /* need to send the SSR parameters to controller again */
           bta_dm_pm_ssr(p_link->addr, BTA_DM_PM_SSR0);
         }
         p_link->prev_low = BTM_PM_STS_ACTIVE;
@@ -1105,6 +1104,8 @@ static void bta_dm_pm_btm_status(const RawAddress& bd_addr, tBTM_PM_STATUS statu
          * in sniff mode from host side.
          */
         bta_dm_pm_stop_timer(bd_addr);
+        log::debug("Sniff mode triggered by remote, Restart service check for peer:{}", bd_addr);
+        bta_dm_pm_set_mode(bd_addr, BTA_DM_PM_NO_ACTION, BTA_DM_PM_RESTART);
       } else {
         bool is_sniff_command_sent = p_link->is_sniff_command_sent();
         p_link->reset_sniff_flags();

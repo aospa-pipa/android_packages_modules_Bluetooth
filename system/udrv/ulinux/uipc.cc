@@ -26,7 +26,7 @@
 
 #define LOG_TAG "uipc"
 
-#include "udrv/include/uipc.h"
+#include "uipc.h"
 
 #include <bluetooth/log.h>
 #include <fcntl.h>
@@ -44,14 +44,18 @@
 #include <cerrno>
 #include <mutex>
 
-#include "osi/include/osi.h"
-#include "osi/include/socket_utils/sockets.h"
+#include "sockets.h"
 
 using namespace bluetooth;
 
 /*****************************************************************************
  *  Constants & Macros
  *****************************************************************************/
+
+// Re-run |fn| system call until the system call doesn't cause EINTR.
+#define OSI_NO_INTR(fn) \
+  do {                  \
+  } while ((fn) == -1 && errno == EINTR)
 
 // AUDIO_STREAM_OUTPUT_BUFFER_SZ controls the size of the audio socket buffer.
 // If one assumes the write buffer is always full during normal BT playback,

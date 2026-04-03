@@ -993,8 +993,7 @@ public class GattService extends ProfileService {
         final Map<BluetoothDevice, Integer> deviceStates = new HashMap<>();
 
         // Add paired LE devices
-        final BluetoothDevice[] bondedDevices = getAdapterService().getBondedDevices();
-        for (BluetoothDevice device : bondedDevices) {
+        for (BluetoothDevice device : getAdapterService().getBondedDevices()) {
             if (getDeviceType(device) != AbstractionLayer.BT_DEVICE_TYPE_BREDR) {
                 deviceStates.put(device, STATE_DISCONNECTED);
             }
@@ -1048,7 +1047,6 @@ public class GattService extends ProfileService {
     }
 
     void registerClient(
-            UUID uuid,
             IBluetoothGattCallback callback,
             boolean eattSupport,
             int transport,
@@ -1071,14 +1069,14 @@ public class GattService extends ProfileService {
             name = name + "[" + tag + "]";
         }
 
+        final var uuid = UUID.randomUUID();
         Log.d(
                 TAG,
                 ("registerClient(): UUID=" + uuid + " name=" + name)
                         + (" transport=" + transportToString(transport)));
         var appName = Util.appNameOrUnknown(getAdapterService(), uid);
         mClientMap.add(uid, appName, uuid, callback, transport, tag);
-        mNativeInterface.gattClientRegisterApp(
-                uuid.getLeastSignificantBits(), uuid.getMostSignificantBits(), name, eattSupport);
+        mNativeInterface.gattClientRegisterApp(uuid, name, eattSupport);
     }
 
     void unregisterClient(
@@ -1118,7 +1116,9 @@ public class GattService extends ProfileService {
             Log.w(TAG, "clientConnect(" + callback + "): App not registered");
             return;
         }
-        final var clientIf = clientApp.getId();
+        final var tag = getLastAttributionTag(source);
+        final var preferRelaxMode =
+                tag != null && GATT_CLIENTS_PREFER_RELAX_MODE.stream().anyMatch(tag::endsWith);
         Log.d(
                 TAG,
                 ("clientConnect(): device=" + device)
@@ -1126,21 +1126,17 @@ public class GattService extends ProfileService {
                         + (", addressType=" + addressType)
                         + (", isDirect=" + isDirect)
                         + (", opportunistic=" + opportunistic)
-                        + (", autoMtuEnabled=" + autoMtuEnabled));
+                        + (", autoMtuEnabled=" + autoMtuEnabled)
+                        + (", tag=" + tag)
+                        + (", preferRelaxMode=" + preferRelaxMode));
+        final var clientIf = clientApp.getId();
         mMetricsReporter.logAppPackage(clientIf, device, source.getUid());
         mMetricsReporter.logClientForegroundInfo(source.getUid(), isDirect);
         mMetricsReporter.logConnectionStateChange(
                 device, clientIf, BluetoothProtoEnums.CONNECTION_STATE_CONNECTING, -1);
         mMetricsReporter.logConnect(device, isDirect, source.getUid());
         int preferredMtu = 0;
-
         final var packageName = source.getPackageName();
-        boolean preferRelaxMode = false;
-        final var tag = getLastAttributionTag(source);
-        if (tag != null && GATT_CLIENTS_PREFER_RELAX_MODE.stream().anyMatch(tag::endsWith)) {
-            preferRelaxMode = true;
-        }
-        Log.d(TAG, "clientConnect(): tag=" + tag + ", preferRelaxMode=" + preferRelaxMode);
         if (packageName != null) {
             getAdapterService().addAssociatedPackage(device, packageName);
 
@@ -1159,13 +1155,11 @@ public class GattService extends ProfileService {
 
         if (transport != TRANSPORT_BREDR && isDirect && !opportunistic) {
             if (!Flags.gattConnSettings()) {
-                String attributionTag = getLastAttributionTag(source);
                 if (packageName != null) {
                     for (Map.Entry<String, String> entry :
                             GATT_CLIENTS_NOTIFY_TO_ADAPTER_PACKAGES.entrySet()) {
                         if (packageName.contains(entry.getKey())
-                                && ((attributionTag != null
-                                                && attributionTag.contains(entry.getValue()))
+                                && ((tag != null && tag.contains(entry.getValue()))
                                         || entry.getValue().isEmpty())) {
                             getAdapterService().notifyDirectLeGattClientConnect(clientIf, device);
                             break;
@@ -1301,7 +1295,7 @@ public class GattService extends ProfileService {
         Log.d(TAG, "discoverServices(): device=" + device + ", connId=" + connId);
 
         if (connId != null) {
-            mNativeInterface.gattClientSearchService(connId, true, 0, 0);
+            mNativeInterface.gattClientSearchService(connId, true, new UUID(0, 0));
         } else {
             Log.e(TAG, "discoverServices(): No connection for " + device);
         }
@@ -1317,8 +1311,7 @@ public class GattService extends ProfileService {
         final var clientIf = clientApp.getId();
         final var connId = getFirstConnectionIdForDevice(clientIf, device);
         if (connId != null) {
-            mNativeInterface.gattClientDiscoverServiceByUuid(
-                    connId, uuid.getLeastSignificantBits(), uuid.getMostSignificantBits());
+            mNativeInterface.gattClientDiscoverServiceByUuid(connId, uuid);
         } else {
             Log.e(TAG, "discoverServiceByUuid(): No connection for " + device);
         }
@@ -1365,12 +1358,7 @@ public class GattService extends ProfileService {
         }
 
         mNativeInterface.gattClientReadUsingCharacteristicUuid(
-                connId,
-                uuid.getLeastSignificantBits(),
-                uuid.getMostSignificantBits(),
-                startHandle,
-                endHandle,
-                authReq);
+                connId, uuid, startHandle, endHandle, authReq);
     }
 
     int writeCharacteristic(

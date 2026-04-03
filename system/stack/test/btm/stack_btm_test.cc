@@ -22,6 +22,12 @@
 #include <iostream>
 #include <sstream>
 
+#include "bta/ag/bta_ag_int.h"
+#include "bta/dm/bta_dm_act.h"
+#include "bta/dm/bta_dm_sec_int.h"
+#include "bta/gatt/bta_gattc_int.h"
+#include "bta/include/bta_dm_acl.h"
+#include "bta/sys/bta_sys.h"
 #include "hci/controller_mock.h"
 #include "hci/hci_layer_mock.h"
 #include "stack/btm/btm_dev.h"
@@ -32,6 +38,7 @@
 #include "stack/btm/internal/btm_api.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_hci_link_interface.h"
+#include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/l2cap/l2c_int.h"
 #include "stack/mock/mock_stack_hcic_layer.h"
@@ -48,6 +55,22 @@ using ::testing::Invoke;
 tL2C_CB l2cb;
 
 const std::string kBroadcastAudioConfigOptions("mock broadcast audio config options");
+
+// TODO: remove dependency on BTA symbols
+void BTA_dm_acl_up(const AclLinkSpec&, uint16_t, bool) { inc_func_call_count(__func__); }
+void BTA_dm_acl_up_failed(const AclLinkSpec&, tHCI_STATUS, bool) {}
+void BTA_dm_acl_down(const AclLinkSpec&) {}
+void BTA_dm_report_role_change(RawAddress, tHCI_ROLE, tHCI_STATUS) {}
+void BTA_dm_notify_remote_features_complete(RawAddress) {}
+void bta_dm_process_remove_device(const RawAddress&) {}
+void bta_dm_remote_key_missing(RawAddress, tBTM_KEY_MISSING_REASON) {}
+void bta_dm_on_encryption_change(bt_encryption_change_evt) {}
+void bta_dm_remove_device(const RawAddress&) {}
+void bta_gattc_continue_discovery_if_needed(const RawAddress&, uint16_t) {}
+void bta_sys_notify_collision(const RawAddress&) {}
+void BTA_dm_remove_on_disconnect(const AclLinkSpec&) {}
+size_t bta_ag_sco_read(uint8_t*, uint32_t) { return 0; }
+size_t bta_ag_sco_write(const uint8_t*, uint32_t) { return 0; }
 
 void btm_inq_remote_name_timer_timeout(void*) {}
 
@@ -228,6 +251,50 @@ TEST_F(StackBtmWithQueuesTest, change_packet_type) {
   btm_set_packet_types_from_address(bda, 0xffff);
   // Illegal mask, won't be sent.
   btm_set_packet_types_from_address(bda, 0x0);
+
+  get_btm_client_interface().lifecycle.btm_free();
+}
+
+TEST_F(StackBtmWithQueuesTest, LeFeaturesIncomplete) {
+  EXPECT_CALL(*bluetooth::hci::testing::mock_hci_layer_, GetScoQueueEnd())
+          .WillOnce(Return(sco_queue_.GetUpEnd()));
+  get_btm_client_interface().lifecycle.btm_init();
+
+  uint16_t handle = 0x123;
+  RawAddress bda("11:22:33:44:55:66");
+  AclLinkSpec link_spec = {.addrt = {.type = BLE_ADDR_PUBLIC, .bda = bda},
+                           .transport = BT_TRANSPORT_LE};
+  btm_acl_created(link_spec, handle, HCI_ROLE_CENTRAL);
+
+  // Verify that all feature checks return false when peer_le_features_valid is false
+  EXPECT_FALSE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_parameters_request(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating_host(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_packet_extension(handle));
+  EXPECT_FALSE(acl_peer_supports_ble_2m_phy(handle));
+
+  // Set features to all 0s and verify they still return false
+  uint8_t features[8] = {0};
+  acl_set_peer_le_features_from_handle(handle, features);
+
+  EXPECT_FALSE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_parameters_request(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating_host(bda));
+  EXPECT_FALSE(acl_peer_supports_ble_packet_extension(handle));
+  EXPECT_FALSE(acl_peer_supports_ble_2m_phy(handle));
+
+  // Set features to all 1s and verify they return true
+  memset(features, 0xff, sizeof(features));
+  acl_set_peer_le_features_from_handle(handle, features);
+
+  EXPECT_TRUE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
+  EXPECT_TRUE(acl_peer_supports_ble_connection_parameters_request(bda));
+  EXPECT_TRUE(acl_peer_supports_ble_connection_subrating(bda));
+  EXPECT_TRUE(acl_peer_supports_ble_connection_subrating_host(bda));
+  EXPECT_TRUE(acl_peer_supports_ble_packet_extension(handle));
+  EXPECT_TRUE(acl_peer_supports_ble_2m_phy(handle));
 
   get_btm_client_interface().lifecycle.btm_free();
 }

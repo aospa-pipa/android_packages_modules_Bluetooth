@@ -173,7 +173,7 @@ public class ActiveDeviceManagerTest {
         mActiveDeviceManager = new ActiveDeviceManager(mAdapterService, mStorage);
         mActiveDeviceManager.start();
         // Capture the Audio Manager callback
-        if (Flags.admCentralizeActiveDeviceHandling()) {
+        if (true) {
             ArgumentCaptor<AudioDeviceCallback> captor =
                     ArgumentCaptor.forClass(AudioDeviceCallback.class);
             verify(mAudioManager).registerAudioDeviceCallback(captor.capture(), any(Handler.class));
@@ -728,6 +728,55 @@ public class ActiveDeviceManagerTest {
         headsetActiveDeviceChanged(mA2dpHeadsetDevice);
         mTestLooper.dispatchAll();
         verify(mA2dpService, never()).setActiveDevice(mA2dpHeadsetDevice);
+    }
+
+    /**
+     * Test that receiving AudioManager onAudioDevicesRemoved callback for HFP device doesn't cause
+     * the fallback mechanism to trigger.
+     *
+     * <pre>
+     * Steps:
+     * 1. Connect HFP device.
+     * 2. Connect A2DP+HFP device. This is currently active device.
+     * 3. Inject onAudioDevicesRemoved callback, with the second device.
+     * 4. Last connected device, and still connected one, is returned as fallback device.
+     * 5. Assert that no device is set as fallback.
+     * </pre>
+     */
+    @Test
+    @EnableFlags(Flags.FLAG_ADM_CENTRALIZE_ACTIVE_DEVICE_HANDLING)
+    public void hfpActiveAudioDeviceRemovedNoFallbackSearch() {
+        headsetConnected(mHeadsetDevice, false);
+        mTestLooper.dispatchAll();
+        verify(mHeadsetService).setActiveDevice(mHeadsetDevice);
+
+        a2dpConnected(mA2dpHeadsetDevice, true);
+        headsetConnected(mA2dpHeadsetDevice, true);
+        mTestLooper.dispatchAll();
+        verify(mA2dpService, atLeastOnce()).setActiveDevice(mA2dpHeadsetDevice);
+        verify(mHeadsetService, atLeastOnce()).setActiveDevice(mA2dpHeadsetDevice);
+
+        headsetActiveDeviceChanged(mA2dpHeadsetDevice);
+        a2dpActiveDeviceChanged(mA2dpHeadsetDevice);
+        mTestLooper.dispatchAll();
+
+        Mockito.clearInvocations(mHeadsetService, mA2dpService);
+        doReturn(AudioManager.MODE_IN_CALL).when(mAudioManager).getMode();
+
+        // Prepare AudioDeviceInfo
+        AudioDeviceInfo deviceInfo = Mockito.mock(AudioDeviceInfo.class);
+        doReturn("00:01:02:03:04:02").when(deviceInfo).getAddress();
+        doReturn(AudioDeviceInfo.TYPE_BLUETOOTH_SCO).when(deviceInfo).getType();
+
+        doReturn(mA2dpHeadsetDevice).when(mAdapterService).getDeviceFromByte(any());
+        doReturn(true).when(mAdapterService).isAvailable();
+
+        doReturn(mA2dpHeadsetDevice).when(mHeadsetService).getFallbackDevice();
+
+        mAudioDeviceCallback.onAudioDevicesRemoved(new AudioDeviceInfo[] {deviceInfo});
+        mTestLooper.dispatchAll();
+        verify(mHeadsetService, never()).setActiveDevice(any());
+        verify(mA2dpService, never()).setActiveDevice(any());
     }
 
     /**
@@ -3299,7 +3348,6 @@ public class ActiveDeviceManagerTest {
      * </pre>
      */
     @Test
-    @EnableFlags(Flags.FLAG_ADM_REMOVE_HAP_VARIABLES)
     public void leAudioConnected_hearingAid_setActiveFails() {
         // LE Audio service fails to set active device
         doReturn(false).when(mLeAudioService).setActiveDevice(mLeHearingAidDevice);

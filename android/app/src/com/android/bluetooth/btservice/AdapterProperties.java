@@ -60,10 +60,13 @@ import com.android.bluetooth.metrics.MetricsLogger;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AdapterProperties {
     private static final String TAG = Util.BT_PREFIX + AdapterProperties.class.getSimpleName();
@@ -86,8 +89,7 @@ public class AdapterProperties {
     private volatile int mDiscoverableTimeout;
     private volatile ParcelUuid[] mUuids;
 
-    private final CopyOnWriteArrayList<BluetoothDevice> mBondedDevices =
-            new CopyOnWriteArrayList<>();
+    private final Set<BluetoothDevice> mBondedDevices = ConcurrentHashMap.newKeySet();
 
     private int mProfilesConnecting, mProfilesConnected, mProfilesDisconnecting;
     private final HashMap<Integer, Pair<Integer, Integer>> mProfileConnectionState =
@@ -364,24 +366,12 @@ public class AdapterProperties {
         return mService.getNative().setBufferLengthMillis(codec, size);
     }
 
-    /**
-     * @return the mBondedDevices
-     */
     @NonNull
-    BluetoothDevice[] getBondedDevices() {
-        BluetoothDevice[] bondedDeviceList = new BluetoothDevice[0];
-        try {
-            bondedDeviceList = mBondedDevices.toArray(bondedDeviceList);
-        } catch (ArrayStoreException ee) {
-            Log.e(TAG, "Error retrieving bonded device array");
-        }
-        infoLog("getBondedDevices: length=" + bondedDeviceList.length);
-        return bondedDeviceList;
+    Set<BluetoothDevice> getBondedDevices() {
+        return Collections.unmodifiableSet(mBondedDevices);
     }
 
-    // This function shall be invoked from BondStateMachine whenever the bond
-    // state changes.
-    @VisibleForTesting
+    // This function shall be invoked from BondStateMachine whenever the bond state changes.
     void onBondStateChanged(BluetoothDevice device, int state) {
         if (device == null) {
             Log.w(TAG, "onBondStateChanged, device is null");
@@ -398,9 +388,8 @@ public class AdapterProperties {
 
             if (state == BluetoothDevice.BOND_BONDED) {
                 // add if not already in list
-                if (!mBondedDevices.contains(device)) {
+                if (mBondedDevices.add(device)) {
                     debugLog("Adding bonded device:" + device);
-                    mBondedDevices.add(device);
                     cleanupPrevBondRecordsFor(device);
                 }
             } else if (state == BluetoothDevice.BOND_NONE) {
@@ -430,7 +419,9 @@ public class AdapterProperties {
             return;
         }
 
-        for (BluetoothDevice existingDevice : mBondedDevices) {
+        Iterator<BluetoothDevice> iterator = mBondedDevices.iterator();
+        while (iterator.hasNext()) {
+            BluetoothDevice existingDevice = iterator.next();
             String existingAddress = existingDevice.getAddress();
             String existingIdentityAddress = mService.getBrEdrAddress(existingDevice);
             int existingDeviceType =
@@ -447,7 +438,7 @@ public class AdapterProperties {
                 // Found an existing LE-only device with the same identity address but different
                 // pseudo address
                 if (mService.getNative().removeBond(Util.getBytesFromAddress(existingAddress))) {
-                    mBondedDevices.remove(existingDevice);
+                    iterator.remove();
                     infoLog(
                             "Removing old bond"
                                     + (" record: " + existingDevice)

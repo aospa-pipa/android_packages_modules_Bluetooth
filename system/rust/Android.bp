@@ -23,7 +23,11 @@ package {
 rust_defaults {
     name: "libbluetooth_rs_defaults",
     min_sdk_version: "36",
+    proc_macros: [
+        "libbluetooth_macros",
+    ],
     rustlibs: [
+        "libbitflags",
         "libbytes",
         "libcxx",
         "libfutures",
@@ -82,7 +86,10 @@ rust_test {
         "libbluetooth_le_audio_rs_test_mocks",
         "libbluetooth_log",
         "libbluetooth_types",
+        "libbt-stack-mock",
         "libchrome",
+        "libgmock",
+        "libgtest",
         "liblog",
     ],
 }

@@ -31,7 +31,6 @@
 #include <hardware/bt_common_types.h>
 
 #include <cstdint>
-#include <vector>
 
 #include "stack/include/bt_device_type.h"
 #include "stack/include/btm_status.h"
@@ -152,7 +151,7 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_SCAN_FAST_WIN 48 /* 30 ms = 48 *0.625 */
 #endif
 
-/* default scan paramter used in reduced power cycle (background scanning) */
+/* default scan parameters used in reduced power cycle (background scanning) */
 #ifndef BTM_BLE_SCAN_SLOW_INT_1
 #define BTM_BLE_SCAN_SLOW_INT_1 2048 /* 1.28 s   = 2048 *0.625 */
 #endif
@@ -160,7 +159,7 @@ typedef uint8_t tBTM_BLE_SFP;
 #define BTM_BLE_SCAN_SLOW_WIN_1 48 /* 30 ms = 48 *0.625 */
 #endif
 
-/* default scan paramter used in reduced power cycle (background scanning) */
+/* default scan parameters used in reduced power cycle (background scanning) */
 #ifndef BTM_BLE_SCAN_SLOW_INT_2
 #define BTM_BLE_SCAN_SLOW_INT_2 4096 /* 2.56 s   = 4096 *0.625 */
 #endif

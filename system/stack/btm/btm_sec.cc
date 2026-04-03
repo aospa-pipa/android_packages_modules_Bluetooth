@@ -3185,23 +3185,40 @@ void btm_sec_auth_complete(uint16_t handle, tHCI_STATUS status) {
 static bool btm_sec_perform_ctkd(BtmDevice* p_device) {
   /* Must be bonded over BR/EDR */
   if (!p_device->sec_rec.is_bonded(BT_TRANSPORT_BR_EDR)) {
+    log::verbose("Not bonded over BR/EDR");
     return false;
   }
 
-  /* Link key must be P-256 and not already derived from */
-  if (!p_device->sec_rec.new_encryption_key_is_p256) {
-    return false;
-  }
+  switch (p_device->sec_rec.bredr_sc_enc_reason) {
+    case BtmSecurityRecord::BrEdrScEncReason::PAIRED:
+      /* Must not be bonded over LE with equal or higher security */
+      if (p_device->sec_rec.is_bonded(BT_TRANSPORT_LE) &&
+          ((p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) ||
+           !(p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED))) {
+        log::verbose("LE bonded with equal or higher security");
+        return false;
+      }
+      break;
 
-  /* Must not be bonded over LE with equivalent or higher security */
-  if (p_device->sec_rec.is_bonded(BT_TRANSPORT_LE) &&
-      ((p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) ||
-       !(p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED))) {
-    return false;
+    case BtmSecurityRecord::BrEdrScEncReason::REPAIRED:
+      /* Must not be bonded over LE with higher security */
+      if (p_device->sec_rec.is_bonded(BT_TRANSPORT_LE) &&
+          ((p_device->sec_rec.sec_flags & BTM_SEC_LE_LINK_KEY_AUTHED) &&
+           !(p_device->sec_rec.sec_flags & BTM_SEC_LINK_KEY_AUTHED))) {
+        log::verbose("LE bonded with higher security");
+        return false;
+      }
+      break;
+
+    case BtmSecurityRecord::BrEdrScEncReason::OTHER:
+    default:
+      log::verbose("BR/EDR pairing did not complete recently");
+      return false;
   }
 
   /* Must support SMP over BR/EDR */
   if (!btm_sec_use_smp_br_chnl(p_device)) {
+    log::verbose("SMP over BR/EDR is not supported");
     return false;
   }
 
@@ -3212,6 +3229,7 @@ static bool btm_sec_perform_ctkd(BtmDevice* p_device) {
     log::warn("Unable to get link policy role peer:{}", p_device->bd_addr);
   }
   if (role != HCI_ROLE_CENTRAL) {
+    log::verbose("Not in central role");
     return false;
   }
 
@@ -3338,6 +3356,19 @@ void btm_sec_encrypt_change(uint16_t handle, tHCI_STATUS status, uint8_t encr_en
     if (encr_enable == HCI_ENCRYPT_MODE_ON) {
       encryption_algo =
               (transport == BT_TRANSPORT_LE) ? EncryptionAlgorithm::AES : EncryptionAlgorithm::E0;
+
+      // Claiming HCI_ENCRYPT_MODE_ON while using BR/EDR transport implies using E0 encryption.
+      // If the stored properties indicate that we should be using AES-CCM (i.e. that we were using
+      // Secure Connections mode previously), then this is a downgrade.
+      if (com_android_bluetooth_flags_btsec_check_implicit_encryption_downgrade() &&
+          transport == BT_TRANSPORT_BR_EDR) {
+        if (btm_sec_is_enc_algo_downgrade(handle, 0, 0)) {
+          acl_set_disconnect_reason(HCI_ERR_HOST_REJECT_SECURITY);
+          btm_sec_send_hci_disconnect(p_device, HCI_ERR_AUTH_FAILURE, handle,
+                                      "attempted to downgrade from Secure Connections mode");
+          return;
+        }
+      }
     } else if (encr_enable == HCI_ENCRYPT_MODE_ON_BR_EDR_AES_CCM) {
       encryption_algo = EncryptionAlgorithm::AES;  // this is for BR/EDR
       if (transport == BT_TRANSPORT_LE) {
@@ -4172,8 +4203,13 @@ void btm_sec_link_key_notification(const RawAddress& bda, const Octet16& link_ke
   } else {
     if ((p_device->sec_rec.link_key_type == BTM_LKEY_TYPE_UNAUTH_COMB_P_256) ||
         (p_device->sec_rec.link_key_type == BTM_LKEY_TYPE_AUTH_COMB_P_256)) {
-      p_device->sec_rec.new_encryption_key_is_p256 = true;
-      log::verbose("set new_encr_key_256 to {}", p_device->sec_rec.new_encryption_key_is_p256);
+      p_device->sec_rec.bredr_sc_enc_reason =
+              p_device->bond_lost ? BtmSecurityRecord::BrEdrScEncReason::REPAIRED
+                                  : BtmSecurityRecord::BrEdrScEncReason::PAIRED;
+      log::verbose("set bredr_sc_enc_reason to {}", BtmSecurityRecord::bredr_sc_enc_reason_text(
+                                                            p_device->sec_rec.bredr_sc_enc_reason));
+    } else {
+      p_device->sec_rec.bredr_sc_enc_reason = BtmSecurityRecord::BrEdrScEncReason::OTHER;
     }
   }
 

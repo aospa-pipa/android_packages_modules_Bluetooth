@@ -40,8 +40,6 @@
 #include "bta_sys.h"
 #include "btif/avrcp/avrcp_service.h"
 #include "btif/include/btif_av.h"
-#include "common/bind.h"
-#include "device/include/device_iot_conf_defs.h"
 #include "device/include/device_iot_config.h"
 #include "device/include/interop.h"
 #include "internal_include/bt_target.h"
@@ -58,7 +56,6 @@
 #include "stack/include/bt_hdr.h"
 #include "stack/include/bt_types.h"
 #include "stack/include/bt_uuid16.h"
-#include "stack/include/btm_client_interface.h"
 #include "stack/include/l2cap_interface.h"
 #include "stack/include/l2cap_types.h"
 #include "stack/include/sdp_api.h"
@@ -912,15 +909,17 @@ static void bta_av_proc_rsp(tAVRC_RESPONSE* p_rc_rsp) {
   }
 }
 
-/*******************************************************************************
+/**
+ * Process an AVRCP metadata command from the peer.
  *
- * Function         bta_av_proc_meta_cmd
- *
- * Description      Process an AVRCP metadata command from the peer.
- *
- * Returns          true to respond immediately
- *
- ******************************************************************************/
+ * @param p_rc_rsp Output parameter for the AVRCP response
+ * @param p_msg    Input parameter for received AVRCP message
+ * @param p_ctype  Output parameter for the response type
+ * @return         The event to be processed by the state machine
+ *                 BTA_AV_META_MSG_EVT to report to the application,
+ *                 or BTA_AV_INVALID_EVT otherwise indicating
+ *                 to reject this packet.
+ */
 static tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE* p_rc_rsp, tBTA_AV_RC_MSG* p_msg,
                                         uint8_t* p_ctype) {
   tBTA_AV_EVT evt = BTA_AV_META_MSG_EVT;
@@ -931,40 +930,36 @@ static tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE* p_rc_rsp, tBTA_AV_RC_MSG
   if (p_vendor->vendor_len == 0) {
     p_rc_rsp->rsp.status = AVRC_STS_BAD_PARAM;
     log::debug("p_vendor->vendor_len == 0");
-    // the caller of this function assume 0 to be an invalid event
-    return 0;
+    return BTA_AV_INVALID_EVT;
   }
 
   pdu = *(p_vendor->p_vendor_data);
   p_rc_rsp->pdu = pdu;
   *p_ctype = AVRC_RSP_REJ;
 
-  /* Check to ansure a  valid minimum meta data length */
+  /* Check to ensure a valid minimum meta data length */
   if ((AVRC_MIN_META_CMD_LEN + p_vendor->vendor_len) > AVRC_META_CMD_BUF_SIZE) {
-    /* reject it */
     p_rc_rsp->rsp.status = AVRC_STS_BAD_PARAM;
     log::error("Invalid meta-command length: {}", p_vendor->vendor_len);
-    return 0;
+    return BTA_AV_INVALID_EVT;
   }
 
   /* Metadata messages only use PANEL sub-unit type */
   if (p_vendor->hdr.subunit_type != AVRC_SUB_PANEL) {
     log::debug("SUBUNIT must be PANEL");
-    /* reject it */
-    evt = 0;
+    evt = BTA_AV_INVALID_EVT;
     p_vendor->hdr.ctype = AVRC_RSP_NOT_IMPL;
     p_vendor->vendor_len = 0;
     p_rc_rsp->rsp.status = AVRC_STS_BAD_PARAM;
   } else if (!AVRC_IsValidAvcType(pdu, p_vendor->hdr.ctype)) {
     log::debug("Invalid pdu/ctype: 0x{:x}, {}", pdu, p_vendor->hdr.ctype);
-    /* reject invalid message without reporting to app */
-    evt = 0;
+    evt = BTA_AV_INVALID_EVT;
     p_rc_rsp->rsp.status = AVRC_STS_BAD_CMD;
   } else {
     switch (pdu) {
       case AVRC_PDU_GET_CAPABILITIES:
         /* process GetCapabilities command without reporting the event to app */
-        evt = 0;
+        evt = BTA_AV_INVALID_EVT;
         if (p_vendor->vendor_len != 5) {
           p_rc_rsp->get_caps.status = AVRC_STS_INTERNAL_ERR;
           break;
@@ -1003,7 +998,7 @@ static tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE* p_rc_rsp, tBTA_AV_RC_MSG
         /* make sure the event_id is implemented */
         p_rc_rsp->rsp.status = bta_av_chk_notif_evt_id(p_vendor);
         if (p_rc_rsp->rsp.status != BTA_AV_STS_NO_RSP) {
-          evt = 0;
+          evt = BTA_AV_INVALID_EVT;
         }
         break;
     }
@@ -1022,7 +1017,7 @@ static tBTA_AV_EVT bta_av_proc_meta_cmd(tAVRC_RESPONSE* p_rc_rsp, tBTA_AV_RC_MSG
  *
  ******************************************************************************/
 void bta_av_rc_msg(tBTA_AV_CB* p_cb, tBTA_AV_DATA* p_data) {
-  tBTA_AV_EVT evt = 0;
+  tBTA_AV_EVT evt = BTA_AV_INVALID_EVT;
   tBTA_AV av;
   BT_HDR* p_pkt = NULL;
   tAVRC_MSG_VENDOR* p_vendor = &p_data->rc_msg.msg.vendor;
@@ -1160,7 +1155,7 @@ void bta_av_rc_msg(tBTA_AV_CB* p_cb, tBTA_AV_DATA* p_data) {
     evt = BTA_AV_META_MSG_EVT;
   }
 
-  if (evt == 0 && rc_rsp.rsp.status != BTA_AV_STS_NO_RSP) {
+  if (evt == BTA_AV_INVALID_EVT && rc_rsp.rsp.status != BTA_AV_STS_NO_RSP) {
     if (!p_pkt) {
       rc_rsp.rsp.opcode = p_data->rc_msg.opcode;
       AVRC_BldResponse(0, &rc_rsp, &p_pkt);
@@ -1171,7 +1166,7 @@ void bta_av_rc_msg(tBTA_AV_CB* p_cb, tBTA_AV_DATA* p_data) {
   }
 
   /* call callback */
-  if (evt != 0) {
+  if (evt != BTA_AV_INVALID_EVT) {
     av.remote_cmd.rc_handle = p_data->rc_msg.handle;
     (*p_cb->p_cback)(evt, &av);
     /* If browsing message, then free the browse message buffer */
@@ -2052,7 +2047,7 @@ static uint16_t bta_avk_get_cover_art_psm() {
                 } else if (param_type == UINT_DESC_TYPE) {
                   protocol_param = (param_len == 2) ? p_protocol_param->attr_value.v.u16
                                                     : p_protocol_param->attr_value.v.u8;
-                } /* else dont care */
+                } /* else don't care */
                 p_protocol_param = p_protocol_param->p_next_attr;  // next
               }
               // If we've found L2CAP then the parameter is a PSM

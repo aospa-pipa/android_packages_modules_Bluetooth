@@ -37,8 +37,6 @@ cc_library_static {
         "fluoride_defaults",
         "fluoride_osi_defaults",
     ],
-    // TODO(mcchou): Remove socket_utils sources after platform specific
-    // dependencies are abstracted.
     srcs: [
         ":OsiCompatSources",
         "src/alarm.cc",
@@ -46,15 +44,11 @@ cc_library_static {
         "src/config.cc",
         "src/fixed_queue.cc",
         "src/future.cc",
-        "src/hash_map_utils.cc",
         "src/list.cc",
         "src/mutex.cc",
         "src/properties.cc",
         "src/reactor.cc",
         "src/socket.cc",
-        "src/socket_utils/socket_local_client.cc",
-        "src/socket_utils/socket_local_server.cc",
-        "src/stack_power_telemetry.cc",
         "src/thread.cc",
         "src/wakelock.cc",
 
@@ -107,11 +101,9 @@ cc_test {
         "test/config_test.cc",
         "test/fixed_queue_test.cc",
         "test/future_test.cc",
-        "test/hash_map_utils_test.cc",
         "test/list_test.cc",
         "test/properties_test.cc",
         "test/reactor_test.cc",
-        "test/stack_power_telemetry_test.cc",
         "test/thread_test.cc",
         "test/wakelock_test.cc", // test internal sources only used inside the libosi
 

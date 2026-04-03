@@ -16,6 +16,7 @@ use bluetooth_offload_hci as hci;
 
 use crate::arbiter::Arbiter;
 use crate::service::{Service, StreamConfiguration};
+use android_hardware_bluetooth_offload_leaudio::aidl::android::hardware::bluetooth::offload::leaudio::DataDirection::DataDirection;
 use hci::{
     Command, CommandToBytes, Event, EventToBytes, IsoData, LeDataPathDirection, Module,
     ModuleBuilder, ReturnParameters, Status,
@@ -24,6 +25,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 const DATA_PATH_ID: u8 = 0x19;
+const REMOVE_ISO_DATA_PATH_DIRECTION_INPUT: u8 = 0x01;
+const REMOVE_ISO_DATA_PATH_DIRECTION_OUTPUT: u8 = 0x02;
 
 /// LE Audio HCI-Proxy module builder
 pub struct LeAudioModuleBuilder {}
@@ -48,23 +51,33 @@ struct BigParameters {
     bis_handles: Vec<u16>,
 }
 
+#[derive(Debug)]
 struct CigParameters {
     sdu_interval_c_to_p: u32,
     sdu_interval_p_to_c: u32,
     cis: Vec<CisParameters>,
 }
 
+#[derive(Debug)]
 struct CisParameters {
     handle: u16,
     max_sdu_size_c_to_p: u16,
     max_sdu_size_p_to_c: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Role {
+    Central,
+    Peripheral,
+}
+
 #[derive(Debug, Clone)]
 struct Stream {
-    state: StreamState,
+    tx_state: StreamState,
+    rx_state: StreamState,
     iso_type: IsoType,
     iso_interval_us: u32,
+    role: Role,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -72,12 +85,13 @@ enum StreamState {
     Idle,
     Enabling,
     Enabled,
+    Disabling,
     Flushing,
 }
 
 #[derive(Debug, Clone)]
 enum IsoType {
-    Cis { c_to_p: IsoInDirection, _p_to_c: IsoInDirection },
+    Cis { c_to_p: IsoInDirection, p_to_c: IsoInDirection },
     Bis { c_to_p: IsoInDirection },
 }
 
@@ -89,34 +103,64 @@ struct IsoInDirection {
 }
 
 impl Stream {
-    fn new_cis(cig: &CigParameters, e: &hci::LeCisEstablished) -> Self {
-        let cis = cig.cis.iter().find(|&s| s.handle == e.connection_handle).unwrap();
+    fn new_cis(cig: Option<&CigParameters>, e: &hci::LeCisEstablished) -> Self {
         let iso_interval_us = (e.iso_interval as u32) * 1250;
+        if let Some(cig) = cig {
+            log::info!("Central role");
+            let cis = cig.cis.iter().find(|&s| s.handle == e.connection_handle).unwrap();
 
-        assert!(
-            cig.sdu_interval_c_to_p == 0 || iso_interval_us.is_multiple_of(cig.sdu_interval_c_to_p),
-            "Framing mode not supported"
-        );
-        assert!(
-            cig.sdu_interval_p_to_c == 0 || iso_interval_us.is_multiple_of(cig.sdu_interval_p_to_c),
-            "Framing mode not supported"
-        );
+            assert!(
+                cig.sdu_interval_c_to_p == 0
+                    || iso_interval_us.is_multiple_of(cig.sdu_interval_c_to_p),
+                "Framing mode not supported"
+            );
+            assert!(
+                cig.sdu_interval_p_to_c == 0
+                    || iso_interval_us.is_multiple_of(cig.sdu_interval_p_to_c),
+                "Framing mode not supported"
+            );
 
-        Self {
-            state: StreamState::Idle,
-            iso_interval_us,
-            iso_type: IsoType::Cis {
-                c_to_p: IsoInDirection {
-                    sdu_interval_us: cig.sdu_interval_c_to_p,
-                    max_sdu_size: cis.max_sdu_size_c_to_p,
-                    flush_timeout: e.ft_c_to_p,
+            Self {
+                tx_state: StreamState::Idle,
+                rx_state: StreamState::Idle,
+                iso_interval_us,
+                iso_type: IsoType::Cis {
+                    c_to_p: IsoInDirection {
+                        sdu_interval_us: cig.sdu_interval_c_to_p,
+                        max_sdu_size: cis.max_sdu_size_c_to_p,
+                        flush_timeout: e.ft_c_to_p,
+                    },
+                    p_to_c: IsoInDirection {
+                        sdu_interval_us: cig.sdu_interval_p_to_c,
+                        max_sdu_size: cis.max_sdu_size_p_to_c,
+                        flush_timeout: e.ft_p_to_c,
+                    },
                 },
-                _p_to_c: IsoInDirection {
-                    sdu_interval_us: cig.sdu_interval_p_to_c,
-                    max_sdu_size: cis.max_sdu_size_p_to_c,
-                    flush_timeout: e.ft_p_to_c,
+                role: Role::Central,
+            }
+        } else {
+            log::info!("Peripheral role");
+            if !bluetooth_swoffload_aconfig_flags_rust::swoffload_peripheral_decoding_feature() {
+                panic!("CIG not set-up for CIS 0x{:03x}", e.connection_handle);
+            }
+            Self {
+                tx_state: StreamState::Idle,
+                rx_state: StreamState::Idle,
+                iso_interval_us,
+                iso_type: IsoType::Cis {
+                    c_to_p: IsoInDirection {
+                        sdu_interval_us: 0,
+                        max_sdu_size: 0,
+                        flush_timeout: e.ft_c_to_p,
+                    },
+                    p_to_c: IsoInDirection {
+                        sdu_interval_us: 0,
+                        max_sdu_size: 0,
+                        flush_timeout: e.ft_p_to_c,
+                    },
                 },
-            },
+                role: Role::Peripheral,
+            }
         }
     }
 
@@ -125,7 +169,8 @@ impl Stream {
         assert_eq!(iso_interval_us % big.sdu_interval, 0, "Framing mode not supported");
 
         Self {
-            state: StreamState::Idle,
+            tx_state: StreamState::Idle,
+            rx_state: StreamState::Idle,
             iso_interval_us,
             iso_type: IsoType::Bis {
                 c_to_p: IsoInDirection {
@@ -134,6 +179,7 @@ impl Stream {
                     flush_timeout: e.irc,
                 },
             },
+            role: Role::Central,
         }
     }
 }
@@ -198,7 +244,10 @@ impl Module for LeAudioModule {
             }
 
             Ok(Command::LeSetupIsoDataPath(ref c)) if c.data_path_id == DATA_PATH_ID => 'command: {
-                assert_eq!(c.data_path_direction, LeDataPathDirection::Input);
+                if !bluetooth_swoffload_aconfig_flags_rust::swoffload_peripheral_decoding_feature()
+                {
+                    assert_eq!(c.data_path_direction, LeDataPathDirection::Input);
+                }
                 let mut state = self.state.lock().unwrap();
                 let Some(stream) = state.stream.get_mut(&c.connection_handle) else {
                     log::warn!(
@@ -207,22 +256,52 @@ impl Module for LeAudioModule {
                     );
                     break 'command;
                 };
-                stream.state = StreamState::Enabling;
 
-                if !state.link_feedback_supported {
-                    log::warn!(
-                        "ISO Link Feedback not supported on BIS/CIS handle: 0x{:03x}",
-                        c.connection_handle
-                    );
+                match c.data_path_direction {
+                    hci::LeDataPathDirection::Input => {
+                        log::info!("Send LeSetupIsoDataPath command -> Input (TX)");
+                        stream.tx_state = StreamState::Enabling;
+                        if !state.link_feedback_supported {
+                            log::warn!(
+                                "ISO Link Feedback not supported on BIS/CIS handle: 0x{:03x}",
+                                c.connection_handle
+                            );
 
-                    // The controller does not implement HCI Link Feedback event,
-                    // thus not implement the `DATA_PATH_ID_SOTWARE` to enable it.
-                    // Fix the data_path_id to 0 (HCI) as a fallback.
-                    self.next().out_cmd(
-                        &hci::LeSetupIsoDataPath { data_path_id: 0, ..c.clone() }.to_bytes(),
-                    );
+                            // The controller does not implement HCI Link Feedback event,
+                            // thus not implement the `DATA_PATH_ID_SOTWARE` to enable it.
+                            // Fix the data_path_id to 0 (HCI) as a fallback.
+                            self.next().out_cmd(
+                                &hci::LeSetupIsoDataPath { data_path_id: 0, ..c.clone() }
+                                    .to_bytes(),
+                            );
 
-                    return;
+                            return;
+                        }
+                    }
+                    hci::LeDataPathDirection::Output => {
+                        log::info!("Send LeSetupIsoDataPath command -> Output (RX)");
+                        stream.rx_state = StreamState::Enabling;
+                    }
+                }
+            }
+
+            Ok(Command::LeRemoveIsoDataPath(ref c)) => 'command: {
+                if bluetooth_swoffload_aconfig_flags_rust::swoffload_peripheral_decoding_feature() {
+                    let mut state = self.state.lock().unwrap();
+                    let Some(stream) = state.stream.get_mut(&c.connection_handle) else {
+                        break 'command;
+                    };
+
+                    if c.data_path_direction & REMOVE_ISO_DATA_PATH_DIRECTION_INPUT != 0
+                        && stream.tx_state == StreamState::Enabled
+                    {
+                        stream.tx_state = StreamState::Disabling;
+                    }
+                    if c.data_path_direction & REMOVE_ISO_DATA_PATH_DIRECTION_OUTPUT != 0
+                        && stream.rx_state == StreamState::Enabled
+                    {
+                        stream.rx_state = StreamState::Disabling;
+                    }
                 }
             }
 
@@ -276,46 +355,89 @@ impl Module for LeAudioModule {
 
                 ReturnParameters::LeSetupIsoDataPath(ref ret) => 'event: {
                     let mut state = self.state.lock().unwrap();
+                    let link_feedback_supported = state.link_feedback_supported;
                     let Some(stream) = state.stream.get_mut(&ret.connection_handle) else {
                         break 'event;
                     };
-                    stream.state =
-                        if stream.state == StreamState::Enabling && ret.status == Status::Success {
-                            StreamState::Enabled
+
+                    let (target_state, direction, params) =
+                        if stream.tx_state == StreamState::Enabling {
+                            let params = match stream.iso_type {
+                                IsoType::Cis { ref c_to_p, ref p_to_c } => match stream.role {
+                                    Role::Central => c_to_p,
+                                    Role::Peripheral => p_to_c,
+                                },
+                                IsoType::Bis { ref c_to_p } => c_to_p,
+                            };
+                            (&mut stream.tx_state, DataDirection::INPUT, params)
+                        } else if stream.rx_state == StreamState::Enabling {
+                            let params = match stream.iso_type {
+                                IsoType::Cis { ref c_to_p, ref p_to_c } => match stream.role {
+                                    Role::Central => p_to_c,
+                                    Role::Peripheral => c_to_p,
+                                },
+                                IsoType::Bis { .. } => panic!("BIS RX not supported yet"),
+                            };
+                            (&mut stream.rx_state, DataDirection::OUTPUT, params)
                         } else {
-                            StreamState::Idle
+                            break 'event;
                         };
 
-                    if stream.state != StreamState::Enabled {
+                    if ret.status == Status::Success {
+                        *target_state = StreamState::Enabled;
+                        let config = StreamConfiguration {
+                            isoIntervalUs: stream.iso_interval_us as i32,
+                            sduIntervalUs: params.sdu_interval_us as i32,
+                            maxSduSize: params.max_sdu_size as i32,
+                            flushTimeout: params.flush_timeout as i32,
+                            linkFeedbackSupported: link_feedback_supported,
+                        };
+                        log::info!("LeSetupIsoDataPath complete, config: {:?}", config);
+                        Service::start_stream(ret.connection_handle, direction, config);
+                    } else {
+                        *target_state = StreamState::Idle;
+                    }
+                }
+
+                ReturnParameters::LeRemoveIsoDataPath(ref ret) => 'event: {
+                    let is_peripheral_decoding_flag =
+                        bluetooth_swoffload_aconfig_flags_rust::swoffload_peripheral_decoding_feature();
+
+                    if !is_peripheral_decoding_flag && ret.status != Status::Success {
                         break 'event;
                     }
 
-                    let c_to_p = match stream.iso_type {
-                        IsoType::Cis { ref c_to_p, .. } => c_to_p,
-                        IsoType::Bis { ref c_to_p } => c_to_p,
-                    };
-
-                    Service::start_stream(
-                        ret.connection_handle,
-                        StreamConfiguration {
-                            isoIntervalUs: stream.iso_interval_us as i32,
-                            sduIntervalUs: c_to_p.sdu_interval_us as i32,
-                            maxSduSize: c_to_p.max_sdu_size as i32,
-                            flushTimeout: c_to_p.flush_timeout as i32,
-                            linkFeedbackSupported: state.link_feedback_supported,
-                        },
-                    );
-                }
-
-                ReturnParameters::LeRemoveIsoDataPath(ref ret) if ret.status == Status::Success => 'event: {
                     let mut state = self.state.lock().unwrap();
                     let Some(stream) = state.stream.get_mut(&ret.connection_handle) else {
                         break 'event;
                     };
-                    if stream.state == StreamState::Enabled {
-                        Service::stop_stream(ret.connection_handle);
+
+                    if is_peripheral_decoding_flag {
+                        let is_success = ret.status == Status::Success;
+
+                        if stream.tx_state == StreamState::Disabling {
+                            if is_success {
+                                Service::stop_stream(ret.connection_handle, DataDirection::INPUT);
+                                stream.tx_state = StreamState::Flushing;
+                            } else {
+                                stream.tx_state = StreamState::Enabled;
+                            }
+                        }
+
+                        if stream.rx_state == StreamState::Disabling {
+                            if is_success {
+                                Service::stop_stream(ret.connection_handle, DataDirection::OUTPUT);
+                                stream.rx_state = StreamState::Flushing;
+                            } else {
+                                stream.rx_state = StreamState::Enabled;
+                            }
+                        }
+                    } else {
+                        if stream.tx_state == StreamState::Enabled {
+                            Service::stop_stream(ret.connection_handle, DataDirection::INPUT);
+                        }
+                        stream.tx_state = StreamState::Flushing;
                     }
-                    stream.state = StreamState::Flushing;
                 }
 
                 _ => (),
@@ -324,11 +446,8 @@ impl Module for LeAudioModule {
             Ok(Event::LeCisEstablished(ref e)) if e.status == Status::Success => {
                 let mut state = self.state.lock().unwrap();
                 let mut cig_values = state.cig.values();
-                let Some(cig) =
-                    cig_values.find(|&g| g.cis.iter().any(|s| s.handle == e.connection_handle))
-                else {
-                    panic!("CIG not set-up for CIS 0x{:03x}", e.connection_handle);
-                };
+                let cig =
+                    cig_values.find(|&g| g.cis.iter().any(|s| s.handle == e.connection_handle));
 
                 let cis = Stream::new_cis(cig, e);
                 if state.stream.insert(e.connection_handle, cis).is_some() {
@@ -344,8 +463,14 @@ impl Module for LeAudioModule {
                 let Some(stream) = state.stream.get_mut(&e.connection_handle) else {
                     break 'event;
                 };
-                if stream.state == StreamState::Enabled {
-                    Service::stop_stream(e.connection_handle);
+
+                if stream.tx_state == StreamState::Enabled {
+                    Service::stop_stream(e.connection_handle, DataDirection::INPUT);
+                }
+                if bluetooth_swoffload_aconfig_flags_rust::swoffload_peripheral_decoding_feature()
+                    && stream.rx_state == StreamState::Enabled
+                {
+                    Service::stop_stream(e.connection_handle, DataDirection::OUTPUT);
                 }
                 state.stream.remove(&e.connection_handle);
 
@@ -389,7 +514,7 @@ impl Module for LeAudioModule {
                     return;
                 };
 
-                if stream.state == StreamState::Enabled {
+                if stream.tx_state == StreamState::Enabled {
                     Service::link_feedback(
                         e.iso_handle,
                         e.sequence_number,
@@ -419,7 +544,7 @@ impl Module for LeAudioModule {
                         arbiter.set_completed(handle, item.num_completed_packets.into());
 
                         if match state.stream.get(&handle) {
-                            Some(stream) => stream.state != StreamState::Idle,
+                            Some(stream) => stream.tx_state != StreamState::Idle,
                             None => false,
                         } {
                             audio_event.handles.push(*item);
@@ -453,7 +578,7 @@ impl Module for LeAudioModule {
         let iso_data = IsoData::from_bytes(data).unwrap();
         let handle = iso_data.connection_handle;
         if match state.stream.get(&handle) {
-            Some(stream) => stream.state != StreamState::Idle,
+            Some(stream) => stream.tx_state != StreamState::Idle,
             None => false,
         } {
             log::error!("Incoming data on handle 0x{handle:03x} not allowed");
