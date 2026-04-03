@@ -16,6 +16,11 @@
 
 package com.android.bluetooth.le_scan;
 
+import static android.bluetooth.le.ScanSettings.CALLBACK_TYPE_ALL_MATCHES;
+import static android.bluetooth.le.ScanSettings.CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH;
+import static android.bluetooth.le.ScanSettings.CALLBACK_TYPE_FIRST_MATCH;
+import static android.bluetooth.le.ScanSettings.CALLBACK_TYPE_MATCH_LOST;
+
 import static com.android.bluetooth.Util.checkCallerTargetSdk;
 import static com.android.bluetooth.Utils.callbackToApp;
 import static com.android.bluetooth.le_scan.BatchScanUtil.permittedResults;
@@ -444,8 +449,8 @@ public class ScanController {
             }
 
             final int callbackType = settings.getCallbackType();
-            if (!(callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES
-                    || callbackType == ScanSettings.CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH)) {
+            if (!(callbackType == CALLBACK_TYPE_ALL_MATCHES
+                    || callbackType == CALLBACK_TYPE_ALL_MATCHES_AUTO_BATCH)) {
                 notAllMatches.add(client);
                 continue;
             }
@@ -458,9 +463,7 @@ public class ScanController {
                     Log.v(TAG, "Callback null for " + client + "; Send results by pendingIntent");
                     List<ScanResult> results = new ArrayList<>(Arrays.asList(result));
                     sendResultsByPendingIntent(
-                            app.getPendingIntent(),
-                            results,
-                            ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
+                            app.getPendingIntent(), results, CALLBACK_TYPE_ALL_MATCHES);
                 }
             } catch (RemoteException | PendingIntent.CanceledException e) {
                 Log.e(TAG, "onScanResult(): Exception: " + e);
@@ -656,9 +659,7 @@ public class ScanController {
                 // PendingIntent based
                 try {
                     sendResultsByPendingIntent(
-                            app.getPendingIntent(),
-                            permittedResults,
-                            ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
+                            app.getPendingIntent(), permittedResults, CALLBACK_TYPE_ALL_MATCHES);
                 } catch (PendingIntent.CanceledException e) {
                     Log.e(TAG, header + "Error sending result via PendingIntent: " + e);
                     handleDeadScanClient(client);
@@ -714,7 +715,7 @@ public class ScanController {
                 }
             } else {
                 sendResultsByPendingIntent(
-                        app.getPendingIntent(), results, ScanSettings.CALLBACK_TYPE_ALL_MATCHES);
+                        app.getPendingIntent(), results, CALLBACK_TYPE_ALL_MATCHES);
             }
         } catch (RemoteException | PendingIntent.CanceledException e) {
             Log.e(TAG, "sendBatchScanResults(): Exception: " + e);
@@ -758,28 +759,20 @@ public class ScanController {
             if (client.getScannerId() == scannerId) {
                 ScanSettings settings = client.getSettings();
                 if ((advertiserState == ADVT_STATE_ONFOUND)
-                        && ((settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_FIRST_MATCH)
-                                != 0)) {
+                        && ((settings.getCallbackType() & CALLBACK_TYPE_FIRST_MATCH) != 0)) {
                     if (app.getCallback() != null) {
                         callbackToApp(() -> app.getCallback().onFoundOrLost(true, result));
                     } else {
                         sendResultByPendingIntent(
-                                app.getPendingIntent(),
-                                result,
-                                ScanSettings.CALLBACK_TYPE_FIRST_MATCH,
-                                client);
+                                app.getPendingIntent(), result, CALLBACK_TYPE_FIRST_MATCH, client);
                     }
                 } else if ((advertiserState == ADVT_STATE_ONLOST)
-                        && ((settings.getCallbackType() & ScanSettings.CALLBACK_TYPE_MATCH_LOST)
-                                != 0)) {
+                        && ((settings.getCallbackType() & CALLBACK_TYPE_MATCH_LOST) != 0)) {
                     if (app.getCallback() != null) {
                         callbackToApp(() -> app.getCallback().onFoundOrLost(false, result));
                     } else {
                         sendResultByPendingIntent(
-                                app.getPendingIntent(),
-                                result,
-                                ScanSettings.CALLBACK_TYPE_MATCH_LOST,
-                                client);
+                                app.getPendingIntent(), result, CALLBACK_TYPE_MATCH_LOST, client);
                     }
                 } else {
                     Log.d(
@@ -1130,6 +1123,12 @@ public class ScanController {
         unregisterScanner(app.getScannerId());
     }
 
+    int numHwTrackFiltersAvailable() {
+        enforceScanThread();
+        return mAdapterService.getTotalNumOfTrackableAdvertisements()
+                - mScanManager.getCurrentUsedTrackingAdvertisement();
+    }
+
     /**************************************************************************
      * PERIODIC SCANNING
      *************************************************************************/
@@ -1167,12 +1166,6 @@ public class ScanController {
             IPeriodicAdvertisingCallback callback) {
         enforceScanThread();
         mPeriodicScanManager.transferSetInfo(device, serviceData, advHandle, callback);
-    }
-
-    int numHwTrackFiltersAvailable() {
-        enforceScanThread();
-        return mAdapterService.getTotalNumOfTrackableAdvertisements()
-                - mScanManager.getCurrentUsedTrackingAdvertisement();
     }
 
     /**************************************************************************

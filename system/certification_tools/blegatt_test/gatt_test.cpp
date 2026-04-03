@@ -70,6 +70,8 @@
 #include "l2c_int.h"
 #include "stack/include/hcimsgs.h"
 #include <bt_testapp.h>
+#include "stack/include/stack_app.h"
+#include "stack/include/stack_le_connection.h"
 
 using bluetooth::Uuid;
 #define L2CAP_FCR_CHAN_OPT_STREAM (1 << L2CAP_FCR_STREAM_MODE)
@@ -1227,20 +1229,22 @@ void service_added_cb(int status, int server_if,
 
 static btgatt_server_callbacks_t sGattServer_cb = {
     register_server_cb,
-    server_connection_cb,  // connection_callback             connection_cb;
-    NULL,      // service_added_callback          service_added_cb;
-    NULL,  // included_service_added_callback included_service_added_cb;
-    NULL,  // characteristic_added_callback   characteristic_added_cb;
-    request_read_cb,   // request_read_callback request_read_characteristic_cb
-    request_read_cb,   // request_read_callback request_read_characteristic_cb
-    request_write_cb,  // request_write_callback          request_write_cb;
-    request_write_cb,  // request_write_callback          request_write_cb;
-    request_exec_write_cb,     // request_exec_write_callback
-                               // request_exec_write_cb;
-    response_confirmation_cb,  // response_confirmation_callback
-                               // response_confirmation_cb;
-    indication_sent_cb,  // indication_sent_callback        indication_sent_cb;
-    NULL, NULL, NULL, NULL, NULL /*subrate_chg_cb*/
+    server_connection_cb,      // connection_callback             connection_cb;
+    NULL,                      // service_added_callback          service_added_cb;
+    NULL,                      // service_deleted_callback        service_deleted_cb;
+    request_read_cb,           // request_read_callback           request_read_characteristic_cb
+    request_read_cb,           // request_read_callback           request_read_descriptor_cb
+    request_write_cb,          // request_write_callback          request_write_characteristic_cb
+    request_write_cb,          // request_write_callback          request_write_descriptor_cb
+    request_exec_write_cb,     // request_exec_write_callback     request_exec_write_cb;
+    response_confirmation_cb,  // response_confirmation_callback  response_confirmation_cb;
+    indication_sent_cb,        // indication_sent_callback        indication_sent_cb;
+    NULL,                      // congestion_callback             congestion_cb;
+    NULL,                      // mtu_changed_callback            mtu_changed_cb;
+    NULL,                      // phy_updated_callback            phy_updated_cb;
+    NULL,                      // conn_updated_callback           conn_updated_cb;
+    NULL,                      // subrate_change_callback         subrate_chg_cb;
+    NULL                       // characteristics_unoffloaded_callback characteristics_unoffloaded_cb;
 };
 
 /************************************************************************************
@@ -1276,18 +1280,78 @@ static void Connection_cb(tGATT_IF gatt_if, const RawAddress& bda,
   g_conn_id = conn_id;
 }
 
-static void AttributeReq_cb(uint16_t conn_id, uint32_t trans_id,
-                            tGATTS_REQ_TYPE type, tGATTS_DATA* p_data) {
-  printf("%s:: conn_id=%d, trans_id=%d, type=%u\n", __FUNCTION__, conn_id,
-         trans_id, type);
+static void GattReqReadCharacteristic_cb(tCONN_ID conn_id, uint32_t trans_id,
+                                         const RawAddress& remote_bda,
+                                         uint16_t handle, uint16_t offset,
+                                         bool is_long) {
+  printf("%s:: conn_id=%d, trans_id=%d, handle=%d, offset=%d, is_long=%d\n",
+         __FUNCTION__, conn_id, trans_id, handle, offset, is_long);
 }
 
-static tGATT_CBACK sGattCB = {
+static void GattReqReadDescriptor_cb(tCONN_ID conn_id, uint32_t trans_id,
+                                     const RawAddress& remote_bda,
+                                     uint16_t handle, uint16_t offset,
+                                     bool is_long) {
+  printf("%s:: conn_id=%d, trans_id=%d, handle=%d, offset=%d, is_long=%d\n",
+         __FUNCTION__, conn_id, trans_id, handle, offset, is_long);
+}
+
+static void GattReqWriteCharacteristic_cb(tCONN_ID conn_id, uint32_t trans_id,
+                                          const RawAddress& remote_bda,
+                                          uint16_t handle, uint16_t offset,
+                                          bool need_rsp, bool is_prep,
+                                          uint8_t* value, uint16_t len) {
+  printf("%s:: conn_id=%d, trans_id=%d, handle=%d, offset=%d, len=%d\n",
+         __FUNCTION__, conn_id, trans_id, handle, offset, len);
+}
+
+static void GattReqWriteDescriptor_cb(tCONN_ID conn_id, uint32_t trans_id,
+                                      const RawAddress& remote_bda,
+                                      uint16_t handle, uint16_t offset,
+                                      bool need_rsp, bool is_prep,
+                                      uint8_t* value, uint16_t len) {
+  printf("%s:: conn_id=%d, trans_id=%d, handle=%d, offset=%d, len=%d\n",
+         __FUNCTION__, conn_id, trans_id, handle, offset, len);
+}
+
+static void GattReqExecWrite_cb(tCONN_ID conn_id, uint32_t trans_id,
+                                const RawAddress& remote_bda,
+                                tGATT_EXEC_FLAG exec_write) {
+  printf("%s:: conn_id=%d, trans_id=%d, exec_write=%d\n",
+         __FUNCTION__, conn_id, trans_id, exec_write);
+}
+
+static void GattReqMtuChanged_cb(tCONN_ID conn_id, const RawAddress& remote_bda,
+                                 uint16_t mtu) {
+  printf("%s:: conn_id=%d, mtu=%d\n", __FUNCTION__, conn_id, mtu);
+}
+
+static void GattReqConf_cb(tCONN_ID conn_id, uint32_t trans_id,
+                           const RawAddress& remote_bda) {
+  printf("%s:: conn_id=%d, trans_id=%d\n", __FUNCTION__, conn_id, trans_id);
+}
+
+static void GattReqConfSendFail_cb(tCONN_ID conn_id, tGATT_STATUS status) {
+  printf("%s:: conn_id=%d, status=%d\n", __FUNCTION__, conn_id, status);
+}
+
+static bluetooth::stack::tGATT_REQ_CBACK sGattReqCB = {
+    GattReqReadCharacteristic_cb,
+    GattReqReadDescriptor_cb,
+    GattReqWriteCharacteristic_cb,
+    GattReqWriteDescriptor_cb,
+    GattReqExecWrite_cb,
+    GattReqMtuChanged_cb,
+    GattReqConf_cb,
+    GattReqConfSendFail_cb
+};
+
+static bluetooth::stack::tGATT_CBACK sGattCB = {
     Connection_cb,
     OperationCmpl_cb,
     DiscoverRes_cb,
     DiscoverCmpl_cb,
-    AttributeReq_cb,
+    &sGattReqCB,
     NULL,
     NULL,
     NULL,
