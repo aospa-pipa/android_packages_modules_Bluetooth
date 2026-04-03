@@ -371,9 +371,7 @@ public class AdapterProperties {
         return Collections.unmodifiableSet(mBondedDevices);
     }
 
-    // This function shall be invoked from BondStateMachine whenever the bond
-    // state changes.
-    @VisibleForTesting
+    // This function shall be invoked from BondStateMachine whenever the bond state changes.
     void onBondStateChanged(BluetoothDevice device, int state) {
         if (device == null) {
             Log.w(TAG, "onBondStateChanged, device is null");

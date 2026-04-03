@@ -11,11 +11,9 @@ cc_library_static {
     name: "libudrv-uipc",
     defaults: ["fluoride_defaults"],
     srcs: [
+        "ulinux/socket_local_client.cc",
+        "ulinux/socket_local_server.cc",
         "ulinux/uipc.cc",
-    ],
-    include_dirs: [
-        "packages/modules/Bluetooth/system",
-        "packages/modules/Bluetooth/system/gd",
     ],
     local_include_dirs: [
         "include",

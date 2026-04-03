@@ -41,6 +41,7 @@ import android.os.Process.SYSTEM_UID
 import android.os.UserHandle
 import android.os.UserManager
 import android.permission.PermissionManager
+import com.android.bluetooth.beta.flags.Flags as BetaFlags
 import com.android.bluetooth.flags.Flags
 import com.android.server.bluetooth.ChangeIds.RESTRICT_ENABLE_DISABLE
 
@@ -231,6 +232,10 @@ internal class PermissionChecker(
 
     @RequiresPermission(LOCAL_MAC_ADDRESS)
     private fun enforceLocalMacAddress(apiName: String) {
+        if (BetaFlags.systemServerSimpleMacPermissionEnforcement()) {
+            context.enforceCallingOrSelfPermission(LOCAL_MAC_ADDRESS, null)
+            return
+        }
         val perm = LOCAL_MAC_ADDRESS
         val msg = "$apiName enforce $perm. But permission is missing"
         if (context.checkCallingOrSelfPermission(perm) == PackageManager.PERMISSION_DENIED) {
@@ -300,17 +305,7 @@ internal class PermissionChecker(
     }
 
     private fun isProfileOwner(source: AttributionSource): Boolean {
-        val userContext =
-            try {
-                context.createPackageContextAsUser(
-                    context.packageName,
-                    0,
-                    UserHandle.getUserHandleForUid(source.uid),
-                )
-            } catch (e: NameNotFoundException) {
-                Log.e(TAG, "Unknown package name")
-                return false
-            }
+        val userContext = context.createContextAsUser(UserHandle.getUserHandleForUid(source.uid), 0)
         // DevicePolicyManager is started after Bluetooth and cannot be passed in constructor
         val devicePolicyManager = userContext.getSystemService(DevicePolicyManager::class.java)
         if (devicePolicyManager == null) {

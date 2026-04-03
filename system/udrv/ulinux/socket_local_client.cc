@@ -23,9 +23,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "osi/include/osi.h"
-#include "osi/include/socket_utils/socket_local.h"
-#include "osi/include/socket_utils/sockets.h"
+#include "socket_local.h"
+#include "sockets.h"
 
 #define LISTEN_BACKLOG 4
 
@@ -96,53 +95,4 @@ int osi_socket_make_sockaddr_un(const char* name, int namespaceId, struct sockad
   return 0;
 error:
   return -1;
-}
-
-/**
- * connect to peer named "name" on fd
- * returns same fd or -1 on error.
- * fd is not closed on error. that's your job.
- *
- * Used by AndroidSocketImpl
- */
-int osi_socket_local_client_connect(int fd, const char* name, int namespaceId, int /* type */) {
-  struct sockaddr_un addr;
-  socklen_t alen;
-  int err;
-
-  err = osi_socket_make_sockaddr_un(name, namespaceId, &addr, &alen);
-
-  if (err < 0) {
-    goto error;
-  }
-
-  OSI_NO_INTR(err = connect(fd, (struct sockaddr*)&addr, alen));
-  if (err < 0) {
-    goto error;
-  }
-
-  return fd;
-
-error:
-  return -1;
-}
-
-/**
- * connect to peer named "name"
- * returns fd or -1 on error
- */
-int osi_socket_local_client(const char* name, int namespaceId, int type) {
-  int s;
-
-  s = socket(AF_LOCAL, type, 0);
-  if (s < 0) {
-    return -1;
-  }
-
-  if (0 > osi_socket_local_client_connect(s, name, namespaceId, type)) {
-    close(s);
-    return -1;
-  }
-
-  return s;
 }

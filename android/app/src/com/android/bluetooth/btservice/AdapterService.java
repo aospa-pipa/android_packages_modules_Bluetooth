@@ -807,14 +807,6 @@ public class AdapterService extends Service {
         return mMediaAudioServer;
     }
 
-    Optional<PhonePolicy> getPhonePolicy() {
-        return mPhonePolicy;
-    }
-
-    BondStateMachine getBondStateMachine() {
-        return mBondStateMachine;
-    }
-
     CompanionDeviceManager getCompanionDeviceManager() {
         return mCompanionDeviceManager;
     }

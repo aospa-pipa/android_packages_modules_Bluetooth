@@ -176,7 +176,7 @@ class BtifAvPeer;
 // different than Open state. Suspend flags are needed however to prevent
 // media task from trying to restart stream during remote Suspend or while
 // we are in the process of a local Suspend.
-class BtifAvStateMachine : public bluetooth::common::StateMachine {
+class BtifAvStateMachine : public bluetooth::common::StateMachine<> {
 public:
   enum {
     kStateIdle,     // AVDTP disconnected

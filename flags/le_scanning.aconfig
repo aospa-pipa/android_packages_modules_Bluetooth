@@ -44,3 +44,13 @@ flag {
         purpose: PURPOSE_BUGFIX
     }
 }
+
+flag {
+    name: "check_scan_hardware_resources_availability_in_binder"
+    namespace: "bluetooth"
+    description: "Check for scan hardware resources availability in binder instead of Framework as we cannot trust the code in the framework"
+    bug: "497584056"
+    metadata {
+        purpose: PURPOSE_BUGFIX
+    }
+}

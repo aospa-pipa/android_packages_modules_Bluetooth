@@ -23,8 +23,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "osi/include/socket_utils/socket_local.h"
-#include "osi/include/socket_utils/sockets.h"
+#include "socket_local.h"
+#include "sockets.h"
 
 #define LISTEN_BACKLOG 4
 
@@ -65,41 +65,6 @@ int osi_socket_local_server_bind(int s, const char* name, int namespaceId) {
 
   if (bind(s, (struct sockaddr*)&addr, alen) < 0) {
     return -1;
-  }
-
-  return s;
-}
-
-/** Open a server-side UNIX domain datagram socket in the Linux non-filesystem
- *  namespace
- *
- *  Returns fd on success, -1 on fail
- */
-int osi_socket_local_server(const char* name, int namespaceId, int type) {
-  int err;
-  int s;
-
-  s = socket(AF_LOCAL, type, 0);
-  if (s < 0) {
-    return -1;
-  }
-
-  err = osi_socket_local_server_bind(s, name, namespaceId);
-
-  if (err < 0) {
-    close(s);
-    return -1;
-  }
-
-  if ((type & SOCK_TYPE_MASK) == SOCK_STREAM) {
-    int ret;
-
-    ret = listen(s, LISTEN_BACKLOG);
-
-    if (ret < 0) {
-      close(s);
-      return -1;
-    }
   }
 
   return s;

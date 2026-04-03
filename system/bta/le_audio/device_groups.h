@@ -41,6 +41,7 @@
 #include <bluetooth/types/string_helpers.h>
 #include <com_android_bluetooth_flags.h>
 
+#include "audio_hal_client/audio_hal_client.h"
 #include "devices.h"
 #include "le_audio_log_history.h"
 #include "le_audio_types.h"

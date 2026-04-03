@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2026 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * You may not use this file except in compliance with the License.
@@ -16,35 +16,18 @@
 
 package android.hardware.bluetooth.offload.leaudio;
 
-import android.hardware.bluetooth.offload.leaudio.DataDirection;
-
 /**
- * Configuration relative to a stream
+ * Data path direction
  */
-parcelable StreamConfiguration {
+@Backing(type="byte")
+enum DataDirection {
+    /**
+     * Host to Controller
+     */
+    INPUT = 0,
 
     /**
-     * Constant ISO time transmission interval, in micro-seconds
+     * Controller to Host
      */
-    int isoIntervalUs;
-
-    /**
-     * Constant SDU transmission interval, in micro-seconds
-     */
-    int sduIntervalUs;
-
-    /**
-     * Maximum size of a SDU
-     */
-    int maxSduSize;
-
-    /**
-     * How many consecutive Isochronous Intervals can be used to transmit an SDU
-     */
-    int flushTimeout;
-
-    /**
-     * Indicates support of Link Feedback
-     */
-    boolean linkFeedbackSupported;
+    OUTPUT = 1,
 }
