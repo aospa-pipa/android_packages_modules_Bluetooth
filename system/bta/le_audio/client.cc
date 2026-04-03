@@ -5992,6 +5992,12 @@ public:
       SetInVoipCall(false);
     }
 
+    auto group = aseGroups_.FindById(active_group_id_);
+    if (group) {
+      log::info("Reseting decoding context");
+      std::vector<record_track_metadata_v7> empty_tracks = {};
+      audioContextTypeManager_->SetDecodingSessionMetadata(empty_tracks);
+    }
     /* If the local sink direction is used, we want to monitor
      * if back channel is actually needed.
      */
