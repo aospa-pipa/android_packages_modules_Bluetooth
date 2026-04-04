@@ -324,13 +324,13 @@ class GattServiceTest(flags: FlagsWrapper) {
 
     @Test
     fun registerClient() {
+        val uuid = UUID.randomUUID()
         val callback = mock<IBluetoothGattCallback>()
         val eattSupport = true
         val transport = BluetoothDevice.TRANSPORT_LE
 
-        service.registerClient(callback, eattSupport, transport, source)
-        verify(nativeInterface)
-            .gattClientRegisterApp(any<UUID>(), eq(context.packageName), eq(eattSupport))
+        service.registerClient(uuid, callback, eattSupport, transport, source)
+        verify(nativeInterface).gattClientRegisterApp(uuid, context.packageName, eattSupport)
     }
 
     @Test
@@ -338,11 +338,12 @@ class GattServiceTest(flags: FlagsWrapper) {
         doReturn(GattService.GATT_CLIENT_LIMIT_PER_APP)
             .whenever(clientMap)
             .countByAppUid(any<Int>())
+        val uuid = UUID.randomUUID()
         val callback = mock<IBluetoothGattCallback>()
         val eattSupport = true
         val transport = BluetoothDevice.TRANSPORT_LE
 
-        service.registerClient(callback, eattSupport, transport, source)
+        service.registerClient(uuid, callback, eattSupport, transport, source)
         verify(clientMap, never()).add(any<Int>(), any(), any(), any(), any<Int>(), any<String>())
         verify(nativeInterface, never()).gattClientRegisterApp(any<UUID>(), any(), any<Boolean>())
     }

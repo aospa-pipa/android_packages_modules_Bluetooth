@@ -27,7 +27,6 @@ rust_defaults {
         "libbluetooth_macros",
     ],
     rustlibs: [
-        "libbitflags",
         "libbytes",
         "libcxx",
         "libfutures",

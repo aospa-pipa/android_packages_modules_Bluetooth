@@ -33,7 +33,7 @@ static char dataOne = 1;
 static char dataTwo = 2;
 }  // namespace
 
-class StateMachineImpl : public StateMachine<> {
+class StateMachineImpl : public StateMachine {
 public:
   enum {
     kStateZero,
@@ -43,7 +43,7 @@ public:
 
   class StateZero : public State {
   public:
-    StateZero(StateMachine<>& sm)
+    StateZero(StateMachine& sm)
         : State(sm, kStateZero),
           on_enter_(false),
           on_exit_(false),
@@ -72,7 +72,7 @@ public:
 
   class StateOne : public State {
   public:
-    StateOne(StateMachine<>& sm)
+    StateOne(StateMachine& sm)
         : State(sm, kStateOne),
           on_enter_(false),
           on_exit_(false),
@@ -101,7 +101,7 @@ public:
 
   class StateTwo : public State {
   public:
-    StateTwo(StateMachine<>& sm)
+    StateTwo(StateMachine& sm)
         : State(sm, kStateTwo),
           on_enter_(false),
           on_exit_(false),
@@ -260,35 +260,4 @@ TEST_F(StateMachineTest, test_process_event) {
   ASSERT_FALSE(sm_.state_zero_->on_exit_);
   ASSERT_EQ(sm_.state_zero_->event_, kEventZero);  // NOTE: state from before
   ASSERT_EQ(sm_.state_zero_->data_, &dataZero);    // NOTE: state from before
-}
-
-class IntStateMachine : public bluetooth::common::StateMachine<int, int> {
-public:
-  class StateOne : public State {
-  public:
-    StateOne(StateMachine<int, int>& sm) : State(sm, 1) {}
-    bool ProcessEvent(int event, int data) override {
-      event_ = event;
-      data_ = data;
-      return true;
-    }
-    int event_{0};
-    int data_{0};
-  };
-
-  IntStateMachine() {
-    state_one_ = new StateOne(*this);
-    AddState(state_one_);
-    SetInitialState(state_one_);
-  }
-  StateOne* state_one_;
-};
-
-TEST(StateMachineTemplateTest, test_int_types) {
-  IntStateMachine sm;
-  sm.Start();
-  ASSERT_EQ(1, sm.StateId());
-  sm.ProcessEvent(42, 100);
-  ASSERT_EQ(42, sm.state_one_->event_);
-  ASSERT_EQ(100, sm.state_one_->data_);
 }

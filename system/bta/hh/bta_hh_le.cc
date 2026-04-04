@@ -607,7 +607,8 @@ static void bta_hh_le_register_input_notif(tBTA_HH_DEV_CB* p_dev_cb, uint8_t pro
                                              p_rpt->char_inst_id);
         }
       }
-      /* else unknown protocol mode */
+      /*
+      else unknow protocol mode */
     }
   }
 }

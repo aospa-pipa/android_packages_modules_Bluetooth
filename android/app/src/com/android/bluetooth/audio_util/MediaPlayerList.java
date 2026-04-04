@@ -242,17 +242,15 @@ public class MediaPlayerList {
 
         mMediaPlayerIds.clear();
 
-        List<MediaPlayerWrapper> mediaPlayers = new ArrayList<>(mMediaPlayers.values());
-        mMediaPlayers.clear();
-        for (MediaPlayerWrapper player : mediaPlayers) {
+        for (MediaPlayerWrapper player : mMediaPlayers.values()) {
             player.cleanup();
         }
+        mMediaPlayers.clear();
 
-        List<MediaBrowserWrapper> mediaBrowsers = new ArrayList<>(mMediaBrowserWrappers.values());
-        mMediaBrowserWrappers.clear();
-        for (MediaBrowserWrapper browser : mediaBrowsers) {
+        for (MediaBrowserWrapper browser : mMediaBrowserWrappers.values()) {
             browser.disconnect();
         }
+        mMediaBrowserWrappers.clear();
     }
 
     /** returns the current player ID. */
@@ -814,15 +812,14 @@ public class MediaPlayerList {
             sendMediaUpdate(newData);
         }
 
-        final MediaPlayerWrapper wrapper = mMediaPlayers.remove(playerId);
-        if (wrapper != null) {
-            d("Removing media player " + wrapper.getPackageName());
-            if (!haveMediaBrowser(playerId)) {
-                d(wrapper.getPackageName() + " doesn't have a browse service. Recycle player ID.");
-                mMediaPlayerIds.remove(wrapper.getPackageName());
-            }
-            wrapper.cleanup();
+        final MediaPlayerWrapper wrapper = mMediaPlayers.get(playerId);
+        d("Removing media player " + wrapper.getPackageName());
+        mMediaPlayers.remove(playerId);
+        if (!haveMediaBrowser(playerId)) {
+            d(wrapper.getPackageName() + " doesn't have a browse service. Recycle player ID.");
+            mMediaPlayerIds.remove(wrapper.getPackageName());
         }
+        wrapper.cleanup();
     }
 
     /**
@@ -1025,11 +1022,8 @@ public class MediaPlayerList {
                         }
                         if (haveMediaBrowser(playerId)) {
                             Log.i(TAG, "package removed from browsable list: " + packageName);
-                            final MediaBrowserWrapper browser =
-                                    mMediaBrowserWrappers.remove(playerId);
-                            if (browser != null) {
-                                browser.disconnect();
-                            }
+                            mMediaBrowserWrappers.get(playerId).disconnect();
+                            mMediaBrowserWrappers.remove(playerId);
                             if (Util.areMultiplePlayersSupported()) {
                                 sendFolderUpdate(true, false, false);
                             }

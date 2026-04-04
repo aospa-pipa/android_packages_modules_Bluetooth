@@ -238,7 +238,6 @@ android_robolectric_test {
         "bluetooth-common-kotlinutils",
         "bluetooth-nano-protos",
         "bluetooth-proto-enums-java-gen",
-        "bluetooth_beta_flags-java_lib",
         "bluetooth_flags_java_lib",
         "flag-junit",
         "inline-mockito-robolectric-prebuilt",

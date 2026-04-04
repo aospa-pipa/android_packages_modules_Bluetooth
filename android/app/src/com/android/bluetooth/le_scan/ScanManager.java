@@ -586,7 +586,10 @@ public class ScanManager {
                 && client.getSettings().getReportDelayMillis() == 0;
     }
 
+    @VisibleForTesting
     void handleScreenOff() {
+        AppScanStats.setScreenState(false);
+        mScanRadioStats.setScreenState(false);
         if (!mScreenOn) {
             return;
         }
@@ -879,7 +882,10 @@ public class ScanManager {
         }
     }
 
+    @VisibleForTesting
     void handleScreenOn() {
+        AppScanStats.setScreenState(true);
+        mScanRadioStats.setScreenState(true);
         if (mScreenOn) {
             return;
         }
@@ -1594,6 +1600,11 @@ public class ScanManager {
                 mNativeInterface.scan(true, "updateScanMsft");
             }
         }
+    }
+
+    void onDisplayChanged(boolean screenOn) {
+        if (screenOn) handleScreenOn();
+        else handleScreenOff();
     }
 
     public boolean isAptXLowLatencyModeEnabled() {

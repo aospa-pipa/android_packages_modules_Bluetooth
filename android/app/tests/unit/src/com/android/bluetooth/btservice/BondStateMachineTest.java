@@ -253,8 +253,8 @@ public class BondStateMachineTest {
                 pendingDevice,
                 BluetoothDevice.TRANSPORT_BREDR,
                 BOND_BONDED,
-                0,
-                0,
+                null,
+                null,
                 AbstractionLayer.BT_PAIRING_INITIATOR_APP,
                 TEST_BOND_REASON,
                 0);
@@ -605,8 +605,8 @@ public class BondStateMachineTest {
                 mDevice,
                 BluetoothDevice.TRANSPORT_BREDR,
                 BOND_NONE,
-                0, // pairingAlgorithm
-                0, // pairingVariant
+                null, // pairingAlgorithm
+                null, // pairingVariant
                 AbstractionLayer.BT_PAIRING_INITIATOR_APP, // pairingInitiator
                 TEST_BOND_REASON,
                 0); // hciReason
@@ -693,8 +693,8 @@ public class BondStateMachineTest {
                         mDevice,
                         BluetoothDevice.TRANSPORT_BREDR,
                         newState,
-                        0,
-                        0,
+                        null,
+                        null,
                         AbstractionLayer.BT_PAIRING_INITIATOR_APP,
                         TEST_BOND_REASON,
                         0);
@@ -1043,117 +1043,5 @@ public class BondStateMachineTest {
 
         // Verify createBond is called immediately
         verify(mNativeInterface).createBond(eq(TEST_BT_ADDR_BYTES_2), anyInt(), anyInt());
-    }
-
-    @Test
-    public void testGetPairingVariant() {
-        // Verifies correct conversion for valid BR/EDR Legacy pairing variants
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY,
-                                AbstractionLayer.BT_LEGACY_PAIRING_VARIANT_PIN))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_DISPLAY_PIN);
-
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY,
-                                AbstractionLayer.BT_LEGACY_PAIRING_VARIANT_PIN_16))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_PIN_16_DIGITS);
-
-        // Verifies fallback to DISPLAY_PIN for invalid BR/EDR Legacy pairing variants
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY,
-                                999))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_DISPLAY_PIN);
-
-        // Verifies correct conversion for valid non-legacy pairing variants
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_LE,
-                                BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY,
-                                AbstractionLayer.BT_PAIRING_VARIANT_PASSKEY_CONFIRMATION))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION);
-
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_LE,
-                                BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY,
-                                AbstractionLayer.BT_PAIRING_VARIANT_CONSENT))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_CONSENT);
-
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_LE,
-                                BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY,
-                                AbstractionLayer.BT_PAIRING_VARIANT_PASSKEY_ENTRY))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_PASSKEY);
-
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_LE,
-                                BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY,
-                                AbstractionLayer.BT_PAIRING_VARIANT_PASSKEY_NOTIFICATION))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_DISPLAY_PASSKEY);
-
-        // Verifies fallback to CONSENT for invalid non-legacy pairing variants
-        assertThat(
-                        BondStateMachine.getPairingVariant(
-                                BluetoothDevice.TRANSPORT_LE,
-                                BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY,
-                                999))
-                .isEqualTo(BluetoothDevice.PAIRING_VARIANT_CONSENT);
-    }
-
-    @Test
-    public void testGetPairingAlgorithm() {
-        // Verifies correct conversion for valid LE pairing algorithms
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                BluetoothDevice.TRANSPORT_LE,
-                                AbstractionLayer.BT_PAIRING_ALGORITHM_LE_LEGACY))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY);
-
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                BluetoothDevice.TRANSPORT_LE,
-                                AbstractionLayer.BT_PAIRING_ALGORITHM_SC))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_SC);
-
-        // Verifies fallback to LE_LEGACY for invalid LE pairing algorithms
-        assertThat(BondStateMachine.getPairingAlgorithm(BluetoothDevice.TRANSPORT_LE, 999))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_LE_LEGACY);
-
-        // Verifies correct conversion for valid BR/EDR pairing algorithms
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                AbstractionLayer.BT_PAIRING_ALGORITHM_BREDR_LEGACY))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY);
-
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                AbstractionLayer.BT_PAIRING_ALGORITHM_SSP))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_BREDR_SSP);
-
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                BluetoothDevice.TRANSPORT_BREDR,
-                                AbstractionLayer.BT_PAIRING_ALGORITHM_SC))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_SC);
-
-        // Verifies fallback to BREDR_LEGACY for invalid BR/EDR pairing algorithms
-        assertThat(BondStateMachine.getPairingAlgorithm(BluetoothDevice.TRANSPORT_BREDR, 999))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY);
-
-        // Verifies fallback to BREDR_LEGACY for invalid transports
-        assertThat(
-                        BondStateMachine.getPairingAlgorithm(
-                                999, AbstractionLayer.BT_PAIRING_ALGORITHM_SC))
-                .isEqualTo(BluetoothDevice.PAIRING_ALGORITHM_BREDR_LEGACY);
     }
 }

@@ -3348,6 +3348,7 @@ public class ActiveDeviceManagerTest {
      * </pre>
      */
     @Test
+    @EnableFlags(Flags.FLAG_ADM_REMOVE_HAP_VARIABLES)
     public void leAudioConnected_hearingAid_setActiveFails() {
         // LE Audio service fails to set active device
         doReturn(false).when(mLeAudioService).setActiveDevice(mLeHearingAidDevice);

@@ -16,7 +16,6 @@
 
 package android.hardware.bluetooth.offload.leaudio;
 
-import android.hardware.bluetooth.offload.leaudio.DataDirection;
 import android.hardware.bluetooth.offload.leaudio.StreamConfiguration;
 
 /**
@@ -27,12 +26,12 @@ interface IHciProxyCallbacks {
     /**
      * Start indication of a stream
      */
-    oneway void startStream(in int handle, in DataDirection direction, in StreamConfiguration configuration);
+    oneway void startStream(in int handle, in StreamConfiguration configuration);
 
     /**
      * Stop indication of a stream
      */
-    oneway void stopStream(in int handle, in DataDirection direction);
+    oneway void stopStream(in int handle);
 
     /**
      * ISO Link-feedback event

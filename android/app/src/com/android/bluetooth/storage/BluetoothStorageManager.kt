@@ -187,6 +187,7 @@ constructor(
 
         val cachedAddresses = synchronized(memoryOnlyCache) { memoryOnlyCache.keys.toSet() }
         for ((address, device) in storage.devicesMap.toSortedMap()) {
+            val isInMemory = cachedAddresses.contains(address)
             val locationTag =
                 when {
                     cachedAddresses.contains(address) -> "[Memory Cache]"
@@ -937,36 +938,29 @@ constructor(
         var pendingRemovals: Set<String>? = null
 
         // Note: DataStore is designed to retry `updateData` automatically.
-        // We don't want to mutate the cache in it, instead we use 'pendingXXX' to update cache once
+        // We don't want to mutate the cache in it.
         val finalStorage = updateData { storageFromDisk ->
-            // Snapshot of the cache to avoid bumping the LRU during read & comparaison
             val cacheCopy = synchronized(memoryOnlyCache) { memoryOnlyCache.toMap() }
 
             // Merge disk storage with memory cache
-            val storage = storageFromDisk.toBuilder().apply { putAllDevices(cacheCopy) }.build()
+            val mergedStorage =
+                storageFromDisk.toBuilder().apply { putAllDevices(cacheCopy) }.build()
 
-            val updatedStorage = transform(storage)
-
-            // Devices that were on disk previously but aren't bonded.
-            // (if disk storage is corrupted or if the config file is manually edited)
-            val removedFromDisk = storageFromDisk.devicesMap.keys - bondedAddr
-
-            // List of devices that we will keep in memoryOnlyCache.
-            // This list is only made of unbonded devices that were not on disk previously
-            val addrForCache = updatedStorage.devicesMap.keys - bondedAddr - removedFromDisk
-
-            val tempCacheUpdates = mutableMapOf<String, Device>()
+            // Apply database transformation on all devices
+            val updatedStorage = transform(mergedStorage)
             val builder = updatedStorage.toBuilder()
 
-            // Remove devices everywhere if they were previously on disk but unbonded
-            removedFromDisk.forEach { address -> builder.removeDevices(address) }
+            // List all unbonded devices in the storage
+            val unbondedAddr = updatedStorage.devicesMap.keys.filter { !bondedAddr.contains(it) }
 
-            // Remove devices from disk if they are intended for cache
-            // Save pending update to bump LRU for changed metadata
-            addrForCache.forEach { address ->
+            val tempCacheUpdates = mutableMapOf<String, Device>()
+
+            unbondedAddr.forEach { address ->
                 val deviceProto = updatedStorage.devicesMap[address]!!
-                // Avoids LRU bumps by comparing with the cacheCopy
-                if (deviceProto != cacheCopy[address]) {
+
+                // Compare against the snapshot, to avoids accidental LRU bumps.
+                val existing = cacheCopy[address]
+                if (existing != deviceProto) {
                     tempCacheUpdates[address] = deviceProto
                 }
 
@@ -975,14 +969,15 @@ constructor(
             }
 
             pendingCacheUpdates = tempCacheUpdates
-            pendingRemovals = cacheCopy.keys - addrForCache
+            val deletedAddresses = mergedStorage.devicesMap.keys - updatedStorage.devicesMap.keys
+            pendingRemovals = bondedAddr + deletedAddresses
 
             builder.build()
         }
 
         if (pendingCacheUpdates != null && pendingRemovals != null) {
             synchronized(memoryOnlyCache) {
-                memoryOnlyCache.keys.removeAll(bondedAddr) // Bonded devices are kept on disk
+                // Remove newly bonded devices from memoryOnlyCache
                 memoryOnlyCache.keys.removeAll(pendingRemovals!!)
 
                 // Putting back devices that actually changed will bumps their LRU order.

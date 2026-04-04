@@ -32,11 +32,14 @@
 #include "osi/include/config.h"
 #include "osi/include/fixed_queue.h"
 #include "osi/include/future.h"
+#include "osi/include/hash_map_utils.h"
 #include "osi/include/list.h"
 #include "osi/include/mutex.h"
 #include "osi/include/properties.h"
 #include "osi/include/reactor.h"
 #include "osi/include/socket.h"
+#include "osi/include/socket_utils/socket_local.h"
+#include "osi/include/socket_utils/sockets.h"
 #include "osi/include/thread.h"
 #include "osi/include/wakelock.h"
 #include "osi/src/compat.cc"  // For strlcpy
@@ -575,6 +578,24 @@ void* list_front(const list_t* list) {
 void* list_node(const list_node_t* node) {
   inc_func_call_count(__func__);
   return nullptr;
+}
+
+int osi_socket_local_client(const char* name, int namespaceId, int type) {
+  inc_func_call_count(__func__);
+  return 0;
+}
+int osi_socket_local_client_connect(int fd, const char* name, int namespaceId, int type) {
+  inc_func_call_count(__func__);
+  return 0;
+}
+int osi_socket_local_server_bind(int s, const char* name, int namespaceId) {
+  inc_func_call_count(__func__);
+  return 0;
+}
+int osi_socket_make_sockaddr_un(const char* name, int namespaceId, struct sockaddr_un* p_addr,
+                                socklen_t* alen) {
+  inc_func_call_count(__func__);
+  return 0;
 }
 
 bool osi_property_get_bool(const char* key, bool default_value) {

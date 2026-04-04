@@ -22,11 +22,17 @@ static_library("osi") {
     "src/config.cc",
     "src/fixed_queue.cc",
     "src/future.cc",
+    "src/hash_map_utils.cc",
     "src/list.cc",
     "src/mutex.cc",
     "src/properties.cc",
     "src/reactor.cc",
     "src/socket.cc",
+
+    # TODO(mcchou): Remove these sources after platform specific
+    # dependencies are abstracted.
+    "src/socket_utils/socket_local_client.cc",
+    "src/socket_utils/socket_local_server.cc",
     "src/thread.cc",
     "src/wakelock.cc",
 
@@ -61,6 +67,7 @@ if (use.test) {
       "test/allocator_test.cc",
       "test/config_test.cc",
       "test/future_test.cc",
+      "test/hash_map_utils_test.cc",
       "test/internal/semaphore_test.cc",
       "test/list_test.cc",
       "test/properties_test.cc",

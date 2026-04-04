@@ -16,8 +16,6 @@
 
 package android.hardware.bluetooth.offload.leaudio;
 
-import android.hardware.bluetooth.offload.leaudio.DataDirection;
-
 /**
  * Configuration relative to a stream
  */

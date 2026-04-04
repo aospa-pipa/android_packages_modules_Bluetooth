@@ -25,7 +25,6 @@ rust_defaults {
         "android.hardware.bluetooth.offload.leaudio-rust",
         "libbinder_rs",
         "libbluetooth_offload_hci",
-        "libbluetooth_swoffload_aconfig_flags_rust",
         "liblog_rust",
         "liblogger",
     ],

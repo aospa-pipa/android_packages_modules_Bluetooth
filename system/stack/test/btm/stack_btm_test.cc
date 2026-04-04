@@ -38,7 +38,6 @@
 #include "stack/btm/internal/btm_api.h"
 #include "stack/include/acl_api.h"
 #include "stack/include/acl_hci_link_interface.h"
-#include "stack/include/btm_ble_api.h"
 #include "stack/include/btm_client_interface.h"
 #include "stack/l2cap/l2c_int.h"
 #include "stack/mock/mock_stack_hcic_layer.h"
@@ -251,50 +250,6 @@ TEST_F(StackBtmWithQueuesTest, change_packet_type) {
   btm_set_packet_types_from_address(bda, 0xffff);
   // Illegal mask, won't be sent.
   btm_set_packet_types_from_address(bda, 0x0);
-
-  get_btm_client_interface().lifecycle.btm_free();
-}
-
-TEST_F(StackBtmWithQueuesTest, LeFeaturesIncomplete) {
-  EXPECT_CALL(*bluetooth::hci::testing::mock_hci_layer_, GetScoQueueEnd())
-          .WillOnce(Return(sco_queue_.GetUpEnd()));
-  get_btm_client_interface().lifecycle.btm_init();
-
-  uint16_t handle = 0x123;
-  RawAddress bda("11:22:33:44:55:66");
-  AclLinkSpec link_spec = {.addrt = {.type = BLE_ADDR_PUBLIC, .bda = bda},
-                           .transport = BT_TRANSPORT_LE};
-  btm_acl_created(link_spec, handle, HCI_ROLE_CENTRAL);
-
-  // Verify that all feature checks return false when peer_le_features_valid is false
-  EXPECT_FALSE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_parameters_request(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating_host(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_packet_extension(handle));
-  EXPECT_FALSE(acl_peer_supports_ble_2m_phy(handle));
-
-  // Set features to all 0s and verify they still return false
-  uint8_t features[8] = {0};
-  acl_set_peer_le_features_from_handle(handle, features);
-
-  EXPECT_FALSE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_parameters_request(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_connection_subrating_host(bda));
-  EXPECT_FALSE(acl_peer_supports_ble_packet_extension(handle));
-  EXPECT_FALSE(acl_peer_supports_ble_2m_phy(handle));
-
-  // Set features to all 1s and verify they return true
-  memset(features, 0xff, sizeof(features));
-  acl_set_peer_le_features_from_handle(handle, features);
-
-  EXPECT_TRUE(BTM_IsPhy2mSupported(bda, BT_TRANSPORT_LE));
-  EXPECT_TRUE(acl_peer_supports_ble_connection_parameters_request(bda));
-  EXPECT_TRUE(acl_peer_supports_ble_connection_subrating(bda));
-  EXPECT_TRUE(acl_peer_supports_ble_connection_subrating_host(bda));
-  EXPECT_TRUE(acl_peer_supports_ble_packet_extension(handle));
-  EXPECT_TRUE(acl_peer_supports_ble_2m_phy(handle));
 
   get_btm_client_interface().lifecycle.btm_free();
 }

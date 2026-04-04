@@ -66,7 +66,7 @@
 #define BTA_HH_VC_UNPLUG_EVT 14 /* virtually unplugged */
 #define BTA_HH_DATA_EVT 15
 #define BTA_HH_API_ERR_EVT 16     /* API error is caught */
-#define BTA_HH_UPDATE_SCPP_EVT 17 /* update scan parameter complete */
+#define BTA_HH_UPDATE_SCPP_EVT 17 /* update scan paramter complete */
 
 typedef uint16_t tBTA_HH_EVT;
 

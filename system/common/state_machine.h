@@ -28,7 +28,6 @@ namespace common {
 /**
  * State machine used by Bluetooth native stack.
  */
-template <typename EventT = uint32_t, typename DataT = void*>
 class StateMachine {
 public:
   enum { kStateInvalid = -1 };
@@ -52,12 +51,14 @@ public:
 
     /**
      * Process an event.
+     * TODO: The arguments are wrong - used for backward compatibility.
+     * Will be replaced later.
      *
      * @param event the event type
-     * @param data the event data
+     * @param p_data the event data
      * @return true if the processing was completed, otherwise false
      */
-    virtual bool ProcessEvent(EventT event, DataT data) = 0;
+    virtual bool ProcessEvent(uint32_t event, void* p_data) = 0;
 
     /**
      * Get the State ID.
@@ -140,16 +141,18 @@ public:
 
   /**
    * Process an event.
+   * TODO: The arguments are wrong - used for backward compatibility.
+   * Will be replaced later.
    *
    * @param event the event type
-   * @param data the event data
+   * @param p_data the event data
    * @return true if the processing was completed, otherwise false
    */
-  bool ProcessEvent(EventT event, DataT data) {
+  bool ProcessEvent(uint32_t event, void* p_data) {
     if (current_state_ == nullptr) {
       return false;
     }
-    return current_state_->ProcessEvent(event, data);
+    return current_state_->ProcessEvent(event, p_data);
   }
 
   /**

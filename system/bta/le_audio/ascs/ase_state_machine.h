@@ -41,7 +41,7 @@ static const char* EVT_LOG_TAG = "Ase State Machine";
  * requests (e.g., Config Codec, Enable) and internal events (e.g., CIS_LOST)
  * to ensure the ASE behaves according to the BAP specification.
  */
-class AscsAseStateMachine : public common::StateMachine<> {
+class AscsAseStateMachine : public common::StateMachine {
 public:
   /** ASE State field values, as per ASCS specification. */
   enum StateId {
@@ -129,12 +129,10 @@ public:
   /** @return The address of the peer device. */
   inline RawAddress GetPeer() const { return peer_; }
   /** @return The current state ID of the state machine. */
-  inline StateId GetStateId() const {
-    return static_cast<StateId>(this->StateMachine<>::StateId());
-  }
+  inline StateId GetStateId() const { return static_cast<StateId>(this->StateMachine::StateId()); }
   /** @return The previous state ID of the state machine. */
   inline StateId GetPreviousStateId() const {
-    return static_cast<StateId>(this->StateMachine<>::PreviousStateId());
+    return static_cast<StateId>(this->StateMachine::PreviousStateId());
   }
   /** @return True if this is a Sink ASE, false otherwise. */
   inline bool IsSinkAse() const { return !is_source_ase_; }
@@ -170,7 +168,7 @@ public:
       cis_conn_handle_ = INVALID_ACL_HANDLE;
     }
     // TODO: Log SM details on failure
-    return common::StateMachine<>::ProcessEvent((uint32_t)event, p_data);
+    return common::StateMachine::ProcessEvent((uint32_t)event, p_data);
   }
 
   /**
@@ -184,10 +182,10 @@ public:
    * @brief Represents the IDLE state of the ASE.
    * The ASE is not configured and not in use.
    */
-  class StateIdle : public common::StateMachine<>::State {
+  class StateIdle : public common::StateMachine::State {
   public:
     explicit StateIdle(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::IDLE), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::IDLE), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -200,10 +198,10 @@ public:
    * @brief Represents the CODEC_CONFIGURED state of the ASE.
    * The ASE has been configured with a codec but QoS is not yet configured.
    */
-  class StateCodecConfigured : public common::StateMachine<>::State {
+  class StateCodecConfigured : public common::StateMachine::State {
   public:
     explicit StateCodecConfigured(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::CODEC_CONFIGURED), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::CODEC_CONFIGURED), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -216,10 +214,10 @@ public:
    * @brief Represents the QOS_CONFIGURED state of the ASE.
    * The ASE has been configured with a codec and QoS parameters.
    */
-  class StateQosConfigured : public common::StateMachine<>::State {
+  class StateQosConfigured : public common::StateMachine::State {
   public:
     explicit StateQosConfigured(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::QOS_CONFIGURED), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::QOS_CONFIGURED), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -232,10 +230,10 @@ public:
    * @brief Represents the ENABLING state of the ASE.
    * The ASE is being enabled and is waiting for the CIS to be established.
    */
-  class StateEnabling : public common::StateMachine<>::State {
+  class StateEnabling : public common::StateMachine::State {
   public:
     explicit StateEnabling(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::ENABLING), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::ENABLING), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -249,10 +247,10 @@ public:
    * The ASE is being disabled and is waiting for the client to confirm with a
    * Receiver Stop Ready operation. This state is only for Source ASEs.
    */
-  class StateDisabling : public common::StateMachine<>::State {
+  class StateDisabling : public common::StateMachine::State {
   public:
     explicit StateDisabling(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::DISABLING), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::DISABLING), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -265,10 +263,10 @@ public:
    * @brief Represents the STREAMING state of the ASE.
    * The ASE is actively streaming audio data.
    */
-  class StateStreaming : public common::StateMachine<>::State {
+  class StateStreaming : public common::StateMachine::State {
   public:
     explicit StateStreaming(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::STREAMING), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::STREAMING), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;
@@ -282,10 +280,10 @@ public:
    * This is a transient state where the ASE is being released. It will
    * transition to either IDLE (no caching) or CODEC_CONFIGURED (caching).
    */
-  class StateReleasing : public common::StateMachine<>::State {
+  class StateReleasing : public common::StateMachine::State {
   public:
     explicit StateReleasing(AscsAseStateMachine& sm)
-        : common::StateMachine<>::State(sm, StateId::RELEASING), sm(&sm) {}
+        : common::StateMachine::State(sm, StateId::RELEASING), sm(&sm) {}
     void OnEnter() override;
     void OnExit() override;
     bool ProcessEvent(uint32_t event, void* p_data) override;

@@ -268,29 +268,6 @@ class BluetoothStorageManagerTest(flags: FlagsWrapper) {
             assertThat(storageManager.getCustomMetadata(device1, key)).isEqualTo(value)
         }
 
-    @Test
-    fun initialize_withUnbondedDevice_removedFromDiskAtFirstEdit() =
-        runTest(testDispatcher) {
-            doReturn(arrayOf(device1, device2)).whenever(adapterService).bondedDevices
-            storageManager.setCustomMetadata(device1, key, value)
-            storageManager.setCustomMetadata(device2, key, value)
-
-            emulateBluetoothRestart()
-
-            // Emulate the device are unbonded (without triggering the bond state callback)
-            // This can happens in two scenario:
-            // 1. If the database on disk already contains unbonded devices from a previous version
-            // 2. If the global database of bonded devices is manually updated
-            doReturn(emptyArray<BluetoothDevice>()).whenever(adapterService).bondedDevices
-            assertThat(storageManager.getCustomMetadata(device1, key)).isEqualTo(value)
-            assertThat(storageManager.getCustomMetadata(device2, key)).isEqualTo(value)
-
-            // Side effect: the first database edit will remove all unbonded devices from storage
-            storageManager.setCustomMetadata(getTestDevice(4), key, value)
-            assertThat(storageManager.getCustomMetadata(device1, key)).isNull()
-            assertThat(storageManager.getCustomMetadata(device2, key)).isNull()
-        }
-
     companion object {
         @JvmStatic @Parameters(name = "{0}") fun getParams() = FlagsWrapper.progressionOf()
     }

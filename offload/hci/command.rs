@@ -610,7 +610,6 @@ pub struct LeGetVendorCapabilitiesComplete {
     pub big_set_channel_map_classification_support: Option<u16>,
     pub vendor_connection_handle_min: Option<u16>,
     pub vendor_connection_handle_max: Option<u16>,
-    pub connection_proximity_threshold_support: Option<u8>,
 }
 
 impl Read for LeGetVendorCapabilitiesComplete {
@@ -638,7 +637,6 @@ impl Read for LeGetVendorCapabilitiesComplete {
             big_set_channel_map_classification_support: r.read_u16(),
             vendor_connection_handle_min: r.read_u16(),
             vendor_connection_handle_max: r.read_u16(),
-            connection_proximity_threshold_support: r.read_u8(),
         })
     }
 }
@@ -667,7 +665,6 @@ impl Write for LeGetVendorCapabilitiesComplete {
         w.write_u16(self.big_set_channel_map_classification_support.unwrap_or(0));
         w.write_u16(self.vendor_connection_handle_min.unwrap_or(0));
         w.write_u16(self.vendor_connection_handle_max.unwrap_or(0));
-        w.write_u8(self.connection_proximity_threshold_support.unwrap_or(0));
     }
 }
 
@@ -682,7 +679,7 @@ fn test_le_get_vendor_capabilities() {
 fn test_le_get_vendor_capabilities_complete() {
     let dump = [
         0xe,  /* command complete */
-        0x26, /* len */
+        0x25, /* len */
         0x1,  /* num_hci_command_packets */
         0x53, 0xfd, /* opcode */
         0x0,  /* status */
@@ -706,8 +703,7 @@ fn test_le_get_vendor_capabilities_complete() {
         0x0, /* sniff_offload_support */
         0x0, 0x0, /* big_set_channel_map_classification_support */
         0x0, 0x3, /* vendor_connection_handle_min */
-        0xff, 0x3,  /* vendor_connection_handle_max */
-        0x00, /* connection_proximity_threshold_support */
+        0xff, 0x3, /* vendor_connection_handle_max */
     ];
     let Ok(Event::CommandComplete(e)) = Event::from_bytes(&dump) else { panic!() };
     let ReturnParameters::LeGetVendorCapabilities(ref p) = e.return_parameters else { panic!() };
@@ -732,7 +728,6 @@ fn test_le_get_vendor_capabilities_complete() {
     assert_eq!(p.big_set_channel_map_classification_support, Some(0x0000));
     assert_eq!(p.vendor_connection_handle_min, Some(0x0300));
     assert_eq!(p.vendor_connection_handle_max, Some(0x03ff));
-    assert_eq!(p.connection_proximity_threshold_support, Some(0x00));
     assert_eq!(e.to_bytes(), &dump[..]);
 }
 

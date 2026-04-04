@@ -15,7 +15,6 @@
 use android_hardware_bluetooth_offload_leaudio::{aidl, binder};
 
 use crate::arbiter::Arbiter;
-use aidl::android::hardware::bluetooth::offload::leaudio::DataDirection::DataDirection;
 use aidl::android::hardware::bluetooth::offload::leaudio::IHciProxy::{
     BnHciProxy, BpHciProxy, IHciProxy,
 };
@@ -40,8 +39,7 @@ static SERVICE: LazyLock<Service> = LazyLock::new(|| {
 #[derive(Default)]
 struct State {
     arbiter: Weak<Arbiter>,
-    tx_streams: HashMap<u16, StreamConfiguration>,
-    rx_streams: HashMap<u16, StreamConfiguration>,
+    streams: HashMap<u16, StreamConfiguration>,
     callbacks: Option<Strong<dyn IHciProxyCallbacks>>,
 }
 
@@ -53,15 +51,11 @@ impl Service {
     pub(crate) fn reset() {
         let mut state = SERVICE.state.lock().unwrap();
         if let Some(callbacks) = &state.callbacks {
-            for &handle in state.tx_streams.keys() {
-                let _ = callbacks.stopStream(handle.into(), DataDirection::INPUT);
-            }
-            for &handle in state.rx_streams.keys() {
-                let _ = callbacks.stopStream(handle.into(), DataDirection::OUTPUT);
+            for &handle in state.streams.keys() {
+                let _ = callbacks.stopStream(handle.into());
             }
         }
-        state.tx_streams.clear();
-        state.rx_streams.clear();
+        state.streams.clear();
     }
 
     pub(crate) fn set_arbiter(arbiter: Weak<Arbiter>) {
@@ -69,38 +63,21 @@ impl Service {
         state.arbiter = arbiter;
     }
 
-    pub(crate) fn start_stream(handle: u16, direction: DataDirection, config: StreamConfiguration) {
+    pub(crate) fn start_stream(handle: u16, config: StreamConfiguration) {
         let mut state = SERVICE.state.lock().unwrap();
         if let Some(callbacks) = &state.callbacks {
-            let _ = callbacks.startStream(handle.into(), direction, &config);
+            let _ = callbacks.startStream(handle.into(), &config);
         } else {
             log::warn!("Stream started without registered client");
         };
-
-        match direction {
-            DataDirection::INPUT => {
-                state.tx_streams.insert(handle, config);
-            }
-            DataDirection::OUTPUT => {
-                state.rx_streams.insert(handle, config);
-            }
-            _ => log::error!("Invalid direction"),
-        }
+        state.streams.insert(handle, config);
     }
 
-    pub(crate) fn stop_stream(handle: u16, direction: DataDirection) {
+    pub(crate) fn stop_stream(handle: u16) {
         let mut state = SERVICE.state.lock().unwrap();
-        match direction {
-            DataDirection::INPUT => {
-                state.tx_streams.remove(&handle);
-            }
-            DataDirection::OUTPUT => {
-                state.rx_streams.remove(&handle);
-            }
-            _ => log::error!("Invalid direction"),
-        }
+        state.streams.remove(&handle);
         if let Some(callbacks) = &state.callbacks {
-            let _ = callbacks.stopStream(handle.into(), direction);
+            let _ = callbacks.stopStream(handle.into());
         };
     }
 
@@ -143,11 +120,8 @@ impl IHciProxy for HciProxy {
     fn registerCallbacks(&self, callbacks: &Strong<dyn IHciProxyCallbacks>) -> BinderResult<()> {
         let mut state = self.state.lock().unwrap();
         state.callbacks = Some(callbacks.clone());
-        for (handle, config) in state.tx_streams.iter() {
-            let _ = callbacks.startStream((*handle).into(), DataDirection::INPUT, config);
-        }
-        for (handle, config) in state.rx_streams.iter() {
-            let _ = callbacks.startStream((*handle).into(), DataDirection::OUTPUT, config);
+        for (handle, config) in &state.streams {
+            let _ = callbacks.startStream((*handle).into(), config);
         }
         Ok(())
     }
@@ -157,7 +131,7 @@ impl IHciProxy for HciProxy {
         let seqnum: u16 = seqnum.try_into().map_err(|_| ExceptionCode::ILLEGAL_ARGUMENT)?;
 
         let state = self.state.lock().unwrap();
-        if let (Some(arbiter), Some(_)) = (state.arbiter.upgrade(), state.tx_streams.get(&handle)) {
+        if let (Some(arbiter), Some(_)) = (state.arbiter.upgrade(), state.streams.get(&handle)) {
             assert!(
                 data.len() <= arbiter.max_buf_len(),
                 "SDU Fragmentation over HCI is not supported"

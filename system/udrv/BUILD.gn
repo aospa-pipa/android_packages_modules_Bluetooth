@@ -15,11 +15,7 @@
 #
 
 source_set("udrv") {
-  sources = [
-    "ulinux/socket_local_client.cc",
-    "ulinux/socket_local_server.cc",
-    "ulinux/uipc.cc",
-  ]
+  sources = [ "ulinux/uipc.cc" ]
 
   include_dirs = [
     "include",

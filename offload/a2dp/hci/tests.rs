@@ -190,7 +190,6 @@ fn test_vendor_capabilities_override() {
         big_set_channel_map_classification_support: None,
         vendor_connection_handle_min: None,
         vendor_connection_handle_max: None,
-        connection_proximity_threshold_support: None,
     };
 
     let event = hci::CommandComplete {

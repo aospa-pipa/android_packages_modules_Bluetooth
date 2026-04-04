@@ -8,13 +8,3 @@ flag {
     bug: "489876039"
 }
 
-flag {
-    name: "system_server_simple_mac_permission_enforcement"
-    namespace: "com_android_bt"
-    description: "Rely to simple request to enforce permission and throw exception when they are missing"
-    bug: "497068035"
-    metadata {
-        purpose: PURPOSE_BUGFIX
-    }
-}
-

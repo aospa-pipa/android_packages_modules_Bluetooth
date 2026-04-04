@@ -2501,7 +2501,7 @@ TEST_F(DeviceIotConfigTest, test_device_iot_config_set_bin) {
   test::mock::osi_alarm::alarm_set.body = [&](alarm_t* /*alarm*/, uint64_t /*interval_ms*/,
                                               alarm_callback_t /*cb*/, void* /*data*/) {};
 
-  test::mock::osi_allocator::osi_calloc.body = [&](size_t size) { return new char[size](); };
+  test::mock::osi_allocator::osi_calloc.body = [&](size_t size) { return new char[size]; };
 
   {
     reset_mock_function_count_map();
@@ -2608,7 +2608,7 @@ TEST_F(DeviceIotConfigTest, test_device_iot_config_addr_set_bin) {
   test::mock::osi_alarm::alarm_set.body = [&](alarm_t* /*alarm*/, uint64_t /*interval_ms*/,
                                               alarm_callback_t /*cb*/, void* /*data*/) {};
 
-  test::mock::osi_allocator::osi_calloc.body = [&](size_t size) { return new char[size](); };
+  test::mock::osi_allocator::osi_calloc.body = [&](size_t size) { return new char[size]; };
 
   {
     reset_mock_function_count_map();

@@ -16,7 +16,6 @@
  */
 
 #include <bluetooth/types/address.h>
-#include <bluetooth/types/bt_octets.h>
 #include <bluetooth/types/string_helpers.h>
 #include <com_android_bluetooth_flags.h>
 #include <gmock/gmock.h>
@@ -563,22 +562,6 @@ static BtmAppReg dummy_app_reg = {dummy_pin_callback,
                                   dummy_le_callback,
                                   dummy_le_key_callback,
                                   dummy_sirk_verification_callback};
-
-TEST_F(StackBtmSecWithInitFreeTest, btm_sec_register_success) {
-  // Ensure IR is zero to trigger btm_ble_reset_id which might generate keys
-  // and notify the app. The app_ pointer must be set before this happens
-  // to prevent null pointer dereference.
-  BtmSecurity::Get().devcb_.id_keys.ir = ZERO_OCTET16;
-
-  // Register the application
-  bool result = btm_sec_register(dummy_app_reg);
-
-  // Verify registration was successful
-  EXPECT_TRUE(result);
-
-  // Verify the app pointer was set
-  EXPECT_EQ(BtmSecurity::Get().app_, &dummy_app_reg);
-}
 
 // Test fixture for testing the Link Key Request Timer logic.
 class StackBtmSecLinkKeyRequestTest : public StackBtmSecWithInitFreeTest {

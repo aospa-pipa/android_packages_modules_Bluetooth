@@ -971,9 +971,11 @@ public final class BluetoothGatt implements BluetoothProfile {
         mCallback = callback;
         mExecutor = executor;
         mGattConnectionSettings = requireNonNull(gattConnectionSettings);
-
+        UUID uuid = UUID.randomUUID();
+        Log.d(TAG, "BluetoothGatt() UUID=" + uuid);
         try {
             mService.registerClient(
+                    new ParcelUuid(uuid),
                     mBluetoothGattCallback,
                     false, // eattSupport
                     mTransport,
@@ -1118,8 +1120,12 @@ public final class BluetoothGatt implements BluetoothProfile {
                 mConnState = CONN_STATE_CONNECTING;
             }
 
+            UUID uuid = UUID.randomUUID();
+            Log.d(TAG, "reconnect from connect(), UUID=" + uuid);
+
             try {
                 mService.registerClient(
+                        new ParcelUuid(uuid),
                         mBluetoothGattCallback,
                         /* eatt_support= */ false,
                         mTransport,
