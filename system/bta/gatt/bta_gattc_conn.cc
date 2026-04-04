@@ -262,7 +262,20 @@ void bta_gattc_conn(tBTA_GATTC_CLCB* p_clcb) {
     if (p_clcb->p_srcb->mtu == GATT_DEF_BLE_MTU_SIZE) {
       // Set the default based on the APP's preference
       log::verbose("bd_addr: {}", p_clcb->bda);
-      GATTC_SetDefaultMtu(p_clcb->bda);
+      uint16_t current_mtu = 0;
+      tGATTC_TryMtuRequestResult result =
+              GATTC_TryMtuRequest(p_clcb->bda, p_clcb->transport, p_clcb->bta_conn_id,
+                                  &current_mtu);
+      if (result == MTU_EXCHANGE_NOT_DONE_YET) {
+        log::info ("MTU is NOT YET DONE {}", static_cast<int>(result));
+        GATTC_SetDefaultMtu(p_clcb->bda);
+      } else {
+        log::info ("MTU is PENDING or ALREADY DONE {}", static_cast<int>(result));
+        if (result == MTU_EXCHANGE_ALREADY_DONE) {
+          log::info ("MTU ALREADY DONE {}", static_cast<int>(result));
+          p_clcb->p_srcb->mtu = current_mtu;
+        }
+      }
     }
   }
 
