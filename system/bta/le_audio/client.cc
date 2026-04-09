@@ -2071,10 +2071,10 @@ public:
        * (see condition in `lc3_hr_setup_decoder``) so we will choose the
        * highest possible sample rate for the PCM to feed to Audio Framework.
        */
-      const auto sink_context_types = {LeAudioContextType::UNSPECIFIED,
-                                       LeAudioContextType::CONVERSATIONAL, LeAudioContextType::GAME,
+      const auto sink_context_types = {/*LeAudioContextType::UNSPECIFIED,*/
+                                       LeAudioContextType::CONVERSATIONAL/*, LeAudioContextType::GAME,
                                        LeAudioContextType::VOICEASSISTANTS,
-                                       LeAudioContextType::LIVE};
+                                       LeAudioContextType::LIVE*/};
       audio_framework_sink_config.sample_rate = bluetooth::audio::le_audio::kSampleRate16000;
       for (auto context_type : sink_context_types) {
         auto sink_configuration = group->GetAudioSessionCodecConfigForDirection(
