@@ -5804,7 +5804,7 @@ public:
       } else {
         log::warn("Audio HAL did not set metadata for local source");
       }
-      CancelLocalAudioSourceStreamingRequest();
+      CancelLocalAudioSourceStreamingRequestWithUnsupported();
       return;
     }
 
@@ -6189,7 +6189,7 @@ public:
       } else {
         log::warn("Audio HAL did not set metadata for local sink");
       }
-      CancelLocalAudioSinkStreamingRequest();
+      CancelLocalAudioSinkStreamingRequestWithUnsupported();
       return;
     }
 
