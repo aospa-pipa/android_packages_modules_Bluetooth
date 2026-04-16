@@ -270,10 +270,21 @@ void bta_gattc_conn(tBTA_GATTC_CLCB* p_clcb) {
         log::info ("MTU is NOT YET DONE {}", static_cast<int>(result));
         GATTC_SetDefaultMtu(p_clcb->bda);
       } else {
-        log::info ("MTU is PENDING or ALREADY DONE {}", static_cast<int>(result));
         if (result == MTU_EXCHANGE_ALREADY_DONE) {
-          log::info ("MTU ALREADY DONE {}", static_cast<int>(result));
+          log::info ("MTU is ALREADY DONE {}", static_cast<int>(result));
           p_clcb->p_srcb->mtu = current_mtu;
+        } else if (result == MTU_EXCHANGE_IN_PROGRESS) {
+          log::info ("MTU is Added to the CMD QUEUE {}", static_cast<int>(result));
+          tBTA_GATTC_API_CFG_MTU* p_buf =
+                 (tBTA_GATTC_API_CFG_MTU*)osi_malloc(sizeof(tBTA_GATTC_API_CFG_MTU));
+
+          p_buf->hdr.event          = BTA_GATTC_API_CFG_MTU_EVT;
+          p_buf->hdr.layer_specific = static_cast<uint16_t>(p_clcb->bta_conn_id);
+          p_buf->mtu                = p_clcb->p_srcb->mtu;
+          p_buf->mtu_cb             = nullptr;
+          p_buf->mtu_cb_data        = nullptr;
+          p_clcb->p_q_cmd_queue.push_back(
+                                     reinterpret_cast<const tBTA_GATTC_DATA*>(p_buf));
         }
       }
     }
