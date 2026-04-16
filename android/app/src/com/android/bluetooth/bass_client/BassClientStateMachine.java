@@ -2162,6 +2162,7 @@ class BassClientStateMachine extends StateMachine {
                     transitionTo(mConnected);
                 }
                 case SET_BCAST_CODE,
+                        UPDATE_BCAST_SOURCE,
                         REMOVE_BCAST_SOURCE,
                         SWITCH_BCAST_SOURCE,
                         STOP_PENDING_PA_SYNC,
