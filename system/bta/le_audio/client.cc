@@ -6658,6 +6658,22 @@ public:
     BidirectionalPair<AudioContexts> remote_metadata = config.second;
     if (!remote_metadata.sink.any() && !remote_metadata.source.any()) {
       log::warn("No valid metadata to update or reconfigure to");
+      /* Avoid reconfiguring to MEDIA while a broadcast is active and the unicast
+      * group is streaming. Reconfiguring during an active broadcast can disrupt
+      * playback. GAME context is exempt because it requires low-latency unicast
+      * and takes priority over broadcast. */
+      if (LeAudioBroadcaster::IsLeAudioBroadcasterRunning() &&
+          LeAudioBroadcaster::Get()->IsLeAudioBroadcastActive() &&
+          group->IsStreaming() && !group->IsReleasingOrIdle() &&
+          configuration_context_type_ != LeAudioContextType::GAME &&
+          new_config_context == LeAudioContextType::MEDIA) {
+        log::info(
+                "Broadcast is active, current configuration context is {}. "
+                "Not reconfig to {} right now.",
+                ToString(configuration_context_type_), ToString(new_config_context));
+        /* Keep the current context to prevent unnecessary reconfiguration. */
+        new_config_context = configuration_context_type_;
+      }
       if (group->IsStreaming() && (new_config_context > LeAudioContextType::UNSPECIFIED) &&
           (new_config_context != configuration_context_type_)) {
         log::warn(" Stop the stream to group_id: {} and reconfigure from {} ->  {}",
