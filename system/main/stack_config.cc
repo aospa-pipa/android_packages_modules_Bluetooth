@@ -48,6 +48,7 @@ const char* PTS_L2CAP_ECOC_MIN_KEY_SIZE = "PTS_L2capEcocMinKeySize";
 const char* PTS_L2CAP_ECOC_INITIAL_CHAN_CNT = "PTS_L2capEcocInitialChanCnt";
 const char* PTS_RFCOMM_SEND_RLS = "PTS_RFCOMM_send_rls";
 const char* PTS_REJ_WRITE_REQ = "PTS_BCS_Rej_Write_req";
+const char* PTS_L2CAP_SILENT_DISCARD = "PTS_L2CAP_SilentDiscard";
 const char* PTS_BCS_RANGING_SELECT = "PTS_BCS_RangingSelect";
 const char* PTS_ENB_IND_RAS = "PTS_BCSenablingind";
 const char* PTS_FOC_DATA_WRITE = "PTS_FOCdatawrite";
@@ -190,6 +191,10 @@ static bool get_pts_bcs_rej_write_req(void) {
   return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_REJ_WRITE_REQ, false);
 }
 
+static bool get_pts_l2cap_silent_discard(void) {
+  return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_L2CAP_SILENT_DISCARD, false);
+}
+
 static bool get_pts_bcs_ranging_select(void) {
   return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_BCS_RANGING_SELECT, false);
 }
@@ -257,6 +262,7 @@ const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_l2cap_ecoc_connect_remaining,
                                   get_pts_rfcomm_rls_check,
                                   get_pts_bcs_rej_write_req,
+                                  get_pts_l2cap_silent_discard,
                                   get_pts_bcs_ranging_select,
                                   get_enable_ind_ras_real_time,
                                   get_pts_foc_data_write,
