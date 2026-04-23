@@ -160,6 +160,11 @@ class HeadsetSystemInterface {
         // terminated for CHUP callback event
         if (mHeadsetService.isVirtualCallStarted()) {
             mHeadsetService.stopScoUsingVirtualVoiceCall();
+            // Notify audio framework about SCO disconnection
+            if (android.media.audio.Flags.btAudioDisconnectApi()) {
+                getAudioManager().handleBluetoothHfpAudioDisconnected(
+                    device, AudioManager.HFP_AUDIO_DISCONNECT_REMOTE_INITIATED);
+            }
         } else {
             BluetoothInCallService bluetoothInCallService = getBluetoothInCallServiceInstance();
             if (bluetoothInCallService != null) {
