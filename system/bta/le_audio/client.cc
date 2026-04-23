@@ -6098,8 +6098,12 @@ public:
                                             kLogAfResume + "LocalSink",
                                             "r_state: " + ToString(audio_receiver_state_) +
                                                     ", s_state: " + ToString(audio_sender_state_));
-    audio_dev_active_tracker_.LogAHALResumeOperation(
-            active_group_id_, bluetooth::le_audio::types::kLeAudioDirectionSink);
+    if (LeAudioBroadcaster::IsLeAudioBroadcasterRunning() &&
+        LeAudioBroadcaster::Get()->IsLeAudioBroadcastStreaming()) {
+      log::info("Broadcast is streaming, cancel local sink stream request");
+      CancelLocalAudioSinkStreamingRequestWithUnsupported();
+      return;
+    }
 
     /* Note: This callback is from audio hal driver.
      * Bluetooth peer is a Source for Audio Framework.
@@ -6654,6 +6658,22 @@ public:
     BidirectionalPair<AudioContexts> remote_metadata = config.second;
     if (!remote_metadata.sink.any() && !remote_metadata.source.any()) {
       log::warn("No valid metadata to update or reconfigure to");
+      /* Avoid reconfiguring to MEDIA while a broadcast is active and the unicast
+      * group is streaming. Reconfiguring during an active broadcast can disrupt
+      * playback. GAME context is exempt because it requires low-latency unicast
+      * and takes priority over broadcast. */
+      if (LeAudioBroadcaster::IsLeAudioBroadcasterRunning() &&
+          LeAudioBroadcaster::Get()->IsLeAudioBroadcastActive() &&
+          group->IsStreaming() && !group->IsReleasingOrIdle() &&
+          configuration_context_type_ != LeAudioContextType::GAME &&
+          new_config_context == LeAudioContextType::MEDIA) {
+        log::info(
+                "Broadcast is active, current configuration context is {}. "
+                "Not reconfig to {} right now.",
+                ToString(configuration_context_type_), ToString(new_config_context));
+        /* Keep the current context to prevent unnecessary reconfiguration. */
+        new_config_context = configuration_context_type_;
+      }
       if (group->IsStreaming() && (new_config_context > LeAudioContextType::UNSPECIFIED) &&
           (new_config_context != configuration_context_type_)) {
         log::warn(" Stop the stream to group_id: {} and reconfigure from {} ->  {}",
