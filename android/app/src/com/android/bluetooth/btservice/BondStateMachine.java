@@ -1044,6 +1044,9 @@ public final class BondStateMachine extends StateMachine {
         Log.d(TAG, "Removing device " + device.getAddress() + " from Absolute Volume rejectlist");
         InteropUtil.interopDatabaseRemoveAddr(
              InteropUtil.InteropFeature.INTEROP_DISABLE_ABSOLUTE_VOLUME, device.getAddress());
+        Log.d(TAG, "Removing device " + device.getAddress() + " from codec negotiation rejectlist");
+        InteropUtil.interopDatabaseRemoveAddr(
+                InteropUtil.InteropFeature.INTEROP_DISABLE_CODEC_NEGOTIATION, device.getAddress());
     }
 
     /**
