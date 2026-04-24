@@ -1725,6 +1725,16 @@ public:
         }
       }
       log::info("Call is coming, speed up reconfiguration for a call");
+      /* If dual mode is enabled and duplex preference is not LE audio,
+       * no need to reconfigure LE audio stream for a call. HFP will handle it.
+       * This prevents CIG creation for CONVERSATIONAL when LE audio is not streaming*/
+      if (IsPreferredProfileLeAudioInDualMode(group)) {
+        log::info(
+                "Dual mode enabled and duplex preference is not LE audio, "
+                "skip reconfiguration to CONVERSATIONAL for group {}",
+                group->group_id_);
+        return;
+      }
       local_metadata_context_types_.sink.clear();
       local_metadata_context_types_.source.clear();
       reconfigure = true;
@@ -2082,6 +2092,19 @@ public:
     return group->is_duplex_preference_le_audio;
   }
 
+  /* Returns true if dual mode audio is enabled and duplex preference is not LE audio.
+   * Used to skip LE audio reconfiguration/preparation for calls when HFP should handle it.
+   */
+  bool IsPreferredProfileLeAudioInDualMode(LeAudioDeviceGroup* group) {
+#ifdef __ANDROID__
+    return bluetooth::os::GetSystemPropertyBool(
+                   bluetooth::os::kIsDualModeAudioEnabledProperty, false) &&
+           !group->is_duplex_preference_le_audio;
+#else
+    return false;
+#endif
+  }
+
   void groupSetAndNotifyInactive(bool autonomous_inactive) {
     if (active_group_id_ == bluetooth::groups::kGroupUnknown) {
       return;
@@ -2361,7 +2384,14 @@ public:
        */
       log::info("prepare_for_a_call {}", prepare_for_a_call);
       if (prepare_for_a_call) {
-        if (!PrepareStreamForAConversational(group)) {
+        /* If dual mode is enabled and duplex preference is not LE audio,
+         * no need to prepare the stream for a call. */
+        if (IsPreferredProfileLeAudioInDualMode(group)) {
+          log::info(
+                  "Dual mode enabled and duplex preference is not LE audio, "
+                  "skip PrepareStreamForAConversational for group {}",
+                  group->group_id_);
+        } else if (!PrepareStreamForAConversational(group)) {
           log::error("Could not configure group {} for a call", group->group_id_);
           groupSetAndNotifyInactive(/* autonomous_inactive */ false);
           return;
