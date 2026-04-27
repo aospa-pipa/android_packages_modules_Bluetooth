@@ -2421,6 +2421,15 @@ public class HeadsetService extends ConnectableProfile {
         }
     }
 
+    /**
+     * Get the HeadsetSystemInterface instance.
+     *
+     * @return HeadsetSystemInterface used by this service
+     */
+    public HeadsetSystemInterface getSystemInterface() {
+        return mSystemInterface;
+    }
+
     public boolean isInCall() {
         boolean isCallOngoing = mSystemInterface.isInCall();
         Log.d(TAG," isInCall " + isCallOngoing);

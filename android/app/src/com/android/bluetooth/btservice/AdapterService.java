@@ -4570,8 +4570,15 @@ public class AdapterService extends Service {
 
     /** Handle Bluetooth app state when active device changes for a given {@code profile}. */
     public void handleActiveDeviceChange(int profile, BluetoothDevice device) {
-        if (!true) {
-            mActiveDeviceManager.profileActiveDeviceChanged(profile, device);
+        final var headset = getHeadsetService();
+        Log.d(TAG, "handleActiveDeviceChange: profile=" + profile
+                                                        + " device="  + device
+                                                        + " headset=" + headset);
+        if (headset.isPresent()) {
+            final var systemInterface = headset.get().getSystemInterface();
+            if (systemInterface != null && !systemInterface.isScoManagedByAudioEnabled()) {
+                mActiveDeviceManager.profileActiveDeviceChanged(profile, device);
+            }
         }
         mSilenceDeviceManager.profileActiveDeviceChanged(profile, device);
         mPhonePolicy.ifPresent(policy -> policy.profileActiveDeviceChanged(profile, device));
