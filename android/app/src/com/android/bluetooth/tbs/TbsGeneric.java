@@ -805,7 +805,7 @@ public class TbsGeneric {
         if (entry == null) {
             Log.d(TAG, "processCallControlOp(): call id is null");
             opResult = TbsGatt.CALL_CONTROL_POINT_RESULT_INVALID_CALL_INDEX;
-            mTbsGatt.setCallControlPointResult(device, opcode, callIndex, opResult);
+            mTbsGatt.setCallControlPointResult(device, 0, callIndex, opResult);
             return;
         }
 
