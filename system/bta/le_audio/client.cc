@@ -1785,6 +1785,14 @@ public:
   void SetInVoipCall(bool in_call) override {
     log::debug("in_voip_call: {}", in_call);
     in_voip_call_ = in_call;
+
+    if (!in_voip_call_) {
+      if (configuration_context_type_ == LeAudioContextType::CONVERSATIONAL) {
+        log::info("Voip call is ended, clear sink context type");
+        local_metadata_context_types_.sink.clear();
+        audioContextTypeManager_->OverrideContextTypes(local_metadata_context_types_);
+      }
+    }
   }
 
   bool IsInVoipCall() override {
