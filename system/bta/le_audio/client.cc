@@ -5525,7 +5525,8 @@ public:
       remote_contexts = local_config.second;
     }
 
-    if (!remote_contexts.sink.any() && !remote_contexts.source.any()) {
+    bool isPtsContextsEnforced = osi_property_get_bool("persist.bluetooth.leaudio.enforce.contexts.pts", false);
+    if (!remote_contexts.sink.any() && !remote_contexts.source.any() && !isPtsContextsEnforced) {
       handleInvalidContextTypeResumeRequest(group);
       return false;
     }
