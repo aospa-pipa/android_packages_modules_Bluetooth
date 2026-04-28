@@ -378,6 +378,21 @@ bool getHfClientConnectionStatus() {
    return is_hf_client_device_connected();
 }
 
+BtStatus GetScoStreamStatus() {
+  CHECK_BTHF_INIT();
+  if (isScoManagedByAudio) {
+    log::error("GetScoStreamStatus before calling disconnectAudio");
+    for (int i = 0; i < btif_max_hf_clients; ++i) {
+      if ((btif_hf_cb[i].audio_state == BTHF_AUDIO_STATE_CONNECTED) ||
+        (btif_hf_cb[i].audio_state == BTHF_AUDIO_STATE_CONNECTING)) {
+        return BtifStatus();;
+      }
+    }
+  }
+  log::error("No active sco streaming");
+  return BtifStatus(DEVICE_NOT_FOUND);
+}
+
 /*******************************************************************************
  *
  * Function         btif_hf_upstreams_evt
