@@ -206,7 +206,7 @@ BluetoothAudioCtrlAck HfpTransport::SuspendRequest() {
   hfp_pending_cmd_ = HFP_CTRL_CMD_NONE;
   if (status) {
     LogMetricHfpSuspendStream(addr);
-    return BluetoothAudioCtrlAck::SUCCESS_FINISHED;
+    return BluetoothAudioCtrlAck::PENDING;
   } else {
     return BluetoothAudioCtrlAck::FAILURE;
   }
