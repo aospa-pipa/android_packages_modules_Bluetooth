@@ -3111,7 +3111,9 @@ public class AdapterService extends Service {
 
         // Pairing is unreliable while scanning, so cancel discovery
         // Note, remove this when native stack improves
-        mNativeInterface.cancelDiscovery();
+        if (isDiscovering()) {
+            mNativeInterface.cancelDiscovery();
+        }
         sendCreateBondMessage(device, transport, remoteP192Data, remoteP256Data);
         return true;
     }
