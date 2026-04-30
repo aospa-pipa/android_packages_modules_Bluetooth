@@ -1847,7 +1847,8 @@ const t_cmd console_cmd_list[] = {
      "\n interval(1-interval low, 2-interval medium, 3-interval high),"
      "\n primary phy(1 for LE 1M, 3 for LE Coded),"
      "\n secondary phy (1 for LE 1M, 2 for LE 2M and 3 for LE Coded),"
-     "\n advertisement type (0 for PUBLIC TYPE, 1 for RANDOM TYPE)",
+     "\n advertisement type (0 for PUBLIC TYPE, 1 for RANDOM TYPE),"
+     "\n 0x02 general discoverable, 0x06 general discoverable + LE only)",
      0},
     {"unregister_advertiser", do_unregister_adv_set, ":: UnregisterAdvertiser",
      0},
@@ -2875,6 +2876,9 @@ void do_start_adv_set(char* p) {
             break;
           case 2:
             arr[2] = 2;
+            break;
+          case 6:
+            arr[6] = 6;
             break;
   }
 
