@@ -5835,13 +5835,13 @@ public:
       log::error("invalid resume request for context type: {}",
                  ToString(upcoming_configuration_context_type));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
-       */
       if (audioContextTypeManager_->IsAnyMetadataSet(
                   bluetooth::le_audio::types::kLeAudioDirectionSource)) {
         handleInvalidContextTypeResumeRequest(group);
       } else {
         log::warn("Audio HAL did not set metadata for local source");
       }
+      */
       CancelLocalAudioSourceStreamingRequestWithUnsupported();
       return;
     }
@@ -6230,13 +6230,13 @@ public:
       log::error("invalid resume request for context type: {}",
                  ToString(configuration_context_type_));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
-       */
       if (audioContextTypeManager_->IsAnyMetadataSet(
                   bluetooth::le_audio::types::kLeAudioDirectionSink)) {
         handleInvalidContextTypeResumeRequest(group);
       } else {
         log::warn("Audio HAL did not set metadata for local sink");
       }
+      */
       CancelLocalAudioSinkStreamingRequestWithUnsupported();
       return;
     }
