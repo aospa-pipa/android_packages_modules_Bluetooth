@@ -680,6 +680,7 @@ static void bta_ag_setup_and_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) 
   }
 
   bta_ag_do_disc(p_scb, bta_ag_svc_mask[p_scb->conn_service]);
+  p_scb->state = BTA_AG_OPEN_ST;
   bta_ag_rfc_open(p_scb, data);
 }
 
@@ -884,6 +885,7 @@ void bta_ag_rfc_acp_open(tBTA_AG_SCB* p_scb, const tBTA_AG_DATA& data) {
     /* do service discovery to get features */
     bta_ag_do_disc(p_scb, bta_ag_svc_mask[p_scb->conn_service]);
 
+    p_scb->state = BTA_AG_OPEN_ST;
     /* continue with common open processing */
     bta_ag_rfc_open(p_scb, data);
   }
