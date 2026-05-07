@@ -3096,6 +3096,7 @@ private:
 
       return;
     }
+    bool bapPtsPrefRtn = osi_property_get_bool("persist.bluetooth.leaudio.bap.pts.pref.rtn", false);
 
     /* Internal helper for filling in the QoS parameters for an ASE, based
      * on the codec configure state and the prefferend ASE QoS parameters.
@@ -3104,7 +3105,7 @@ private:
      *       PrepareAndSendConfigQos(), once the whole group transitions to a
      *       proper state.
      */
-    auto qos_config_update = [leAudioDevice](
+    auto qos_config_update = [leAudioDevice, bapPtsPrefRtn](
                                      const struct bluetooth::le_audio::client_parser::ascs::
                                              ase_codec_configured_state_params& rsp,
                                      bluetooth::le_audio::types::AseQosPreferences& out_qos,
@@ -3126,7 +3127,7 @@ private:
       /* Validate and update QoS to be consistent */
       if ((!out_cfg.max_transport_latency ||
            out_cfg.max_transport_latency > rsp.max_transport_latency) ||
-          !out_cfg.retrans_nb) {
+          !out_cfg.retrans_nb || bapPtsPrefRtn) {
         out_cfg.max_transport_latency = rsp.max_transport_latency;
         out_cfg.retrans_nb = rsp.preferred_retrans_nb;
         log::info(
