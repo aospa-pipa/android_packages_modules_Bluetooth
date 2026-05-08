@@ -209,6 +209,7 @@ BluetoothAudioCtrlAck HfpTransport::SuspendRequest() {
     if (streamstatus) {
       log::info("There is an ongoing SCO. Need to ack pending");
       LogMetricHfpSuspendStream(addr);
+      hfp_pending_cmd_ = HFP_CTRL_CMD_SUSPEND;
       return BluetoothAudioCtrlAck::PENDING;
     } else {
       log::info("No active SCO. Acking success");
