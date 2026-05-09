@@ -2888,6 +2888,9 @@ void do_start_adv_set(char* p) {
   // adv data
   uint8_t arr[] = {2,1,0,10, 9, 'G', 'A', 'T', 'T', '-', 'T', 'O', 'O', 'L'};
   switch(adv_type) {
+          case 0:
+            arr[2] = 0;
+            break;
           case 1:
             arr[2] = 1;
             break;
@@ -2895,7 +2898,12 @@ void do_start_adv_set(char* p) {
             arr[2] = 2;
             break;
           case 6:
-            arr[6] = 6;
+            arr[2] = 6;
+            break;
+          default:
+            printf("%s:: unsupported flags value=0x%x, using 0x00\n", __FUNCTION__,
+                   adv_type);
+            arr[2] = 0;
             break;
   }
 
