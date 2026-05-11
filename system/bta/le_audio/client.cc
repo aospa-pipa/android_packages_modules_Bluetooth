@@ -6587,6 +6587,21 @@ public:
       }
     }
 
+    /* If current context is GAME or LIVE, update local metadata should clean decode metadata
+       if receiver state is IDLE and there is no configuration pending
+    */
+    if (audio_receiver_state_ == AudioState::IDLE &&
+        (configuration_context_type_ == LeAudioContextType::LIVE ||
+         configuration_context_type_ == LeAudioContextType::GAME) &&
+        (local_metadata_context_types_.sink.test(LeAudioContextType::LIVE) ||
+         local_metadata_context_types_.sink.test(LeAudioContextType::GAME)) &&
+        !group->IsPendingConfiguration() &&
+        !group->IsSuspendedForReconfiguration()) {
+      log::info("Clearing stale LIVE/GAME decoding context: receiver IDLE, not reconfiguring");
+      local_metadata_context_types_.sink.clear();
+      audioContextTypeManager_->SetDecodingSessionMetadata({});
+    }
+
     if (IsReconfigurationTimeoutRunning(group->group_id_)) {
       log::info("Skip it as group is reconfiguring");
       auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
