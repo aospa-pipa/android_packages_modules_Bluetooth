@@ -3356,31 +3356,37 @@ void do_le_server_send_indication(char* p) {
 }
 
 void do_le_server_send_multi_notification(char* p) {
-  tGATT_STATUS Ret = GATT_SUCCESS;
-  uint8_t num_attr = 0;
-  uint16_t attr_handles[10];
-  uint16_t lens[10];
-  int i = 0, j = 0;
-  std::vector<std::vector<uint8_t>> values;
+  uint8_t num_attr = static_cast<uint8_t>(get_int(&p, -1));
+  if (num_attr == 0 || num_attr > 10) {
+    printf("%s:: Invalid num_attr=%u (must be 1-10)\n", __FUNCTION__, num_attr);
+    return;
+  }
 
-  num_attr = get_int(&p, -1);
-  for (i = 0; i < num_attr; i++) {
-    attr_handles[i] = get_hex(&p, -1);
+  std::vector<btgatt_multi_notif_params_t> params(num_attr);
+
+  for (int i = 0; i < num_attr; i++) {
+    params[i].attribute_handle = static_cast<uint16_t>(get_hex(&p, -1));
   }
-  for (i = 0; i < num_attr; i++) {
-    lens[i] = get_int(&p, 0);
-  }
-  for (i = 0; i < num_attr; i++) {
-    std::vector<uint8_t> value;
-    for (j = 0; j < lens[i]; j++) {
-      value.push_back(get_hex_byte(&p, 0));
+
+  for (int i = 0; i < num_attr; i++) {
+    uint16_t len = static_cast<uint16_t>(get_int(&p, 0));
+    if (len > GATT_MAX_ATTR_LEN) {
+      printf("%s:: attr[%d] len=%u exceeds GATT_MAX_ATTR_LEN=%d\n",
+             __FUNCTION__, i, len, GATT_MAX_ATTR_LEN);
+      return;
     }
-    values.push_back(value);
+    params[i].len = len;
   }
 
-  Ret = sGattInterface->sSendMultiNotification(g_conn_id, num_attr,
-                                               attr_handles, lens, values);
-  printf("%s:: Ret=%d \n", __FUNCTION__, Ret);
+  for (int i = 0; i < num_attr; i++) {
+    for (int j = 0; j < params[i].len; j++) {
+      params[i].value[j] = static_cast<uint8_t>(get_hex_byte(&p, 0));
+    }
+  }
+
+  BtStatus Ret = sGattIfaceScan->server->send_multi_notification(
+      g_conn_id, params.data(), num_attr);
+  printf("%s:: Ret=%d\n", __FUNCTION__, static_cast<int>(Ret));
 }
 
 /**************************************************
