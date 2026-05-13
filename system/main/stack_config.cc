@@ -65,6 +65,7 @@ const char* PTS_GATT_READ_MULTIPLE_NOT_SUPPORTED_DURING_DISCOVERY =
         "PTS_GattReadMultipleNotSupportedDuringDiscovery";
 const char* PTS_L2CAP_LE_MALFORMED_PDU = "PTS_L2capLeMalformedPdu";
 const char* PTS_LE_DISABLE_ENCRYP = "PTS_LeDisableEncryp";
+const char* PTS_L2CAP_LE_INSUFF_ENC = "PTS_L2capLeInsuffEnc";
 
 static std::unique_ptr<config_t> config;
 }  // namespace
@@ -260,6 +261,10 @@ static bool get_pts_le_disable_encryp(void) {
   return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_LE_DISABLE_ENCRYP, false);
 }
 
+static int get_pts_l2cap_le_insuff_enc(void) {
+  return config_get_int(*config, CONFIG_DEFAULT_SECTION, PTS_L2CAP_LE_INSUFF_ENC, 0);
+}
+
 const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_secure_only_mode,
                                   get_pts_conn_updates_disabled,
@@ -292,6 +297,7 @@ const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_DB_out_of_sync,
                                   get_pts_gatt_read_multiple_not_supported_during_discovery,
                                   get_pts_l2cap_le_malformed_pdu,
-                                  get_pts_le_disable_encryp};
+                                  get_pts_le_disable_encryp,
+                                  get_pts_l2cap_le_insuff_enc};
 
 const stack_config_t* stack_config_get_interface(void) { return &interface; }
