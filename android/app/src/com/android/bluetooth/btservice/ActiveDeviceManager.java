@@ -715,7 +715,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     boolean leAudioMadeActive =
                             setLeAudioActiveDevice(device, /* stopAudio= */ true);
                     if (leAudioMadeActive && !Utils.isDualModeAudioEnabled()) {
-                        setA2dpActiveDevice(null, /* stopAudio= */ false);
+                    //  setA2dpActiveDevice(null, /* stopAudio= */ false);
                         setHfpActiveDevice(null);
                     }
                 } else if (isLeAudioHearingAidDevice(device)) {
