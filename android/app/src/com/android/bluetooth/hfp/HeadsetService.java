@@ -1636,7 +1636,7 @@ public class HeadsetService extends ConnectableProfile {
                 Log.w(TAG, "startScoUsingVirtualVoiceCall: no active device");
                 return false;
             }
-            if (isVoipLeaWarEnabled()) {
+            if (isVoipLeaWarEnabled() && !mSystemInterface.isScoManagedByAudioEnabled()) {
                 CallAudio mCallAudio = CallAudio.get();
                 if (mCallAudio != null && mCallAudio.getBroadcastedActiveDevice() == null) {
                     Log.w(TAG, "startScoUsingVirtualVoiceCall: Broadcasted HFP Active Device is null");

@@ -1496,6 +1496,10 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     case AudioDeviceInfo.TYPE_BLE_HEADSET,
                             AudioDeviceInfo.TYPE_BLE_SPEAKER,
                             AudioDeviceInfo.TYPE_BLE_HEARING_AID -> {
+                        CallAudio mCallAudio = CallAudio.get();
+                        if (mCallAudio != null && isVoipLeaWarEnabled()) {
+                            mCallAudio.updateActiveDevice(null, mCallAudio.LE_AUDIO_VOICE);
+                        }
                         mAdapterService
                                 .getLeAudioService()
                                 .ifPresent(
@@ -1526,6 +1530,10 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                                              });
                     }
                     case AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> {
+                        CallAudio mCallAudio = CallAudio.get();
+                        if (mCallAudio != null && isVoipLeaWarEnabled()) {
+                            mCallAudio.updateActiveDevice(null, mCallAudio.HFP);
+                        }
                         mAdapterService
                                 .getHeadsetService()
                                 .ifPresent(s -> s.handleAudioDeviceRemoved(device));

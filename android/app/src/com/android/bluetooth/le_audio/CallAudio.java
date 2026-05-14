@@ -41,6 +41,7 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.media.BluetoothProfileConnectionInfo;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -58,6 +59,7 @@ import com.android.bluetooth.hfp.HeadsetService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -408,23 +410,23 @@ public class CallAudio {
         intent.putExtra(BluetoothProfile.EXTRA_STATE, toState);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
         intent.addFlags(Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-        headsetService.get().sendBroadcastAsUser(
+        headsetService.get().sendBroadcast(
                 intent,
-                UserHandle.ALL,
                 BLUETOOTH_CONNECT,
                 Util.getTempBroadcastBundle());
     }
 
     public void broadcastActiveDevice(BluetoothDevice device) {
-        Log.d(TAG, "broadcast active device changed " + device);
+        Log.d(TAG, "broadcastActiveDevice: " + device);
 
         final var headsetService = mAdapterService.getHeadsetService();
         if (headsetService.isEmpty()) {
-            Log.w(TAG, "broadcastConnectionState: HeadsetService not initialized. Return!");
+            Log.w(TAG, "broadcastActiveDevice: HeadsetService not initialized. Return!");
             return;
         }
 
         mBroadcastedActiveDevice = device;
+
         synchronized (headsetService.get()) {
             BluetoothStatsLog.write(
                     BluetoothStatsLog.BLUETOOTH_ACTIVE_DEVICE_CHANGED,
@@ -432,14 +434,15 @@ public class CallAudio {
                     mAdapterService.obfuscateAddress(device),
                     mAdapterService.getMetricId(device));
 
+            Log.d(TAG, "broadcastActiveDevice: broadcasting ACTION_ACTIVE_DEVICE_CHANGED, device="
+                    + device);
             Intent intent = new Intent(BluetoothHeadset.ACTION_ACTIVE_DEVICE_CHANGED);
             intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
             intent.addFlags(
                     Intent.FLAG_RECEIVER_REGISTERED_ONLY_BEFORE_BOOT
                             | Intent.FLAG_RECEIVER_INCLUDE_BACKGROUND);
-            headsetService.get().sendBroadcastAsUser(
+            headsetService.get().sendBroadcast(
                     intent,
-                    UserHandle.ALL,
                     BLUETOOTH_CONNECT,
                     Util.getTempBroadcastBundle());
         }
@@ -448,6 +451,37 @@ public class CallAudio {
     public BluetoothDevice getBroadcastedActiveDevice() {
         Log.d(TAG, "getBroadcastedActiveDevice, device: " + mBroadcastedActiveDevice);
         return mBroadcastedActiveDevice;
+    }
+
+    private void handleBluetoothActiveDeviceChangedForVoipWar(
+            BluetoothDevice device,
+            int profile,
+            BluetoothDevice previousDevice,
+            int previousActiveProfile) {
+        if (!mAudioManager.isScoManagedByAudio()) {
+            return;
+        }
+        Log.d(TAG, "handleBluetoothActiveDeviceChangedForVoipWar: previousDevice="
+                + previousDevice + ", previousProfile=" + previousActiveProfile
+                + ", device=" + device + ", profile=" + profile);
+        if (profile == LE_AUDIO_VOICE && device != null) {
+            Log.d(TAG, "handleBluetoothActiveDeviceChangedForVoipWar: LEA active,"
+                    + " reporting null -> dummy to AudioManager");
+            mAudioManager.handleBluetoothActiveDeviceChanged(
+                    mAdapterService.getRemoteDevice("00:00:00:00:00:00"),
+                    null,
+                    BluetoothProfileConnectionInfo.createHfpInfo());
+        } else if (profile == LE_AUDIO_VOICE
+                && device == null
+                && previousActiveProfile == LE_AUDIO_VOICE
+                && previousDevice != null) {
+            Log.d(TAG, "handleBluetoothActiveDeviceChangedForVoipWar: LEA inactive,"
+                    + " reporting dummy -> null to AudioManager");
+            mAudioManager.handleBluetoothActiveDeviceChanged(
+                    null,
+                    mAdapterService.getRemoteDevice("00:00:00:00:00:00"),
+                    BluetoothProfileConnectionInfo.createHfpInfo());
+        }
     }
 
     private void broadcastAudioState(BluetoothDevice device, int fromState, int toState) {
@@ -482,9 +516,8 @@ public class CallAudio {
         intent.putExtra(BluetoothProfile.EXTRA_PREVIOUS_STATE, fromState);
         intent.putExtra(BluetoothProfile.EXTRA_STATE, toState);
         intent.putExtra(BluetoothDevice.EXTRA_DEVICE, device);
-        headsetService.get().sendBroadcastAsUser(
+        headsetService.get().sendBroadcast(
                 intent,
-                UserHandle.ALL,
                 BLUETOOTH_CONNECT,
                 Util.getTempBroadcastBundle());
     }
@@ -542,13 +575,12 @@ public class CallAudio {
             mActiveProfile = UNKNOWPROFILE;
             return;
         }
-        if (device != null
-                && mActiveDevice != null
-                && device.equals(mActiveDevice)
-                && mActiveProfile == profile) {
+        if (Objects.equals(device, mActiveDevice) && mActiveProfile == profile) {
             Log.d(TAG, "updateActiveDevice, same device & profile.");
             return;
         }
+        handleBluetoothActiveDeviceChangedForVoipWar(
+                device, profile, mBroadcastedActiveDevice, mActiveProfile);
         if (device != null) {
             final var headsetService = mAdapterService.getHeadsetService();
             if (headsetService.isPresent()
