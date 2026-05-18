@@ -1501,6 +1501,16 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                                                 }
                                              });
                     }
+                    case AudioDeviceInfo.TYPE_BLE_BROADCAST -> {
+                        mAdapterService
+                                .getLeAudioService()
+                                .ifPresent(
+                                        s -> {
+                                                s.handleAudioBroadcastDeviceRemoved(
+                                                        device,
+                                                        deviceInfo.getType());
+                                             });
+                    }
                     case AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> {
                         mAdapterService
                                 .getHeadsetService()
@@ -2181,6 +2191,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                     AudioDeviceInfo.TYPE_HEARING_AID,
                     AudioDeviceInfo.TYPE_BLE_HEADSET,
                     AudioDeviceInfo.TYPE_BLE_SPEAKER,
+                    AudioDeviceInfo.TYPE_BLE_BROADCAST,
                     AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
                     AudioDeviceInfo.TYPE_BLE_HEARING_AID -> {
                 return true;
