@@ -61,6 +61,9 @@ const char* PTS_GATT_SKIP_SERVICE_DISCOVERY_DURING_CONN =
         "PTS_SkipServiceDiscoveryDuringConnection";
 const char* PTS_CONFIGURE_SERVICE_CHG_INDICATION = "PTS_ConfigureServiceChangeIndication";
 const char* PTS_DB_OUT_OF_SYNC = "PTS_DBOutOfSync";
+const char* PTS_GATT_READ_MULTIPLE_NOT_SUPPORTED_DURING_DISCOVERY =
+        "PTS_GattReadMultipleNotSupportedDuringDiscovery";
+const char* PTS_L2CAP_LE_MALFORMED_PDU = "PTS_L2capLeMalformedPdu";
 
 static std::unique_ptr<config_t> config;
 }  // namespace
@@ -239,8 +242,17 @@ static bool get_pts_DB_out_of_sync(void){
   return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_DB_OUT_OF_SYNC, false);
  }
 
+static bool get_pts_gatt_read_multiple_not_supported_during_discovery(void) {
+  return config_get_bool(*config, CONFIG_DEFAULT_SECTION,
+                         PTS_GATT_READ_MULTIPLE_NOT_SUPPORTED_DURING_DISCOVERY, false);
+}
+
 static bool get_pts_gatt_skip_service_discovery(void) {
   return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_GATT_SKIP_SERVICE_DISCOVERY_DURING_CONN, false);
+}
+
+static bool get_pts_l2cap_le_malformed_pdu(void) {
+  return config_get_bool(*config, CONFIG_DEFAULT_SECTION, PTS_L2CAP_LE_MALFORMED_PDU, false);
 }
 
 const stack_config_t interface = {get_pts_avrcp_test,
@@ -272,6 +284,8 @@ const stack_config_t interface = {get_pts_avrcp_test,
                                   get_pts_le_audio_disable_ases_before_stopping,
                                   get_pts_gatt_skip_service_discovery,
                                   get_pts_configure_svc_chg_indication,
-                                  get_pts_DB_out_of_sync};
+                                  get_pts_DB_out_of_sync,
+                                  get_pts_gatt_read_multiple_not_supported_during_discovery,
+                                  get_pts_l2cap_le_malformed_pdu};
 
 const stack_config_t* stack_config_get_interface(void) { return &interface; }

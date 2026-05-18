@@ -1725,6 +1725,16 @@ public:
         }
       }
       log::info("Call is coming, speed up reconfiguration for a call");
+      /* If dual mode is enabled and duplex preference is not LE audio,
+       * no need to reconfigure LE audio stream for a call. HFP will handle it.
+       * This prevents CIG creation for CONVERSATIONAL when LE audio is not streaming*/
+      if (IsPreferredProfileLeAudioInDualMode(group)) {
+        log::info(
+                "Dual mode enabled and duplex preference is not LE audio, "
+                "skip reconfiguration to CONVERSATIONAL for group {}",
+                group->group_id_);
+        return;
+      }
       local_metadata_context_types_.sink.clear();
       local_metadata_context_types_.source.clear();
       reconfigure = true;
@@ -1785,6 +1795,14 @@ public:
   void SetInVoipCall(bool in_call) override {
     log::debug("in_voip_call: {}", in_call);
     in_voip_call_ = in_call;
+
+    if (!in_voip_call_) {
+      if (configuration_context_type_ == LeAudioContextType::CONVERSATIONAL) {
+        log::info("Voip call is ended, clear sink context type");
+        local_metadata_context_types_.sink.clear();
+        audioContextTypeManager_->OverrideContextTypes(local_metadata_context_types_);
+      }
+    }
   }
 
   bool IsInVoipCall() override {
@@ -2082,6 +2100,19 @@ public:
     return group->is_duplex_preference_le_audio;
   }
 
+  /* Returns true if dual mode audio is enabled and duplex preference is not LE audio.
+   * Used to skip LE audio reconfiguration/preparation for calls when HFP should handle it.
+   */
+  bool IsPreferredProfileLeAudioInDualMode(LeAudioDeviceGroup* group) {
+#ifdef __ANDROID__
+    return bluetooth::os::GetSystemPropertyBool(
+                   bluetooth::os::kIsDualModeAudioEnabledProperty, false) &&
+           !group->is_duplex_preference_le_audio;
+#else
+    return false;
+#endif
+  }
+
   void groupSetAndNotifyInactive(bool autonomous_inactive) {
     if (active_group_id_ == bluetooth::groups::kGroupUnknown) {
       return;
@@ -2361,7 +2392,14 @@ public:
        */
       log::info("prepare_for_a_call {}", prepare_for_a_call);
       if (prepare_for_a_call) {
-        if (!PrepareStreamForAConversational(group)) {
+        /* If dual mode is enabled and duplex preference is not LE audio,
+         * no need to prepare the stream for a call. */
+        if (IsPreferredProfileLeAudioInDualMode(group)) {
+          log::info(
+                  "Dual mode enabled and duplex preference is not LE audio, "
+                  "skip PrepareStreamForAConversational for group {}",
+                  group->group_id_);
+        } else if (!PrepareStreamForAConversational(group)) {
           log::error("Could not configure group {} for a call", group->group_id_);
           groupSetAndNotifyInactive(/* autonomous_inactive */ false);
           return;
@@ -5487,7 +5525,8 @@ public:
       remote_contexts = local_config.second;
     }
 
-    if (!remote_contexts.sink.any() && !remote_contexts.source.any()) {
+    bool isPtsContextsEnforced = osi_property_get_bool("persist.bluetooth.leaudio.enforce.contexts.pts", false);
+    if (!remote_contexts.sink.any() && !remote_contexts.source.any() && !isPtsContextsEnforced) {
       handleInvalidContextTypeResumeRequest(group);
       return false;
     }
@@ -5790,10 +5829,11 @@ public:
       ReconfigureOrUpdateRemote(group, bluetooth::le_audio::types::kLeAudioDirectionSink);
     }
 
+    bool isCapPts = osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false);
     /* Check if the device resume is allowed */
     if (!group->HasCodecConfigurationForDirection(
                 upcoming_configuration_context_type,
-                bluetooth::le_audio::types::kLeAudioDirectionSink)) {
+                bluetooth::le_audio::types::kLeAudioDirectionSink) && !isCapPts) {
       log::error("invalid resume request for context type: {}",
                  ToString(upcoming_configuration_context_type));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
@@ -6186,9 +6226,10 @@ public:
       return;
     }
 
+    bool isCapPts = osi_property_get_bool("persist.bluetooth.leaudio.cap.pts", false);
     /* Check if the device resume is allowed */
     if (!group->HasCodecConfigurationForDirection(
-                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+                configuration_context_type_, bluetooth::le_audio::types::kLeAudioDirectionSource) && !isCapPts) {
       log::error("invalid resume request for context type: {}",
                  ToString(configuration_context_type_));
       /* If lack of context type is an internal issue, let's don't report it as a remote issue
