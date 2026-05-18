@@ -789,7 +789,6 @@ void Device::SetVolume(int8_t volume) {
     log::warn("{}: Ignoring volume change same as current volume level", address_);
     return;
   }
-  volume_ = volume;
 
   if (set_vol_cmd_in_progress_) {
     log::info("There is already a volume command in progress");
@@ -818,6 +817,11 @@ void Device::SetVolume(int8_t volume) {
 
   if (stack_config_get_interface()->get_pts_avrcp_test()) {
     label = MAX_TRANSACTION_LABEL;
+    if(volume_ < volume){
+      log::info("Send Passthrough volume up");
+    } else {
+      log::info("Send passthrough Volume down");
+    }
     for (uint8_t i = 0; i < MAX_TRANSACTION_LABEL; i++) {
       if (active_labels_.find(i) == active_labels_.end()) {
         active_labels_.insert(i);
@@ -842,8 +846,9 @@ void Device::SetVolume(int8_t volume) {
     auto vol_cmd_release = PassThroughPacketBuilder::MakeBuilder(
          false, false, (volume_ < volume) ? 0x41 : 0x42);
     send_message(label, false, std::move(vol_cmd_release));
-    volume_ = volume;
   }
+  log::info("Updating the local device volume");
+  volume_ = volume;
 }
 
 void Device::TrackChangedNotificationResponse(uint8_t label, bool interim, std::string curr_song_id,
