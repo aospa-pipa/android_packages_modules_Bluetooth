@@ -1124,6 +1124,7 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
                  */
                 if (mLeAudioActiveDevice != null
                         && device != null
+                        && !Utils.isDualModeAudioEnabled()
                         && !mLeAudioActiveDevice.equals(device)) {
                     /* HFP device becoming active is not dual mode and was not set as
                      * active LE Audio device. Inactivate LE Audio device.
