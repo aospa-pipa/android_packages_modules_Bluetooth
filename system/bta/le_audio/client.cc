@@ -7759,6 +7759,20 @@ public:
                 defer_call_reconfig_ = false;
                 SetInCall(true);
               }
+              /* Dual mode, HFP preferred audio profile for call: metadata
+               * update triggered reconfiguration completes with audio states
+               * in RELEASING. Reset to IDLE to allow HFP SCO via IsInIdle().
+               */
+              if (group && IsPreferredProfileLeAudioInDualMode(group) &&
+                  (audio_receiver_state_ == AudioState::RELEASING ||
+                   audio_sender_state_ == AudioState::RELEASING)) {
+                log::warn(
+                    "Reconfig completed for metadata-triggered reconfig in"
+                    " dual mode call use case, updating reconfigurationComplete");
+                reconfigurationComplete();
+                notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
+                notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
+              }
             }
           } else {
             reconfigurationComplete();
