@@ -1567,6 +1567,8 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::FindGroupStrategyForConf
       return types::LeAudioConfigurationStrategy::RFU;
     }
 
+    bool mTmapPts =
+             osi_property_get_bool("persist.bluetooth.tmap.pts", false);
     /* Simple strategy picker */
     log::debug("Group {} size {}", group_id_, expected_group_size);
     if (expected_group_size > 1) {
@@ -1593,7 +1595,7 @@ types::LeAudioConfigurationStrategy LeAudioDeviceGroup::FindGroupStrategyForConf
                                      ? config_element->codec.GetChannelCountPerIsoStream()
                                      : 1;
     log::debug("max_channel_count {}", max_channel_count);
-    if (max_channel_count == 1) {
+    if (max_channel_count == 1 && !mTmapPts) {
       return types::LeAudioConfigurationStrategy::STEREO_TWO_CISES_PER_DEVICE;
     }
 
