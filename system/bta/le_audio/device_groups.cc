@@ -1099,11 +1099,19 @@ LeAudioDeviceGroup::GetAudioSetConfigurationRequirements(types::LeAudioContextTy
       log::verbose(" config_req.target_Phy: 0x{:02x}", config_req.target_Phy);
       log::info("Device {} pushes requirement, location: {}, direction: {}", device->address_,
                 (int)locations, (int)remote_direction);
-      if(pts_gmap) {
+      if (pts_gmap) {
         log::info(" GMAP is enabled, push requirement according to number of ASEs");
         int num_ases = device->GetAseCount(remote_direction);
-        for(int i = 0; i < num_ases; i++) {
-          direction_req->push_back(std::move(config_req));
+        direction_req->push_back(config_req);
+        if (num_ases > 1) {
+          auto config_req_right = config_req;
+          /* Remove and add to make sure we don't have both locations set */
+          config_req_right.params.Remove(codec_spec_conf::kLeAudioLtvTypeAudioChannelAllocation);
+          locations = dev_locations->value.to_ulong() &
+                      (codec_spec_conf::kLeAudioLocationFrontRight);
+          config_req_right.params.Add(codec_spec_conf::kLeAudioLtvTypeAudioChannelAllocation,
+                                      (uint32_t)locations);
+          direction_req->push_back(config_req_right);
         }
         continue;
       }
