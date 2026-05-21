@@ -106,8 +106,11 @@ public:
 
   void OnScannerRegistered(const Uuid app_uuid, uint8_t scannerId, uint8_t status) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
     sCallbackEnv->CallVoidMethod(mScanCallbacksObj, method_onScannerRegistered, status, scannerId,
@@ -116,8 +119,11 @@ public:
 
   void OnSetScannerParameterComplete(uint8_t scannerId, uint8_t status) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
     sCallbackEnv->CallVoidMethod(mScanCallbacksObj, method_onScanParamSetupCompleted, status,
@@ -128,8 +134,11 @@ public:
                     uint8_t secondary_phy, uint8_t advertising_sid, int8_t tx_power, int8_t rssi,
                     uint16_t periodic_adv_int, std::vector<uint8_t> adv_data) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
 
@@ -152,9 +161,13 @@ public:
 
   void OnTrackAdvFoundLost(AdvertisingTrackInfo track_info) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      log::error("mScanCallbacksObj is NULL.");
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
-      log::error("sCallbackEnv not valid or no mScanCallbacksObj.");
+    if (!sCallbackEnv.valid()) {
+      log::error("sCallbackEnv is not valid.");
       return;
     }
 
@@ -190,8 +203,11 @@ public:
   void OnBatchScanReports(int client_if, int status, int report_format, int num_records,
                           std::vector<uint8_t> data) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
     ScopedLocalRef<jbyteArray> jb(sCallbackEnv.get(), sCallbackEnv->NewByteArray(data.size()));
@@ -203,8 +219,11 @@ public:
 
   void OnBatchScanThresholdCrossed(int client_if) {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
     sCallbackEnv->CallVoidMethod(mScanCallbacksObj, method_onBatchScanThresholdCrossed, client_if);
@@ -214,12 +233,12 @@ public:
                              uint8_t address_type, RawAddress address, uint8_t phy,
                              uint16_t interval) override {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
-    CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid()) {
-      return;
-    }
     if (!mPeriodicScanCallbacksObj) {
       log::error("mPeriodicScanCallbacksObj is NULL. Return.");
+      return;
+    }
+    CallbackEnv sCallbackEnv(__func__);
+    if (!sCallbackEnv.valid()) {
       return;
     }
     ScopedLocalRef<jstring> addr = addressToJString(sCallbackEnv, address);
@@ -231,8 +250,11 @@ public:
   void OnPeriodicSyncReport(uint16_t sync_handle, int8_t tx_power, int8_t rssi, uint8_t data_status,
                             std::vector<uint8_t> data) override {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mPeriodicScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mPeriodicScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
 
@@ -245,8 +267,11 @@ public:
 
   void OnPeriodicSyncLost(uint16_t sync_handle) override {
     std::shared_lock<std::shared_mutex> lock(callbacks_mutex);
+    if (!mPeriodicScanCallbacksObj) {
+      return;
+    }
     CallbackEnv sCallbackEnv(__func__);
-    if (!sCallbackEnv.valid() || !mPeriodicScanCallbacksObj) {
+    if (!sCallbackEnv.valid()) {
       return;
     }
 
@@ -864,6 +889,11 @@ static void scanCleanupNative(JNIEnv* env, jobject /* object */) {
     mScanCallbacksObj = NULL;
   }
   if (sScanner != NULL) {
+    // Reset to the default no-op callback before nulling sScanner. This
+    // prevents on_scan_result from posting JniScanningCallbacks::OnScanResult
+    // to the jni_thread after DISASSOCIATE_JVM has been queued, which would
+    // cause CallbackEnv to be constructed with a null JNI env.
+    sScanner->RegisterCallbacks(nullptr);
     sScanner = NULL;
   }
 }
