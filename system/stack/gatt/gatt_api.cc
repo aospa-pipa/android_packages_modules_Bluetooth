@@ -163,6 +163,11 @@ static void gatt_update_for_database_change() {
     tGATT_TCB& tcb = gatt_cb.tcb[i];
     if (tcb.in_use) {
       gatt_sr_update_cl_status(tcb, /* chg_aware= */ false);
+      // Clear the pending "next-request makes change-aware" flag so that a
+      // stale flag from a previous DB Out of Sync response does not
+      // incorrectly mark the client change-aware with the old hash after
+      // the database has changed again (spec 2.5.2.1 / BV-05-C Step 15-16).
+      tcb.db_out_of_sync_sent = false;
     }
   }
 }
