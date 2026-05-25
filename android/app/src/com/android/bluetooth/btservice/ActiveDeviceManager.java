@@ -1338,6 +1338,15 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
     }
 
     private class AudioManagerAudioDeviceCallback extends AudioDeviceCallback {
+        private static boolean isWiredDeviceType(int type) {
+            return switch (type) {
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                     AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                     AudioDeviceInfo.TYPE_USB_HEADSET -> true;
+                default -> false;
+            };
+        }
+
         @Override
         public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
             if (!true) {
@@ -1351,6 +1360,12 @@ public class ActiveDeviceManager implements AdapterService.BluetoothStateCallbac
             for (AudioDeviceInfo deviceInfo : addedDevices) {
                 String address = deviceInfo.getAddress();
                 if (address == null || address.equals("00:00:00:00:00:00")) {
+                    continue;
+                }
+
+                if (isWiredDeviceType(deviceInfo.getType())) {
+                    Log.i(TAG, "Stop Broadcast while wired audio device is connected");
+                    stopBroadcastingAudio();
                     continue;
                 }
 
