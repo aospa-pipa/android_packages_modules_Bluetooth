@@ -4170,6 +4170,10 @@ public class AdapterService extends Service {
         return mAdapterProperties.isLeChannelSoundingSupported();
     }
 
+    public boolean isLeBlePowerControlRequestSupported() {
+        return mAdapterProperties.isLeBlePowerControlRequestSupported();
+    }
+
     /**
      * Check if the LE audio CIS central feature is supported.
      *
