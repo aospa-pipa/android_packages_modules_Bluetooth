@@ -657,7 +657,7 @@ uint8_t LeAudioDeviceGroup::GetPacking(void) const {
     return stream_conf.conf->packing;
   }
 
-  if (android::sysprop::bluetooth::LeAudio::iso_interleaved_packing_enabled().value_or(false)) {
+  if (android::sysprop::bluetooth::LeAudio::iso_interleaved_packing_enabled().value_or(true)) {
     log::info("No stream configuration has been set, return Interleaved packing type");
     return bluetooth::hci::kIsoCigPackingInterleaved;
   }
