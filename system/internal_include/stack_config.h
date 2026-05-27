@@ -59,6 +59,8 @@ typedef struct {
   bool (*get_pts_gatt_read_multiple_not_supported_during_discovery)(void);
   bool (*get_pts_l2cap_le_malformed_pdu)(void);
   bool (*get_pts_le_disable_encryp)(void);
+  int  (*get_pts_l2cap_le_insuff_enc)(void);
+  bool (*get_pts_enable_authorization_encr_data_key)(void);
 } stack_config_t;
 
 extern const stack_config_t* stack_config_get_interface(void);

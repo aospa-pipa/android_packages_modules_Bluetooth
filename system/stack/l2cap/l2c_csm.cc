@@ -45,6 +45,7 @@
 #include "stack/include/bt_psm_types.h"
 #include <bt_testapp.h>
 #include <cutils/properties.h>
+#include "internal_include/stack_config.h"
 using namespace bluetooth;
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -414,6 +415,12 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, tL2CEVT event, void* p_data) {
         p_ccb->chnl_state = CST_TERM_W4_SEC_COMP;
         tL2CAP_LE_RESULT_CODE result = l2ble_sec_access_req(
                 p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm, false, &l2c_link_sec_comp, p_ccb);
+        // PTS override: force a specific L2CAP LE result code for certification testing
+        int pts_insuff_enc = stack_config_get_interface()->get_pts_l2cap_le_insuff_enc();
+        if (pts_insuff_enc != 0) {
+            log::info("PTS override: forcing L2CAP LE result to 0x{:04x}", pts_insuff_enc);
+            result = static_cast<tL2CAP_LE_RESULT_CODE>(pts_insuff_enc);
+        }
 
         switch (result) {
           case tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_INSUFFICIENT_AUTHORIZATION:
