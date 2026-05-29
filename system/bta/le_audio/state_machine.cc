@@ -745,7 +745,12 @@ public:
     } else {
       SetTargetState(group, AseState::BTA_LE_AUDIO_ASE_STATE_CODEC_CONFIGURED);
     }
-    return PrepareAndSendCodecConfigToTheGroup(group);
+    if (!PrepareAndSendCodecConfigToTheGroup(group)) {
+      group->PrintDebugState();
+      cancel_watchdog_if_needed(group->group_id_);
+      return false;
+    }
+    return true;
   }
 
   bool EnableStreamingDirection(LeAudioDeviceGroup* group, uint8_t remote_direction) {
