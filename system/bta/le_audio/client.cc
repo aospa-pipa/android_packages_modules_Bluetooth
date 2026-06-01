@@ -8091,7 +8091,7 @@ private:
   std::unique_ptr<LeAudioSourceAudioHalClient> le_audio_source_hal_client_;
   std::unique_ptr<LeAudioSinkAudioHalClient> le_audio_sink_hal_client_;
   static constexpr uint64_t kAudioSuspentKeepIsoAliveTimeoutMs = 500;
-  static constexpr uint64_t kAudioSuspentKeepIsoAliveDuringCallTimeoutMs = 2000;
+  static constexpr uint64_t kAudioSuspentKeepIsoAliveDuringCallTimeoutMs = 500;
   static constexpr uint64_t kAudioDisableTimeoutMs = 3000;
   static constexpr uint64_t kAudioUpdateRelaxedConnIntervalTimeoutMs = 15000;
   static constexpr char kAudioSuspentKeepIsoAliveTimeoutMsProp[] =
