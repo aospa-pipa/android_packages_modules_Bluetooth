@@ -522,6 +522,11 @@ public:
             ToString(configuration_context_type_), ToString(audio_receiver_state_),
             audio_hal_check_in_progress, audio_hal_is_capable_to_send_empty_metadata_);
 
+    if (audio_receiver_state_ != AudioState::STARTED) {
+      log::debug("Do not reconfigure - audio receiver state is not STARTED");
+      return;
+    }
+
     auto group = aseGroups_.FindById(active_group_id_);
 
     /* Workaround warning.
@@ -5814,6 +5819,16 @@ public:
 
     group->ClearReconfigStartPendingDirs(bluetooth::le_audio::types::kLeAudioDirectionSink);
 
+    if (configuration_context_type_ != LeAudioContextType::LIVE &&
+        configuration_context_type_ != LeAudioContextType::GAME &&
+        configuration_context_type_ != LeAudioContextType::CONVERSATIONAL &&
+        audio_receiver_state_ == AudioState::IDLE &&
+        !group->IsPendingConfiguration() &&
+        !group->IsSuspendedForReconfiguration()) {
+      local_metadata_context_types_.sink.clear();
+      audioContextTypeManager_->SetDecodingSessionMetadata({});
+    }
+
     /* Get configuration context type from the audioContextTypeManager only when it is unknown */
     auto [new_context_type, _] = audioContextTypeManager_->GetAudioContextsForTheGroup(
             group, get_remote_directions_for_context_type_manager(
@@ -6629,13 +6644,21 @@ public:
       return;
     }
 
+    StopVbcCloseTimeout();
+
     group->dsa_.mode = dsa_mode;
 
     /* allow reconfigure only if the new source context is bi-directional
        (or) not in suspended for reconfiguration (or) receiver state is idle
        to avoid the additional reconfigurations.
     */
-    if ((local_metadata_context_types_.source.test(LeAudioContextType::MEDIA) &&
+    if (local_metadata_context_types_.sink.test(LeAudioContextType::LIVE) &&
+        !local_metadata_context_types_.source.test(LeAudioContextType::LIVE) &&
+        !local_metadata_context_types_.source.test(LeAudioContextType::CONVERSATIONAL) &&
+        !local_metadata_context_types_.source.test(LeAudioContextType::GAME)) {
+      log::warn("Skip ReconfigureOrUpdateRemote to LIVE, source context is non-bidirectional: {}",
+                ToString(local_metadata_context_types_.source));
+    } else if ((local_metadata_context_types_.source.test(LeAudioContextType::MEDIA) &&
          configuration_context_type_ == LeAudioContextType::LIVE) &&
         (group->IsPendingConfiguration() || group->IsSuspendedForReconfiguration() ||
          group->IsReconfigStartPendingDir(bluetooth::le_audio::types::kLeAudioDirectionSink))) {
