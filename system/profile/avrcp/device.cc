@@ -1660,18 +1660,23 @@ void Device::HandleChangePath(uint8_t label, std::shared_ptr<ChangePathRequest> 
       return;
     }
 
-    auto new_path = vfs_ids_.get_media_id(pkt->GetUid());
-    log::verbose("Check pushing {} on top of {} ", new_path, CurrentFolder());
-    if (CurrentFolder() != new_path) {
-      current_path_.push(new_path);
-      log::verbose("Pushing Path to stack in current_path_: \"{}\"", CurrentFolder());
-    }
+    if (osi_property_get_bool("persist.bluetooth.pts.add_empty_folder", false)) {
+      current_path_.push(vfs_ids_.get_media_id(pkt->GetUid()));
+      log::verbose("Pushing Path to stack: \"{}\"", CurrentFolder());
+    } else {
+      auto new_path = vfs_ids_.get_media_id(pkt->GetUid());
+      log::verbose("Check pushing {} on top of {} ", new_path, CurrentFolder());
+      if (CurrentFolder() != new_path) {
+        current_path_.push(new_path);
+        log::verbose("Pushing Path to stack in current_path_: \"{}\"", CurrentFolder());
+      }
 
-    std::string current_browse_path;
-    if (vfs_uid_to_folder_name_.find(pkt->GetUid()) != vfs_uid_to_folder_name_.end())
-      current_browse_path = vfs_uid_to_folder_name_[pkt->GetUid()];
-    browse_path_.push(current_browse_path);
-    log::verbose("Pushing Browse Path to stack in browse_path_: \"{}\"", browse_path_.top());
+      std::string current_browse_path;
+      if (vfs_uid_to_folder_name_.find(pkt->GetUid()) != vfs_uid_to_folder_name_.end())
+        current_browse_path = vfs_uid_to_folder_name_[pkt->GetUid()];
+      browse_path_.push(current_browse_path);
+      log::verbose("Pushing Browse Path to stack in browse_path_: \"{}\"", browse_path_.top());
+    }
   } else {
     if (!browse_path_.empty()) {
       log::verbose("Pop Browse Path to stack in browse_path_: \"{}\"", browse_path_.top());
