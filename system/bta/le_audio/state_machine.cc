@@ -3705,7 +3705,10 @@ private:
 
     log::assert_that(ase, "shouldn't be called without an active ASE");
     do {
-      if (!(ase->direction & remote_directions)) {
+      bool pts_gmap_mxlt =
+           osi_property_get_bool("persist.vendor.qcom.bluetooth.pts_gmap_mxlt", false);
+      // pts_gmap_mxlt is enabled, enable source ASE unconditionally
+      if (!(ase->direction & remote_directions) && !pts_gmap_mxlt) {
         log::info("group_id: {}, {}, ase_id: {} ({:#x}), enabled_directions {:#x} not to enable",
                   leAudioDevice->group_id_, leAudioDevice->address_, ase->id, ase->direction,
                   remote_directions);
