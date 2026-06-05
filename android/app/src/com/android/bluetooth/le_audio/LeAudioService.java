@@ -5178,8 +5178,12 @@ public class LeAudioService extends ConnectableProfile {
             return;
         }
         Optional<Integer> broadcastId = getFirstNotStoppedBroadcastId();
+        if (broadcastId.isEmpty()) {
+            Log.d(TAG, "setInactiveForBroadcast: no active broadcast found");
+            return;
+        }
         LeAudioBroadcastDescriptor descriptor = mBroadcastDescriptors.get(broadcastId.get());
-        if (!broadcastId.isEmpty() && (descriptor != null)) {
+        if (descriptor != null) {
             if (descriptor.mState.equals(LeAudioStackEvent.BROADCAST_STATE_STOPPING)) {
                 Log.d(TAG, "Broadcast is stopping");
                 return;
