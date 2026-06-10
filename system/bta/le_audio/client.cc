@@ -7752,6 +7752,12 @@ public:
               if (track_in_call_update_ == IN_CALL_UPDATE_FROM_BT_APP_AND_BT_HAL) {
                 log::warn("Both BT App and UpdateMetadata received for call,"
                           " send reconfigurationComplete to BT HAL");
+                if (!group->IsDirectionAvailableForConfiguration(configuration_context_type_,
+                                               bluetooth::le_audio::types::kLeAudioDirectionSource)) {
+                  log::warn("invalidated config, fetching again for configuration_context_type_: {}",
+                             common::ToString(configuration_context_type_));
+                  group->GetConfiguration(configuration_context_type_);
+                }
                 reconfigurationComplete();
                 notifyAudioLocalSink(UnicastMonitorModeStatus::SUSPENDED);
                 notifyAudioLocalSource(UnicastMonitorModeStatus::SUSPENDED);
@@ -7770,8 +7776,8 @@ public:
                                 ? bluetooth::le_audio::types::kLeAudioDirectionSource
                                 : bluetooth::le_audio::types::kLeAudioDirectionSink;
                 auto config_ =
-                        audioContextTypeManager_->GetAudioContextsForTheGroup(
-            group, get_remote_directions_for_context_type_manager(remote_direction));
+                        audioContextTypeManager_->GetAudioContextsForTheGroup(group,
+                          get_remote_directions_for_context_type_manager(remote_direction));
                 auto remote_contexts = config_.second;
 
                 GroupStream(group, configuration_context_type_, remote_contexts);
@@ -8114,7 +8120,7 @@ private:
   std::unique_ptr<LeAudioSourceAudioHalClient> le_audio_source_hal_client_;
   std::unique_ptr<LeAudioSinkAudioHalClient> le_audio_sink_hal_client_;
   static constexpr uint64_t kAudioSuspentKeepIsoAliveTimeoutMs = 500;
-  static constexpr uint64_t kAudioSuspentKeepIsoAliveDuringCallTimeoutMs = 2000;
+  static constexpr uint64_t kAudioSuspentKeepIsoAliveDuringCallTimeoutMs = 500;
   static constexpr uint64_t kAudioDisableTimeoutMs = 3000;
   static constexpr uint64_t kAudioUpdateRelaxedConnIntervalTimeoutMs = 15000;
   static constexpr char kAudioSuspentKeepIsoAliveTimeoutMsProp[] =
