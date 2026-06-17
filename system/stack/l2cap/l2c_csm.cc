@@ -45,6 +45,7 @@
 #include "stack/include/bt_psm_types.h"
 #include <bt_testapp.h>
 #include <cutils/properties.h>
+#include "internal_include/stack_config.h"
 using namespace bluetooth;
 /******************************************************************************/
 /*            L O C A L    F U N C T I O N     P R O T O T Y P E S            */
@@ -414,6 +415,12 @@ static void l2c_csm_closed(tL2C_CCB* p_ccb, tL2CEVT event, void* p_data) {
         p_ccb->chnl_state = CST_TERM_W4_SEC_COMP;
         tL2CAP_LE_RESULT_CODE result = l2ble_sec_access_req(
                 p_ccb->p_lcb->remote_bd_addr, p_ccb->p_rcb->psm, false, &l2c_link_sec_comp, p_ccb);
+        // PTS override: force a specific L2CAP LE result code for certification testing
+        int pts_insuff_enc = stack_config_get_interface()->get_pts_l2cap_le_insuff_enc();
+        if (pts_insuff_enc != 0) {
+            log::info("PTS override: forcing L2CAP LE result to 0x{:04x}", pts_insuff_enc);
+            result = static_cast<tL2CAP_LE_RESULT_CODE>(pts_insuff_enc);
+        }
 
         switch (result) {
           case tL2CAP_LE_RESULT_CODE::L2CAP_LE_RESULT_INSUFFICIENT_AUTHORIZATION:
@@ -789,17 +796,10 @@ static void l2c_csm_w4_l2cap_connect_rsp(tL2C_CCB* p_ccb, tL2CEVT event, void* p
 
   switch (event) {
     case L2CEVT_LP_DISCONNECT_IND: /* Link was disconnected */
-      /* Send disc indication unless peer to peer race condition AND normal
-       * disconnect */
-      /* *((uint8_t *)p_data) != HCI_ERR_PEER_USER happens when peer device try
-       * to disconnect for normal reason */
       p_ccb->chnl_state = CST_CLOSED;
-      if ((p_ccb->flags & CCB_FLAG_NO_RETRY) || !p_data ||
-          (*((uint8_t*)p_data) != HCI_ERR_PEER_USER)) {
-        log::debug("Calling Disconnect_Ind_Cb(), CID: 0x{:04x}  No Conf Needed", p_ccb->local_cid);
-        l2cu_release_ccb(p_ccb);
-        (*disconnect_ind)(local_cid, false);
-      }
+      log::debug("Calling Disconnect_Ind_Cb(), CID: 0x{:04x}  No Conf Needed", p_ccb->local_cid);
+      l2cu_release_ccb(p_ccb);
+      (*disconnect_ind)(local_cid, false);
       p_ccb->flags |= CCB_FLAG_NO_RETRY;
       break;
 

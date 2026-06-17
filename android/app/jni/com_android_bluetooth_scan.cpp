@@ -146,17 +146,9 @@ public:
     ScopedLocalRef<jbyteArray> jb(sCallbackEnv.get(), sCallbackEnv->NewByteArray(adv_data.size()));
     sCallbackEnv->SetByteArrayRegion(jb.get(), 0, adv_data.size(), (jbyte*)adv_data.data());
 
-    // TODO(optedoblivion): Figure out original address for here, use empty
-    // for now
-
-    // length of data + '\0'
-    char empty_address[18] = "00:00:00:00:00:00";
-    ScopedLocalRef<jstring> fake_address(sCallbackEnv.get(),
-                                         sCallbackEnv->NewStringUTF(empty_address));
-
     sCallbackEnv->CallVoidMethod(mScanCallbacksObj, method_onScanResult, event_type, addr_type,
                                  address.get(), primary_phy, secondary_phy, advertising_sid,
-                                 tx_power, rssi, periodic_adv_int, jb.get(), fake_address.get());
+                                 tx_power, rssi, periodic_adv_int, jb.get(), address.get());
   }
 
   void OnTrackAdvFoundLost(AdvertisingTrackInfo track_info) {

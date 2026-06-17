@@ -270,7 +270,11 @@ static tGATT_STATUS read_attr_value(uint16_t handle, tGATT_VALUE* p_value, bool 
           if (btm_cb.encrypted_advertising_data_supported) {
             uint8_t* p_encr_material = p;
             uint8_t* p_temp = p_encr_material;
-
+            // PTS override: Check if authorization should be enforced for Encrypted Data Key Material
+            if (stack_config_get_interface()->get_pts_enable_authorization_encr_data_key()) {
+                log::info("PTS_EnableAuthorizationEncrDataKey is set, returning GATT_INSUF_AUTHORIZATION");
+                return GATT_INSUF_AUTHORIZATION;
+            }
             REVERSE_ARRAY_TO_STREAM(p_encr_material, attr_value.enc_key_material.session_key,
                                     ENC_KEY_LEN);
             REVERSE_ARRAY_TO_STREAM(p_encr_material, attr_value.enc_key_material.init_vector,
