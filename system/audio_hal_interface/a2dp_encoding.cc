@@ -230,14 +230,14 @@ void ack_stream_suspended(Status status) {
 
 // Read from the FMQ of BluetoothAudio HAL
 size_t read(uint8_t* p_buf, uint32_t len) {
-  LOG(INFO) << __func__;
+  VLOG(2) << __func__;
   const auto transport = HalVersionManager::GetHalTransport();
   if (transport == BluetoothAudioHalTransport::HIDL) {
     return hidl::a2dp::read(p_buf, len);
   } else if (transport == BluetoothAudioHalTransport::AIDL) {
     return aidl::a2dp::read(p_buf, len);
   } else if (transport == BluetoothAudioHalTransport::QTI_HIDL) {
-    LOG(INFO) << __func__ << ": qti_hidl read";
+    VLOG(2) << __func__ << ": qti_hidl read";
     return qti_hidl::a2dp::read(p_buf, len);
   }
   return 0;

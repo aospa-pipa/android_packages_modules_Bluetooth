@@ -1058,7 +1058,7 @@ static bool btif_a2dp_source_enqueue_callback(BT_HDR* p_buf, size_t frames_n,
   uint64_t now_us = bluetooth::common::time_get_os_boottime_us();
 
   // Check if the transmission queue has been flushed.
-  log::info("btif_a2dp_source_enqueue_callback");
+  log::verbose("btif_a2dp_source_enqueue_callback");
   if (btif_a2dp_source_cb.tx_flush) {
     log::debug("tx suspended, discarded frame");
 
