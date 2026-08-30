@@ -43,6 +43,8 @@ std::string toString(BluetoothAudioHalTransport transport) {
       return "HIDL";
     case BluetoothAudioHalTransport::AIDL:
       return "AIDL";
+    case BluetoothAudioHalTransport::QTI_HIDL:
+      return "QTI_HIDL";
     default:
       return std::to_string(static_cast<int32_t>(transport));
   }
